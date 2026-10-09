@@ -590,57 +590,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn actions_file_round_trip_and_reimport_is_idempotent() {
-        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
-        app.session.actions.list.push(Action { name: "Draw".into(), steps: vec![("layer.new.layer".into(), json!({}))] });
-        let bytes = export_actions_bytes(&app).unwrap();
-        app.session.actions.list.clear();
-        let r = import_actions_bytes(&mut app, &bytes).unwrap();
-        assert_eq!(r["imported"], 1);
-        assert_eq!(app.session.actions.list[0].name, "Draw");
-        assert_eq!(app.session.actions.list[0].steps, vec![("layer.new.layer".into(), json!({}))]);
-        let r = import_actions_bytes(&mut app, &bytes).unwrap();
-        assert_eq!(r["imported"], 0);
-        assert_eq!(app.session.actions.list.len(), 1);
-    }
-
-    #[test]
-    fn import_renames_conflicts_and_retargets_nested_calls() {
-        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
-        app.session.actions.list.push(Action { name: "Child".into(), steps: vec![] });
-        let imported = actions_cmds::ActionsFile {
-            version: 1,
-            actions: vec![
-                Action { name: "Child".into(), steps: vec![("layer.new.layer".into(), json!({}))] },
-                Action { name: "Parent".into(), steps: vec![("actions.play".into(), json!({"action": 0}))] },
-                Action { name: "Named".into(), steps: vec![("actions.play".into(), json!({"action":"Child"}))] },
-            ],
-        };
-        let bytes = serde_json::to_vec(&imported).unwrap();
-        assert_eq!(import_actions_bytes(&mut app, &bytes).unwrap()["imported"], 3);
-        assert_eq!(app.session.actions.list[1].name, "Child (Imported 2)");
-        assert_eq!(app.session.actions.list[2].steps[0].1["action"], "Child (Imported 2)");
-        assert_eq!(app.session.actions.list[3].steps[0].1["action"], "Child (Imported 2)");
-        let rev = app.session.actions.rev;
-        assert_eq!(import_actions_bytes(&mut app, &bytes).unwrap()["imported"], 0);
-        assert_eq!(app.session.actions.rev, rev, "no writes on repeated import");
-    }
-
-    #[test]
-    fn malformed_action_files_leave_existing_actions_untouched() {
-        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
-        app.session.actions.list.push(Action { name: "Keep".into(), steps: vec![] });
-        for data in [b"not json".as_slice(), br#"{"version":2,"actions":[]}"#, br#"{"version":1,"actions":[{"name":"A"},{"name":"A"}]}"#] {
-            assert!(import_actions_bytes(&mut app, data).is_err());
-            assert_eq!(app.session.actions.list.len(), 1);
-            assert_eq!(app.session.actions.list[0].name, "Keep");
-        }
-        app.session.actions.recording = Some((0, 0));
-        assert!(import_actions_bytes(&mut app, b"{}").is_err());
-        assert_eq!(app.session.actions.list.len(), 1);
-    }
-
-    #[test]
     fn recording_reveals_new_action_and_latest_step_in_a_long_panel() {
         use egui_kittest::{Harness, kittest::Queryable};
         let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
@@ -846,4 +795,56 @@ mod tests {
         assert_eq!(d.layers.len(), 2);
         assert_eq!(d.layers[1].surface().unwrap().pixel(5, 5), vec![1.0, 0.0, 0.0, 1.0]);
     }
+    #[test]
+    fn actions_file_round_trip_and_reimport_is_idempotent() {
+        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+        app.session.actions.list.push(Action { name: "Draw".into(), steps: vec![("layer.new.layer".into(), json!({}))] });
+        let bytes = export_actions_bytes(&app).unwrap();
+        app.session.actions.list.clear();
+        let r = import_actions_bytes(&mut app, &bytes).unwrap();
+        assert_eq!(r["imported"], 1);
+        assert_eq!(app.session.actions.list[0].name, "Draw");
+        assert_eq!(app.session.actions.list[0].steps, vec![("layer.new.layer".into(), json!({}))]);
+        let r = import_actions_bytes(&mut app, &bytes).unwrap();
+        assert_eq!(r["imported"], 0);
+        assert_eq!(app.session.actions.list.len(), 1);
+    }
+
+    #[test]
+    fn import_renames_conflicts_and_retargets_nested_calls() {
+        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+        app.session.actions.list.push(Action { name: "Child".into(), steps: vec![] });
+        let imported = actions_cmds::ActionsFile {
+            version: 1,
+            actions: vec![
+                Action { name: "Child".into(), steps: vec![("layer.new.layer".into(), json!({}))] },
+                Action { name: "Parent".into(), steps: vec![("actions.play".into(), json!({"action": 0}))] },
+                Action { name: "Named".into(), steps: vec![("actions.play".into(), json!({"action":"Child"}))] },
+            ],
+        };
+        let bytes = serde_json::to_vec(&imported).unwrap();
+        assert_eq!(import_actions_bytes(&mut app, &bytes).unwrap()["imported"], 3);
+        assert_eq!(app.session.actions.list[1].name, "Child (Imported 2)");
+        assert_eq!(app.session.actions.list[2].steps[0].1["action"], "Child (Imported 2)");
+        assert_eq!(app.session.actions.list[3].steps[0].1["action"], "Child (Imported 2)");
+        let rev = app.session.actions.rev;
+        assert_eq!(import_actions_bytes(&mut app, &bytes).unwrap()["imported"], 0);
+        assert_eq!(app.session.actions.rev, rev, "no writes on repeated import");
+    }
+
+    #[test]
+    fn malformed_action_files_leave_existing_actions_untouched() {
+        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+        app.session.actions.list.push(Action { name: "Keep".into(), steps: vec![] });
+        for data in [b"not json".as_slice(), br#"{"version":2,"actions":[]}"#, br#"{"version":1,"actions":[{"name":"A"},{"name":"A"}]}"#] {
+            assert!(import_actions_bytes(&mut app, data).is_err());
+            assert_eq!(app.session.actions.list.len(), 1);
+            assert_eq!(app.session.actions.list[0].name, "Keep");
+        }
+        app.session.actions.recording = Some((0, 0));
+        assert!(import_actions_bytes(&mut app, b"{}").is_err());
+        assert_eq!(app.session.actions.list.len(), 1);
+    }
+
+
 }
