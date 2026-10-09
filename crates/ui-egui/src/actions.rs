@@ -136,6 +136,116 @@ pub(crate) fn run_view(app: &mut PhotocraftApp, id: &str, params: Value) -> Resu
     Ok(Value::Null)
 }
 
+/// Export the same versioned format as the persisted `actions.json` preset store.
+fn export_actions_bytes(app: &PhotocraftApp) -> Result<Vec<u8>, String> {
+    let data = actions_cmds::ActionsFile { version: 1, actions: app.session.actions.list.clone() };
+    let bytes = serde_json::to_vec_pretty(&data).map_err(|e| e.to_string())?;
+    if bytes.len() as u64 > photocraft_engine::preset_store::MAX_ACTIONS_BYTES {
+        return Err("Actions exceed the 16 MiB export limit".into());
+    }
+    Ok(bytes)
+}
+
+/// Merge a portable action file into the list, preserving local actions. Rename
+/// conflicting incoming names and update their nested named/indexed play steps.
+fn import_actions_bytes(app: &mut PhotocraftApp, bytes: &[u8]) -> Result<Value, String> {
+    if app.session.actions.recording.is_some() || app.session.actions.playing > 0 {
+        return Err("Stop recording or playing before importing Actions".into());
+    }
+    if bytes.len() as u64 > photocraft_engine::preset_store::MAX_ACTIONS_BYTES {
+        return Err("Actions file exceeds the 16 MiB import limit".into());
+    }
+    let mut file: actions_cmds::ActionsFile = serde_json::from_slice(bytes).map_err(|e| format!("Invalid Actions JSON: {e}"))?;
+    if file.version != 1 {
+        return Err(format!("Unsupported Actions file version {}", file.version));
+    }
+    if file.actions.len() > 1024 {
+        return Err("An imported file may contain at most 1024 actions".into());
+    }
+    let mut names = std::collections::HashSet::new();
+    for action in &file.actions {
+        if action.name.trim().is_empty() || action.name.len() > 256 || !names.insert(action.name.clone()) {
+            return Err("Action names must be unique, non-empty and at most 256 bytes".into());
+        }
+        if action.steps.len() > 10_000 {
+            return Err(format!("Action '{}' has more than 10,000 steps", action.name));
+        }
+    }
+
+    let existing = &app.session.actions.list;
+    let mut reserved: std::collections::HashSet<String> = existing.iter().map(|a| a.name.clone()).chain(file.actions.iter().map(|a| a.name.clone())).collect();
+    let mut mapped = std::collections::HashMap::new();
+    let mut insert = Vec::new();
+    let original: Vec<String> = file.actions.iter().map(|a| a.name.clone()).collect();
+    for mut action in file.actions.drain(..) {
+        let name = action.name.clone();
+        if let Some(found) = existing.iter().find(|a| a.name == name && a.steps == action.steps) {
+            mapped.insert(name, found.name.clone());
+            continue;
+        }
+        // Re-importing an already-renamed action must not append a third copy.
+        if let Some(found) = existing.iter().find(|a| a.name.starts_with(&format!("{name} (Imported ")) && a.steps == action.steps) {
+            mapped.insert(name, found.name.clone());
+            continue;
+        }
+        if reserved.iter().any(|s| s == &name) && existing.iter().any(|a| a.name == name) {
+            let mut n = 2usize;
+            loop {
+                let candidate = format!("{name} (Imported {n})");
+                if reserved.insert(candidate.clone()) {
+                    action.name = candidate;
+                    break;
+                }
+                n += 1;
+            }
+        }
+        mapped.insert(name, action.name.clone());
+        insert.push(action);
+    }
+    for action in &mut insert {
+        for (id, params) in &mut action.steps {
+            if id != "actions.play" {
+                continue;
+            }
+            if let Some(name) = params.get("action").and_then(Value::as_str)
+                && let Some(target) = mapped.get(name)
+            {
+                params["action"] = json!(target);
+            } else if let Some(index) = params.get("action").and_then(Value::as_u64) {
+                let name = original.get(index as usize).ok_or_else(|| format!("Invalid nested action index {index}"))?;
+                let target = mapped.get(name).ok_or_else(|| format!("Missing imported action '{name}'"))?;
+                params["action"] = json!(target);
+            }
+        }
+    }
+    let imported = insert.len();
+    if imported > 0 {
+        app.session.actions.list.extend(insert);
+        app.session.actions.rev = app.session.actions.rev.saturating_add(1);
+        app.ui.actions.selected_step = None;
+        app.ui.actions.selected = Some(app.session.actions.list.len() - imported);
+    }
+    app.ui.status_error = false;
+    app.ui.status = format!("Imported {imported} actions ({} already present)", original.len() - imported);
+    Ok(json!({"imported": imported, "skipped": original.len() - imported}))
+}
+
+fn import_actions_dialog(app: &mut PhotocraftApp) -> Result<Value, String> {
+    app.pick_file_bytes(|app, _, bytes| import_actions_bytes(app, &bytes))
+}
+
+fn export_actions_dialog(app: &mut PhotocraftApp) -> Result<Value, String> {
+    let bytes = export_actions_bytes(app)?;
+    let count = app.session.actions.list.len();
+    app.pick_save("Actions.json", move |app, path| {
+        let writer = app.services.write.as_mut().ok_or("no writer configured")?;
+        writer(&path, &bytes)?;
+        app.ui.status_error = false;
+        app.ui.status = format!("Exported {count} actions to {}", crate::file_open::display_name(&path));
+        Ok(json!({"path": path, "count": count}))
+    })
+}
+
 fn begin_recording(app: &mut PhotocraftApp, append: bool) {
     if app.session.actions.recording.is_some() {
         return;
@@ -261,6 +371,7 @@ pub fn panel(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     let max_h = (ui.available_height() - 70.0).clamp(80.0, 320.0);
     let mut play_idx = None;
     let mut moved = None;
+    let mut file_action = None;
     let recording_row = recording.and_then(|(_, i)| rows.get(i).map(|(_, steps)| (i, steps.len())));
     let reveal = recording_row.filter(|row| app.ui.actions.reveal_recording != Some(*row));
     app.ui.actions.reveal_recording = recording_row;
@@ -411,7 +522,27 @@ pub fn panel(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                 delete_selection(app);
             }
         });
+        ui.menu_button("⋯", |ui| {
+            if ui.add_enabled(!recording_now, egui::Button::new("Import Actions…")).clicked() {
+                file_action = Some("import");
+                ui.close();
+            }
+            if ui.add_enabled(!rows.is_empty(), egui::Button::new("Export Actions…")).clicked() {
+                file_action = Some("export");
+                ui.close();
+            }
+        });
     });
+    if let Some(file_action) = file_action {
+        let result = match file_action {
+            "import" => import_actions_dialog(app),
+            _ => export_actions_dialog(app),
+        };
+        if let Err(e) = result && e != "cancelled" {
+            app.ui.status = e;
+            app.ui.status_error = true;
+        }
+    }
     if let Some(i) = play_idx
         && let Ok(v) = app.run("actions.play", json!({"action": i}))
     {
@@ -422,6 +553,57 @@ pub fn panel(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn actions_file_round_trip_and_reimport_is_idempotent() {
+        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+        app.session.actions.list.push(Action { name: "Draw".into(), steps: vec![("layer.new.layer".into(), json!({}))] });
+        let bytes = export_actions_bytes(&app).unwrap();
+        app.session.actions.list.clear();
+        let r = import_actions_bytes(&mut app, &bytes).unwrap();
+        assert_eq!(r["imported"], 1);
+        assert_eq!(app.session.actions.list[0].name, "Draw");
+        assert_eq!(app.session.actions.list[0].steps, vec![("layer.new.layer".into(), json!({}))]);
+        let r = import_actions_bytes(&mut app, &bytes).unwrap();
+        assert_eq!(r["imported"], 0);
+        assert_eq!(app.session.actions.list.len(), 1);
+    }
+
+    #[test]
+    fn import_renames_conflicts_and_retargets_nested_calls() {
+        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+        app.session.actions.list.push(Action { name: "Child".into(), steps: vec![] });
+        let imported = actions_cmds::ActionsFile {
+            version: 1,
+            actions: vec![
+                Action { name: "Child".into(), steps: vec![("layer.new.layer".into(), json!({}))] },
+                Action { name: "Parent".into(), steps: vec![("actions.play".into(), json!({"action": 0}))] },
+                Action { name: "Named".into(), steps: vec![("actions.play".into(), json!({"action":"Child"}))] },
+            ],
+        };
+        let bytes = serde_json::to_vec(&imported).unwrap();
+        assert_eq!(import_actions_bytes(&mut app, &bytes).unwrap()["imported"], 3);
+        assert_eq!(app.session.actions.list[1].name, "Child (Imported 2)");
+        assert_eq!(app.session.actions.list[2].steps[0].1["action"], "Child (Imported 2)");
+        assert_eq!(app.session.actions.list[3].steps[0].1["action"], "Child (Imported 2)");
+        let rev = app.session.actions.rev;
+        assert_eq!(import_actions_bytes(&mut app, &bytes).unwrap()["imported"], 0);
+        assert_eq!(app.session.actions.rev, rev, "no writes on repeated import");
+    }
+
+    #[test]
+    fn malformed_action_files_leave_existing_actions_untouched() {
+        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+        app.session.actions.list.push(Action { name: "Keep".into(), steps: vec![] });
+        for data in [b"not json".as_slice(), br#"{"version":2,"actions":[]}"#, br#"{"version":1,"actions":[{"name":"A"},{"name":"A"}]}"#] {
+            assert!(import_actions_bytes(&mut app, data).is_err());
+            assert_eq!(app.session.actions.list.len(), 1);
+            assert_eq!(app.session.actions.list[0].name, "Keep");
+        }
+        app.session.actions.recording = Some((0, 0));
+        assert!(import_actions_bytes(&mut app, b"{}").is_err());
+        assert_eq!(app.session.actions.list.len(), 1);
+    }
 
     #[test]
     fn recording_reveals_new_action_and_latest_step_in_a_long_panel() {
