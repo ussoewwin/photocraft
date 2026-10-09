@@ -185,7 +185,7 @@ fn import_actions_bytes(app: &mut PhotocraftApp, bytes: &[u8]) -> Result<Value, 
         let name = action.name.clone();
         let target = if let Some(found) = existing.iter().find(|a| a.name == name && a.steps == action.steps) {
             found.name.clone()
-        } else if let Some(found) = existing.iter().find(|a| a.name.starts_with(&format!("{name} (Imported ")) && a.steps == action.steps) {
+        } else if let Some(found) = existing.iter().find(|a| a.name.starts_with(format!("{name} (Imported ").as_str()) && a.steps == action.steps) {
             found.name.clone()
         } else if existing.iter().any(|a| a.name == name) {
             let mut n = 2usize;
@@ -233,7 +233,7 @@ fn import_actions_bytes(app: &mut PhotocraftApp, bytes: &[u8]) -> Result<Value, 
     let mut corrected = std::collections::HashMap::<String, String>::new();
     for (source_name, action) in original.iter().zip(&mut planned) {
         if let Some(found) = existing.iter().find(|a| {
-            (a.name == *source_name || a.name.starts_with(&format!("{source_name} (Imported "))) && a.steps == action.steps
+            (a.name == *source_name || a.name.starts_with(format!("{source_name} (Imported ").as_str())) && a.steps == action.steps
         }) {
             corrected.insert(action.name.clone(), found.name.clone());
             action.name = found.name.clone();
