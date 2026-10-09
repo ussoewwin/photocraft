@@ -138,6 +138,9 @@ pub(crate) fn run_view(app: &mut PhotocraftApp, id: &str, params: Value) -> Resu
 
 /// Export the same versioned format as the persisted `actions.json` preset store.
 fn export_actions_bytes(app: &PhotocraftApp) -> Result<Vec<u8>, String> {
+    if app.session.actions.recording.is_some() || app.session.actions.playing > 0 {
+        return Err("Stop recording or playing before exporting Actions".into());
+    }
     let data = actions_cmds::ActionsFile { version: 1, actions: app.session.actions.list.clone() };
     let bytes = serde_json::to_vec_pretty(&data).map_err(|e| e.to_string())?;
     if bytes.len() as u64 > photocraft_engine::preset_store::MAX_ACTIONS_BYTES {
@@ -174,50 +177,82 @@ fn import_actions_bytes(app: &mut PhotocraftApp, bytes: &[u8]) -> Result<Value, 
 
     let existing = &app.session.actions.list;
     let mut reserved: std::collections::HashSet<String> = existing.iter().map(|a| a.name.clone()).chain(file.actions.iter().map(|a| a.name.clone())).collect();
-    let mut mapped = std::collections::HashMap::new();
-    let mut insert = Vec::new();
+    let mut mapped = std::collections::HashMap::<String, String>::new();
     let original: Vec<String> = file.actions.iter().map(|a| a.name.clone()).collect();
+    // Plan *all* destination names first: a parent may precede the child it calls.
+    let mut planned = Vec::new();
     for mut action in file.actions.drain(..) {
         let name = action.name.clone();
-        if let Some(found) = existing.iter().find(|a| a.name == name && a.steps == action.steps) {
-            mapped.insert(name, found.name.clone());
-            continue;
-        }
-        // Re-importing an already-renamed action must not append a third copy.
-        if let Some(found) = existing.iter().find(|a| a.name.starts_with(&format!("{name} (Imported ")) && a.steps == action.steps) {
-            mapped.insert(name, found.name.clone());
-            continue;
-        }
-        if reserved.iter().any(|s| s == &name) && existing.iter().any(|a| a.name == name) {
+        let target = if let Some(found) = existing.iter().find(|a| a.name == name && a.steps == action.steps) {
+            found.name.clone()
+        } else if let Some(found) = existing.iter().find(|a| a.name.starts_with(&format!("{name} (Imported ")) && a.steps == action.steps) {
+            found.name.clone()
+        } else if existing.iter().any(|a| a.name == name) {
             let mut n = 2usize;
             loop {
                 let candidate = format!("{name} (Imported {n})");
                 if reserved.insert(candidate.clone()) {
-                    action.name = candidate;
-                    break;
+                    break candidate;
                 }
                 n += 1;
             }
-        }
-        mapped.insert(name, action.name.clone());
-        insert.push(action);
+        } else {
+            name.clone()
+        };
+        mapped.insert(name, target.clone());
+        action.name = target;
+        planned.push(action);
     }
-    for action in &mut insert {
+
+    // Rewrite nested calls against the final name table, including portable index references.
+    let retarget = |action: &mut Action, mapping: &std::collections::HashMap<String, String>| -> Result<(), String> {
         for (id, params) in &mut action.steps {
             if id != "actions.play" {
                 continue;
             }
-            if let Some(name) = params.get("action").and_then(Value::as_str)
-                && let Some(target) = mapped.get(name)
-            {
-                params["action"] = json!(target);
-            } else if let Some(index) = params.get("action").and_then(Value::as_u64) {
-                let name = original.get(index as usize).ok_or_else(|| format!("Invalid nested action index {index}"))?;
-                let target = mapped.get(name).ok_or_else(|| format!("Missing imported action '{name}'"))?;
+            let original_name = match params.get("action") {
+                Some(Value::String(name)) => name.clone(),
+                Some(Value::Number(n)) if n.as_u64().is_some() => {
+                    let index = usize::try_from(n.as_u64().unwrap()).map_err(|_| "Nested action index out of range")?;
+                    original.get(index).cloned().ok_or_else(|| format!("Invalid nested action index {index}"))?
+                }
+                _ => continue,
+            };
+            if let Some(target) = mapping.get(&original_name) {
                 params["action"] = json!(target);
             }
         }
+        Ok(())
+    };
+    for action in &mut planned {
+        retarget(action, &mapped)?;
     }
+
+    // An existing action can become identical *after* its nested calls are
+    // retargeted. Reuse it instead of appending a duplicate during re-import.
+    let mut corrected = std::collections::HashMap::<String, String>::new();
+    for (source_name, action) in original.iter().zip(&mut planned) {
+        if let Some(found) = existing.iter().find(|a| {
+            (a.name == *source_name || a.name.starts_with(&format!("{source_name} (Imported "))) && a.steps == action.steps
+        }) {
+            corrected.insert(action.name.clone(), found.name.clone());
+            action.name = found.name.clone();
+        }
+    }
+    for action in &mut planned {
+        for (id, params) in &mut action.steps {
+            if id == "actions.play"
+                && let Some(current) = params.get("action").and_then(Value::as_str)
+                && let Some(correct) = corrected.get(current)
+            {
+                params["action"] = json!(correct);
+            }
+        }
+    }
+    let insert: Vec<_> = planned
+        .into_iter()
+        .filter(|action| !existing.iter().any(|a| a.name == action.name && a.steps == action.steps))
+        .collect();
     let imported = insert.len();
     if imported > 0 {
         app.session.actions.list.extend(insert);
@@ -527,7 +562,7 @@ pub fn panel(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                 file_action = Some("import");
                 ui.close();
             }
-            if ui.add_enabled(!rows.is_empty(), egui::Button::new("Export Actions…")).clicked() {
+            if ui.add_enabled(!rows.is_empty() && !recording_now, egui::Button::new("Export Actions…")).clicked() {
                 file_action = Some("export");
                 ui.close();
             }
