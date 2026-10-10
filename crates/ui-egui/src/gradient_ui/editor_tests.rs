@@ -62,7 +62,7 @@ fn top_opacity_and_bottom_color_select_their_own_fields_in_both_editor_modes() {
         assert!(h.query_by_label("Opacity stops").is_none());
         assert!(h.get_all_by_label("Color").any(|n| n.accesskit_node().role() == egui::accesskit::Role::Button));
         select(&mut h, 0.5, true);
-        let key = strip_key(h.state(), sink, Strip::Combined).with("selection");
+        let key = strip_key(h.state(), sink).with("selection");
         assert_eq!(h.ctx.data(|d| d.get_temp::<Marker>(key)), Some(Marker::Opacity(1)));
         assert!(h.query_by_label("Color").is_none(), "opacity selection hides color controls");
         select(&mut h, 0.5, false);
@@ -106,7 +106,7 @@ fn editor_location_follows_reordered_color_and_opens_existing_picker() {
         let (mut h, sink) = editor(layer);
         select(&mut h, 0.0, false);
         type_number(&mut h, 0, "70", true);
-        let key = strip_key(h.state(), sink, Strip::Combined).with("selection");
+        let key = strip_key(h.state(), sink).with("selection");
         assert_eq!(h.ctx.data(|d| d.get_temp::<Marker>(key)), Some(Marker::Color(1)));
         assert!(matches!(sink.fill(h.state()).unwrap(), Fill::Gradient { stops, .. } if (stops[1].0 - 0.7).abs() < 1e-5));
         h.get_all_by_label("Color").find(|n| n.accesskit_node().role() == egui::accesskit::Role::Button).unwrap().click();
@@ -125,7 +125,7 @@ fn editor_opacity_location_changes_only_opacity_in_both_modes() {
         let Fill::Gradient { stops, opacity_stops, .. } = sink.fill(h.state()).unwrap() else { panic!() };
         assert_eq!(stops, before, "opacity location must not move a color stop");
         assert!((opacity_stops[1].0 - 0.7).abs() < 1e-5);
-        let key = strip_key(h.state(), sink, Strip::Combined).with("selection");
+        let key = strip_key(h.state(), sink).with("selection");
         assert_eq!(h.ctx.data(|d| d.get_temp::<Marker>(key)), Some(Marker::Opacity(1)));
     }
 }

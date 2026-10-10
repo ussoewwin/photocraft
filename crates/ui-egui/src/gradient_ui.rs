@@ -689,21 +689,13 @@ enum Marker {
     Mid(usize),
 }
 
-/// The editor window keeps its combined strip; Properties exposes two separate tracks.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-enum Strip {
-    Combined,
-    Color,
-    Opacity,
-}
-
-fn strip_key(app: &PhotocraftApp, sink: Sink, strip: Strip) -> egui::Id {
+fn strip_key(app: &PhotocraftApp, sink: Sink) -> egui::Id {
     // Layer IDs can repeat in different documents. Tool presets belong to the session.
     let document = match sink {
         Sink::Layer(_) => app.session.active().map(|s| s.doc.id),
         Sink::Preset => None,
     };
-    sink.key().with((strip, document))
+    sink.key().with(document)
 }
 
 /// What a stops editor instance edits: a Gradient Fill layer (`gradient.fill.stop`) or the
@@ -790,12 +782,12 @@ fn preset_stop_color(app: &mut PhotocraftApp, i: usize) {
 }
 
 fn stops_editor_for(app: &mut PhotocraftApp, ui: &mut egui::Ui, sink: Sink, f: Fill) {
-    let key = strip_key(app, sink, Strip::Combined).with("selection");
+    let key = strip_key(app, sink).with("selection");
     if ui.data(|d| d.get_temp::<Marker>(key)).is_none() {
         ui.data_mut(|d| d.insert_temp(key, Marker::Color(0)));
     }
-    stop_strip(app, ui, sink, f, Strip::Combined);
-    properties_panel::stop_fields(app, ui, sink, Strip::Combined);
+    stop_strip(app, ui, sink, f);
+    properties_panel::stop_fields(app, ui, sink);
 }
 
 /// Keep selection on a stop after the engine sorts its new position.
@@ -825,20 +817,14 @@ fn selection_after_edit(f: &Fill, p: &Value, previous: Option<Marker>) -> Option
     Some(if opacity { Marker::Opacity(at) } else { Marker::Color(at) })
 }
 
-fn stop_strip(app: &mut PhotocraftApp, ui: &mut egui::Ui, sink: Sink, f: Fill, strip: Strip) {
+fn stop_strip(app: &mut PhotocraftApp, ui: &mut egui::Ui, sink: Sink, f: Fill) {
     let Fill::Gradient { stops, .. } = &f else { return };
     let t = Tokens::get(ui.ctx());
     let w = ui.available_width().max(120.0);
-    let combined = strip == Strip::Combined;
-    let (outer, resp) = ui.allocate_exact_size(vec2(w, if combined { 58.0 } else { 48.0 }), Sense::click_and_drag());
+    let (outer, resp) = ui.allocate_exact_size(vec2(w, 58.0), Sense::click_and_drag());
     // Name the strip for accessibility (and so tests and agents can find it).
-    let strip_label = match strip {
-        Strip::Combined => "Gradient stops",
-        Strip::Color => "Color stops",
-        Strip::Opacity => "Opacity stops",
-    };
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), tl!(strip_label)));
-    let top = outer.top() + if combined { 16.0 } else { 4.0 };
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), tl!("Gradient stops")));
+    let top = outer.top() + 16.0;
     let bar = Rect::from_min_max(pos2(outer.left() + 8.0, top), pos2(outer.right() - 8.0, top + 24.0));
     let x_of = |loc: f32| bar.left() + loc.clamp(0.0, 1.0) * bar.width();
     let loc_of = |x: f32| ((x - bar.left()) / bar.width().max(1.0)).clamp(0.0, 1.0);
@@ -850,18 +836,9 @@ fn stop_strip(app: &mut PhotocraftApp, ui: &mut egui::Ui, sink: Sink, f: Fill, s
     let (fg, bg) = (app.session.tools.foreground, app.session.tools.background);
     let shown = pending.as_ref().and_then(|p| cmds::apply_stop(&f, p, fg, bg).ok()).unwrap_or_else(|| f.clone());
     let mut track_fill = shown.clone();
-    if let Fill::Gradient { stops, opacity_stops, reverse, .. } = &mut track_fill {
+    if let Fill::Gradient { reverse, .. } = &mut track_fill {
         // All markers address un-reversed positions; Reverse applies to the canvas output.
         *reverse = false;
-        match strip {
-            Strip::Color => opacity_stops.clear(),
-            Strip::Opacity => {
-                for (_, color) in stops {
-                    *color = photocraft_color::Color::BLACK;
-                }
-            }
-            Strip::Combined => {}
-        }
     }
     if let Some(ramp) = gf::Ramp::new(&track_fill) {
         paint_ramp(ui.painter(), bar, |u| ramp.sample(u));
@@ -875,36 +852,28 @@ fn stop_strip(app: &mut PhotocraftApp, ui: &mut egui::Ui, sink: Sink, f: Fill, s
     sorted.sort_by(|a, b| a.0.total_cmp(&b.0));
     let mut ops: Vec<(f32, f32)> = if os.is_empty() { vec![(0.0, 1.0), (1.0, 1.0)] } else { os.clone() };
     ops.sort_by(|a, b| a.0.total_cmp(&b.0));
-    let key = strip_key(app, sink, strip);
+    let key = strip_key(app, sink);
     let selection_key = key.with("selection");
     let selected: Option<Marker> = ui.data(|d| d.get_temp(selection_key));
     let dragging: Option<Marker> = ui.data(|d| d.get_temp(key));
     // Markers.
     let p = ui.painter();
-    for (i, (loc, c)) in sorted.iter().enumerate().filter(|_| strip != Strip::Opacity) {
+    for (i, (loc, c)) in sorted.iter().enumerate() {
         let x = x_of(*loc);
         let sel = dragging.or(selected) == Some(Marker::Color(i));
         let tip = pos2(x, bar.bottom() + 1.0);
         let body = Rect::from_center_size(pos2(x, bar.bottom() + 10.0), vec2(10.0, 10.0));
         let rgb = c.to_rgb();
         let color = c32([rgb[0], rgb[1], rgb[2], 1.0]);
-        if combined {
-            p.add(egui::Shape::convex_polygon(
-                vec![tip, pos2(x + 5.0, body.top()), pos2(x - 5.0, body.top())],
-                if sel { t.accent } else { t.text_dim },
-                Stroke::NONE,
-            ));
-            p.rect_filled(body, 1.0, color);
-            p.rect_stroke(body, 1.0, Stroke::new(1.0, if sel { t.accent } else { t.text_dim }), StrokeKind::Outside);
-        } else {
-            p.circle_filled(body.center(), 5.0, color);
-            p.circle_stroke(body.center(), 5.0, Stroke::new(1.0, t.text));
-            if sel {
-                p.circle_stroke(body.center(), 7.0, Stroke::new(1.5, t.accent));
-            }
-        }
+        p.add(egui::Shape::convex_polygon(
+            vec![tip, pos2(x + 5.0, body.top()), pos2(x - 5.0, body.top())],
+            if sel { t.accent } else { t.text_dim },
+            Stroke::NONE,
+        ));
+        p.rect_filled(body, 1.0, color);
+        p.rect_stroke(body, 1.0, Stroke::new(1.0, if sel { t.accent } else { t.text_dim }), StrokeKind::Outside);
     }
-    if sink.midpoints() && strip != Strip::Opacity {
+    if sink.midpoints() {
         for i in 0..sorted.len().saturating_sub(1) {
             let (a, b) = (sorted[i].0, sorted[i + 1].0);
             if b - a > 1e-3 {
@@ -914,33 +883,22 @@ fn stop_strip(app: &mut PhotocraftApp, ui: &mut egui::Ui, sink: Sink, f: Fill, s
             }
         }
     }
-    for (i, (loc, a)) in ops.iter().enumerate().filter(|_| strip != Strip::Color) {
+    for (i, (loc, a)) in ops.iter().enumerate() {
         let x = x_of(*loc);
         let sel = dragging.or(selected) == Some(Marker::Opacity(i));
-        let y = if combined { bar.top() - 10.0 } else { bar.bottom() + 10.0 };
+        let y = bar.top() - 10.0;
         let body = Rect::from_center_size(pos2(x, y), vec2(10.0, 10.0));
         let color = Color32::from_gray((a.clamp(0.0, 1.0) * 255.0) as u8);
-        if combined {
-            p.add(egui::Shape::convex_polygon(
-                vec![pos2(x, bar.top() - 1.0), pos2(x + 5.0, body.bottom()), pos2(x - 5.0, body.bottom())],
-                if sel { t.accent } else { t.text_dim },
-                Stroke::NONE,
-            ));
-            p.rect_filled(body, 1.0, color);
-            p.rect_stroke(body, 1.0, Stroke::new(1.0, if sel { t.accent } else { t.text_dim }), StrokeKind::Outside);
-        } else {
-            p.circle_filled(body.center(), 5.0, color);
-            p.circle_stroke(body.center(), 5.0, Stroke::new(1.0, t.text));
-            if sel {
-                p.circle_stroke(body.center(), 7.0, Stroke::new(1.5, t.accent));
-            }
-        }
+        p.add(egui::Shape::convex_polygon(
+            vec![pos2(x, bar.top() - 1.0), pos2(x + 5.0, body.bottom()), pos2(x - 5.0, body.bottom())],
+            if sel { t.accent } else { t.text_dim },
+            Stroke::NONE,
+        ));
+        p.rect_filled(body, 1.0, color);
+        p.rect_stroke(body, 1.0, Stroke::new(1.0, if sel { t.accent } else { t.text_dim }), StrokeKind::Outside);
     }
     // Interaction.
     let hit = |pos: Pos2| -> Option<Marker> {
-        if strip == Strip::Opacity {
-            return (pos.y > bar.bottom()).then(|| ops.iter().position(|(l, _)| (x_of(*l) - pos.x).abs() <= 6.0)).flatten().map(Marker::Opacity);
-        }
         if pos.y > bar.bottom() {
             if let Some(i) = sorted.iter().position(|(l, _)| (x_of(*l) - pos.x).abs() <= 6.0 && pos.y >= bar.bottom() + 3.0) {
                 return Some(Marker::Color(i));
@@ -955,7 +913,7 @@ fn stop_strip(app: &mut PhotocraftApp, ui: &mut egui::Ui, sink: Sink, f: Fill, s
                 })
                 .map(Marker::Mid);
         }
-        if combined && pos.y < bar.top() {
+        if pos.y < bar.top() {
             return ops.iter().position(|(l, _)| (x_of(*l) - pos.x).abs() <= 6.0).map(Marker::Opacity);
         }
         None
@@ -1033,7 +991,7 @@ fn stop_strip(app: &mut PhotocraftApp, ui: &mut egui::Ui, sink: Sink, f: Fill, s
             return;
         }
         let loc = loc_of(pos.x);
-        let opacity = strip == Strip::Opacity || (combined && pos.y < bar.center().y);
+        let opacity = pos.y < bar.center().y;
         let p = if opacity {
             sink.params(json!({"action": "add", "kind": "opacity", "location": loc}))
         } else {

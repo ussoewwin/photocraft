@@ -14,34 +14,24 @@ const STYLES: [(GradientStyle, &str); 5] = [
 pub(super) fn show(app: &mut PhotocraftApp, ui: &mut egui::Ui, layer: &Layer) {
     let document = app.session.active().map(|s| s.doc.id);
     ui.push_id(("gradient-properties", document, layer.id.0), |ui| {
-        options(app, ui, layer);
-        for (strip, title) in [(Strip::Color, "Color stops"), (Strip::Opacity, "Opacity stops")] {
-            let section_id = if strip == Strip::Color { "gradient-fill-colors" } else { "gradient-fill-opacity" };
-            if props_layout::section(ui, section_id, title) {
-                // Fetch current state after a preceding control committed, not the panel's snapshot.
-                if let Some(fill) = current_fill(app, layer.id) {
-                    let key = strip_key(app, Sink::Layer(layer.id), strip).with("selection");
-                    if ui.data(|d| d.get_temp::<Marker>(key)).is_none() {
-                        ui.data_mut(|d| d.insert_temp(key, if strip == Strip::Color { Marker::Color(0) } else { Marker::Opacity(0) }));
-                    }
-                    stop_strip(app, ui, Sink::Layer(layer.id), fill, strip);
-                    stop_fields(app, ui, Sink::Layer(layer.id), strip);
-                }
-            }
-        }
+        layer_controls(app, ui, layer);
     });
 }
 
 pub(super) fn editor(app: &mut PhotocraftApp, ui: &mut egui::Ui, layer: &Layer) {
     let document = app.session.active().map(|s| s.doc.id);
     ui.push_id(("gradient-editor-layer", document, layer.id.0), |ui| {
-        if props_layout::section(ui, "gradient-editor-stops", "Gradient")
-            && let Some(fill) = current_fill(app, layer.id)
-        {
-            stops_editor_for(app, ui, Sink::Layer(layer.id), fill);
-        }
-        options(app, ui, layer);
+        layer_controls(app, ui, layer);
     });
+}
+
+fn layer_controls(app: &mut PhotocraftApp, ui: &mut egui::Ui, layer: &Layer) {
+    if props_layout::section(ui, "gradient-fill-stops", "Gradient")
+        && let Some(fill) = current_fill(app, layer.id)
+    {
+        stops_editor_for(app, ui, Sink::Layer(layer.id), fill);
+    }
+    options(app, ui, layer);
 }
 
 fn options(app: &mut PhotocraftApp, ui: &mut egui::Ui, layer: &Layer) {
@@ -143,18 +133,17 @@ fn style_button(ui: &mut egui::Ui, style: GradientStyle, selected: bool, name: &
     response.on_hover_text(tl!(name))
 }
 
-pub(super) fn stop_fields(app: &mut PhotocraftApp, ui: &mut egui::Ui, sink: Sink, strip: Strip) {
+pub(super) fn stop_fields(app: &mut PhotocraftApp, ui: &mut egui::Ui, sink: Sink) {
     let Some(Fill::Gradient { mut stops, mut opacity_stops, midpoints, .. }) = sink.fill(app) else { return };
     stops.sort_by(|a, b| a.0.total_cmp(&b.0));
     if opacity_stops.is_empty() {
         opacity_stops = vec![(0.0, 1.0), (1.0, 1.0)];
     }
     opacity_stops.sort_by(|a, b| a.0.total_cmp(&b.0));
-    let key = strip_key(app, sink, strip).with("selection");
-    let default = if strip == Strip::Opacity { Marker::Opacity(0) } else { Marker::Color(0) };
-    let selected = ui.data(|d| d.get_temp::<Marker>(key)).unwrap_or(default);
+    let key = strip_key(app, sink).with("selection");
+    let selected = ui.data(|d| d.get_temp::<Marker>(key)).unwrap_or(Marker::Color(0));
     let (index, location, count) = match selected {
-        Marker::Color(i) if strip != Strip::Opacity => {
+        Marker::Color(i) => {
             let Some((location, color)) = stops.get(i) else {
                 ui.data_mut(|d| d.remove::<Marker>(key));
                 return;
@@ -175,7 +164,7 @@ pub(super) fn stop_fields(app: &mut PhotocraftApp, ui: &mut egui::Ui, sink: Sink
             });
             (i, *location, stops.len())
         }
-        Marker::Opacity(i) if strip != Strip::Color => {
+        Marker::Opacity(i) => {
             let Some((location, opacity)) = opacity_stops.get(i) else {
                 ui.data_mut(|d| d.remove::<Marker>(key));
                 return;
@@ -185,7 +174,7 @@ pub(super) fn stop_fields(app: &mut PhotocraftApp, ui: &mut egui::Ui, sink: Sink
             }
             (i, *location, opacity_stops.len())
         }
-        Marker::Mid(i) if strip != Strip::Opacity => {
+        Marker::Mid(i) => {
             if stops.get(i).is_none() || stops.get(i.saturating_add(1)).is_none() {
                 ui.data_mut(|d| d.remove::<Marker>(key));
                 return;
@@ -195,7 +184,6 @@ pub(super) fn stop_fields(app: &mut PhotocraftApp, ui: &mut egui::Ui, sink: Sink
             }
             return;
         }
-        _ => return,
     };
     let kind = if matches!(selected, Marker::Opacity(_)) { "opacity" } else { "color" };
     if let Some(value) = numeric_row(ui, &format!("{kind}-location-{index}"), "Location", location * 100.0, 0.0..=100.0, "%") {
@@ -255,6 +243,17 @@ mod tests {
         current_fill(app, state.active_layer.unwrap()).unwrap()
     }
 
+    fn click_strip(h: &mut Harness<'_, PhotocraftApp>, location: f32, y: f32) {
+        let rect = h.get_by_label("Gradient stops").rect();
+        let pos = pos2(rect.left() + 8.0 + (rect.width() - 16.0) * location, rect.top() + y);
+        h.event(egui::Event::PointerMoved(pos));
+        h.run_steps(1);
+        h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: true, modifiers: egui::Modifiers::NONE });
+        h.run_steps(1);
+        h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: false, modifiers: egui::Modifiers::NONE });
+        h.run_steps(3);
+    }
+
     #[test]
     fn style_icons_edit_the_selected_layer_with_one_undo_step() {
         let mut h = Harness::builder().with_size(vec2(280.0, 800.0)).build_ui_state(panel, app());
@@ -278,21 +277,17 @@ mod tests {
     }
 
     #[test]
-    fn separate_tracks_add_only_their_own_kind_and_keep_color_picker_working() {
+    fn combined_strip_adds_only_the_clicked_kind_and_keeps_color_picker_working() {
         let mut h = Harness::builder().with_size(vec2(280.0, 800.0)).build_ui_state(panel, app());
         PhotocraftApp::setup_context(&h.ctx, theme::ThemeKind::ProMedium);
         h.run_steps(3);
-        for (title, opacity) in [("Color stops", false), ("Opacity stops", true)] {
+        assert!(h.query_by_label("Color stops").is_none());
+        assert!(h.query_by_label("Opacity stops").is_none());
+        assert!(h.get_by_label("Gradient stops").rect().bottom() < h.get_by_label("Gradient Options").rect().top());
+        for opacity in [false, true] {
             let before = fill(h.state());
             let count = h.state().session.active().unwrap().history.past_len();
-            let rect = h.query_all_by_label(title).find(|n| n.rect().height() > 40.0).unwrap().rect();
-            let pos = rect.center();
-            h.event(egui::Event::PointerMoved(pos));
-            h.run_steps(1);
-            h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: true, modifiers: egui::Modifiers::NONE });
-            h.run_steps(1);
-            h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: false, modifiers: egui::Modifiers::NONE });
-            h.run_steps(3);
+            click_strip(&mut h, 0.5, if opacity { 22.0 } else { 34.0 });
             let after = fill(h.state());
             let Fill::Gradient { stops: old_colors, opacity_stops: old_opacity, .. } = &before else { panic!() };
             let Fill::Gradient { stops: colors, opacity_stops, .. } = &after else { panic!() };
@@ -310,7 +305,13 @@ mod tests {
             assert_eq!(fill(h.state()), after);
             h.run_steps(2);
         }
-        // Selected color remains independently editable even after editing opacity.
+        // The selected opacity's fields are replaced when a bottom color handle is selected.
+        assert!(h.query_all_by_label("Color").all(|n| n.rect().width() < 80.0));
+        let before = fill(h.state());
+        let count = h.state().session.active().unwrap().history.past_len();
+        click_strip(&mut h, 0.0, 50.0);
+        assert_eq!(fill(h.state()), before);
+        assert_eq!(h.state().session.active().unwrap().history.past_len(), count);
         h.query_all_by_label("Color").find(|n| n.rect().width() > 80.0).unwrap().click();
         h.run_steps(2);
         assert!(!h.state().ui.dialogs.is_empty());
@@ -321,10 +322,11 @@ mod tests {
         let mut h = Harness::builder().with_size(vec2(280.0, 800.0)).build_ui_state(panel, app());
         PhotocraftApp::setup_context(&h.ctx, theme::ThemeKind::ProMedium);
         h.run_steps(3);
+        click_strip(&mut h, 0.0, 6.0);
         let before = fill(h.state());
         let count = h.state().session.active().unwrap().history.past_len();
-        // Angle, scale, color location, opacity, opacity location.
-        h.get_all_by_role(egui::accesskit::Role::SpinButton).nth(3).unwrap().click();
+        // Selected opacity and location precede angle and scale.
+        h.get_all_by_role(egui::accesskit::Role::SpinButton).next().unwrap().click();
         h.run_steps(2);
         h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
         h.event(egui::Event::Text("35".into()));
@@ -346,10 +348,11 @@ mod tests {
         PhotocraftApp::setup_context(&h.ctx, theme::ThemeKind::ProMedium);
         h.run_steps(3);
         assert!(h.get_all_by_label("Delete").next().unwrap().accesskit_node().is_disabled(), "two colors cannot be reduced further");
-        assert!(!h.get_all_by_label("Delete").nth(1).unwrap().accesskit_node().is_disabled(), "three opacity points can be reduced");
+        click_strip(&mut h, 0.0, 6.0);
+        assert!(!h.get_all_by_label("Delete").next().unwrap().accesskit_node().is_disabled(), "three opacity points can be reduced");
         let before = fill(h.state());
         let count = h.state().session.active().unwrap().history.past_len();
-        h.get_all_by_label("Delete").nth(1).unwrap().click();
+        h.get_all_by_label("Delete").next().unwrap().click();
         h.run_steps(3);
         let after = fill(h.state());
         let Fill::Gradient { stops: old_colors, opacity_stops: old_opacity, .. } = &before else { panic!() };
@@ -357,11 +360,12 @@ mod tests {
         assert_eq!(colors, old_colors);
         assert_eq!(opacity_stops, &old_opacity[1..]);
         assert_eq!(h.state().session.active().unwrap().history.past_len(), count + 1);
-        assert!(h.get_all_by_label("Delete").nth(1).unwrap().accesskit_node().is_disabled(), "two opacity points cannot be reduced further");
+        click_strip(&mut h, 0.5, 6.0);
+        assert!(h.get_all_by_label("Delete").next().unwrap().accesskit_node().is_disabled(), "two opacity points cannot be reduced further");
         h.state_mut().run("edit.undo", json!({})).unwrap();
         assert_eq!(fill(h.state()), before);
         h.run_steps(3);
-        assert!(!h.get_all_by_label("Delete").nth(1).unwrap().accesskit_node().is_disabled());
+        assert!(!h.get_all_by_label("Delete").next().unwrap().accesskit_node().is_disabled());
         h.state_mut().run("edit.redo", json!({})).unwrap();
         assert_eq!(fill(h.state()), after);
     }
@@ -377,10 +381,8 @@ mod tests {
                 let rect = h.get_by_label(name).rect();
                 assert!(rect.right() <= 260.0 && rect.left() >= 0.0, "{theme:?}: {name} {rect:?}");
             }
-            for title in ["Color stops", "Opacity stops"] {
-                let rect = h.query_all_by_label(title).find(|n| n.rect().height() > 40.0).unwrap().rect();
-                assert!(rect.right() <= 260.0, "{theme:?}: {title} {rect:?}");
-            }
+            let rect = h.get_by_label("Gradient stops").rect();
+            assert!(rect.right() <= 260.0, "{theme:?}: {rect:?}");
         }
     }
 
@@ -409,8 +411,8 @@ mod tests {
         h.run_steps(3);
         let before = fill(h.state());
         let count = h.state().session.active().unwrap().history.past_len();
-        let rect = h.query_all_by_label("Color stops").find(|n| n.rect().height() > 40.0).unwrap().rect();
-        let from = pos2(rect.left() + 8.0, rect.top() + 38.0);
+        let rect = h.get_by_label("Gradient stops").rect();
+        let from = pos2(rect.left() + 8.0, rect.top() + 50.0);
         let to = pos2(rect.left() + 8.0 + (rect.width() - 16.0) * 0.7, from.y);
         h.event(egui::Event::PointerMoved(from));
         h.run_steps(1);
@@ -424,7 +426,7 @@ mod tests {
         h.run_steps(3);
         assert_eq!(h.state().session.active().unwrap().history.past_len(), count + 1);
         assert!(matches!(fill(h.state()), Fill::Gradient { stops, .. } if (stops[1].0 - 0.7).abs() < 1e-5));
-        let key = strip_key(h.state(), Sink::Layer(id), Strip::Color).with("selection");
+        let key = strip_key(h.state(), Sink::Layer(id)).with("selection");
         assert_eq!(h.ctx.data(|d| d.get_temp::<Marker>(key)), Some(Marker::Color(1)));
         h.get_all_by_label("Delete").next().unwrap().click();
         h.run_steps(3);
