@@ -901,7 +901,7 @@ fn humanize(key: &str) -> String {
         "appearanceMode" => return "Appearance Mode".into(),
         "darkTheme" => return "Dark Theme".into(),
         "lightTheme" => return "Light Theme".into(),
-        "nativeGradientIcons" => return "Use PhotoCraft gradient icons".into(),
+        "nativeGradientIcons" => return "Use PhotoCraft-native gradient icons".into(),
         _ => {}
     }
     // These controls appear only for WebP, so reuse the existing translated labels.
@@ -2696,10 +2696,10 @@ mod tests {
             app
         });
         h.run_steps(4);
-        h.get_by_label("Use PhotoCraft gradient icons").scroll_to_me();
+        h.get_by_label("Use PhotoCraft-native gradient icons").scroll_to_me();
         h.run_steps(4);
         for desired in [true, false] {
-            h.get_by_label("Use PhotoCraft gradient icons").click();
+            h.get_by_label("Use PhotoCraft-native gradient icons").click();
             h.run_steps(4);
             assert_eq!(h.state().session.prefs().interface.native_gradient_icons, !desired, "draft waits for Apply");
             h.get_by_label("Apply").click();
@@ -2709,7 +2709,7 @@ mod tests {
             let (restarted, _) = app_with_saved(store.lock().unwrap().clone());
             assert_eq!(restarted.session.prefs().interface.native_gradient_icons, desired);
         }
-        h.get_by_label("Use PhotoCraft gradient icons").click();
+        h.get_by_label("Use PhotoCraft-native gradient icons").click();
         h.run_steps(4);
         h.get_by_label("Cancel").click();
         h.run_steps(4);
