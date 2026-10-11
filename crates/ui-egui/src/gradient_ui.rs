@@ -28,6 +28,9 @@ use crate::widgets;
 
 #[cfg(test)]
 mod editor_tests;
+mod preset_browser;
+#[cfg(test)]
+mod preset_browser_tests;
 mod properties_panel;
 
 /// Id of the temporary layer previewing a new gradient while it is drawn.
@@ -578,17 +581,10 @@ pub fn paint_thumbnail(ui: &egui::Ui, layer: LayerId, f: &Fill, rect: Rect) -> b
 }
 
 /// Options-bar swatch of the current gradient. Both live and classic modes use the same
-/// engine-owned preset (#1651). Clicking it opens the Gradient Editor window, as Photoshop's
-/// swatch does. Returns whether it was clicked.
+/// engine-owned preset (#1651). The Classic ribbon opens the editor; Live is a preview.
+/// Both modes provide a separate preset dropdown. Returns whether to open the editor.
 pub fn preset_swatch(app: &mut PhotocraftApp, ui: &mut egui::Ui) -> bool {
-    let t = Tokens::get(ui.ctx());
-    let stops = app.session.presets.gradient.resolve(app.session.tools.foreground, app.session.tools.background);
-    let (r, resp) = ui.allocate_exact_size(vec2(96.0, 20.0), Sense::click());
-    paint_ramp(ui.painter(), r, |u| photocraft_algo::paint::sample_stops(&stops, u));
-    ui.painter().rect_stroke(r, 0.0, Stroke::new(1.0, t.field_border), StrokeKind::Outside);
-    // Name the control for accessibility (and so tests and agents can find it).
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, tl!("Gradient picker")));
-    resp.on_hover_text(tl!("Click to edit the gradient")).clicked()
+    preset_browser::swatch(app, ui)
 }
 
 /// The selected layer when it is a gradient fill layer. Unlike [`active_gradient`] it does not
@@ -611,32 +607,40 @@ pub fn editor_window(app: &mut PhotocraftApp, ctx: &egui::Context) {
     let mut open = true;
     let mut show_panel = false;
     // Resolved before the closure so `app` is borrowed only once inside it.
-    let layer = selected_gradient(app);
+    let layer = (!app.ui.tool_options.gradient_classic).then(|| selected_gradient(app)).flatten();
     egui::Window::new(tl!("Gradient Editor"))
         .id(egui::Id::new("gradient-editor"))
         .open(&mut open)
         .collapsible(false)
         .resizable(true)
         .default_width(330.0)
-        .show(ctx, |ui| match &layer {
-            Some(l) => properties_panel::editor(app, ui, l),
-            None => {
-                // Photoshop's editor edits the gradient the tool paints with, so with no gradient
-                // fill layer around the strip edits the current gradient in place.
-                let t = Tokens::get(ui.ctx());
-                ui.label(egui::RichText::new(tl!("The gradient the Gradient tool paints with")).color(t.text_dim));
-                ui.add_space(6.0);
-                preset_stops_editor(app, ui);
-                ui.add_space(6.0);
-                ui.horizontal(|ui| {
-                    if widgets::secondary_button(ui, tl!("Save As Preset"), 0.0)
-                        .on_hover_text(tl!("Adds the current gradient to the Gradients panel"))
-                        .clicked()
-                    {
-                        let _ = app.run("gradient.presets.new", json!({}));
-                    }
-                    show_panel = widgets::secondary_button(ui, tl!("Gradients"), 0.0).clicked();
-                });
+        .default_height(if layer.is_some() { 850.0 } else { 650.0 })
+        .vscroll(true)
+        .show(ctx, |ui| {
+            egui::CollapsingHeader::new(tl!("Presets")).id_salt("gradient-editor-presets").default_open(true).show(ui, |ui| {
+                preset_browser::show(app, ui, "gradient-editor-presets");
+            });
+            ui.separator();
+            match &layer {
+                Some(l) => properties_panel::editor(app, ui, l),
+                None => {
+                    // Photoshop's editor edits the gradient the tool paints with, so with no gradient
+                    // fill layer around the strip edits the current gradient in place.
+                    let t = Tokens::get(ui.ctx());
+                    ui.label(egui::RichText::new(tl!("The gradient the Gradient tool paints with")).color(t.text_dim));
+                    ui.add_space(6.0);
+                    preset_stops_editor(app, ui);
+                    ui.add_space(6.0);
+                    ui.horizontal(|ui| {
+                        if widgets::secondary_button(ui, tl!("Save As Preset"), 0.0)
+                            .on_hover_text(tl!("Adds the current gradient to the Gradients panel"))
+                            .clicked()
+                        {
+                            let _ = app.run("gradient.presets.new", json!({}));
+                        }
+                        show_panel = widgets::secondary_button(ui, tl!("Gradients"), 0.0).clicked();
+                    });
+                }
             }
         });
     if show_panel {
@@ -787,7 +791,9 @@ fn stops_editor_for(app: &mut PhotocraftApp, ui: &mut egui::Ui, sink: Sink, f: F
         ui.data_mut(|d| d.insert_temp(key, Marker::Color(0)));
     }
     stop_strip(app, ui, sink, f);
-    properties_panel::stop_fields(app, ui, sink);
+    // A preset replacement discards drafts owned by the previous stop set.
+    let generation = ui.data(|d| d.get_temp::<u64>(key.with("generation"))).unwrap_or_default();
+    ui.push_id(generation, |ui| properties_panel::stop_fields(app, ui, sink));
 }
 
 /// Keep selection on a stop after the engine sorts its new position.
@@ -1062,7 +1068,8 @@ mod tests {
     #[test]
     fn options_bar_swatch_opens_the_editor_and_reaches_the_gradients_panel() {
         use egui_kittest::{Harness, kittest::Queryable};
-        let app = app_with_gradient("linear");
+        let mut app = app_with_gradient("linear");
+        app.ui.tool_options.gradient_classic = true;
         let mut h = Harness::builder().with_size(vec2(440.0, 560.0)).build_ui_state(
             |ui, app: &mut PhotocraftApp| {
                 if preset_swatch(app, ui) {
@@ -1079,7 +1086,10 @@ mod tests {
         h.get_by_label("Gradient picker").click();
         h.run_steps(2);
         assert!(h.state().ui.panels.gradient_editor, "the swatch opened the editor window");
-        // Quick preset picking lives in the editor: its Gradients button shows the Gradients panel.
+        // Collapse the embedded browser to reach the sidebar shortcut on a small screen.
+        h.get_all_by_label("Presets").last().unwrap().click();
+        h.run_steps(8);
+        // The existing Gradients button still opens the sidebar.
         h.get_by_label("Gradients").click();
         h.run_steps(2);
         assert!(h.state().ui.panels.color, "the Gradients panel opened");
@@ -1254,12 +1264,9 @@ mod tests {
         assert!(display_doc(&mut app, 0).is_none());
     }
 
-    /// Regression: the options bar's gradient swatch could not open anything. In live mode it
-    /// sensed hover only, so `clicked()` was never true; in classic mode it sensed clicks and
-    /// promised "Click to edit the gradient" but never read the response. Both now open the
-    /// Gradient Editor window.
+    /// Issue #2199: the Live ribbon is a preview; only Classic opens the editor.
     #[test]
-    fn the_options_bar_swatch_opens_the_gradient_editor_in_both_modes() {
+    fn the_options_bar_ribbon_opens_the_editor_only_in_classic_mode() {
         use egui_kittest::kittest::Queryable;
 
         for classic in [false, true] {
@@ -1276,9 +1283,13 @@ mod tests {
             PhotocraftApp::setup_context(&h.ctx, crate::theme::ThemeKind::ALL[0]);
             h.run_steps(4);
             assert!(!h.state().ui.panels.gradient_editor, "classic={classic}: starts closed");
-            h.get_by_label("Gradient picker").click();
+            if classic {
+                h.get_by_label("Gradient picker").click();
+            } else {
+                h.query_all_by_label("Gradient").find(|n| n.rect().width() == 96.0).unwrap().click();
+            }
             h.run_steps(3);
-            assert!(h.state().ui.panels.gradient_editor, "classic={classic}: the swatch opened the editor");
+            assert_eq!(h.state().ui.panels.gradient_editor, classic, "classic={classic}: ribbon behavior follows the mode");
         }
     }
 

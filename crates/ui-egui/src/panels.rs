@@ -1071,9 +1071,8 @@ pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                         if widgets::dropdown(ui, "gradient-mode", &mut classic, &[(false, "Gradient"), (true, "Classic gradient")], 118.0) {
                             app.ui.tool_options.gradient_classic = classic;
                         }
-                        // Live "Gradient" (a Gradient Fill layer) or "Classic gradient" (pixels):
-                        // both paint with the same engine-owned preset (#1651), and either swatch
-                        // click opens the Gradient Editor window, as in Photoshop.
+                        // Classic's ribbon opens the editor; Live is a preview. Both have a
+                        // separate dropdown for choosing a preset without leaving the tool.
                         if crate::gradient_ui::preset_swatch(app, ui) {
                             app.ui.panels.gradient_editor = true;
                         }
