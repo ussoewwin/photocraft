@@ -56,6 +56,7 @@ mod raf;
 mod rw2;
 mod sensor;
 mod sony;
+mod sony_metadata;
 mod tiff;
 mod tiffep;
 
