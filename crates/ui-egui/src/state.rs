@@ -880,6 +880,10 @@ pub struct TransformSession {
     /// Edit › Transform › Skew / Distort / Perspective (`Free` for Free Transform).
     #[serde(default)]
     pub mode: TransformMode,
+    /// Free Transform of several selected layers at once (#3592): every layer the box moves, bottom
+    /// to top, around one shared frame (`layer` stays the active one). Empty for a single layer.
+    #[serde(default)]
+    pub layers: Vec<u64>,
 }
 
 /// Why a Free Transform session's layer was made for it.

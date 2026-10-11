@@ -171,6 +171,11 @@ pub fn begin(app: &mut PhotocraftApp, ctx: &egui::Context) -> Result<(), String>
         return begin_lone(app, ctx, doc, surf, target);
     }
     let id = st.active_layer.ok_or("no active layer")?;
+    // Several layers selected: one box around all of them (#3592).
+    let many = photocraft_engine::transform_cmds::multi_targets(&doc, &st.selected_layers());
+    if many.len() > 1 {
+        return begin_many(app, ctx, doc, id, many);
+    }
     let layer = doc.layer(id).ok_or("no layer")?;
     if photocraft_engine::transform_cmds::locked_for_transform(&doc, id) {
         // Photoshop refuses before the box opens rather than when it is committed (#2585).
@@ -237,6 +242,91 @@ pub fn begin(app: &mut PhotocraftApp, ctx: &egui::Context) -> Result<(), String>
         path: None,
         made: None,
         mode: Default::default(),
+        layers: Vec::new(),
+    });
+    start_steps(app);
+    Ok(())
+}
+
+/// Free Transform of several selected layers together (#3592), like Photoshop: the box frames all
+/// of their content (within the selection for pixel layers), the moving layers preview as one
+/// composite over the document with them hidden (or their selected pixels lifted out), and OK
+/// commits one `edit.transform` step with `"layers"`. Warp, a lone mask/channel target and edits
+/// followed live while the box is open stay single-layer features.
+fn begin_many(app: &mut PhotocraftApp, ctx: &egui::Context, doc: Arc<Document>, active: LayerId, ids: Vec<LayerId>) -> Result<(), String> {
+    use photocraft_engine::transform_cmds as tc;
+    if ids.iter().any(|&id| tc::locked_for_transform(&doc, id)) {
+        app.ui.open_dialog(crate::state::DialogKind::Error, json!({"message": tl!(LOCKED)}).as_object().cloned().unwrap_or_default());
+        return Err(LOCKED.into());
+    }
+    let b = tc::multi_bounds(&doc, &ids);
+    if b.is_empty() {
+        return Err("Could not transform: the layers are empty".into());
+    }
+    crate::type_tool::commit(app);
+    let rect = [b.x0 as f64, b.y0 as f64, b.x1 as f64, b.y1 as f64];
+    let session = app.ui.alloc_id();
+    // `pd`: the document under the box; `solo`: just what moves.
+    let (mut pd, mut solo) = ((*doc).clone(), (*doc).clone());
+    for &id in &ids {
+        let lift = doc.selection.as_ref().filter(|_| doc.layer(id).is_some_and(|l| !tc::moves_whole(l) && l.surface().is_some()));
+        match (lift, doc.layer(id).and_then(|l| l.surface())) {
+            (Some(sel), Some(surf)) => {
+                let (moving, rest) = tc::split_selected(surf, sel).map_err(|e| e.to_string())?;
+                if let Some(s) = pd.layer_mut(id).and_then(|l| l.surface_mut()) {
+                    *s = rest;
+                }
+                if let Some(s) = solo.layer_mut(id).and_then(|l| l.surface_mut()) {
+                    *s = moving;
+                }
+            }
+            _ => {
+                if let Some(l) = pd.layer_mut(id) {
+                    l.visible = false;
+                }
+            }
+        }
+    }
+    show_only(&mut solo.layers, &ids);
+    let max_side = ctx.input(|i| i.max_texture_side).max(app.gpu.as_ref().map_or(1, |g| g.max_texture_side()));
+    // What covers the topmost moving layer draws over the preview.
+    let top = *ids.last().unwrap_or(&active);
+    let above = Above::new(ctx, format!("transform-{session}-above"), &doc, top, max_side);
+    above.hide_in(&mut pd.layers);
+    let (image, uv) = composite_image(&solo, b, max_side);
+    let texture = crate::transform_tex::PreviewTextures::new(ctx, format!("transform-{session}"), image, uv);
+    app.transform_preview = Some(TransformPreview {
+        session,
+        doc: Arc::new(pd),
+        texture,
+        // The composite already carries each layer's opacity and masks.
+        opacity: 1.0,
+        above: Some(above),
+        follow: None,
+        gesture: None,
+        warp_drag: None,
+        split_tool: None,
+        split_pointer: None,
+        split_placing: false,
+        split_quick: false,
+        steps: Steps::default(),
+        tool: app.ui.tool,
+        path: None,
+    });
+    app.ui.transform = Some(TransformSession {
+        session,
+        layer: active.0,
+        rect,
+        quad: corners(rect),
+        pivot: [(rect[0] + rect[2]) / 2.0, (rect[1] + rect[3]) / 2.0],
+        interpolation: "bicubic".into(),
+        warp: None,
+        selection: false,
+        target: None,
+        path: None,
+        made: None,
+        mode: Default::default(),
+        layers: ids.iter().map(|l| l.0).collect(),
     });
     start_steps(app);
     Ok(())
@@ -375,6 +465,7 @@ fn begin_lone(
         path: None,
         made: None,
         mode: Default::default(),
+        layers: Vec::new(),
     });
     start_steps(app);
     Ok(())
@@ -423,6 +514,7 @@ fn begin_path(app: &mut PhotocraftApp, ctx: &egui::Context, params: serde_json::
         path: Some(params),
         made: None,
         mode: Default::default(),
+        layers: Vec::new(),
     });
     start_steps(app);
     Ok(())
@@ -503,6 +595,7 @@ pub fn begin_selection(app: &mut PhotocraftApp, ctx: &egui::Context) -> Result<(
         path: None,
         made: None,
         mode: Default::default(),
+        layers: Vec::new(),
     });
     start_steps(app);
     Ok(())
@@ -528,8 +621,9 @@ pub fn enter_warp(app: &mut PhotocraftApp) {
     let existing =
         app.session.active().and_then(|d| d.doc.layer(LayerId(app.ui.transform.as_ref()?.layer)).and_then(photocraft_engine::warp_cmds::smart_warp_doc_space));
     let Some(t) = app.ui.transform.as_mut() else { return };
-    // Warp moves layers only: a lone mask, channel or path keeps the box.
-    if t.warp.is_some() || t.target.is_some() || t.path.is_some() {
+    // Warp moves layers only: a lone mask, channel or path keeps the box, and so does a box
+    // around several layers (#3592: warping them together isn't supported yet).
+    if t.warp.is_some() || t.target.is_some() || t.path.is_some() || t.layers.len() > 1 {
         return;
     }
     if t.quad == corners(t.rect)
@@ -822,6 +916,9 @@ pub fn commit(app: &mut PhotocraftApp) {
             return; // untouched: nothing to do and no history step; a ⌥⌘T copy or a place stays
         }
         let mut p = json!({"layer": t.layer, "rect": t.rect, "quad": t.quad, "interpolation": t.interpolation});
+        if t.layers.len() > 1 {
+            p["layers"] = json!(t.layers);
+        }
         if let Some(target) = t.target {
             p["target"] = target;
         }
@@ -2310,6 +2407,7 @@ mod tests {
             path: None,
             made: None,
             mode: Default::default(),
+            layers: Vec::new(),
         }
     }
 
