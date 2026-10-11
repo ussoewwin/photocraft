@@ -32,6 +32,10 @@ fn new_params(app: &PhotocraftApp, sink: Sink) -> Value {
 
 pub(super) fn show(app: &mut PhotocraftApp, ui: &mut egui::Ui, panel: &str) -> bool {
     let sink = target(app);
+    show_for(app, ui, panel, sink)
+}
+
+fn show_for(app: &mut PhotocraftApp, ui: &mut egui::Ui, panel: &str, sink: Sink) -> bool {
     let params = new_params(app, sink);
     if !crate::preset_panels::gradient_picker(app, ui, panel, matches!(sink, Sink::Layer(_)), params) {
         return false;
@@ -52,6 +56,17 @@ pub(super) fn show(app: &mut PhotocraftApp, ui: &mut egui::Ui, panel: &str) -> b
         Sink::Preset => app.gradient.preset_stop = None,
     }
     true
+}
+
+pub(super) fn layer_picker(app: &mut PhotocraftApp, ui: &mut egui::Ui, sink: Sink) {
+    let arrow = crate::icons::button(ui, "chevron-down", 20.0, false, "Presets");
+    arrow.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), tl!("Presets")));
+    egui::Popup::from_toggle_button_response(&arrow).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
+        ui.set_width(320.0);
+        if show_for(app, ui, "gradient-properties-presets", sink) {
+            ui.close();
+        }
+    });
 }
 
 pub(super) fn swatch(app: &mut PhotocraftApp, ui: &mut egui::Ui) -> bool {
