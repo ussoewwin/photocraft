@@ -955,6 +955,9 @@ pub(crate) fn display_doc(app: &mut PhotocraftApp, idx: usize) -> (std::sync::Ar
     if let Some(shown) = crate::solid_fill_ui::display_doc(app, idx) {
         return shown;
     }
+    if let Some(shown) = crate::shape_fill_ui::display_doc(app, idx) {
+        return shown;
+    }
     if let Some(shown) = crate::shape_stroke_ui::display_doc(app, idx) {
         return shown;
     }
@@ -2490,7 +2493,14 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
         // Crop tool: the layers' pixels past the canvas while a frame is edited, under the canvas
         // (whose edge blends into them) and without its shadow.
         let beyond = draw_beyond_canvas(app, &painter, &xf, idx, output);
-        let drop_shadow = drop_shadow && !beyond;
+        // View › Pattern Preview (#1067): copies of the document around it, from the same texture.
+        let pattern = if app.ui.view.pattern_preview {
+            let v = visible_doc_rect(&xf);
+            crate::pattern_preview::copies([v.x0, v.y0, v.x1, v.y1].map(f64::from), size)
+        } else {
+            Vec::new()
+        };
+        let drop_shadow = drop_shadow && !beyond && !app.ui.view.pattern_preview;
         // Live adjustment previews on big documents use a downsampled proxy (see proxy.rs), unless
         // Preferences › Performance › Low Resolution Previews is off.
         let mut on_gpu = false;
@@ -2523,8 +2533,9 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
                 display: sync_display_lut(app, &doc, key, output),
                 output: output.unwrap_or(0),
                 hdr: hdr_preview(app, &doc),
+                offset: [0.0, 0.0],
             };
-            crate::gpu_canvas::GpuCanvas::paint(&painter, rect, params);
+            paint_gpu_view(&painter, rect, params, &pattern);
         } else if gpu_ok && ensure_gpu(app, idx, visible_doc_rect(&xf)) {
             on_gpu = true;
             app.perf.gpu = true;
@@ -2544,40 +2555,19 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
                 display: sync_display_lut(app, &doc, doc.id.0, output),
                 output: output.unwrap_or(0),
                 hdr: hdr_preview(app, &doc),
+                offset: [0.0, 0.0],
             };
-            crate::gpu_canvas::GpuCanvas::paint(&painter, rect, params);
+            paint_gpu_view(&painter, rect, params, &pattern);
         } else {
             if !crate::theme::Tokens::get(&ctx).bevel && drop_shadow {
                 painter.add(egui::Shadow { offset: [0, 8], blur: 28, spread: 0, color: Color32::from_black_alpha(150) }.as_shape(img_rect, 0));
             }
             let rotated = view.rotation.abs() > 0.05;
-            let size = [doc.size.width as f32, doc.size.height as f32];
-            match app.session.prefs().transparency_and_gamut.square() {
-                Some(square) => {
-                    let checker_id = checker(app, &ctx);
-                    if rotated {
-                        let tiles = vec2(size[0], size[1]) / (2.0 * square);
-                        paint_mapped_image(&painter, &xf, checker_id, Rect::from_min_max(Pos2::ZERO, pos2(tiles.x, tiles.y)), size, Color32::WHITE);
-                    } else {
-                        let tiles = img_rect.size() / (2.0 * square);
-                        painter.image(checker_id, img_rect, Rect::from_min_max(Pos2::ZERO, pos2(tiles.x, tiles.y)), Color32::WHITE);
-                    }
-                }
-                None => {
-                    if rotated {
-                        paint_mapped_quad(&painter, &xf, size, Color32::WHITE);
-                    } else {
-                        painter.rect_filled(img_rect, 0.0, Color32::WHITE);
-                    }
-                }
-            }
-            if let Some((tex, _scale)) = ensure_texture(app, &ctx, idx, output) {
-                if rotated {
-                    paint_mapped_image(&painter, &xf, tex, Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0)), size, Color32::WHITE);
-                } else {
-                    let uv = if flip { Rect::from_min_max(pos2(1.0, 0.0), pos2(0.0, 1.0)) } else { Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0)) };
-                    painter.image(tex, img_rect, uv, Color32::WHITE);
-                }
+            let checkerboard = app.session.prefs().transparency_and_gamut.square().map(|square| (checker(app, &ctx), square));
+            let tex = ensure_texture(app, &ctx, idx, output).map(|(tex, _scale)| tex);
+            paint_cpu_document(&painter, &xf, doc.bounds(), rotated, checkerboard, tex);
+            for &c in &pattern {
+                paint_cpu_document(&painter, &pattern_xf(&xf, c, size), doc.bounds(), rotated, checkerboard, tex);
             }
         }
         // Channels panel: alpha / Quick Mask overlays and single-channel views (channel_view.rs).
@@ -2864,7 +2854,7 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
             }
         }
         // Right-click while transforming: switch the box's mode (Free Transform, Scale, Rotate,
-        // Skew, Distort, Perspective, Warp).
+        // Skew, Distort, Perspective, Warp), or rotate or flip the box.
         let transforming = app.ui.transform.as_ref().is_some_and(|t| t.warp.is_none());
         if response.secondary_clicked()
             && transforming
@@ -3126,6 +3116,9 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
         // The pending crop frame shows on its own document only, not on the other tiles (#1918).
         let foreign_crop = if app.session.active_index() == Some(idx) { None } else { app.ui.crop_rect.take() };
         draw_drag_preview(app, &painter, &xf);
+        if app.session.active_index() == Some(idx) {
+            crate::move_box::draw(app, &painter, &xf);
+        }
         if foreign_crop.is_some() {
             app.ui.crop_rect = foreign_crop;
         }
@@ -3400,6 +3393,69 @@ fn paint_mapped_image(painter: &egui::Painter, xf: &ViewXform, tex: egui::Textur
     mesh.add_triangle(0, 1, 2);
     mesh.add_triangle(0, 2, 3);
     painter.add(egui::Shape::mesh(mesh));
+}
+
+/// The GPU canvas view, then its View › Pattern Preview copies (#1067): the same texture drawn
+/// again whole document sizes away, each with its own view uniform and no shadow.
+fn paint_gpu_view(painter: &egui::Painter, rect: Rect, params: crate::gpu_canvas::ViewParams, copies: &[[i32; 2]]) {
+    crate::gpu_canvas::GpuCanvas::paint(painter, rect, params);
+    for (k, &c) in copies.iter().enumerate() {
+        let copy = crate::gpu_canvas::ViewParams {
+            offset: crate::pattern_preview::offset(c, params.doc_size),
+            shadow: false,
+            // Keyed by slot, not by tile index, so panning reuses the same few uniform buffers.
+            view_key: egui::Id::new((params.view_key, "pattern", k)).value(),
+            ..params
+        };
+        crate::gpu_canvas::GpuCanvas::paint(painter, rect, copy);
+    }
+}
+
+/// The mapping that draws Pattern Preview copy `c` of a `size` document where it sits next to
+/// the document: the same view, looking the matching number of document sizes back.
+fn pattern_xf(xf: &ViewXform, c: [i32; 2], size: [u32; 2]) -> ViewXform {
+    let [ox, oy] = crate::pattern_preview::offset(c, size);
+    ViewXform { center: [xf.center[0] - ox, xf.center[1] - oy], ..*xf }
+}
+
+/// CPU canvas: the transparency checkerboard (or white) and the display texture, for the
+/// document or one of its Pattern Preview copies (`xf` from [`pattern_xf`]).
+fn paint_cpu_document(
+    painter: &egui::Painter,
+    xf: &ViewXform,
+    bounds: DRect,
+    rotated: bool,
+    checker: Option<(egui::TextureId, f32)>,
+    tex: Option<egui::TextureId>,
+) {
+    let size = [bounds.width() as f32, bounds.height() as f32];
+    let img_rect = xf.doc_rect(bounds);
+    match checker {
+        Some((checker_id, square)) => {
+            if rotated {
+                let tiles = vec2(size[0], size[1]) / (2.0 * square);
+                paint_mapped_image(painter, xf, checker_id, Rect::from_min_max(Pos2::ZERO, pos2(tiles.x, tiles.y)), size, Color32::WHITE);
+            } else {
+                let tiles = img_rect.size() / (2.0 * square);
+                painter.image(checker_id, img_rect, Rect::from_min_max(Pos2::ZERO, pos2(tiles.x, tiles.y)), Color32::WHITE);
+            }
+        }
+        None => {
+            if rotated {
+                paint_mapped_quad(painter, xf, size, Color32::WHITE);
+            } else {
+                painter.rect_filled(img_rect, 0.0, Color32::WHITE);
+            }
+        }
+    }
+    if let Some(tex) = tex {
+        if rotated {
+            paint_mapped_image(painter, xf, tex, Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0)), size, Color32::WHITE);
+        } else {
+            let uv = if xf.flip { Rect::from_min_max(pos2(1.0, 0.0), pos2(0.0, 1.0)) } else { Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0)) };
+            painter.image(tex, img_rect, uv, Color32::WHITE);
+        }
+    }
 }
 
 fn paint_mapped_quad(painter: &egui::Painter, xf: &ViewXform, size: [f32; 2], color: Color32) {
@@ -4060,6 +4116,10 @@ pub fn tool_event(app: &mut PhotocraftApp, ev: ToolEvent, mods: egui::Modifiers)
     }
     // View › Snap / Snap To and smart guides (snap_ui.rs).
     let raw = ev;
+    // The Move tool's marquee selecting layers takes its moves and release unsnapped (move_box.rs).
+    if crate::move_box::pointer(app, raw) {
+        return;
+    }
     // A press anywhere but on the floating piece (or with ⇧ / ⌥, to draw) drops it first; the
     // Move tool (⌘ with a painting tool too, `event_tool`) drags it from anywhere.
     if let ToolEvent::Down { x, y, .. } = raw
@@ -4178,7 +4238,14 @@ pub fn tool_event(app: &mut PhotocraftApp, ev: ToolEvent, mods: egui::Modifiers)
                 let target = app.ui.tool_options.move_target.clone();
                 let mode = if mods.shift { "add" } else { "replace" };
                 let before = app.session.active().map(|st| st.selected_layers());
-                let _ = app.run("layer.pickAt", json!({"x": x, "y": y, "target": target, "mode": mode}));
+                let picked = app.run("layer.pickAt", json!({"x": x, "y": y, "target": target, "mode": mode}));
+                // No pixels there at all (an empty spot, or off the canvas): drag a marquee that
+                // selects the layers it touches instead (move_box.rs). A fully locked layer's
+                // pixels still say it is locked once the pointer moves (`move_lock`).
+                if picked.is_ok_and(|v| v["layer"].is_null()) && crate::move_box::empty_at(app, [x, y]) {
+                    crate::move_box::begin(app, [x, y], mods.shift);
+                    return;
+                }
                 // Snapping (and the drag's box) started before the pick: point it at what moves.
                 if app.session.active().map(|st| st.selected_layers()) != before {
                     crate::snap_ui::retarget_move(app, [x, y], mods);
