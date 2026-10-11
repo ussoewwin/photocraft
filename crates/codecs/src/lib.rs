@@ -59,7 +59,7 @@ pub fn decode_as(format: Format, bytes: &[u8]) -> Result<Image, CodecError> {
 /// Decode as a specific format.
 pub fn decode_as_with(format: Format, bytes: &[u8], opts: &DecodeOptions) -> Result<Image, CodecError> {
     // HEIF without the `heif` feature: its decoder stub says what is missing from this build.
-    if !caps(format).read && format != Format::Heif {
+    if !caps(format).read && !matches!(format, Format::Heif | Format::Jxl) {
         return Err(CodecError::unsupported(format, "decoding is not available for this format"));
     }
     let l = &opts.limits;

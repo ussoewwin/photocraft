@@ -46,6 +46,7 @@ let out = encode(&img, Format::Tiff, &EncodeOptions::default())?;
 | Radiance HDR | yes | yes | F32 | RGB | no | no | no | no | no | no | yes (RGBE) | `image` |
 | AVIF | **no** | only with feature `avif` | U8 | RGB, RGBA | yes | no | no | no | no | no | yes | `image` + `ravif` |
 | HEIF/HEIC | with feature `heif` | **no** | U8, U16 (10/12-bit decodes to U16) | RGB, RGBA | yes (auxiliary alpha) | yes (`colr` prof) | yes | yes | no | no | n/a | `heic-rs` |
+| JPEG XL (.jxl) | **no** (see #2868) | yes | U8, U16 | Gray, GrayA, RGB, RGBA | yes | no (bare codestream) | no | no | no | no | no | `zune-jpegxl` |
 
 "Native" means the data is stored and read back without conversion. Anything else is converted by
 the encode plan, and `fidelity_warnings` reports the conversion when it loses information:
@@ -61,6 +62,15 @@ the encode plan, and `fidelity_warnings` reports the conversion when it loses in
 the same.
 
 ## Documented asymmetries and limitations
+
+* **JPEG XL export** writes lossless modular `.jxl` codestreams in pure Rust with
+  `zune-jpegxl`, preserving 8/16-bit integer pixels and optional alpha for gray/RGB
+  sources. The writer does not embed ICC, EXIF or XMP boxes; untagged RGB images are
+  converted to sRGB by the document export path and `fidelity_warnings` report
+  dropped metadata. JPEG XL *reading* is not available on this branch; the
+  independent read-support PR #2868 has not merged. JPEG XL therefore remains
+  listed in `ASYMMETRIC_EXCEPTIONS` until an importer lands.
+
 
 * **Camera raw files** (DNG, CR2, NEF, ARW… which are TIFF-structured) are recognised and refused
   with `CodecError::Unsupported`: they are sensor data, not flat images. `photocraft-raw` decodes

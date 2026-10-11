@@ -4298,6 +4298,7 @@ dependencies = [
  "image",
  "image-webp",
  "jpeg-encoder",
+ "jxl-oxide",
  "photocraft-heif",
  "png 0.18.1",
  "proptest",
@@ -4308,7 +4309,6 @@ dependencies = [
  "zune-core 0.5.3",
  "zune-jpeg 0.5.15",
  "zune-jpegxl",
- "jxl-oxide",
 ]
 
 [[package]]
