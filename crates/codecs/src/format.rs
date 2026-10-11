@@ -23,6 +23,8 @@ pub enum Format {
     Avif,
     /// HEIF/HEIC (HEVC-coded): read-only; see [`ASYMMETRIC_EXCEPTIONS`].
     Heif,
+    /// Lossless JPEG XL: encode-only until the separate JPEG XL decoder lands.
+    Jxl,
 }
 
 /// What a format can hold **and** what this crate reads/writes for it.
@@ -60,6 +62,11 @@ pub const ASYMMETRIC_EXCEPTIONS: &[(Format, &str)] = &[
          until a pure-Rust AV1 decoder is viable. Only enabled with the non-default `avif` feature.",
     ),
     (
+        Format::Jxl,
+        "Lossless JPEG XL encoding uses the pure-Rust zune-jpegxl encoder. Opening JXL files is
+         tracked separately; read support is not available in this build.",
+    ),
+    (
         Format::Heif,
         "HEIC decode uses heic-rs (pure Rust, in the optional photocraft-heif crate behind the \
          non-default `heif` feature, which official builds enable), so iPhone and Mac photos open; \
@@ -76,7 +83,7 @@ const ALL_LAYOUTS: &[ChannelLayout] = &[L::Gray, L::GrayA, L::Rgb, L::Rgba, L::C
 
 impl Format {
     /// Every format known to the crate (enabled or not).
-    pub const ALL: [Format; 14] = [
+    pub const ALL: [Format; 15] = [
         Format::Png,
         Format::Jpeg,
         Format::Tiff,
@@ -91,6 +98,7 @@ impl Format {
         Format::Hdr,
         Format::Avif,
         Format::Heif,
+        Format::Jxl,
     ];
 
     pub fn caps(self) -> FormatCaps {
@@ -119,6 +127,7 @@ impl Format {
             Format::Hdr => "Radiance HDR",
             Format::Avif => "AVIF",
             Format::Heif => "HEIF",
+            Format::Jxl => "JPEG XL",
         }
     }
 
@@ -140,6 +149,7 @@ impl Format {
             Format::Hdr => &["hdr"],
             Format::Avif => &["avif"],
             Format::Heif => &["heic", "heif", "hif"],
+            Format::Jxl => &["jxl"],
         }
     }
 
@@ -159,6 +169,7 @@ impl Format {
             Format::Hdr => "image/vnd.radiance",
             Format::Avif => "image/avif",
             Format::Heif => "image/heif",
+            Format::Jxl => "image/jxl",
         }
     }
 
@@ -205,6 +216,9 @@ pub fn caps(format: Format) -> FormatCaps {
         Format::OpenExr => FormatCaps { depths: &[S::F16, S::F32], layouts: RGB_GRAY, ..base },
         Format::Hdr => FormatCaps { depths: &[S::F32], layouts: &[L::Rgb], alpha: false, lossy: true, ..base },
         Format::Avif => FormatCaps { read: false, write: cfg!(feature = "avif"), lossy: true, ..base },
+        // The modular encoder is lossless for integer gray/RGB(A). Its bare codestream
+        // has no ICC/EXIF/XMP container boxes: callers must convert to sRGB.
+        Format::Jxl => FormatCaps { read: false, depths: &[S::U8, S::U16], layouts: RGB_GRAY, ..base },
         Format::Heif => {
             FormatCaps { read: cfg!(feature = "heif"), write: false, depths: &[S::U8, S::U16], icc: true, exif: true, xmp: true, lossy: true, ..base }
         }
@@ -220,6 +234,10 @@ pub fn detect(bytes: &[u8]) -> Option<Format> {
     }
     if b.starts_with(&[0xFF, 0xD8, 0xFF]) {
         return Some(Format::Jpeg);
+    }
+    // JPEG XL bare codestream and ISO/IEC 18181-2 container signature box.
+    if b.starts_with(&[0xFF, 0x0A]) || b.starts_with(b"\0\0\0\x0cJXL \r\n\x87\n") {
+        return Some(Format::Jxl);
     }
     if b.starts_with(b"II*\0") || b.starts_with(b"MM\0*") || b.starts_with(b"II+\0") || b.starts_with(b"MM\0+") {
         return Some(Format::Tiff);
