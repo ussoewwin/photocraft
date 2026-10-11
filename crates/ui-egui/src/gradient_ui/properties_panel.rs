@@ -40,7 +40,7 @@ fn options(app: &mut PhotocraftApp, ui: &mut egui::Ui, layer: &Layer) {
         ui.horizontal(|ui| {
             row_label(ui, "Style");
             ui.spacing_mut().item_spacing.x = 3.0;
-            if let Some(value) = style_buttons(ui, cmds::style_name(style)) {
+            if let Some(value) = style_buttons(ui, cmds::style_name(style), app.session.prefs().interface.native_gradient_icons) {
                 let _ = app.run(cmds::SET, json!({"layer": layer.id.0, "style": value}));
             }
         });
@@ -99,11 +99,24 @@ fn numeric_row(ui: &mut egui::Ui, id: &str, name: &str, current: f32, range: std
     .inner
 }
 
-pub(super) fn style_buttons(ui: &mut egui::Ui, current: &str) -> Option<&'static str> {
+pub(super) fn style_buttons(ui: &mut egui::Ui, current: &str, native_icons: bool) -> Option<&'static str> {
     let mut selected = None;
     for (style, name) in STYLES {
         let value = cmds::style_name(style);
-        if style_button(ui, style, value == current, name).clicked() {
+        let response = if native_icons {
+            let icon = match style {
+                GradientStyle::Linear => "blend",
+                GradientStyle::Radial => "circle",
+                GradientStyle::Angle => "rotate-cw",
+                GradientStyle::Reflected => "arrow-left-right",
+                GradientStyle::Diamond => "diamond",
+            };
+            icons::button(ui, icon, 25.0, value == current, name)
+        } else {
+            style_button(ui, style, value == current, name)
+        };
+        response.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, ui.is_enabled(), value == current, tl!(name)));
+        if response.clicked() {
             selected = Some(value);
         }
     }
@@ -138,7 +151,6 @@ fn style_button(ui: &mut egui::Ui, style: GradientStyle, selected: bool, name: &
     }
     ui.painter().add(egui::Shape::mesh(mesh));
     ui.painter().rect_stroke(preview, 0.0, Stroke::new(1.0, t.text_dim), StrokeKind::Outside);
-    response.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, ui.is_enabled(), selected, tl!(name)));
     response.on_hover_text(tl!(name))
 }
 
@@ -308,23 +320,27 @@ mod tests {
 
     #[test]
     fn style_icons_edit_the_selected_layer_with_one_undo_step() {
-        let mut h = Harness::builder().with_size(vec2(280.0, 800.0)).build_ui_state(panel, app());
-        PhotocraftApp::setup_context(&h.ctx, theme::ThemeKind::ProMedium);
-        h.run_steps(3);
-        for (style, name) in STYLES.into_iter().skip(1) {
-            let before = fill(h.state());
-            let count = h.state().session.active().unwrap().history.past_len();
-            h.get_by_label(name).click();
+        for native_icons in [false, true] {
+            let mut app = app();
+            app.run("prefs.set", json!({"path": "interface.nativeGradientIcons", "value": native_icons})).unwrap();
+            let mut h = Harness::builder().with_size(vec2(280.0, 800.0)).build_ui_state(panel, app);
+            PhotocraftApp::setup_context(&h.ctx, theme::ThemeKind::ProMedium);
             h.run_steps(3);
-            let after = fill(h.state());
-            assert!(matches!(&after, Fill::Gradient { style: actual, .. } if *actual == style));
-            assert_eq!(h.state().session.active().unwrap().doc.layers.len(), 2);
-            assert_eq!(h.state().session.active().unwrap().history.past_len(), count + 1);
-            h.state_mut().run("edit.undo", json!({})).unwrap();
-            assert_eq!(fill(h.state()), before);
-            h.state_mut().run("edit.redo", json!({})).unwrap();
-            assert_eq!(fill(h.state()), after);
-            h.run_steps(2);
+            for (style, name) in STYLES.into_iter().skip(1) {
+                let before = fill(h.state());
+                let count = h.state().session.active().unwrap().history.past_len();
+                h.get_by_label(name).click();
+                h.run_steps(3);
+                let after = fill(h.state());
+                assert!(matches!(&after, Fill::Gradient { style: actual, .. } if *actual == style));
+                assert_eq!(h.state().session.active().unwrap().doc.layers.len(), 2);
+                assert_eq!(h.state().session.active().unwrap().history.past_len(), count + 1);
+                h.state_mut().run("edit.undo", json!({})).unwrap();
+                assert_eq!(fill(h.state()), before);
+                h.state_mut().run("edit.redo", json!({})).unwrap();
+                assert_eq!(fill(h.state()), after);
+                h.run_steps(2);
+            }
         }
     }
 

@@ -656,8 +656,8 @@ pub fn editor_window(app: &mut PhotocraftApp, ctx: &egui::Context) {
 }
 
 /// Shared style previews for the options bar and Gradient Fill controls.
-pub fn style_buttons(ui: &mut egui::Ui, current: &str) -> Option<&'static str> {
-    properties_panel::style_buttons(ui, current)
+pub fn style_buttons(ui: &mut egui::Ui, current: &str, native_icons: bool) -> Option<&'static str> {
+    properties_panel::style_buttons(ui, current, native_icons)
 }
 
 /// Live mode: style, reverse, dither and blend mode changes in the options bar also edit the selected

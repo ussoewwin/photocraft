@@ -1079,7 +1079,7 @@ pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                         widgets::vline(ui, 22.0);
                         ui.spacing_mut().item_spacing.x = 2.0;
                         let before = app.ui.tool_options.clone();
-                        if let Some(style) = crate::gradient_ui::style_buttons(ui, &app.ui.tool_options.gradient_style) {
+                        if let Some(style) = crate::gradient_ui::style_buttons(ui, &app.ui.tool_options.gradient_style, app.session.prefs().interface.native_gradient_icons) {
                             app.ui.tool_options.gradient_style = style.into();
                         }
                         ui.spacing_mut().item_spacing.x = 8.0;
