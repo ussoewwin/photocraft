@@ -320,6 +320,8 @@ pub struct Tools {
     pub vary_round_brush_hardness_on_hud: bool,
     /// Round snapped vector and transform coordinates to whole pixels.
     pub snap_vector_tools_and_transforms_to_pixel_grid: bool,
+    /// The size and angle readouts beside the pointer while a marquee or crop frame is drawn,
+    /// resized or turned (off: none).
     pub show_transformation_values: bool,
     /// Move tool with Auto-Select: outline the layer a click would pick under the pointer.
     pub show_highlight_on_rollover: bool,
@@ -988,15 +990,12 @@ pub const SECTIONS: [(&str, &str); 18] = [
 /// preference is read anywhere outside `prefs.rs`, and while an unlisted one is read nowhere.
 pub const HIDDEN_UNTIL_IMPLEMENTED: &[&str] = &[
     "general.colorPicker",
-    "general.alwaysCreateSmartObjectsWhenPlacing",
     "general.animatedZoom",
     "general.zoomResizesWindows",
     "workspace.autoCollapseIconPanels",
     "workspace.autoShowHiddenPanels",
     "workspace.enableFloatingDocumentWindowDocking",
     "workspace.enableNarrowOptionsBar",
-    "tools.enableFlickPanning",
-    "tools.showTransformationValues",
     "fileHandling.imagePreviews",
     "fileHandling.saveInBackground",
     "fileHandling.ignoreExifProfileTag",
@@ -1012,7 +1011,6 @@ pub const HIDDEN_UNTIL_IMPLEMENTED: &[&str] = &[
     "plugIns.allowScriptsToConnect",
     "plugIns.generatorEnabled",
     "type.missingGlyphProtection",
-    "type.showFontNamesInEnglish",
     "type.textEngine",
     "type.recentFonts",
     "enhancedControls.scrubbySliderAcceleration",
