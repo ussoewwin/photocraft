@@ -86,7 +86,7 @@ Change the UI language without restarting with `prefs.set`:
 are documented in [UI localisation](localization.md). `prefs.get` and the existing preference
 store expose and persist the same setting; scripts keep using canonical command IDs.
 
-`engine.execute` runs any command by id. `engine.commands` (or the engine command `command.list`) lists them all, with labels, menu paths, shortcuts, a parameter description, and whether each is currently enabled. Examples:
+`engine.execute` runs any command by id. `engine.commands` (or the engine command `command.list`) lists them all, with labels, menu paths, shortcuts, a parameter description, and whether each is currently enabled. An unknown command id or method name fails with up to three near matches, for example ``unknown command `engine.commands`; did you mean `command.list`?``; a protocol method sent through `engine.execute`, or an engine command id sent as a method, says which of the two it is. Examples:
 
 | Command | Params |
 |---|---|
