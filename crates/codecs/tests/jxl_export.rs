@@ -66,3 +66,10 @@ fn jpeg_xl_decodes_losslessly_with_independent_decoder() {
         }
     }
 }
+
+#[test]
+fn jpeg_xl_rejects_one_pixel_images_without_panicking() {
+    // zune-jpegxl currently requires at least two pixels on each axis.
+    let image = Image::from_u8(1, 1, ChannelLayout::Rgb, vec![42, 100, 255]).unwrap();
+    assert!(matches!(encode(&image, Format::Jxl, &EncodeOptions::default()), Err(CodecError::Encode { format: Format::Jxl, .. })));
+}
