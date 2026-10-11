@@ -22,6 +22,7 @@ pub mod adjust_ui;
 mod alt_grab;
 pub mod analysis_ui;
 pub mod artboard_ui;
+pub mod bidi_label;
 pub(crate) mod blend_preview;
 mod brand;
 pub mod brush_panel;
