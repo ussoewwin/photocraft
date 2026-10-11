@@ -1026,4 +1026,45 @@ mod tests {
         s.execute("edit.transform", json!({"layers": [a.0, empty.0], "matrix": [1, 0, 0, 1, 5, 0]})).unwrap();
         assert_eq!(bounds_of(&s, a), Rect::new(15, 10, 35, 20));
     }
+
+    #[test]
+    fn flip_and_rotate_turn_every_selected_layer_around_the_shared_box() {
+        let (mut s, a, b) = two_layers();
+        s.execute("layer.select", json!({"layer": a.0, "mode": "add"})).unwrap();
+        let steps = s.active().unwrap().history.entries().len();
+        s.execute("edit.transform.flipHorizontal", json!({})).unwrap();
+        assert_eq!(bounds_of(&s, a), Rect::new(60, 10, 80, 20));
+        assert_eq!(bounds_of(&s, b), Rect::new(10, 50, 30, 70));
+        assert_eq!(s.active().unwrap().history.entries().len(), steps + 1, "one step");
+        s.execute("edit.undo", json!({})).unwrap();
+        s.execute("edit.transform.rotate180", json!({})).unwrap();
+        assert_eq!(bounds_of(&s, a), Rect::new(60, 60, 80, 70));
+        assert_eq!(bounds_of(&s, b), Rect::new(10, 10, 30, 30));
+        s.execute("edit.undo", json!({})).unwrap();
+        // A named layer still turns alone, around its own box.
+        s.execute("edit.transform.flipVertical", json!({"layer": a.0})).unwrap();
+        assert_eq!((bounds_of(&s, a), bounds_of(&s, b)), (Rect::new(10, 10, 30, 20), Rect::new(60, 50, 80, 70)));
+    }
+
+    #[test]
+    fn warp_applies_one_shared_warp_to_every_listed_layer_in_one_step() {
+        let (mut s, a, b) = two_layers();
+        let before = (bounds_of(&s, a), bounds_of(&s, b));
+        let steps = s.active().unwrap().history.entries().len();
+        let r = s.execute("edit.transform.warp", json!({"layers": [a.0, b.0], "style": "arc", "bend": 50})).unwrap();
+        assert_eq!(r["rect"], json!([10, 10, 80, 70]), "the shared box");
+        assert_ne!(bounds_of(&s, a), before.0);
+        assert_ne!(bounds_of(&s, b), before.1);
+        assert_eq!(s.active().unwrap().history.entries().len(), steps + 1);
+        s.execute("edit.undo", json!({})).unwrap();
+        assert_eq!((bounds_of(&s, a), bounds_of(&s, b)), before);
+        // A locked layer refuses the whole warp.
+        s.edit("lock", |doc, _| {
+            doc.layer_mut(b).unwrap().locks.position = true;
+            Ok(())
+        })
+        .unwrap();
+        assert!(s.execute("edit.transform.warp", json!({"layers": [a.0, b.0], "style": "arc", "bend": 50})).is_err());
+        assert_eq!(bounds_of(&s, a), before.0);
+    }
 }

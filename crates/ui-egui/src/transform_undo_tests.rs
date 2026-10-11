@@ -361,3 +361,81 @@ fn a_locked_layer_in_the_selection_refuses_the_box() {
     assert!(crate::menus::invoke(h.state_mut(), &ctx, "edit.freeTransform", json!({})).is_err());
     assert!(h.state().ui.transform.is_none());
 }
+
+fn shift_x(q: [[f64; 2]; 4], dx: f64) -> [[f64; 2]; 4] {
+    q.map(|p| [p[0] + dx, p[1]])
+}
+
+#[test]
+fn warp_with_several_layers_warps_them_all_with_one_mesh() {
+    let mut h = harness();
+    let (red, blue) = two_selected(&mut h);
+    let steps = history(&h);
+    let ctx = h.ctx.clone();
+    crate::menus::invoke(h.state_mut(), &ctx, "edit.transform.warp", json!({})).unwrap();
+    h.run_steps(2);
+    let t = h.state().ui.transform.clone().expect("warping");
+    assert_eq!(t.layers.len(), 2);
+    assert_eq!(t.rect, [100.0, 100.0, 300.0, 250.0], "one mesh over both");
+    let w = t.warp.expect("in Warp");
+    // Slide the whole mesh 10 px right: a warp that moves both layers.
+    let mesh = w.mesh.clone().unwrap().map_points(|p| [p[0] + 10.0, p[1]]);
+    h.state_mut().ui.transform.as_mut().unwrap().warp = Some(photocraft_geom::warp::Warp::custom(mesh, t.rect));
+    key(&mut h, Modifiers::NONE, Key::Enter);
+    assert!(h.state().ui.transform.is_none());
+    assert_eq!(history(&h), steps + 1, "one Warp step");
+    assert_eq!(bounds(&h, red), photocraft_geom::Rect::new(110, 100, 210, 160));
+    assert_eq!(bounds(&h, blue), photocraft_geom::Rect::new(260, 200, 310, 250));
+    key(&mut h, Modifiers::COMMAND, Key::Z);
+    assert_eq!(bounds(&h, red), photocraft_geom::Rect::new(100, 100, 200, 160));
+    assert_eq!(bounds(&h, blue), photocraft_geom::Rect::new(250, 200, 300, 250));
+}
+
+#[test]
+fn free_transform_a_copy_duplicates_every_selected_layer_and_moves_the_copies() {
+    let mut h = harness();
+    let (red, blue) = two_selected(&mut h);
+    let steps = history(&h);
+    let count = |h: &Harness<'static, PhotocraftApp>| h.state().session.active().unwrap().doc.walk().len();
+    let n = count(&h);
+    let ctx = h.ctx.clone();
+    crate::menus::invoke(h.state_mut(), &ctx, "edit.freeTransformCopy", json!({})).unwrap();
+    h.run_steps(2);
+    let t = h.state().ui.transform.clone().expect("transforming");
+    assert_eq!(t.layers.len(), 2, "both copies in the box");
+    assert!(!t.layers.contains(&red) && !t.layers.contains(&blue), "the copies move, not the originals");
+    assert_eq!(count(&h), n + 2);
+    h.state_mut().ui.transform.as_mut().unwrap().quad = shift_x(t.quad, 20.0);
+    key(&mut h, Modifiers::NONE, Key::Enter);
+    assert_eq!(history(&h), steps + 1, "the copies and their transform are one step");
+    assert_eq!(bounds(&h, red), photocraft_geom::Rect::new(100, 100, 200, 160));
+    assert_eq!(bounds(&h, blue), photocraft_geom::Rect::new(250, 200, 300, 250));
+    assert_eq!(bounds(&h, t.layers[0]), photocraft_geom::Rect::new(120, 100, 220, 160));
+    assert_eq!(bounds(&h, t.layers[1]), photocraft_geom::Rect::new(270, 200, 320, 250));
+    key(&mut h, Modifiers::COMMAND, Key::Z);
+    assert_eq!((count(&h), history(&h)), (n, steps), "one Undo takes both copies back");
+
+    // Esc takes the copies back too, leaving nothing to redo.
+    crate::menus::invoke(h.state_mut(), &ctx, "edit.freeTransformCopy", json!({})).unwrap();
+    h.run_steps(2);
+    key(&mut h, Modifiers::NONE, Key::Escape);
+    assert_eq!((count(&h), history(&h)), (n, steps));
+}
+
+#[test]
+fn flip_and_rotate_menu_items_turn_every_selected_layer_around_the_shared_box() {
+    let mut h = harness();
+    let (red, blue) = two_selected(&mut h);
+    let steps = history(&h);
+    let ctx = h.ctx.clone();
+    crate::menus::invoke(h.state_mut(), &ctx, "edit.transform.flipHorizontal", json!({})).unwrap();
+    h.run_steps(2);
+    assert_eq!(history(&h), steps + 1);
+    assert_eq!(bounds(&h, red), photocraft_geom::Rect::new(200, 100, 300, 160));
+    assert_eq!(bounds(&h, blue), photocraft_geom::Rect::new(100, 200, 150, 250));
+    key(&mut h, Modifiers::COMMAND, Key::Z);
+    crate::menus::invoke(h.state_mut(), &ctx, "edit.transform.rotate180", json!({})).unwrap();
+    h.run_steps(2);
+    assert_eq!(bounds(&h, red), photocraft_geom::Rect::new(200, 190, 300, 250));
+    assert_eq!(bounds(&h, blue), photocraft_geom::Rect::new(100, 100, 150, 150));
+}
