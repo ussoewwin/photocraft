@@ -26,7 +26,7 @@ fn jpeg_xl_encoding_is_deterministic_and_converts_float_to_integer() {
     let two = encode(&input, Format::Jxl, &opts).unwrap();
     assert_eq!(one, two);
     assert_eq!(detect(&one), Some(Format::Jxl));
-    let float = Image::from_f32(1, 1, ChannelLayout::Rgb, &[0.0, 0.5, 1.0]).unwrap();
+    let float = Image::from_f32(2, 2, ChannelLayout::Rgb, &[0.0, 0.5, 1.0, 0.25, 0.5, 0.75, 0.75, 0.5, 0.25, 1.0, 0.0, 0.5]).unwrap();
     let bytes = encode(&float, Format::Jxl, &opts).unwrap();
     assert_eq!(detect(&bytes), Some(Format::Jxl));
 }
