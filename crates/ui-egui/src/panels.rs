@@ -1079,16 +1079,8 @@ pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                         widgets::vline(ui, 22.0);
                         ui.spacing_mut().item_spacing.x = 2.0;
                         let before = app.ui.tool_options.clone();
-                        for (style, icon, tip) in [
-                            ("linear", "blend", tl!("Linear Gradient")),
-                            ("radial", "circle", tl!("Radial Gradient")),
-                            ("angle", "rotate-cw", tl!("Angle Gradient")),
-                            ("reflected", "arrow-left-right", tl!("Reflected Gradient")),
-                            ("diamond", "diamond", tl!("Diamond Gradient")),
-                        ] {
-                            if icons::button(ui, icon, 24.0, app.ui.tool_options.gradient_style == style, tip).clicked() {
-                                app.ui.tool_options.gradient_style = style.into();
-                            }
+                        if let Some(style) = crate::gradient_ui::style_buttons(ui, &app.ui.tool_options.gradient_style) {
+                            app.ui.tool_options.gradient_style = style.into();
                         }
                         ui.spacing_mut().item_spacing.x = 8.0;
                         widgets::vline(ui, 22.0);

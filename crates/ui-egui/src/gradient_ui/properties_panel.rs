@@ -40,10 +40,8 @@ fn options(app: &mut PhotocraftApp, ui: &mut egui::Ui, layer: &Layer) {
         ui.horizontal(|ui| {
             row_label(ui, "Style");
             ui.spacing_mut().item_spacing.x = 3.0;
-            for (value, name) in STYLES {
-                if style_button(ui, value, value == style, name).clicked() {
-                    let _ = app.run(cmds::SET, json!({"layer": layer.id.0, "style": cmds::style_name(value)}));
-                }
+            if let Some(value) = style_buttons(ui, cmds::style_name(style)) {
+                let _ = app.run(cmds::SET, json!({"layer": layer.id.0, "style": value}));
             }
         });
         if let Some(value) = numeric_row(ui, "angle", "Angle", angle, -180.0..=180.0, "°") {
@@ -99,6 +97,17 @@ fn numeric_row(ui: &mut egui::Ui, id: &str, name: &str, current: f32, range: std
         .inner
     })
     .inner
+}
+
+pub(super) fn style_buttons(ui: &mut egui::Ui, current: &str) -> Option<&'static str> {
+    let mut selected = None;
+    for (style, name) in STYLES {
+        let value = cmds::style_name(style);
+        if style_button(ui, style, value == current, name).clicked() {
+            selected = Some(value);
+        }
+    }
+    selected
 }
 
 /// Small procedural previews: no proprietary icon assets, colours follow the theme.
