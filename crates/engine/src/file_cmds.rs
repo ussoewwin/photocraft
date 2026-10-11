@@ -1103,6 +1103,7 @@ fn layers_to_files(s: &mut Session, p: &Value) -> Result<Value> {
     let dir = str_param(p, "dir", cmd).or_else(|_| str_param(p, "output", cmd))?.to_string();
     let format = p.get("format").and_then(Value::as_str).unwrap_or("png").trim_start_matches('.').to_ascii_lowercase();
     let visible_only = p.get("visibleOnly").and_then(Value::as_bool).unwrap_or(true);
+    let trim = p.get("trim").and_then(Value::as_bool).unwrap_or(false);
     let save = SaveOpts::from_params(p, cmd)?;
     let d = s.active().ok_or(EngineError::NoDocument)?;
     let prefix = p.get("prefix").and_then(Value::as_str).map(str::to_string).unwrap_or_else(|| stem(&d.doc.name));
@@ -1119,6 +1120,28 @@ fn layers_to_files(s: &mut Session, p: &Value) -> Result<Value> {
         only.visible = true;
         only.clipped = false;
         one.layers = vec![only];
+        if trim {
+            // Trim what this isolated layer actually renders, including its mask,
+            // vector geometry and layer effects; never alter the source document.
+            let rendered = photocraft_compose::flatten(&one);
+            let width = one.size.width as usize;
+            let mut bounds = Rect::EMPTY;
+            if width > 0 {
+                for (pixel, rgba) in rendered.px.iter().enumerate() {
+                    if rgba[3] > 0.0 {
+                        let x = (pixel % width) as i32;
+                        let y = (pixel / width) as i32;
+                        let at = Rect::new(x, y, x + 1, y + 1);
+                        bounds = if bounds.is_empty() { at } else { bounds.union(&at) };
+                    }
+                }
+            }
+            // An entirely transparent layer has no content bounds. Keep a valid
+            // full-size file for it rather than trying to crop to zero pixels.
+            if !bounds.is_empty() && bounds != one.bounds() {
+                crate::image_cmds::crop_doc(&mut one, cmd, bounds, true)?;
+            }
+        }
         let path = join(&dir, &format!("{}_{:04}_{}.{format}", sanitize(&prefix), i, sanitize(&l.name)));
         save_doc(&one, &path, save)?;
         files.push(path);
@@ -1460,7 +1483,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Layers to Files…",
             &["File", "Export"],
             None,
-            r##"{"dir":folder,"format":"png|jpg|psd|tiff|…"="png","prefix":str=document name,"visibleOnly":bool=true,"quality":0..12?,"tiffLayers":bool=false,"tgaBits":24|32?} → {files}"##,
+            r##"{"dir":folder,"format":"png|jpg|psd|tiff|…"="png","prefix":str=document name,"visibleOnly":bool=true,"trim":bool=false,"quality":0..12?,"tiffLayers":bool=false,"tgaBits":24|32?} → {files}"##,
             native_doc,
             layers_to_files
         ),
