@@ -363,6 +363,9 @@ fn begin_many(app: &mut PhotocraftApp, ctx: &egui::Context, doc: Arc<Document>, 
         steps: Steps::default(),
         tool: app.ui.tool,
         many: Some(many),
+        // The composite is rendered with each layer's styles already (#3653's styled preview is
+        // for one unlifted layer).
+        styled: None,
         path: None,
         content_aware: None,
     });
