@@ -23,7 +23,9 @@ pub enum Format {
     Avif,
     /// HEIF/HEIC (HEVC-coded): read-only; see [`ASYMMETRIC_EXCEPTIONS`].
     Heif,
-    /// Lossless JPEG XL: encode-only until the separate JPEG XL decoder lands.
+    /// FITS (Flexible Image Transport System), the astronomy format: gray or RGB image data.
+    Fits,
+    /// JPEG XL: lossless export-only until the separate importer lands.
     Jxl,
 }
 
@@ -63,8 +65,7 @@ pub const ASYMMETRIC_EXCEPTIONS: &[(Format, &str)] = &[
     ),
     (
         Format::Jxl,
-        "Lossless JPEG XL encoding uses the pure-Rust zune-jpegxl encoder. Opening JXL files is
-         tracked separately; read support is not available in this build.",
+        "Lossless JPEG XL export uses the pure-Rust zune-jpegxl encoder; JPEG XL reading is tracked separately and is not yet available.",
     ),
     (
         Format::Heif,
@@ -83,7 +84,7 @@ const ALL_LAYOUTS: &[ChannelLayout] = &[L::Gray, L::GrayA, L::Rgb, L::Rgba, L::C
 
 impl Format {
     /// Every format known to the crate (enabled or not).
-    pub const ALL: [Format; 15] = [
+    pub const ALL: [Format; 16] = [
         Format::Png,
         Format::Jpeg,
         Format::Tiff,
@@ -98,6 +99,7 @@ impl Format {
         Format::Hdr,
         Format::Avif,
         Format::Heif,
+        Format::Fits,
         Format::Jxl,
     ];
 
@@ -127,6 +129,7 @@ impl Format {
             Format::Hdr => "Radiance HDR",
             Format::Avif => "AVIF",
             Format::Heif => "HEIF",
+            Format::Fits => "FITS",
             Format::Jxl => "JPEG XL",
         }
     }
@@ -149,6 +152,7 @@ impl Format {
             Format::Hdr => &["hdr"],
             Format::Avif => &["avif"],
             Format::Heif => &["heic", "heif", "hif"],
+            Format::Fits => &["fits", "fit", "fts"],
             Format::Jxl => &["jxl"],
         }
     }
@@ -169,6 +173,7 @@ impl Format {
             Format::Hdr => "image/vnd.radiance",
             Format::Avif => "image/avif",
             Format::Heif => "image/heif",
+            Format::Fits => "image/fits",
             Format::Jxl => "image/jxl",
         }
     }
@@ -216,12 +221,13 @@ pub fn caps(format: Format) -> FormatCaps {
         Format::OpenExr => FormatCaps { depths: &[S::F16, S::F32], layouts: RGB_GRAY, ..base },
         Format::Hdr => FormatCaps { depths: &[S::F32], layouts: &[L::Rgb], alpha: false, lossy: true, ..base },
         Format::Avif => FormatCaps { read: false, write: cfg!(feature = "avif"), lossy: true, ..base },
-        // The modular encoder is lossless for integer gray/RGB(A). Its bare codestream
-        // has no ICC/EXIF/XMP container boxes: callers must convert to sRGB.
-        Format::Jxl => FormatCaps { read: false, depths: &[S::U8, S::U16], layouts: RGB_GRAY, ..base },
         Format::Heif => {
             FormatCaps { read: cfg!(feature = "heif"), write: false, depths: &[S::U8, S::U16], icc: true, exif: true, xmp: true, lossy: true, ..base }
         }
+        Format::Fits => FormatCaps { depths: &[S::U8, S::U16, S::F32], layouts: &[L::Gray, L::Rgb], alpha: false, text: true, ..base },
+        // Native GrayA16 encoding loses alpha precision with zune-jpegxl 0.5.2.
+        // The ordinary encode plan widens GrayA to RGBA at the original depth.
+        Format::Jxl => FormatCaps { read: false, depths: &[S::U8, S::U16], layouts: &[L::Gray, L::Rgb, L::Rgba], ..base },
     }
 }
 
@@ -273,6 +279,9 @@ pub fn detect(bytes: &[u8]) -> Option<Format> {
     }
     if b.len() >= 3 && b[0] == b'P' && matches!(b[1], b'1'..=b'7' | b'F' | b'f') && b[2].is_ascii_whitespace() {
         return Some(Format::Pnm);
+    }
+    if b.starts_with(b"SIMPLE  =") {
+        return Some(Format::Fits);
     }
     if looks_like_tga(b) {
         return Some(Format::Tga);

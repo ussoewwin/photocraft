@@ -1,7 +1,8 @@
 //! Pure-Rust lossless JPEG XL (Modular) writer.
 //!
 //! Currently writes a bare JPEG XL codestream. The encoder accepts 8- or 16-bit
-//! gray, gray+alpha, RGB and RGBA samples, but does not write ICC/EXIF/XMP boxes.
+//! gray, RGB and RGBA samples, but does not write ICC/EXIF/XMP boxes.
+//! Gray+alpha sources are expanded losslessly to RGBA by the export plan.
 //! The flat export pipeline converts tagged RGB documents to sRGB first.
 
 use std::panic::{AssertUnwindSafe, catch_unwind};

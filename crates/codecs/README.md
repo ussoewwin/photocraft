@@ -4,7 +4,7 @@ Codecs for flat raster image formats, written in pure Rust. The crate is standal
 workspace crate and defines its own `Image` type. It also builds for `wasm32-unknown-unknown` and
 does no I/O: decoders take `&[u8]` and encoders return `Vec<u8>`.
 
-It follows the "avoid GIMP's hole" rules in `plan/architecture.md` §1.1:
+It follows the "Avoiding GIMP's hole" rules in `docs/architecture.md` §1.1:
 
 * **Symmetric.** Every format we write, we can also read. The only exceptions are listed in
   `ASYMMETRIC_EXCEPTIONS`, each with a reason. The test suite checks this.
@@ -44,9 +44,10 @@ let out = encode(&img, Format::Tiff, &EncodeOptions::default())?;
 | QOI | yes | yes | U8 | RGB, RGBA | yes | no | no | no | no | no | no | `image` |
 | OpenEXR | yes | yes | F16, F32 | Y, YA, RGB, RGBA | yes | no | no | no | no | no | no | `exr` |
 | Radiance HDR | yes | yes | F32 | RGB | no | no | no | no | no | no | yes (RGBE) | `image` |
+| FITS | yes | yes | U8, U16, F32 | Gray, RGB | no | no | no | no | no | yes (header cards) | no | built in |
 | AVIF | **no** | only with feature `avif` | U8 | RGB, RGBA | yes | no | no | no | no | no | yes | `image` + `ravif` |
 | HEIF/HEIC | with feature `heif` | **no** | U8, U16 (10/12-bit decodes to U16) | RGB, RGBA | yes (auxiliary alpha) | yes (`colr` prof) | yes | yes | no | no | n/a | `heic-rs` |
-| JPEG XL (.jxl) | **no** (see #2868) | yes | U8, U16 | Gray, GrayA, RGB, RGBA | yes | no (bare codestream) | no | no | no | no | no | `zune-jpegxl` |
+| JPEG XL (.jxl) | **no** (see #2868) | yes | U8, U16 | Gray, RGB, RGBA (GrayA expands to RGBA) | yes | no (bare codestream) | no | no | no | no | no | `zune-jpegxl` |
 
 "Native" means the data is stored and read back without conversion. Anything else is converted by
 the encode plan, and `fidelity_warnings` reports the conversion when it loses information:
@@ -63,14 +64,22 @@ the same.
 
 ## Documented asymmetries and limitations
 
-* **JPEG XL export** writes lossless modular `.jxl` codestreams in pure Rust with
-  `zune-jpegxl`, preserving 8/16-bit integer pixels and optional alpha for gray/RGB
-  sources. The writer does not embed ICC, EXIF or XMP boxes; untagged RGB images are
-  converted to sRGB by the document export path and `fidelity_warnings` report
-  dropped metadata. JPEG XL *reading* is not available on this branch; the
-  independent read-support PR #2868 has not merged. JPEG XL therefore remains
-  listed in `ASYMMETRIC_EXCEPTIONS` until an importer lands.
+* **JPEG XL export.** Writes lossless 8/16-bit bare codestreams with `zune-jpegxl`.
+  Native layouts are Gray, RGB and RGBA. GrayA is expanded to RGBA at the
+  original depth because native GrayA16 did not preserve alpha in an independent
+  decoder test. The expansion preserves sample values but is not a native
+  GrayA layout. No ICC, EXIF, XMP or DPI container boxes are written; the
+  document pipeline converts tagged images to sRGB and reports metadata loss.
+  Reading remains in the separate #2868 PR. The `ASYMMETRIC_EXCEPTIONS`
+  entry stays until import is merged.
 
+* **FITS.** The image in the primary HDU, or the first `IMAGE` extension, is read; `NAXIS3 = 3`
+  opens as RGB and any other plane count opens the first plane with `DecodeWarning::MorePages`.
+  Rows follow `ROWORDER` (bottom-up by default, as Siril and DS9 do). Physical values that fit
+  stay exact as U8/U16 (a camera's `BITPIX = 16`, `BZERO = 32768`); the rest become F32, taken as
+  normalised when at most 2 and scaled by 65535 (or the maximum) otherwise. Header cards are
+  kept as text (`HIERARCH` for long names). Tile-compressed (fpack) files are refused with
+  `CodecError::Unsupported`; Bayer mosaics open undebayered.
 
 * **Camera raw files** (DNG, CR2, NEF, ARW… which are TIFF-structured) are recognised and refused
   with `CodecError::Unsupported`: they are sensor data, not flat images. `photocraft-raw` decodes
@@ -102,7 +111,10 @@ the same.
   `DecodeWarning::MoreFrames` / `MorePages` in `Image::warnings`, with the total when the file
   states it (frames and TIFF directories are counted without decoding them; reduced-resolution
   TIFF directories and transparency masks are not pages). Any TIFF page can still be opened
-  with `decode_tiff_page` (and `photocraft_io::import_tiff_page`).
+  with `decode_tiff_page` (and `photocraft_io::import_tiff_page`). Every frame of a GIF comes
+  from `decode_gif_frames`: each frame composited onto the logical screen with the disposal
+  methods applied, as RGBA8 with its delay in milliseconds, within `Limits` and
+  `MAX_GIF_FRAMES`. The video-layer commands use it (`photocraft_io::import_gif_frames`).
 * **EXIF in TIFF** is stored as a sub-IFD rather than a blob, so it is not preserved yet.
   `caps.exif = false` for TIFF, and a warning is raised.
 * **Orientation** (EXIF tag 274 in JPEG, PNG `eXIf` and WebP; the decoded page's tag in TIFF and
