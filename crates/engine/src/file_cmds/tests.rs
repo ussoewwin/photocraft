@@ -570,7 +570,6 @@ fn layers_to_files_writes_each_visible_layer() {
     assert_eq!(r["files"].as_array().unwrap().len(), 3);
 }
 
-
 #[test]
 fn layers_to_files_can_trim_transparent_margins_without_changing_the_document() {
     let dir = tmp("layers-trim");
@@ -608,7 +607,8 @@ fn streamed_layer_export_respects_trim() {
     let names = super::export_layers_with(&s, &json!({"trim": true, "format": "png"}), |name, bytes| {
         encoded.push((name.to_string(), bytes.to_vec()));
         Ok(())
-    }).unwrap();
+    })
+    .unwrap();
     assert_eq!(names.len(), encoded.len());
     let cropped = photocraft_io::import(&encoded[0].0, &encoded[0].1).unwrap().document;
     assert_eq!((cropped.size.width, cropped.size.height), (4, 5));
