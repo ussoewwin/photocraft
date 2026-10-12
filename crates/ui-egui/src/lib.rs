@@ -193,6 +193,7 @@ mod tool_cursor;
 pub mod tool_feedback;
 pub(crate) mod tool_memory;
 mod tool_reset;
+pub mod transform_fx;
 pub mod transform_tex;
 pub mod transform_tool;
 mod type_font_preview;
@@ -1732,6 +1733,9 @@ impl eframe::App for PhotocraftApp {
                 let _ = w.send(serde_json::json!({"ok": true, "result": null}));
             }
         }
+        // A menu or dialog can start a filter after `jobs_ui::tick` ran in this frame. Keep
+        // polling it even when the platform would otherwise put the event loop to sleep.
+        jobs_ui::keep_polling(self, &ctx);
         // Menus and buttons in this frame may have asked for a file dialog.
         self.poll_file_dialog(&ctx, Some(frame));
     }
@@ -2266,6 +2270,9 @@ mod pencil_tests;
 
 #[cfg(test)]
 mod pixel_aspect_tests;
+
+#[cfg(test)]
+mod transform_fx_tests;
 
 #[cfg(test)]
 mod transform_undo_tests;
