@@ -13,7 +13,7 @@ const MAX_SUGGESTIONS: usize = 3;
 
 /// Up to [`MAX_SUGGESTIONS`] `candidates` close to `name`, best first: a different case or a few
 /// typos (edit distance), then names that `name` is the start of (`filter.blur.gaussian`), the
-/// same last segment in another namespace (`history.undo` → `edit.undo`), and the same namespace
+/// same last segment in another namespace (`document.undo` → `edit.undo`), and the same namespace
 /// with a longer last segment (`image.size` → `image.imageSize`). Deterministic: within a tier
 /// the closest spelling wins, then the name.
 pub fn near_matches<'a>(name: &str, candidates: impl IntoIterator<Item = &'a str>) -> Vec<&'a str> {
@@ -111,9 +111,9 @@ mod tests {
         // Typo, case, and the same verb in another namespace.
         assert!(unknown("edit.undoo").contains("did you mean `edit.undo`"), "{}", unknown("edit.undoo"));
         assert!(unknown("Edit.Undo").contains("did you mean `edit.undo`"), "{}", unknown("Edit.Undo"));
-        let e = unknown("history.undo");
+        let e = unknown("document.undo");
         assert!(e.contains("did you mean `edit.undo`"), "{e}");
-        assert!(unknown("history.redo").contains("did you mean `edit.redo`"));
+        assert!(unknown("document.redo").contains("did you mean `edit.redo`"));
         // A namespace prefix, a truncated id, a shorter last segment.
         assert!(unknown("layer.new").contains("`layer.new.layer`"), "{}", unknown("layer.new"));
         assert!(unknown("filter.blur.gaussian").contains("did you mean `filter.blur.gaussianBlur`"));
