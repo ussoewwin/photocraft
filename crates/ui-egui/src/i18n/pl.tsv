@@ -19,6 +19,11 @@
 # Zapisz jako…), sentence case as in the English source. Quotes: „…”.
 
 # Guide layout dialog
+# Smart Filter row actions (#1265)
+	Move Up	Przenieś w górę
+	Move Down	Przenieś w dół
+	Delete Smart Filter	Usuń filtr inteligentny
+
 	Rows	Wiersze
 	Number	Liczba
 	Top:	Góra:

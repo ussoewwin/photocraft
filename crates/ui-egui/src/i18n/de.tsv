@@ -16,6 +16,11 @@
 # letters; the trailing "…" of dialog commands is kept. Plural rule: one|other (n != 1 -> other).
 
 # Guide layout dialog
+# Smart Filter row actions (#1265)
+	Move Up	Nach oben verschieben
+	Move Down	Nach unten verschieben
+	Delete Smart Filter	Smartfilter löschen
+
 	Columns	Spalten
 	Rows	Zeilen
 	Number	Anzahl

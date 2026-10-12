@@ -8,6 +8,11 @@
 # Product names and technology names retain their spelling.
 
 # Guide layout dialog
+# Smart Filter row actions (#1265)
+	Move Up	위로 이동
+	Move Down	아래로 이동
+	Delete Smart Filter	스마트 필터 삭제
+
 	Columns	열
 	Rows	행
 	Number	개수

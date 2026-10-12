@@ -11,6 +11,11 @@
 # Menus
 
 # Guide layout dialog
+# Smart Filter row actions (#1265)
+	Move Up	Перемістити вгору
+	Move Down	Перемістити вниз
+	Delete Smart Filter	Видалити смарт-фільтр
+
 	Rows	Рядки
 	Number	Кількість
 	Top:	Зверху:

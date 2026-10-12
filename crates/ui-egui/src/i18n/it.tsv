@@ -13,6 +13,11 @@
 # letters; the trailing … of dialog commands is kept.
 
 # Guide layout dialog
+# Smart Filter row actions (#1265)
+	Move Up	Sposta su
+	Move Down	Sposta giù
+	Delete Smart Filter	Elimina filtro avanzato
+
 	Columns	Colonne
 	Rows	Righe
 	Number	Numero

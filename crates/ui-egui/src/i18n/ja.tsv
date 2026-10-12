@@ -16,6 +16,11 @@
 # letters; the trailing "…" of dialog commands is kept.
 
 # Guide layout dialog
+# Smart Filter row actions (#1265)
+	Move Up	上へ移動
+	Move Down	下へ移動
+	Delete Smart Filter	スマートフィルターを削除
+
 	Rows	行
 	Number	数
 	Top:	上:

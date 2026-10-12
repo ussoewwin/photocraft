@@ -9,6 +9,11 @@
 # informally ("je") and uses sentence case.
 
 # Guide layout dialog
+# Smart Filter row actions (#1265)
+	Move Up	Omhoog verplaatsen
+	Move Down	Omlaag verplaatsen
+	Delete Smart Filter	Slim filter verwijderen
+
 	Rows	Rijen
 	Number	Aantal
 	Top:	Boven:

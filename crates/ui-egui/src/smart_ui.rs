@@ -1,6 +1,8 @@
 //! Layers-panel pieces for smart objects: the thumbnail badge and the Smart Filters sub-rows
 //! (eye toggles; double-click a filter to re-open its dialog with the recorded parameters).
 
+pub(crate) mod context_menu;
+
 use egui::{Align2, Color32, Rect, Sense, Stroke, pos2, vec2};
 use photocraft_doc::{Layer, LayerContent, SmartObject};
 use serde_json::{Value, json};
@@ -81,6 +83,9 @@ pub fn filter_rows(app: &mut PhotocraftApp, ui: &mut egui::Ui, l: &Layer, depth:
         {
             open_editor(app, ui.ctx(), l.id.0, sm, i);
         }
+        if let Some(i) = index {
+            context_menu::show(app, &resp, l.id, i, actions);
+        }
     }
 }
 
@@ -121,3 +126,9 @@ pub fn confirm_command(fields: &serde_json::Map<String, Value>, command: String,
         None => (command, params),
     }
 }
+
+#[cfg(test)]
+mod context_tests;
+
+#[cfg(test)]
+mod menu_guard_tests;

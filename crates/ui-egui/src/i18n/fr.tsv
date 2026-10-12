@@ -20,6 +20,11 @@
 # dialog commands is kept.
 
 # Guide layout dialog
+# Smart Filter row actions (#1265)
+	Move Up	Déplacer vers le haut
+	Move Down	Déplacer vers le bas
+	Delete Smart Filter	Supprimer le filtre intelligent
+
 	Rows	Lignes
 	Number	Nombre
 	Margin	Marge

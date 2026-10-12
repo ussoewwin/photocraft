@@ -13,6 +13,11 @@
 # letters; the trailing "…" of dialog commands is kept.
 
 # Guide layout dialog
+# Smart Filter row actions (#1265)
+	Move Up	Pindahkan ke Atas
+	Move Down	Pindahkan ke Bawah
+	Delete Smart Filter	Hapus Smart Filter
+
 	Rows	Baris
 	Number	Jumlah
 	Margin	Margin

@@ -20,6 +20,11 @@
 # Menus
 
 # Guide layout dialog
+# Smart Filter row actions (#1265)
+	Move Up	Переместить вверх
+	Move Down	Переместить вниз
+	Delete Smart Filter	Удалить смарт-фильтр
+
 	Rows	Строки
 	Number	Количество
 	Margin	Поля

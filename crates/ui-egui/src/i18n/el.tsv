@@ -4,6 +4,11 @@
 # Covers every source label the i18n coverage check lists.
 
 # Guide layout dialog
+# Smart Filter row actions (#1265)
+	Move Up	Μετακίνηση πάνω
+	Move Down	Μετακίνηση κάτω
+	Delete Smart Filter	Διαγραφή έξυπνου φίλτρου
+
 	Rows	Γραμμές
 	Number	Πλήθος
 	Top:	Επάνω:

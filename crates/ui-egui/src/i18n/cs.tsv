@@ -20,6 +20,11 @@
 # dialog commands is kept.
 
 # Guide layout dialog
+# Smart Filter row actions (#1265)
+	Move Up	Přesunout nahoru
+	Move Down	Přesunout dolů
+	Delete Smart Filter	Odstranit chytrý filtr
+
 	Columns	Sloupce
 	Rows	Řádky
 	Number	Počet
