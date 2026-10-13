@@ -19,6 +19,15 @@
 # kept. Full-width punctuation (，。：) inside sentences; half-width parentheses and the " · "
 # separators as in the English.
 
+# Channel Options and New Spot Channel (#3761)
+	Channel Color	色版顏色
+	Color Indicates:	色彩指示：
+	Solidity:	硬度：
+	Masked Areas	遮色片區域
+	Selected Areas	選取區域
+	Spot Color	特別色
+	Ink Characteristics	油墨特性
+
 # Guide layout dialog
 
 # Custom print paper (#3820)
@@ -2711,3 +2720,4 @@ curves	Smooth	平滑
 	Auto Add/Delete	自動增加/刪除
 	Scrollbar Visibility	捲軸可見性
 	Hidden	隱藏
+	ICO is limited to 256 × 256 pixels	ICO 最大為 256 × 256 像素

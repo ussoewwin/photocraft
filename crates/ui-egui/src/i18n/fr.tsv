@@ -19,6 +19,12 @@
 # ArtCraft, OpenType, Lab ...) stay as they are; RGB/CMYK read RVB/CMJN; the trailing "…" of
 # dialog commands is kept.
 
+# Channel Options and New Spot Channel (#3761)
+	Channel Color	Couleur de la couche
+	Color Indicates:	La couleur indique :
+	Solidity:	Solidité :
+	Ink Characteristics	Caractéristiques de l’encre
+
 # Guide layout dialog
 
 # Custom print paper (#3820)
@@ -3122,3 +3128,4 @@ curves	Smooth	Lisser
 	Auto Add/Delete	Ajout/suppr. auto
 	Scrollbar Visibility	Visibilité des barres de défilement
 	Hidden	Masqué
+	ICO is limited to 256 × 256 pixels	Le format ICO est limité à 256 × 256 pixels
