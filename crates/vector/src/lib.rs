@@ -22,6 +22,7 @@
 pub mod edit;
 pub mod flatten;
 pub mod map;
+pub mod pattern;
 pub mod raster;
 pub mod shapes;
 pub mod stroke;
