@@ -22,6 +22,70 @@ fn state_id() -> egui::Id {
     egui::Id::new("smart-filter-row-menu-target")
 }
 
+#[derive(Clone)]
+struct PendingSelection {
+    target: Target,
+    command: &'static str,
+    params: Value,
+    to: Option<usize>,
+}
+
+fn pending_id() -> egui::Id {
+    egui::Id::new("smart-filter-row-menu-selection")
+}
+
+/// A menu edit changes storage indices. Apply its row selection only after the engine succeeds.
+pub(crate) struct SelectionUpdate {
+    document: DocId,
+    before: super::FilterDrag,
+    after: Option<super::FilterDrag>,
+}
+
+impl SelectionUpdate {
+    pub(crate) fn apply(self, ctx: &egui::Context) {
+        ctx.data_mut(|data| {
+            let key = super::selected_key(self.document);
+            if data.get_temp::<super::FilterDrag>(key) == Some(self.before) {
+                if let Some(after) = self.after {
+                    data.insert_temp(key, after);
+                } else {
+                    data.remove::<super::FilterDrag>(key);
+                }
+            }
+        });
+    }
+}
+
+/// Only choices queued by this row menu remap selection; other command origins keep their policy.
+pub(crate) fn selection_update(app: &PhotocraftApp, ctx: &egui::Context, command: &str, params: &Value) -> Option<SelectionUpdate> {
+    let pending = ctx.data(|d| d.get_temp::<PendingSelection>(pending_id()))?;
+    if pending.command != command || &pending.params != params {
+        return None;
+    }
+    ctx.data_mut(|d| d.remove::<PendingSelection>(pending_id()));
+    let count = pending.target.count(app)?;
+    let before = ctx.data(|d| d.get_temp::<super::FilterDrag>(super::selected_key(pending.target.document)))?;
+    let (layer, Some(picked)) = before else { return None };
+    if layer != pending.target.layer.0 || picked >= count {
+        return None;
+    }
+    let from = pending.target.index;
+    let next = match pending.to {
+        Some(to) if picked == from => Some(to),
+        Some(to) if from < to && picked > from && picked <= to => picked.checked_sub(1),
+        Some(to) if from > to && picked >= to && picked < from => picked.checked_add(1),
+        None if picked == from => None,
+        None if picked > from => picked.checked_sub(1),
+        _ => Some(picked),
+    };
+    Some(SelectionUpdate { document: pending.target.document, before, after: next.map(|index| (layer, Some(index))) })
+}
+
+fn queue(ctx: &egui::Context, target: &Target, command: &'static str, params: Value, to: Option<usize>, actions: &mut Vec<(String, Value)>) {
+    ctx.data_mut(|d| d.insert_temp(pending_id(), PendingSelection { target: target.clone(), command, params: params.clone(), to }));
+    actions.push((command.into(), params));
+}
+
 impl Target {
     fn count(&self, app: &PhotocraftApp) -> Option<usize> {
         let st = app.session.active()?;
@@ -63,6 +127,7 @@ pub(crate) fn close_stale(app: &PhotocraftApp, ctx: &egui::Context) {
     {
         egui::Popup::close_id(ctx, target.popup);
         ctx.data_mut(|d| d.remove::<Target>(state_id()));
+        ctx.data_mut(|d| d.remove::<PendingSelection>(pending_id()));
     }
 }
 
@@ -93,13 +158,13 @@ pub(crate) fn show(app: &mut PhotocraftApp, response: &egui::Response, layer: La
             if ui.add_enabled(enabled && to.is_some(), egui::Button::new(label)).clicked()
                 && let Some(to) = to
             {
-                actions.push(("layer.smartFilter.move".into(), json!({"layer": target.layer.0, "index": target.index, "to": to})));
+                queue(ctx, &target, "layer.smartFilter.move", json!({"layer": target.layer.0, "index": target.index, "to": to}), Some(to), actions);
                 ui.close();
             }
         }
         ui.separator();
         if ui.add_enabled(target.enabled(app, "layer.smartFilter.delete"), egui::Button::new(tl!("Delete Smart Filter"))).clicked() {
-            actions.push(("layer.smartFilter.delete".into(), target.params()));
+            queue(ctx, &target, "layer.smartFilter.delete", target.params(), None, actions);
             ui.close();
         }
     });

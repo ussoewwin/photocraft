@@ -203,3 +203,96 @@ fn capture_native_popup_at_two_scales_and_in_french() {
         println!("capture {} at {offset:?}, doc {:?}, inactive target {:?}", file.display(), h.state().session.active().unwrap().doc.id, layer);
     }
 }
+/// Selecting a row is a primary action; its subsequent context edit keeps that filter selected.
+#[test]
+fn row_menu_reorder_keeps_the_selected_filter_identity() {
+    let _language = crate::i18n::language_scope(crate::i18n::Lang::EN);
+    for ppp in [1.0, 2.0] {
+        for (target, choice) in [("Offset", "Move Up"), ("Gaussian Blur", "Move Down")] {
+            let (mut h, layer) = harness_at(8, ppp);
+            let at = text_position(&h, "Offset");
+            click(&mut h, at, PointerButton::Primary);
+            assert_eq!(h.get_by_label("Offset").accesskit_node().toggled(), Some(egui::accesskit::Toggled::True));
+            assert_eq!(h.get_by_label("Gaussian Blur").accesskit_node().toggled(), Some(egui::accesskit::Toggled::False));
+            let st = h.state().session.active().unwrap();
+            let (active, selected, history) = (st.active_layer, st.selected_layers.clone(), st.history.past_len());
+            let at = text_position(&h, target);
+            click(&mut h, at, PointerButton::Secondary);
+            h.get_by_label(choice).click();
+            h.run_steps(4);
+            assert_eq!(filters(h.state(), layer).iter().map(|f| f.command.as_str()).collect::<Vec<_>>(), ["filter.blur.gaussianBlur", "filter.other.offset"]);
+            assert_eq!(h.get_by_label("Offset").accesskit_node().toggled(), Some(egui::accesskit::Toggled::True), "{target}/{choice} keeps Offset selected");
+            assert_eq!(h.get_by_label("Gaussian Blur").accesskit_node().toggled(), Some(egui::accesskit::Toggled::False));
+            let st = h.state().session.active().unwrap();
+            assert_eq!((st.active_layer, &st.selected_layers, st.history.past_len()), (active, &selected, history + 1));
+        }
+    }
+}
+
+#[test]
+fn row_menu_delete_before_selection_keeps_the_remaining_filter_selected() {
+    let _language = crate::i18n::language_scope(crate::i18n::Lang::EN);
+    for ppp in [1.0, 2.0] {
+        let (mut h, layer) = harness_at(8, ppp);
+        let at = text_position(&h, "Gaussian Blur");
+        click(&mut h, at, PointerButton::Primary);
+        assert_eq!(h.get_by_label("Gaussian Blur").accesskit_node().toggled(), Some(egui::accesskit::Toggled::True));
+        let st = h.state().session.active().unwrap();
+        let (active, selected, history) = (st.active_layer, st.selected_layers.clone(), st.history.past_len());
+        let at = text_position(&h, "Offset");
+        click(&mut h, at, PointerButton::Secondary);
+        h.get_by_label("Delete Smart Filter").click();
+        h.run_steps(4);
+        assert_eq!(filters(h.state(), layer).iter().map(|f| f.command.as_str()).collect::<Vec<_>>(), ["filter.blur.gaussianBlur"]);
+        assert_eq!(h.get_by_label("Gaussian Blur").accesskit_node().toggled(), Some(egui::accesskit::Toggled::True));
+        let st = h.state().session.active().unwrap();
+        assert_eq!((st.active_layer, &st.selected_layers, st.history.past_len()), (active, &selected, history + 1));
+    }
+}
+
+#[test]
+fn row_menu_delete_selected_filter_clears_its_row_selection() {
+    let _language = crate::i18n::language_scope(crate::i18n::Lang::EN);
+    for ppp in [1.0, 2.0] {
+        let (mut h, layer) = harness_at(8, ppp);
+        let at = text_position(&h, "Offset");
+        click(&mut h, at, PointerButton::Primary);
+        assert_eq!(h.get_by_label("Offset").accesskit_node().toggled(), Some(egui::accesskit::Toggled::True));
+        let st = h.state().session.active().unwrap();
+        let (active, selected, history) = (st.active_layer, st.selected_layers.clone(), st.history.past_len());
+        let at = text_position(&h, "Offset");
+        click(&mut h, at, PointerButton::Secondary);
+        h.get_by_label("Delete Smart Filter").click();
+        h.run_steps(4);
+        assert_eq!(filters(h.state(), layer).iter().map(|f| f.command.as_str()).collect::<Vec<_>>(), ["filter.blur.gaussianBlur"]);
+        assert_eq!(h.get_by_label("Gaussian Blur").accesskit_node().toggled(), Some(egui::accesskit::Toggled::False));
+        let doc = h.state().session.active().unwrap().doc.id;
+        assert!(h.ctx.data(|d| d.get_temp::<FilterDrag>(selected_key(doc))).is_none());
+        let st = h.state().session.active().unwrap();
+        assert_eq!((st.active_layer, &st.selected_layers, st.history.past_len()), (active, &selected, history + 1));
+    }
+}
+
+#[test]
+fn row_menu_refused_edit_preserves_filter_order_and_selection() {
+    let _language = crate::i18n::language_scope(crate::i18n::Lang::EN);
+    let (mut h, layer) = harness();
+    let at = text_position(&h, "Offset");
+    click(&mut h, at, PointerButton::Primary);
+    assert_eq!(h.get_by_label("Offset").accesskit_node().toggled(), Some(egui::accesskit::Toggled::True));
+    let before = h.state().session.active().unwrap().doc.clone();
+    let st = h.state().session.active().unwrap();
+    let (active, selected, history) = (st.active_layer, st.selected_layers.clone(), st.history.past_len());
+    h.state_mut().session.authorize =
+        Some(|command, _| if command == "layer.smartFilter.move" { Err(photocraft_engine::EngineError::Other("refused menu edit".into())) } else { Ok(()) });
+    let at = text_position(&h, "Offset");
+    click(&mut h, at, PointerButton::Secondary);
+    h.get_by_label("Move Up").click();
+    h.run_steps(4);
+    let st = h.state().session.active().unwrap();
+    assert!(Arc::ptr_eq(&before, &st.doc));
+    assert_eq!((st.active_layer, &st.selected_layers, st.history.past_len()), (active, &selected, history));
+    assert_eq!(filters(h.state(), layer).iter().map(|f| f.command.as_str()).collect::<Vec<_>>(), ["filter.other.offset", "filter.blur.gaussianBlur"]);
+    assert_eq!(h.get_by_label("Offset").accesskit_node().toggled(), Some(egui::accesskit::Toggled::True));
+    assert_eq!(h.get_by_label("Gaussian Blur").accesskit_node().toggled(), Some(egui::accesskit::Toggled::False));
+}
