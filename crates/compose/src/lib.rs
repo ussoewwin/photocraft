@@ -1724,7 +1724,7 @@ fn composite_atop_any(layer: &Layer, base: &mut Buffer, cx: &Ctx) {
             let x = rect.x0 + (i as i32 % rect.width());
             let y = rect.y0 + (i as i32 / rect.width());
             s[3] = if dissolve_noise(x, y) < s[3] * opacity { 1.0 } else { 0.0 };
-            blend::composite_gamma(BlendMode::Normal, [p[0], p[1], p[2], 1.0], s, 1.0, gamma)
+            blend::composite(BlendMode::Normal, [p[0], p[1], p[2], 1.0], s, 1.0)
         } else {
             blend::composite_gamma(layer.blend, [p[0], p[1], p[2], 1.0], s, opacity, gamma)
         };
