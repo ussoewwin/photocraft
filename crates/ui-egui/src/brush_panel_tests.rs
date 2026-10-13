@@ -1141,22 +1141,20 @@ fn f5_edits_the_default_brush_with_every_section() {
     for (name, _) in SECTIONS {
         assert!(h.query_all_by_label(name).next().is_some(), "{name} listed");
     }
-    // Clicking a section's name shows it and turns it on: one tools.setBrush.
+    // Clicking a section's name shows its settings without changing its enable flag.
     let n = h.state().session.journal.len();
+    let shape_enabled = h.state().session.tools.brush.shape_dynamics.enabled;
     h.get_by_label("Shape Dynamics").click();
     h.run_steps(3);
     assert_eq!(h.state().ui.brush_section, 1);
-    assert!(h.state().session.tools.brush.shape_dynamics.enabled);
-    assert_eq!(h.state().session.journal.len(), n + 1);
-    let (id, p) = last_journal(h.state()).unwrap();
-    assert_eq!(id, "tools.setBrush");
-    assert_eq!(p["brush"]["shapeDynamics"]["enabled"], json!(true));
+    assert_eq!(h.state().session.tools.brush.shape_dynamics.enabled, shape_enabled);
+    assert_eq!(h.state().session.journal.len(), n);
     // A section's box toggles it without showing it.
     h.get_by_label("Enable Transfer").click();
     h.run_steps(3);
     assert!(h.state().session.tools.brush.transfer.enabled);
     assert_eq!(h.state().ui.brush_section, 1);
-    assert_eq!(h.state().session.journal.len(), n + 2);
+    assert_eq!(h.state().session.journal.len(), n + 1);
     // The rest of the brush is untouched.
     let b = &h.state().session.tools.brush;
     assert_eq!((b.size, b.hardness, &b.tip), (fresh.size, fresh.hardness, &fresh.tip));
