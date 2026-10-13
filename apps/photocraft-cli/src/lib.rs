@@ -30,7 +30,7 @@ USAGE:
   photocraft-cli batch --actions <actions.json|set.atn> [--action <name>] --in <dir> --out <dir> [--recursive] [--naming <template>] [--start-serial <n>] [--stop-on-error] [--error-log <file>] [--format <ext>] [--quality <1-100>] [--in-place] [--tiff-layers] [--tga-bits <24|32>] [--dpx-bits <8|10|12|16>]
       Apply an action list to every image in a directory (--recursive: its subfolders too, mirrored
       under --out). --naming names the results, default {name}.{ext}; tokens: {name} {NAME} {Name},
-      {serial} {serial:2} {serial:3} {serial:4} (from --start-serial, default 1), {letter} {LETTER},
+      {serial} (3 digits) {serial:1..4} (from --start-serial, default 1), {letter} {LETTER},
       {date:mmddyy|mmdd|yyyymmdd|yymmdd|yyddmm|ddmmyy}, {ext} {EXT}; other text is literal.
       --stop-on-error stops at the first failing file (the rest are skipped) instead of going on;
       --error-log writes the failures to a text file. A Photoshop Actions file (.atn) is a
@@ -303,13 +303,14 @@ fn command_list(a: &Args) -> Result<Vec<(String, Value)>, String> {
 fn run_cmds(a: &Args, out: &mut dyn Write, err: &mut dyn Write) -> R {
     let opts = export_opts(a)?;
     let mut h = Headless::trusted_local();
-    // Each missing-font warning is printed once, wherever it is first detected (open, a command or
-    // the save).
+    // Opening, running commands and exporting can all notice the same missing font:
+    // one `run` invocation reports each warning line at most once.
     let mut reported_fonts = std::collections::HashSet::<String>::new();
     match (a.positional.as_slice(), a.get("--new")) {
         ([file], None) => {
             let o = h.open(Path::new(file)).map_err(|e| e.to_string())?;
             let ws: Vec<String> = serde_json::from_value(o["warnings"].clone()).unwrap_or_default();
+            reported_fonts.extend(ws.iter().cloned());
             warn_all(err, &ws);
             reported_fonts.extend(ws);
         }
@@ -355,9 +356,8 @@ fn run_cmds(a: &Args, out: &mut dyn Write, err: &mut dyn Write) -> R {
     warn_all(err, &remaining);
     if let Some(o) = a.get("--out") {
         let r = h.save(None, Some(Path::new(o)), a.get("--format"), &opts).map_err(|e| e.to_string())?;
-        // The save repeats the document's missing-font warnings; each was already reported above.
-        let ws: Vec<String> =
-            serde_json::from_value::<Vec<String>>(r["warnings"].clone()).unwrap_or_default().into_iter().filter(|w| !reported_fonts.contains(w)).collect();
+        let ws: Vec<String> = serde_json::from_value(r["warnings"].clone()).unwrap_or_default();
+        let ws: Vec<String> = ws.into_iter().filter(|w| reported_fonts.insert(w.clone())).collect();
         warn_all(err, &ws);
     }
     Ok(())
@@ -468,7 +468,7 @@ fn batch(a: &Args, out: &mut dyn Write, err: &mut dyn Write) -> R {
     }
     std::fs::create_dir_all(&out_dir).map_err(|e| e.to_string())?;
     let start = match a.get("--start-serial") {
-        Some(n) => n.parse::<u64>().map_err(|_| format!("--start-serial {n}: not a non-negative integer"))?,
+        Some(n) => n.parse::<u32>().ok().filter(|n| *n > 0).map(u64::from).ok_or_else(|| format!("--start-serial {n}: not an integer from 1 to 4294967295"))?,
         None => 1,
     };
     let naming = photocraft_engine::batch::Naming::parse(a.get("--naming").unwrap_or(photocraft_engine::batch::Naming::DEFAULT), start)

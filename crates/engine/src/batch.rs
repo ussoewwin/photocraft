@@ -4,11 +4,14 @@
 //!
 //! The naming template follows Photoshop's File Naming fields as tokens in one string:
 //! `{name}` / `{NAME}` / `{Name}` (the document name as is, upper case, capitalised),
-//! `{serial}` to `{serial:4}` (a serial number, padded to that many digits, from
-//! `startSerial`), `{letter}` / `{LETTER}` (a serial letter: a, b … z, aa, ab …),
-//! `{date:mmddyy}`, `{date:mmdd}`, `{date:yyyymmdd}`, `{date:yymmdd}`, `{date:yyddmm}`,
-//! `{date:ddmmyy}` (today's date), `{ext}` / `{EXT}` (the output extension), and any other
-//! text literally. The default is `{name}.{ext}`.
+//! `{serial}` (a serial number padded to 3 digits, from `startingSerial`; a failed input keeps
+//! its position) and `{serial:1}` to `{serial:4}` (padded to that many digits), `{letter}` /
+//! `{LETTER}` (a serial letter: a, b … z, aa, ab …), `{date}` (today's UTC date as
+//! `YYYY-MM-DD`), `{date:mmddyy}`, `{date:mmdd}`, `{date:yyyymmdd}`, `{date:yymmdd}`,
+//! `{date:yyddmm}`, `{date:ddmmyy}`, `{ext}` / `{EXT}` (the output extension), and any other
+//! text literally; braces in a document's name are literal. A template without `{ext}` gets
+//! `.{ext}` appended, so `{name}_{serial}` names a stem (#4466). The default (and a blank
+//! template) is `{name}.{ext}`.
 
 use serde_json::{Value, json};
 
@@ -102,12 +105,13 @@ pub struct Date {
 }
 
 impl Date {
-    /// The local date. On the web (where the batch commands don't run) the epoch.
+    /// Today's UTC date (the date a run captures, the same everywhere a batch is reproduced).
+    /// On the web (where the batch commands don't run) the epoch.
     pub fn today() -> Self {
         #[cfg(not(target_arch = "wasm32"))]
         {
             use chrono::Datelike;
-            let now = chrono::Local::now();
+            let now = chrono::Utc::now();
             Self { year: now.year(), month: now.month(), day: now.day() }
         }
         #[cfg(target_arch = "wasm32")]
@@ -120,6 +124,7 @@ impl Date {
         let (y, m, d) = (self.year.rem_euclid(10_000), self.month, self.day);
         let yy = y % 100;
         match fmt {
+            DateFmt::Iso => format!("{y:04}-{m:02}-{d:02}"),
             DateFmt::Mmddyy => format!("{m:02}{d:02}{yy:02}"),
             DateFmt::Mmdd => format!("{m:02}{d:02}"),
             DateFmt::Yyyymmdd => format!("{y:04}{m:02}{d:02}"),
@@ -132,6 +137,8 @@ impl Date {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum DateFmt {
+    /// `YYYY-MM-DD`, the `{date}` token.
+    Iso,
     Mmddyy,
     Mmdd,
     Yyyymmdd,
@@ -171,8 +178,14 @@ impl Naming {
     /// The template every batch uses unless told otherwise: `<document name>.<extension>`.
     pub const DEFAULT: &'static str = "{name}.{ext}";
 
+    /// Longest template accepted, in bytes.
+    pub const MAX_LEN: usize = 255;
+
     /// Parse `template`; serial numbers count from `start`.
     pub fn parse(template: &str, start: u64) -> std::result::Result<Self, String> {
+        if template.len() > Self::MAX_LEN {
+            return Err(format!("longer than {} bytes", Self::MAX_LEN));
+        }
         let mut segs = Vec::new();
         let mut lit = String::new();
         let mut rest = template;
@@ -185,7 +198,8 @@ impl Naming {
                 "name" => Seg::Name(Case::AsIs),
                 "NAME" => Seg::Name(Case::Upper),
                 "Name" => Seg::Name(Case::Title),
-                "serial" => Seg::Serial(1),
+                "serial" => Seg::Serial(3),
+                "date" => Seg::Date(DateFmt::Iso),
                 "letter" => Seg::Letter(false),
                 "LETTER" => Seg::Letter(true),
                 "ext" => Seg::Ext(false),
@@ -200,7 +214,7 @@ impl Naming {
                     Some(n) if (1..=4).contains(&n) => Seg::Serial(n),
                     _ => {
                         return Err(format!(
-                            "unknown token `{{{token}}}` (tokens: {{name}}, {{NAME}}, {{Name}}, {{serial}}, {{serial:2}}, {{serial:3}}, {{serial:4}}, {{letter}}, {{LETTER}}, {{date:mmddyy}}, {{date:mmdd}}, {{date:yyyymmdd}}, {{date:yymmdd}}, {{date:yyddmm}}, {{date:ddmmyy}}, {{ext}}, {{EXT}})"
+                            "unknown token `{{{token}}}` (tokens: {{name}}, {{NAME}}, {{Name}}, {{serial}}, {{serial:1}}, {{serial:2}}, {{serial:3}}, {{serial:4}}, {{letter}}, {{LETTER}}, {{date}}, {{date:mmddyy}}, {{date:mmdd}}, {{date:yyyymmdd}}, {{date:yymmdd}}, {{date:yyddmm}}, {{date:ddmmyy}}, {{ext}}, {{EXT}})"
                         ));
                     }
                 },
@@ -225,7 +239,23 @@ impl Naming {
         if text.contains(['/', '\\', ':']) || text.split('.').any(|part| part == "..") {
             return Err("file names can't contain path separators or `..`".into());
         }
+        if text.contains(['<', '>', '"', '|', '?', '*']) || text.chars().any(char::is_control) {
+            return Err("file names can't contain `<>\"|?*` or control characters".into());
+        }
+        // A template that names a stem gets the output's extension, as `{name}_{serial}` reads.
+        if !segs.iter().any(|s| matches!(s, Seg::Ext(_))) {
+            segs.extend([Seg::Lit(".".into()), Seg::Ext(false)]);
+        }
         Ok(Self { segs, start })
+    }
+
+    /// `Err` when the serial of the last of `count` outputs would pass 4294967295 (serials are
+    /// kept within `u32`, so a run's position never silently wraps or truncates).
+    pub fn check_serials(&self, count: u64) -> std::result::Result<(), String> {
+        match self.start.checked_add(count.saturating_sub(1)) {
+            Some(last) if last <= u64::from(u32::MAX) => Ok(()),
+            _ => Err("\"startingSerial\" plus the number of inputs exceeds 4294967295".into()),
+        }
     }
 
     /// `<name><suffix>.<ext>`, the naming of the commands without a template.
@@ -290,12 +320,19 @@ pub struct Options {
 }
 
 impl Options {
-    /// `naming`, `startSerial`, `stopOnError` and `errorLog` from command `cmd`'s params.
+    /// `naming`, `startingSerial`, `stopOnError` and `errorLog` from command `cmd`'s params.
     pub(crate) fn from_params(p: &Value, cmd: &str) -> Result<Self> {
-        let template = p.get("naming").and_then(Value::as_str).map(str::trim).filter(|t| !t.is_empty()).unwrap_or(Naming::DEFAULT);
-        let start = match p.get("startSerial") {
+        let template = match p.get("naming") {
+            None | Some(Value::Null) => Naming::DEFAULT,
+            Some(Value::String(t)) => Some(t.trim()).filter(|t| !t.is_empty()).unwrap_or(Naming::DEFAULT),
+            Some(_) => return Err(bad(cmd, "\"naming\" must be a string")),
+        };
+        let start = match p.get("startingSerial") {
             None | Some(Value::Null) => 1,
-            Some(v) => v.as_u64().ok_or_else(|| bad(cmd, "\"startSerial\" must be a non-negative integer"))?,
+            Some(v) => v
+                .as_u64()
+                .filter(|n| (1..=u64::from(u32::MAX)).contains(n))
+                .ok_or_else(|| bad(cmd, "\"startingSerial\" must be an integer from 1 to 4294967295"))?,
         };
         let naming = Naming::parse(template, start).map_err(|m| bad(cmd, format!("\"naming\": {m}")))?;
         let stop_on_error = p.get("stopOnError").and_then(Value::as_bool).unwrap_or(false);

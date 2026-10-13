@@ -31,16 +31,20 @@ fn name(template: &str, start: u64, stem: &str, ext: &str, index: u64) -> String
 fn naming_tokens() {
     assert_eq!(name("{name}.{ext}", 1, "Photo", "jpg", 0), "Photo.jpg");
     assert_eq!(name("{NAME}_{Name}.{EXT}", 1, "my Photo", "JPG", 0), "MY PHOTO_My photo.JPG");
-    assert_eq!(name("{name}-{serial}.{ext}", 1, "a", "png", 0), "a-1.png");
+    assert_eq!(name("{name}-{serial}.{ext}", 1, "a", "png", 0), "a-001.png", "{{serial}} is three digits (#4466)");
+    assert_eq!(name("{name}-{serial:1}.{ext}", 1, "a", "png", 0), "a-1.png");
     assert_eq!(name("{name}-{serial:3}.{ext}", 7, "a", "png", 2), "a-009.png");
-    assert_eq!(name("{serial:2}", 1, "a", "png", 150), "151", "a serial longer than its width keeps every digit");
-    assert_eq!(name("{letter}{LETTER}", 1, "a", "png", 0), "aA");
-    assert_eq!(name("{letter}", 1, "a", "png", 25), "z");
-    assert_eq!(name("{letter}", 1, "a", "png", 26), "aa");
-    assert_eq!(name("{LETTER}", 1, "a", "png", 27), "AB");
+    assert_eq!(name("{serial:2}", 1, "a", "png", 150), "151.png", "a serial longer than its width keeps every digit");
+    assert_eq!(name("{name}_{serial}", 7, "a", "png", 1000), "a_1007.png", "a stem template gets the extension; serials don't wrap");
+    assert_eq!(name("{name}_{serial}", 7, "photo{serial}", "png", 0), "photo{serial}_007.png", "braces in a document name are literal");
+    assert_eq!(name("{date}_{name}", 1, "a", "png", 0), "2026-10-12_a.png");
+    assert_eq!(name("{letter}{LETTER}", 1, "a", "png", 0), "aA.png");
+    assert_eq!(name("{letter}", 1, "a", "png", 25), "z.png");
+    assert_eq!(name("{letter}", 1, "a", "png", 26), "aa.png");
+    assert_eq!(name("{LETTER}", 1, "a", "png", 27), "AB.png");
     assert_eq!(
         name("{date:mmddyy} {date:mmdd} {date:yyyymmdd} {date:yymmdd} {date:yyddmm} {date:ddmmyy}", 1, "a", "png", 0),
-        "101226 1012 20261012 261012 261210 121026"
+        "101226 1012 20261012 261012 261210 121026.png"
     );
     assert_eq!(name("final copy.{ext}", 1, "a", "png", 0), "final copy.png", "literal text");
     assert_eq!(Naming::plain("-x").file_name("a", "PNG", 0, DATE), "a-x.png");
@@ -61,25 +65,37 @@ fn naming_rejects_bad_templates() {
         ("../{name}.{ext}", "separators"),
         ("sub/{name}", "separators"),
         ("{name}\\x", "separators"),
+        ("C:{name}", "separators"),
+        ("{name}?", "control"),
+        ("{name}\u{7}", "control"),
     ] {
         let e = Naming::parse(t, 1).unwrap_err();
         assert!(e.contains(why), "{t:?}: {e}");
     }
     assert_eq!(name("v1.2.{ext}", 1, "a", "png", 0), "v1.2.png", "dots inside a name are fine");
+    assert!(Naming::parse(&"x".repeat(256), 1).unwrap_err().contains("255"));
+    let n = Naming::parse("{serial}", 4_294_967_295).unwrap();
+    assert!(n.check_serials(1).is_ok() && n.check_serials(2).is_err(), "serials stay within u32");
+    assert!(Naming::parse("{name}", 4_294_967_295).unwrap().check_serials(0).is_ok(), "no input, nothing to overflow");
 }
 
 #[test]
 fn options_from_params() {
     let o = Options::from_params(&json!({}), "x").unwrap();
     assert_eq!(o, Options::plain(""));
-    let o =
-        Options::from_params(&json!({"naming": " {name}-{serial:2}.{ext} ", "startSerial": 5, "stopOnError": true, "errorLog": "/tmp/log.txt"}), "x").unwrap();
+    let o = Options::from_params(&json!({"naming": " {name}-{serial:2}.{ext} ", "startingSerial": 5, "stopOnError": true, "errorLog": "/tmp/log.txt"}), "x")
+        .unwrap();
     assert!(o.stop_on_error && o.error_log.as_deref() == Some("/tmp/log.txt"));
     assert_eq!(o.naming.file_name("a", "png", 0, DATE), "a-05.png");
     let e = Options::from_params(&json!({"naming": "{bad}"}), "x").unwrap_err();
     assert!(e.to_string().contains("naming"), "{e}");
-    assert!(Options::from_params(&json!({"startSerial": -1}), "x").is_err());
-    assert!(Options::from_params(&json!({"startSerial": 1.5}), "x").is_err());
+    for start in [json!(-1), json!(0), json!(1.5), json!("1"), json!(4_294_967_296_u64)] {
+        let e = Options::from_params(&json!({"startingSerial": start}), "x").unwrap_err();
+        assert!(e.to_string().contains("startingSerial"), "{start}: {e}");
+    }
+    assert!(Options::from_params(&json!({"startingSerial": 4_294_967_295_u64}), "x").is_ok());
+    let e = Options::from_params(&json!({"naming": 42}), "x").unwrap_err();
+    assert!(e.to_string().contains("must be a string"), "{e}");
     assert_eq!(Options::from_params(&json!({"naming": "", "errorLog": "  "}), "x").unwrap(), Options::plain(""), "empty strings mean the defaults");
 }
 
@@ -115,7 +131,7 @@ fn batch_into_subfolders_with_a_naming_template() {
     let r = s
         .execute(
             "file.automate.batch",
-            json!({"steps": [["image.adjustments.invert", {}]], "input": input, "includeSubfolders": true, "output": out, "format": "png", "naming": "{name}_{serial:2}.{ext}", "startSerial": 10}),
+            json!({"steps": [["image.adjustments.invert", {}]], "input": input, "includeSubfolders": true, "output": out, "format": "png", "naming": "{name}_{serial:2}.{ext}", "startingSerial": 10}),
         )
         .unwrap();
     let files: Vec<&str> = r["files"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
@@ -181,7 +197,7 @@ fn a_cancelled_run_stops_and_still_logs() {
     let ctx = JobCtx::new();
     ctx.cancel();
     let options = Options { naming: Naming::plain(""), stop_on_error: false, error_log: Some(log.clone()) };
-    let r = crate::file_cmds::process_files(&[Input::file(&a)], &join(&dir, "out"), "png", Default::default(), &options, Some(&ctx), &|_| Ok(()));
+    let r = crate::file_cmds::process_files("x", &[Input::file(&a)], &join(&dir, "out"), "png", Default::default(), &options, Some(&ctx), &|_| Ok(()));
     assert!(matches!(r, Err(crate::EngineError::Cancelled)), "{r:?}");
     assert!(!std::path::Path::new(&join(&dir, "out/a.png")).exists(), "nothing was written after the cancel");
 }

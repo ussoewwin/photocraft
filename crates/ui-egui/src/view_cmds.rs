@@ -1085,6 +1085,16 @@ pub fn form_body(ui: &mut egui::Ui, f: &mut Map<String, Value>) {
     egui::Grid::new("form-dialog").num_columns(2).spacing([12.0, 6.0]).show(ui, |ui| {
         for k in keys {
             let v = f.get(&k).cloned().unwrap_or(Value::Null);
+            if k == "naming" && f.get("__command").and_then(Value::as_str) == Some("file.automate.batch") {
+                let label = ui.label(tl!("File Naming"));
+                let mut naming = v.as_str().unwrap_or_default().to_owned();
+                ui.add(egui::TextEdit::singleline(&mut naming).desired_width(260.0).hint_text(photocraft_engine::batch::Naming::DEFAULT))
+                    .labelled_by(label.id)
+                    .on_hover_text("{name} {NAME} {Name} · {serial} {serial:1..4} · {letter} {LETTER} · {date} (UTC) {date:mmddyy|mmdd|yyyymmdd|yymmdd|yyddmm|ddmmyy} · {ext} {EXT}; blank keeps the names");
+                f.insert(k, json!(naming));
+                ui.end_row();
+                continue;
+            }
             if k == "quality" && f.get("__command").and_then(Value::as_str) == Some("file.automate.batch") {
                 ui.label(label(&k));
                 let mut custom = v.as_f64().is_some();
@@ -1338,9 +1348,9 @@ fn front(app: &mut PhotocraftApp, id: &str, params: &Value) -> Option<Result<Val
                 app,
                 json!({
                     "action": name, "steps": steps, "source": "folder", "input": dir, "includeSubfolders": false,
-                    "output": format!("{dir}/batch"), "format": "same", "naming": photocraft_engine::batch::Naming::DEFAULT, "startSerial": 1,
+                    "output": format!("{dir}/batch"), "format": "same", "naming": "", "startingSerial": 1,
                     "stopOnError": false, "errorLog": "", "quality": null, "__batchQuality": 8,
-                    "__order": ["action", "source", "input", "includeSubfolders", "output", "format", "naming", "startSerial", "quality", "stopOnError", "errorLog"],
+                    "__order": ["action", "source", "input", "includeSubfolders", "output", "format", "naming", "startingSerial", "quality", "stopOnError", "errorLog"],
                 }),
                 json!({"format": ["same", "png", "jpg", "psd", "tiff", "webp"], "source": ["folder", "open"]}),
             )

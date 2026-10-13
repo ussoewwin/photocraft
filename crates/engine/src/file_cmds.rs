@@ -942,11 +942,15 @@ fn ensure_dir(dir: &str) -> Result<()> {
 
 /// Opens each input in a scratch session, runs `f` on it and saves it to `output` (in the
 /// input's subfolder, mirrored) as `format` (`"same"` keeps the input's extension), named by
-/// `options.naming`. Errors per file are collected, not fatal, unless `options.stop_on_error`;
-/// they also go to `options.error_log` when set. With a job context, progress is reported per
-/// file and a cancel stops after the current file (`Err(Cancelled)`; the files written so far
-/// stay, the log is still written).
+/// `options.naming`. The names are planned and checked as a whole before any file is opened: a
+/// run whose serials would pass 4294967295, or whose outputs would replace another input before
+/// it is read, is refused as `cmd`'s bad params with nothing written. Errors per file are
+/// collected, not fatal, unless `options.stop_on_error`; they also go to `options.error_log`
+/// when set. With a job context, progress is reported per file and a cancel stops after the
+/// current file (`Err(Cancelled)`; the files written so far stay, the log is still written).
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn process_files(
+    cmd: &str,
     inputs: &[crate::batch::Input],
     output: &str,
     format: &str,
@@ -955,15 +959,16 @@ pub(crate) fn process_files(
     ctx: Option<&crate::jobs::JobCtx>,
     f: &dyn Fn(&mut Session) -> Result<()>,
 ) -> Result<Value> {
+    let date = crate::batch::Date::today();
+    let plan = plan_outputs(cmd, inputs, output, format, options, date)?;
     let mut files = Vec::new();
     let mut errors = Vec::new();
     let mut written = OutputClaims::default();
-    let date = crate::batch::Date::today();
     let total = inputs.len();
     let mut stopped = None;
     let mut cancelled = false;
     let mut done = 0;
-    for (i, input) in inputs.iter().enumerate() {
+    for (i, (input, (dir, out))) in inputs.iter().zip(plan).enumerate() {
         if let Some(ctx) = ctx {
             if ctx.cancelled() {
                 cancelled = true;
@@ -972,16 +977,12 @@ pub(crate) fn process_files(
             ctx.progress(i as f32 / total.max(1) as f32, &format!("{} of {total}: {}", i + 1, file_name(&input.path)));
         }
         let path = &input.path;
-        let ext =
-            if format == "same" { path.rsplit('.').next().unwrap_or("png").to_ascii_lowercase() } else { format.trim_start_matches('.').to_ascii_lowercase() };
-        let dir = if input.subdir.is_empty() { output.to_string() } else { join(output, &input.subdir) };
-        let out = join(&dir, &options.naming.file_name(&stem(path), &ext, i as u64, date));
         let r = (|| -> Result<()> {
             written.check(&out).map_err(EngineError::Other)?;
             let bytes = read_file(path)?;
             let mut scratch = Session::new();
             let doc = import(&file_name(path), &bytes)?;
-            scratch.add_document(doc, Some(path.clone()));
+            scratch.add_document(doc, Some(path.to_string()));
             f(&mut scratch)?;
             let d = scratch.active().ok_or(EngineError::NoDocument)?;
             ensure_dir(&dir)?;
@@ -1016,6 +1017,45 @@ pub(crate) fn process_files(
     }
     let skipped = || inputs.iter().skip(done).map(|i| i.path.clone()).collect();
     Ok(crate::batch::outcome(files, errors, stopped.map(|at| (at, skipped())), options.error_log.as_deref()))
+}
+
+/// The output folder and path of every input of a run, checked as a whole before anything is
+/// written (#4466): the serials must stay within 4294967295, and no output may be another input
+/// (`{serial}` over the input folder would rename `002.png` to `001.png`, the next input, before
+/// it is read; existing paths are resolved so `in/./001.png` is caught too). An input saved over
+/// itself is read first, so that stays allowed.
+fn plan_outputs(
+    cmd: &str,
+    inputs: &[crate::batch::Input],
+    output: &str,
+    format: &str,
+    options: &crate::batch::Options,
+    date: crate::batch::Date,
+) -> Result<Vec<(String, String)>> {
+    let bad = |msg: String| EngineError::BadParams { cmd: cmd.into(), msg };
+    options.naming.check_serials(inputs.len() as u64).map_err(bad)?;
+    let mut plan = Vec::with_capacity(inputs.len());
+    for (i, input) in inputs.iter().enumerate() {
+        let path = &input.path;
+        let ext =
+            if format == "same" { path.rsplit('.').next().unwrap_or("png").to_ascii_lowercase() } else { format.trim_start_matches('.').to_ascii_lowercase() };
+        let dir = if input.subdir.is_empty() { output.to_string() } else { join(output, &input.subdir) };
+        let out = join(&dir, &options.naming.file_name(&stem(path), &ext, i as u64, date));
+        plan.push((dir, out));
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let sources: std::collections::HashMap<std::path::PathBuf, usize> =
+            inputs.iter().enumerate().filter_map(|(i, input)| std::fs::canonicalize(&input.path).ok().map(|p| (p, i))).collect();
+        for (i, (_, out)) in plan.iter().enumerate() {
+            if let Some(&j) = std::fs::canonicalize(out).ok().and_then(|p| sources.get(&p))
+                && j != i
+            {
+                return Err(bad(format!("naming would replace the input file {out} before it is read; choose another destination or template")));
+            }
+        }
+    }
+    Ok(plan)
 }
 
 /// The output paths a batch run has written, so a later input whose output name matches an
@@ -1084,7 +1124,7 @@ fn batch(s: &mut Session, p: &Value) -> Result<Value> {
         "Batch",
         false,
         move |ctx| {
-            process_files(&inputs, &output, &format, save, &options, Some(ctx), &|scratch| {
+            process_files(cmd, &inputs, &output, &format, save, &options, Some(ctx), &|scratch| {
                 scratch.actions = actions.clone();
                 for (id, params) in &steps {
                     let r = scratch.execute(id, params.clone())?;
@@ -1188,7 +1228,7 @@ fn image_processor(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let to_srgb = p.get("convertToSrgb").and_then(Value::as_bool).unwrap_or(false);
     let options = crate::batch::Options::from_params(p, cmd)?;
-    process_files(&inputs, &output, &format, SaveOpts::from_params(s, p, cmd)?.or_quality(8.0), &options, None, &|scratch| {
+    process_files(cmd, &inputs, &output, &format, SaveOpts::from_params(s, p, cmd)?.or_quality(8.0), &options, None, &|scratch| {
         if to_srgb && scratch.active().is_some_and(|d| d.doc.mode != ColorMode::Rgb) {
             scratch.execute("image.mode.rgb", json!({}))?;
         }
@@ -1688,7 +1728,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Batch…",
             &["File", "Automate"],
             None,
-            r##"{"steps":[[commandId,params]|{"command":id,"params":{}}…] (a recorded action),"source":"folder|open"="folder" (open: the steps run on every open document; "input" is ignored, "output" optional: a copy of each is saved there, else they just stay changed),"input":folder|[paths],"includeSubfolders":bool=false (the output mirrors the subfolders),"output":folder,"format":"same|png|jpg|psd|tiff|…"="same","naming":"{name}.{ext}"? (template: {name} {NAME} {Name} {serial} {serial:2..4} {letter} {LETTER} {date:mmddyy|mmdd|yyyymmdd|yymmdd|yyddmm|ddmmyy} {ext} {EXT}, other text literal),"startSerial":int=1,"stopOnError":bool=false (else every file is tried),"errorLog":path? (the errors, one per line),"quality":0..12?,"tiffLayers":bool=false,"tgaBits":24|32?,"dpxBits":8|10|12|16? (DPX: bits per sample; unset, 8 for an 8-bit document, else 16),"calledActions":[{"name","steps"}…]? (the actions Play Action steps call; default: the session's)} → {files, errors, stopped?, skipped?, errorLog?} (an input whose output name was already written in the run goes to errors). Runs as a job: progress per file, Cancel stops after the current one"##,
+            r##"{"steps":[[commandId,params]|{"command":id,"params":{}}…] (a recorded action),"source":"folder|open"="folder" (open: the steps run on every open document; "input" is ignored, "output" optional: a copy of each is saved there, else they just stay changed),"input":folder|[paths],"includeSubfolders":bool=false (the output mirrors the subfolders),"output":folder,"format":"same|png|jpg|psd|tiff|…"="same","naming":"{name}.{ext}"? (blank keeps the names; template tokens: {name} {NAME} {Name}, {serial} (3 digits) {serial:1..4}, {letter} {LETTER}, {date} (YYYY-MM-DD, UTC) {date:mmddyy|mmdd|yyyymmdd|yymmdd|yyddmm|ddmmyy}, {ext} {EXT}; other text literal; without {ext} the extension is appended),"startingSerial":1..4294967295=1 (the first serial; a failed input keeps its position),"stopOnError":bool=false (else every file is tried),"errorLog":path? (the errors, one per line),"quality":0..12?,"tiffLayers":bool=false,"tgaBits":24|32?,"dpxBits":8|10|12|16? (DPX: bits per sample; unset, 8 for an 8-bit document, else 16),"calledActions":[{"name","steps"}…]? (the actions Play Action steps call; default: the session's)} → {files, errors, stopped?, skipped?, errorLog?} (an input whose output name was already written in the run goes to errors). Runs as a job: progress per file, Cancel stops after the current one"##,
             native,
             batch
         ),
@@ -1697,7 +1737,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Image Processor…",
             &["File", "Scripts"],
             None,
-            r##"{"input":folder|[paths],"includeSubfolders":bool=false,"output":folder,"format":"jpg|png|psd|tiff|…"="jpg","naming":"{name}.{ext}"? (as file.automate.batch),"startSerial":int=1,"stopOnError":bool=false,"errorLog":path?,"quality":0..12=8,"tiffLayers":bool=false,"tgaBits":24|32?,"dpxBits":8|10|12|16? (DPX: bits per sample; unset, 8 for an 8-bit document, else 16),"width":px?,"height":px? (fit, never enlarge),"convertToSrgb":bool=false} → {files, errors, stopped?, skipped?, errorLog?} (an input whose output name was already written in the run goes to errors)"##,
+            r##"{"input":folder|[paths],"includeSubfolders":bool=false,"output":folder,"format":"jpg|png|psd|tiff|…"="jpg","naming":"{name}.{ext}"? (as file.automate.batch),"startingSerial":1..4294967295=1,"stopOnError":bool=false,"errorLog":path?,"quality":0..12=8,"tiffLayers":bool=false,"tgaBits":24|32?,"dpxBits":8|10|12|16? (DPX: bits per sample; unset, 8 for an 8-bit document, else 16),"width":px?,"height":px? (fit, never enlarge),"convertToSrgb":bool=false} → {files, errors, stopped?, skipped?, errorLog?} (an input whose output name was already written in the run goes to errors)"##,
             native,
             image_processor
         ),
