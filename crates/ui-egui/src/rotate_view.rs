@@ -648,14 +648,8 @@ mod tests {
                 let mut app = app_docs(1);
                 app.ui.view.flip_horizontal = flip;
                 app.ui.views[0].rotation = 23.0;
-                let before = ViewXform {
-                    rect: Rect::from_min_size(Pos2::ZERO, vec2(400.0, 300.0)),
-                    zoom: 1.0,
-                    center: [0.0, 0.0],
-                    flip,
-                    rotation: 23.0,
-                    aspect: 1.0,
-                };
+                let before =
+                    ViewXform { rect: Rect::from_min_size(Pos2::ZERO, vec2(400.0, 300.0)), zoom: 1.0, center: [0.0, 0.0], flip, rotation: 23.0, aspect: 1.0 };
                 crate::menus::invoke(&mut app, &ctx, id, json!({})).unwrap();
                 let after = ViewXform { rotation: app.ui.views[0].rotation, ..before };
                 let angle = |xf: &ViewXform| {
@@ -686,13 +680,7 @@ mod tests {
         let sc = crate::shortcuts::parse(shortcut).unwrap();
         let mut events = vec![Event::ModifiersChanged(sc.modifiers)];
         for n in 0..repeats {
-            events.push(Event::Key {
-                key: sc.logical_key,
-                physical_key: Some(sc.logical_key),
-                pressed: true,
-                repeat: n != 0,
-                modifiers: sc.modifiers,
-            });
+            events.push(Event::Key { key: sc.logical_key, physical_key: Some(sc.logical_key), pressed: true, repeat: n != 0, modifiers: sc.modifiers });
         }
         ctx.begin_pass(egui::RawInput { events, ..Default::default() });
         crate::shortcuts::handle(app, ctx);
@@ -713,7 +701,10 @@ mod tests {
         assert_eq!(app.ui.views[0].rotation, 45.0);
         step_keys(&mut app, &ctx, "Alt+Shift+,", 1);
         assert_eq!(app.ui.views[0].rotation, 30.0);
-        app.run("edit.keyboardShortcuts", json!({"set": {"view.rotateRight": "Alt+K", "view.rotateLeft": ""}})).unwrap();
+        // Exercise the dialog's apply path: shell commands are intentionally absent from
+        // the engine registry and the dialog handles their bindings and conflicts.
+        let fields = json!({"__prefsui": "shortcuts", "overrides": {"view.rotateRight": "Alt+K", "view.rotateLeft": ""}});
+        crate::prefs_ui::confirm(&mut app, fields.as_object().unwrap()).unwrap();
         let saved = serde_json::to_value(app.session.prefs()).unwrap();
         app.session.edit_prefs(|p| *p = serde_json::from_value(saved).unwrap());
         step_keys(&mut app, &ctx, "Alt+Shift+.", 1);
@@ -726,5 +717,4 @@ mod tests {
         assert_eq!(app.ui.views[0].rotation, 45.0, "a dialog owns its keys");
         assert_eq!(app.session.active().unwrap().history.past_len(), 0);
     }
-
 }
