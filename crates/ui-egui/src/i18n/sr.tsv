@@ -802,6 +802,9 @@
 	Intersect Mask with Selection	Presek maske i selekcije
 	Add Stop	Dodaj tačku
 	Add a layer style	Dodaj stil sloja
+	Move effect up	Pomeri efekat nagore
+	Move effect down	Pomeri efekat nadole
+	Delete effect	Obriši efekat
 	Add a mask  (from the selection; {key} inverts)	Dodaj masku  (iz selekcije; {key} invertuje)
 	Add an adjustment	Dodaj korekciju
 	Add disk	Dodaj disk

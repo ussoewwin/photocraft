@@ -801,6 +801,9 @@
 	Add Layer Mask	Laagmasker toevoegen
 	Add Stop	Kleurstop toevoegen
 	Add a layer style	Een laagstijl toevoegen
+	Move effect up	Effect omhoog verplaatsen
+	Move effect down	Effect omlaag verplaatsen
+	Delete effect	Effect verwijderen
 	Add a mask  (from the selection; {key} inverts)	Een masker toevoegen  (vanuit de selectie; {key} keert om)
 	Add an adjustment	Een aanpassing toevoegen
 	Add disk	Schijf toevoegen

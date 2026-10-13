@@ -940,6 +940,9 @@
 	Delete layer	Xóa lớp
 	Link layers	Liên kết lớp
 	Add a layer style	Thêm kiểu lớp
+	Move effect up	Chuyển hiệu ứng lên
+	Move effect down	Chuyển hiệu ứng xuống
+	Delete effect	Xóa hiệu ứng
 	Add a mask  (from the selection; {key} inverts)	Thêm mặt nạ  (từ vùng chọn; {key} đảo)
 	No document	Không có tài liệu
 	Collapse	Thu gọn

@@ -124,8 +124,8 @@ fn sizing_of(d: &Dialog, id: egui::Id) -> Option<Sizing> {
     if d.fields.contains_key("__web") {
         Some(Sizing { id, default: egui::vec2(960.0, 900.0), min: egui::vec2(560.0, 400.0), resizable: true, stroke: true })
     } else if d.kind == DialogKind::LayerStyle {
-        // Room for the tallest page (Bevel & Emboss) on a 900-point screen.
-        Some(Sizing { id, default: egui::vec2(600.0, 760.0), min: egui::vec2(540.0, 380.0), resizable: false, stroke: false })
+        // Photoshop's shape: wide and short, with OK and Cancel in a column on the right.
+        Some(Sizing { id, default: egui::vec2(800.0, 550.0), min: egui::vec2(640.0, 360.0), resizable: false, stroke: false })
     } else {
         None
     }
@@ -358,13 +358,13 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
                 DialogKind::Command if crate::new_guide_ui::owns(&fields) => crate::new_guide_ui::body(ui, &mut fields),
                 DialogKind::Command if fields.contains_key("__form") => crate::view_cmds::form_body(ui, &mut fields),
                 DialogKind::Command => {}
-                DialogKind::LayerStyle => crate::layer_style::body(app, ui, &mut fields),
+                DialogKind::LayerStyle => outcome = crate::layer_style::body(app, ui, &mut fields, interactive),
                 DialogKind::Error => {
                     ui.label(fields.get("message").and_then(Value::as_str).unwrap_or("Error"));
                 }
             }
             crate::field_tab::end(ui.ctx(), tab);
-            if crate::guide_layout_ui::owns(&fields) || crate::brush_preset_dialog::owns(&fields) {
+            if crate::guide_layout_ui::owns(&fields) || crate::brush_preset_dialog::owns(&fields) || d.kind == DialogKind::LayerStyle {
                 // These dialogs own their right-side actions and validate Enter themselves.
             } else if crate::color_picker_ui::owns(&fields) {
                 if interactive && outcome.is_none() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
@@ -881,6 +881,63 @@ mod tests {
         for button in ["OK", "Cancel"] {
             assert!(screen.contains_rect(h.get_by_label(button).rect()), "{button} is on screen");
         }
+    }
+
+    /// Layer Style is laid out like Photoshop's: wide and short, the effect list on the left, the
+    /// page in the middle and OK, Cancel, New Style…, Preview in a column on the right.
+    #[test]
+    fn layer_style_is_laid_out_like_photoshops() {
+        use egui_kittest::kittest::Queryable;
+
+        let h = layer_style_on_bevel(egui::vec2(1400.0, 900.0));
+        let at = |label: &str| h.get_by_label(label).rect();
+        let frame = frame(&h);
+        assert!(frame.width() > frame.height() * 1.3, "wide and short: {:?}", frame.size());
+        // The list's rows are painted; its bar's fx button marks the column.
+        let (list, page) = (at("Add a layer style"), at("Depth"));
+        let [ok, cancel, new_style, preview] = ["OK", "Cancel", "New Style…", "Preview"].map(at);
+        assert!(list.right() < page.left(), "the list is left of the page");
+        for (name, r) in [("OK", ok), ("Cancel", cancel), ("New Style…", new_style), ("Preview", preview)] {
+            assert!(r.left() > page.right(), "{name} is right of the page");
+        }
+        assert!(ok.top() < cancel.top() && cancel.top() < new_style.top() && new_style.top() < preview.top(), "top to bottom");
+    }
+
+    /// The right-hand column's OK applies the style and Cancel drops it; Enter is OK.
+    #[test]
+    fn layer_style_ok_cancel_and_enter() {
+        let bevels = |h: &egui_kittest::Harness<'_, PhotocraftApp>| {
+            let st = h.state().session.active().unwrap();
+            let layer = st.doc.layer(st.active_layer.unwrap()).unwrap();
+            layer.effects.items.iter().filter(|e| matches!(e, photocraft_doc::Effect::BevelEmboss { .. })).count()
+        };
+        for (how, applied) in [("OK", 1), ("Cancel", 0), ("Enter", 1)] {
+            use egui_kittest::kittest::Queryable;
+
+            let mut h = layer_style_on_bevel(egui::vec2(1400.0, 900.0));
+            if how == "Enter" {
+                h.key_press(egui::Key::Enter);
+            } else {
+                h.get_by_label(how).click();
+            }
+            h.run_steps(3);
+            assert!(h.state().ui.dialogs.is_empty(), "{how} closes the dialog");
+            assert_eq!(bevels(&h), applied, "{how}");
+        }
+    }
+
+    /// The bin under the effect list deletes the selected effect from the dialog.
+    #[test]
+    fn layer_style_bin_deletes_the_selected_effect() {
+        use egui_kittest::kittest::Queryable;
+
+        let mut h = layer_style_on_bevel(egui::vec2(1400.0, 900.0));
+        let effects = |h: &egui_kittest::Harness<'_, PhotocraftApp>| h.state().ui.dialogs[0].fields["effects"].as_array().map_or(0, Vec::len);
+        assert_eq!(effects(&h), 1);
+        h.get_by_label("Delete effect").click();
+        h.run_steps(3);
+        assert_eq!(effects(&h), 0, "Bevel & Emboss is gone from the list");
+        assert_eq!(h.state().ui.dialogs.len(), 1, "the dialog stays open");
     }
 
     fn dialog_harness(size: egui::Vec2, command: &str) -> egui_kittest::Harness<'static, PhotocraftApp> {

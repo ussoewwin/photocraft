@@ -2010,6 +2010,9 @@
 	Add Pins	Προσθήκη καρφιτσών
 	Add Stop	Προσθήκη σημείου διαβάθμισης
 	Add a layer style	Προσθήκη στυλ επιπέδου
+	Move effect up	Μετακίνηση εφέ προς τα πάνω
+	Move effect down	Μετακίνηση εφέ προς τα κάτω
+	Delete effect	Διαγραφή εφέ
 	Add a mask  (from the selection; {key} inverts)	Προσθήκη μάσκας (από την επιλογή· το {key} αντιστρέφει)
 	Add a mask  (from the selection; ⌥ inverts)	Προσθήκη μάσκας (από την επιλογή· ⌥ για αντιστροφή)
 	Add an adjustment	Προσθήκη προσαρμογής

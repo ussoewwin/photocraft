@@ -803,6 +803,9 @@
 	Add Layer Mask	Adicionar máscara de camada
 	Add Stop	Adicionar parada
 	Add a layer style	Adicionar um estilo de camada
+	Move effect up	Mover efeito para cima
+	Move effect down	Mover efeito para baixo
+	Delete effect	Excluir efeito
 	Add a mask  (from the selection; {key} inverts)	Adicionar uma máscara  (a partir da seleção; {key} inverte)
 	Add an adjustment	Adicionar um ajuste
 	Add disk	Adicionar disco

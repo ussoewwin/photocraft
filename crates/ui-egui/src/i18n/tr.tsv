@@ -790,6 +790,9 @@
 	Add Layer Mask	Katman Maskesi Ekle
 	Add Stop	Durak Ekle
 	Add a layer style	Katman stili ekleme
+	Move effect up	Efekti yukarı taşı
+	Move effect down	Efekti aşağı taşı
+	Delete effect	Efekti sil
 	Add a mask  (from the selection; {key} inverts)	Bir maske ekleyin (seçimden; {key} tersine çevirir)
 	Add an adjustment	Düzenleme ekle
 	Add disk	Disk ekle
