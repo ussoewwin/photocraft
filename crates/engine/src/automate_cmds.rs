@@ -341,7 +341,8 @@ else
 fi
 exec "$cli" droplet {quoted_abs} "$@"
 "#
-    );    crate::file_cmds::write_file(&shim, body.as_bytes())?;
+    );
+    crate::file_cmds::write_file(&shim, body.as_bytes())?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
