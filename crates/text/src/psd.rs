@@ -1351,12 +1351,7 @@ mod tysh_geometry_tests {
 
     #[test]
     fn reject_unusable_matrices_before_type_layout() {
-        let original = TySh {
-            transform: Affine { m: [1.0, 0.0, 0.0, 1.0, 30.0, 40.0] },
-            text: Descriptor::new("TxLr"),
-            warp: None,
-            bounds: [0.0; 4],
-        };
+        let original = TySh { transform: Affine { m: [1.0, 0.0, 0.0, 1.0, 30.0, 40.0] }, text: Descriptor::new("TxLr"), warp: None, bounds: [0.0; 4] };
         let clean = write_tysh(&original);
         assert_eq!(parse_tysh(&clean).unwrap().transform, original.transform);
         for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY, 1.315776645269349e62] {
