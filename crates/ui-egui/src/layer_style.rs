@@ -1354,7 +1354,7 @@ fn blending_page(ui: &mut egui::Ui, p: &mut Value, names: &[String]) {
         }
     }
     widgets::hairline(ui);
-    // Blend If: the channel, then This Layer / Underlying Layer split sliders (Alt-drag splits).
+    // Blend If: the channel, then Current Layer / Underlying Layer split sliders (Alt-drag splits).
     let entries = p.get("blendIf").and_then(Value::as_array).map_or(0, Vec::len);
     if entries == 0 {
         return;
@@ -1379,7 +1379,8 @@ fn blending_page(ui: &mut egui::Ui, p: &mut Value, names: &[String]) {
             p["blendIfChannel"] = json!(cur);
         }
     });
-    for (key, label) in [("thisLayer", "This Layer:"), ("underlying", "Underlying Layer:")] {
+    // Photoshop 2026 calls the first bar Current Layer (it was This Layer).
+    for (key, label) in [("thisLayer", "Current Layer:"), ("underlying", "Underlying Layer:")] {
         let mut q = blend_quad(p.get("blendIf").and_then(|a| a.get(sel)).and_then(|e| e.get(key)));
         ui.horizontal(|ui| {
             ui.label(RichText::new(tl!(label)).color(t.text_dim));

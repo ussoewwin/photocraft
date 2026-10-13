@@ -1993,6 +1993,8 @@ layers	Fill:	Độ tô:
 	Bitmap…	Bitmap…
 	Blend If	Điều kiện hòa trộn
 	Blend If:	Điều kiện hòa trộn:
+	Current Layer:	Lớp hiện tại:
+	Underlying Layer:	Lớp bên dưới:
 	Bottom Left	Dưới trái
 	Bottom Right	Dưới phải
 	Brush Name	Tên cọ

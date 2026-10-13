@@ -2335,6 +2335,8 @@ cameraRaw	Blending	混合
 	Add to Swatches	加入色票
 # Layer Style > Blending Options (Advanced Blending)
 	Blend If:	混合範圍:
+	Current Layer:	目前圖層:
+	Underlying Layer:	下一圖層:
 	Channels:	色版:
 	Knockout	去底色
 	Apply At Canvas Bounds	套用效果至版面邊界

@@ -2781,6 +2781,8 @@ cameraRaw	Whites	Brancos
 	Add to Swatches	Adicionar às amostras
 # Layer Style > Blending Options (Advanced Blending)
 	Blend If:	Mesclar se:
+	Current Layer:	Camada atual:
+	Underlying Layer:	Camada subjacente:
 	Channels:	Canais:
 	Knockout	Vazado
 	Apply At Canvas Bounds	Aplicar efeito nos limites da tela

@@ -2365,6 +2365,8 @@ cameraRaw	Blending	混合
 	Add to Swatches	添加到色板
 # Layer Style > Blending Options (Advanced Blending)
 	Blend If:	混合颜色带:
+	Current Layer:	当前图层:
+	Underlying Layer:	下一图层:
 	Channels:	通道:
 	Knockout	挖空
 	Apply At Canvas Bounds	应用画布边界的效果

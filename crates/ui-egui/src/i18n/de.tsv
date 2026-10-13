@@ -2394,6 +2394,8 @@
 	Add to Swatches	Zu Farbfeldern hinzufügen
 # Layer Style > Blending Options (Advanced Blending)
 	Blend If:	Farbbereich:
+	Current Layer:	Aktuelle Ebene:
+	Underlying Layer:	Darunter liegende Ebene:
 	Channels:	Kanäle:
 	Knockout	Aussparung
 	Apply At Canvas Bounds	Effekt an Arbeitsflächenbegrenzungen anwenden

@@ -2621,6 +2621,8 @@ cameraRaw	Roughness	Неровность
 	Add to Swatches	Добавить в образцы
 # Layer Style > Blending Options (Advanced Blending)
 	Blend If:	Изображение если:
+	Current Layer:	Текущий слой:
+	Underlying Layer:	Подлежащий слой:
 	Channels:	Каналы:
 	Knockout	Просвечивание
 	Apply At Canvas Bounds	Применить эффект на границах холста

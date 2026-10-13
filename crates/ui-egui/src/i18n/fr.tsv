@@ -2777,6 +2777,8 @@ cameraRaw	Blending	Fusion
 	Add to Swatches	Ajouter au nuancier
 # Layer Style > Blending Options (Advanced Blending)
 	Blend If:	Fusion si :
+	Current Layer:	Calque actif :
+	Underlying Layer:	Calque sous-jacent :
 	Channels:	Couches :
 	Knockout	Masquage
 	Apply At Canvas Bounds	Appliquer l’effet aux limites de la zone de travail

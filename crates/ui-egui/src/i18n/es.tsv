@@ -2425,6 +2425,8 @@ cameraRaw	Amount	Cantidad
 	Add to Swatches	Añadir a muestras
 # Layer Style > Blending Options (Advanced Blending)
 	Blend If:	Fusionar si:
+	Current Layer:	Capa actual:
+	Underlying Layer:	Capa subyacente:
 	Channels:	Canales:
 	Knockout	Extraer
 	Apply At Canvas Bounds	Aplicar en los límites del lienzo

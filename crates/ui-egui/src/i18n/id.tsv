@@ -2764,6 +2764,8 @@ cameraRaw	Blending	Pembauran
 	Add to Swatches	Tambahkan ke Swatch
 # Layer Style > Blending Options (Advanced Blending)
 	Blend If:	Blend If:
+	Current Layer:	Layer Saat Ini:
+	Underlying Layer:	Layer di Bawah:
 	Channels:	Channel:
 	Knockout	Knockout
 	Apply At Canvas Bounds	Terapkan efek di batas kanvas

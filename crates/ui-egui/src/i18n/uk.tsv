@@ -2593,6 +2593,8 @@ cameraRaw	Roughness	Шорсткість
 	Add to Swatches	Додати до зразків кольорів
 # Layer Style > Blending Options (Advanced Blending)
 	Blend If:	Накладати, якщо:
+	Current Layer:	Поточний шар:
+	Underlying Layer:	Нижній шар:
 	Channels:	Канали:
 	Knockout	Вибивання
 	Apply At Canvas Bounds	Застосувати на межах полотна
