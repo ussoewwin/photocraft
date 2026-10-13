@@ -1717,9 +1717,19 @@ fn composite_atop_any(layer: &Layer, base: &mut Buffer, cx: &Ctx) {
         if alpha <= 0.0 {
             continue;
         }
-        let s = content.px[i];
+        let mut s = content.px[i];
+        // The clipped source still uses Dissolve's binary coverage, not Normal's
+        // fractional alpha. Restrict the resulting colour to the base's alpha.
+        let mode = if layer.blend == BlendMode::Dissolve {
+            let x = rect.x0 + (i as i32 % rect.width());
+            let y = rect.y0 + (i as i32 / rect.width());
+            s[3] = if dissolve_noise(x, y) < s[3] * opacity { 1.0 } else { 0.0 };
+            BlendMode::Normal
+        } else {
+            layer.blend
+        };
         // Blend as if the base were opaque, then keep the base's alpha.
-        let r = blend::composite_gamma(layer.blend, [p[0], p[1], p[2], 1.0], s, opacity, gamma);
+        let r = blend::composite_gamma(mode, [p[0], p[1], p[2], 1.0], s, if mode == BlendMode::Normal && layer.blend == BlendMode::Dissolve { 1.0 } else { opacity }, gamma);
         *p = [r[0], r[1], r[2], alpha];
     }
 }
