@@ -105,7 +105,7 @@ pub(super) fn style_buttons(ui: &mut egui::Ui, current: &str, native_icons: bool
         let value = cmds::style_name(style);
         let response = if native_icons {
             let icon = match style {
-                GradientStyle::Linear => "blend",
+                GradientStyle::Linear => "gradient",
                 GradientStyle::Radial => "circle",
                 GradientStyle::Angle => "rotate-cw",
                 GradientStyle::Reflected => "arrow-left-right",
