@@ -3716,3 +3716,5 @@ curves	Smooth	Wygładź
 	Step {step} is waiting for its dialog	Krok {step} czeka na swoje okno dialogowe
 @plural	{n} action|{n} actions	{n} operacja|{n} operacje|{n} operacji
 	Auto Add/Delete	Automatyczne dodawanie/usuwanie
+	Scrollbar Visibility	Widoczność pasków przewijania
+	Hidden	Ukryte
