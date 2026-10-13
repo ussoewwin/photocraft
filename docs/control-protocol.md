@@ -121,6 +121,7 @@ store expose and persist the same setting; scripts keep using canonical command 
 | `type.caret` | `{"layer":id?,"index":char}`: caret segment in document pixels, `{"index","line","segment":[[x,y],[x,y]]}` (rotated and vertical type included) |
 | `type.navigate` | `{"layer":id?,"index":char,"move":"wordPrev\|wordNext\|linePrev\|lineNext\|lineStart\|lineEnd\|start\|end","x":px?}`: neighbouring caret. `x` keeps the column across line moves. Result `{"index"}` |
 | `actions.list` | `{}` → `{actions:[{name, steps}], recording}` (the name being recorded, or null) |
+| `actions.loadDefaults` | `{}` → `{added:[names], set}`. Append missing PhotoCraft Essentials actions without replacing same-name actions. Available without a document; refused while recording or playing an action. |
 | `actions.get` | `{"action": name or index}` → `{name, steps:[[id, params], …], disabled:[step, …]}`. `steps` is the shape `file.automate.batch` and droplets take; `disabled` lists the 0-based steps playback skips |
 | `actions.record` | `{"name":"Red"}` starts a new action (default name `Action N`). `{"action": name or index}` appends to one that exists |
 | `actions.stop` | `{}` → `{action, steps}`. Copies replayable journal entries since `actions.record` (queries and action-editing commands omitted) |
@@ -130,7 +131,18 @@ store expose and persist the same setting; scripts keep using canonical command 
 | `actions.toggle` | `{"action": name or index, "step": index?, "enabled": bool?}` → `{action, disabled}`. Switches one 0-based step (pending recorded steps included) on or off; omitting `enabled` flips it. Without `step`, switches every step: on unless all already are. Playback, Batch and droplets skip steps that are off. In the desktop panel, click a step's check box |
 | `actions.rename` | `{"action": name or index, "name": str}` → `{action, index}`. Empty, whitespace-only or duplicate names are rejected and keep the old name. Nested `actions.play` steps that call the action by name and its function key follow the new name. In the desktop panel, double-click an action's name to rename it in place (Enter commits, Esc cancels) |
 
-The Actions list fills the resizable dock group.
+The Actions list fills the resizable dock group. **PhotoCraft Essentials** supplies Auto Tone,
+Auto Contrast, Auto Color, and Select Subject. These are original, editable single-step actions
+using PhotoCraft's existing commands. The three auto adjustments work on the active pixel layer
+and respect the selection; Select Subject samples the visible image using PhotoCraft's current
+subject-detection heuristic. Each successful edit can be undone normally.
+
+The set is added once when the desktop or web preset store opens, including for existing users.
+Saved actions keep their order and definitions; a same-name action is preserved. Deleting or
+renaming a default stays that way after restart. **Load Default Actions** in the Actions panel's
+menu (also offered by an empty panel) adds missing defaults again. CLI/MCP sessions can use
+`actions.loadDefaults` explicitly. Background blur is not included: composing Select Subject,
+Inverse, and Blur cannot safely handle the detector finding no subject.
 
 The Actions panel shows replayable steps immediately while recording. Click an individual
 step to select it, then use the trash button to remove that step; selecting the action
