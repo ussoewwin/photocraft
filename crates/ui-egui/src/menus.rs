@@ -60,6 +60,8 @@ pub const UI_COMMANDS: &[(&str, &str, &[&str], Option<&str>)] = &[
     ("view.fitOnScreen", "Fit on Screen", &["View"], Some("Cmd+0")),
     ("view.actualPixels", "100%", &["View"], Some("Cmd+1")),
     ("view.rotateView", "Rotate View", &[], None),
+    ("view.rotateLeft", "Rotate View Left", &["View"], Some("Alt+Shift+,")),
+    ("view.rotateRight", "Rotate View Right", &["View"], Some("Alt+Shift+.")),
     ("view.resetView", "Reset View", &["View"], None),
     ("window.newWindowForDocument", "New Window for Document", &["Window", "Arrange"], None),
     ("window.toggle.layers", "Layers", &["Window"], Some("F7")),
@@ -952,7 +954,9 @@ pub fn is_live(id: &str) -> bool {
 const PLACE_AFTER: &[(&str, &str)] = &[
     ("file.newFromClipboard", "file.new"),
     ("filter.render.relight", "filter.render.lightingEffects"),
-    ("view.resetView", "view.flipHorizontal"),
+    ("view.rotateLeft", "view.flipHorizontal"),
+    ("view.rotateRight", "view.rotateLeft"),
+    ("view.resetView", "view.rotateRight"),
     ("filter.other.colorToAlpha", "filter.other.offset"),
 ];
 
@@ -1117,6 +1121,17 @@ pub fn menu_items(app: &PhotocraftApp) -> Vec<MenuItem> {
         for it in &mut items {
             it.color = prefs.menus.colors.get(&it.id).cloned();
         }
+    }
+    // Layer › Create Clipping Mask is Photoshop's one Create / Release item: when its shortcut
+    // would release ([`crate::shortcut_dispatch::clip_key_releases`]) it reads Release Clipping
+    // Mask and runs it, keeping that shortcut. The engine's own Release item lives in that slot.
+    items.retain(|i| i.id != "layer.releaseClippingMask");
+    if crate::shortcut_dispatch::clip_key_releases(app)
+        && let Some(item) = items.iter_mut().find(|i| i.id == "layer.createClippingMask")
+    {
+        item.id = "layer.releaseClippingMask".into();
+        item.label = "Release Clipping Mask".into();
+        item.enabled = is_enabled(app, &item.id);
     }
     items
 }

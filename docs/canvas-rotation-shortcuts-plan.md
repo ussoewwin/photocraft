@@ -1,20 +1,24 @@
 # Canvas view rotation shortcuts: issue #4911
 
-Status: planning placeholder; implementation and tests pending.
-
 Refs https://github.com/storytold/photocraft/issues/4911
 
-Add keyboard commands to rotate the canvas view left/right by 15 degrees. Change view state only: do not resample pixels, mutate document content or add destructive image-rotation history entries.
+View > Rotate View Left and Rotate View Right turn the active canvas camera by 15 degrees.
+The default bindings are Alt+Shift+, and Alt+Shift+. (Option+Shift on macOS).
+They can be changed or removed in Edit > Keyboard Shortcuts, under View.
 
-Before implementation:
+Each key press, including keyboard repeats, adds one relative step. An existing 7-degree
+angle becomes 22 degrees after rotating right; it is not snapped to the nearest grid angle.
+Angles wrap in the existing (-180, 180] range. Left/right describe the visible direction,
+including when View > Flip Horizontal is enabled.
 
-- Inspect existing view.rotateView, rotation/reset handling and command dispatch; reuse view state conventions.
-- Review related #4042 (Shift + middle-mouse drag) and #4227 (flipped-view direction).
-- Audit default shortcut collisions, text-input/modal focus and platform modifiers before selecting bindings.
-- Expose both actions through configurable bindings; verify rebinding, persistence and discoverability.
-- Define visual left/right direction in flipped views, angle wrapping and steps from non-multiples of 15 degrees.
-- Verify repeated presses accumulate one 15-degree step per command; existing reset returns to zero without editing the document.
+The commands change view state only. They preserve document pixels, history, zoom, center
+and other tabs. Existing Reset View returns the angle to zero. Text fields retain the
+default bindings, and modal dialogs block them through the normal shortcut dispatcher.
 
-Pending verification: focused command/input regressions for both directions, repeated presses, wrapping, reset, configurable bindings, shortcut collisions and unchanged pixels/history; visual verification and relevant repository checks after implementation.
+The control channel can invoke view.rotateLeft or view.rotateRight with an empty params
+object, through the same shell-command route as view.rotateView and view.resetView.
+No unmerged Shift+middle-drag work from #4042 is included.
 
-Documentation only. No feature implemented, build or feature tests run.
+Regression coverage in rotate_view tests checks relative steps, wrapping, reset,
+flipped-view direction, unchanged document/history/other tabs, empty-document and malformed
+parameter errors, repeated key events, rebinding, persisted preferences and modal suppression.
