@@ -583,12 +583,7 @@ fn resized_brush(start_size: f32, start_density: f32, dx: f32, dy: f32, zoom: f3
     // Liquify stores density as 0–100; the shared brush gesture works on normalized hardness.
     // Use the same zoom-corrected screen movement and size limits as the main canvas.
     let zoom = if zoom.is_finite() && zoom > 0.0 { zoom } else { 1.0 };
-    let (size, density) = crate::brush_resize::resized(
-        (start_size, start_density / 100.0),
-        f64::from(dx / zoom),
-        f64::from(dy / zoom),
-        zoom,
-    );
+    let (size, density) = crate::brush_resize::resized((start_size, start_density / 100.0), f64::from(dx / zoom), f64::from(dy / zoom), zoom);
     (size, (density * 100.0).round())
 }
 
@@ -932,12 +927,17 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
                 let r = d.opts.size * 0.5 * d.zoom;
                 if d.brush_resize.is_some() {
                     crate::brush_resize::tip_preview(
-                        &clip, center, r, d.opts.density / 100.0,
+                        &clip,
+                        center,
+                        r,
+                        d.opts.density / 100.0,
                         Color32::from_rgba_unmultiplied(t.accent.r(), t.accent.g(), t.accent.b(), 110),
                     );
                     ui.ctx().set_cursor_icon(egui::CursorIcon::None);
                     crate::canvas::draw_readout(
-                        ui.ctx(), "liquify-brush-resize-readout", hp,
+                        ui.ctx(),
+                        "liquify-brush-resize-readout",
+                        hp,
                         [tl!("Diameter:"), tl!("Density:")],
                         [format!("{} px", d.opts.size.round() as i64), format!("{}%", d.opts.density.round() as i64)],
                     );
