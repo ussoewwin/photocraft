@@ -2759,6 +2759,8 @@ curves	Smooth	Glätten
 
 # Actions panel: Load/Save Actions (.atn) and kept Photoshop steps
 	Load Actions…	Aktionen laden…
+	Load Default Actions	Standardaktionen laden
+	Blur Background	Hintergrund weichzeichnen
 	Save Actions…	Aktionen speichern…
 	{name} (Photoshop)	{name} (Photoshop)
 	{message} ({note})	{message} ({note})
@@ -2781,4 +2783,3 @@ curves	Smooth	Glätten
 @plural	{n} action|{n} actions	{n} Aktion|{n} Aktionen
 	Auto Add/Delete	Autom. hinzuf./löschen
 	ICO is limited to 256 × 256 pixels	ICO ist auf 256 × 256 Pixel begrenzt
-	Load Default Actions	Standardaktionen laden

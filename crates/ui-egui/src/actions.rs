@@ -945,7 +945,7 @@ mod tests {
         h.get_by_label("Load Default Actions").click();
         h.run_steps(3);
         assert!(h.query_by_label("PhotoCraft Essentials").is_some());
-        for name in ["Auto Tone", "Auto Contrast", "Auto Color", "Select Subject"] {
+        for name in ["Auto Tone", "Auto Contrast", "Auto Color", "Select Subject", "Blur Background"] {
             assert!(h.query_by_label(name).is_some(), "missing preset {name}");
         }
         assert_eq!(h.state().ui.actions.selected, Some(0));
@@ -977,7 +977,7 @@ mod tests {
         h.get_by_label("Load Default Actions").click();
         h.run_steps(3);
         assert_eq!(h.state().session.actions.list[0], custom);
-        assert_eq!(h.state().session.actions.list.len(), 4);
+        assert_eq!(h.state().session.actions.list.len(), 5);
         assert_eq!(h.state().ui.actions.selected, Some(1));
         assert!(h.state().ui.actions.collapsed_sets.is_empty());
         assert!(h.query_by_label("Select Subject").is_some());

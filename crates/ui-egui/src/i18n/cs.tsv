@@ -3723,6 +3723,8 @@ navigator	Zoom	Zvětšení
 
 # Actions panel: Load/Save Actions (.atn) and kept Photoshop steps
 	Load Actions…	Načíst akce…
+	Load Default Actions	Načíst výchozí akce
+	Blur Background	Rozostřit pozadí
 	Save Actions…	Uložit akce…
 	{name} (Photoshop)	{name} (Photoshop)
 	{message} ({note})	{message} ({note})
@@ -3745,4 +3747,3 @@ navigator	Zoom	Zvětšení
 @plural	{n} action|{n} actions	{n} akce|{n} akce|{n} akcí
 	Auto Add/Delete	Automaticky přidat/odstranit
 	ICO is limited to 256 × 256 pixels	ICO je omezen na 256 × 256 pixelů
-	Load Default Actions	Načíst výchozí akce

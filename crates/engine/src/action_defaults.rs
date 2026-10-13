@@ -16,6 +16,7 @@ fn defaults() -> Vec<Action> {
         ("Auto Contrast", "image.autoContrast", json!({})),
         ("Auto Color", "image.autoColor", json!({})),
         ("Select Subject", "select.subject", json!({"sampleAllLayers": true, "mode": "replace"})),
+        ("Blur Background", "layer.blurBackground", json!({"radius": 8.0})),
     ]
     .into_iter()
     .map(|(name, id, params)| Action { set: Some(SET.into()), ..Action::new(name, vec![(id.into(), params)]) })
@@ -90,7 +91,7 @@ mod tests {
         let custom = Action::new("Auto Tone", vec![("image.flipCanvasHorizontal".into(), json!({}))]);
         s.actions.list.push(custom.clone());
         let loaded = s.execute("actions.loadDefaults", json!({})).unwrap();
-        assert_eq!(loaded["added"], json!(["Auto Contrast", "Auto Color", "Select Subject"]));
+        assert_eq!(loaded["added"], json!(["Auto Contrast", "Auto Color", "Select Subject", "Blur Background"]));
         assert_eq!(s.actions.list[0], custom);
         assert!(s.actions.list.iter().skip(1).all(|a| a.set.as_deref() == Some(SET)));
         let rev = s.actions.rev;
@@ -139,7 +140,7 @@ mod tests {
         assert_eq!(&s.actions.list[..3], &[early, custom, disk]);
         assert_eq!(
             s.actions.list.iter().map(|a| a.name.as_str()).collect::<Vec<_>>(),
-            ["Auto Color", "Auto Tone", "My Workflow", "Auto Contrast", "Select Subject"]
+            ["Auto Color", "Auto Tone", "My Workflow", "Auto Contrast", "Select Subject", "Blur Background"]
         );
         assert_eq!(saved(&mem).defaults_version, VERSION);
         assert_eq!(attached(&mem).actions.list, s.actions.list);

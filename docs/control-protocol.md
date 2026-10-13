@@ -103,6 +103,7 @@ store expose and persist the same setting; scripts keep using canonical command 
 | `layer.select` | `{"layer":id,"mode":"replace\|toggle\|range\|add"}`: ⌘-click = toggle, ⇧-click = range; `document.inspect` reports `selectedLayers` and a per-layer `selected` flag |
 | `channel.target` / `channel.setVisible` | Channels panel target and eyes (`"composite"`, colour name, alpha index or name, `"quickMask"`). `document.inspect` (and `channel.list`) report `channels`: composite/colour/alpha rows with visibility, channel options, `quickMask`, `target`. Pixel commands without a `target` param follow the targeted channel |
 | `layer.setProps` | `{"layer":id?,"name":…,"visible":…,"opacity":0..1,"blend":"Multiply"}` |
+| `layer.blurBackground` | `{"layer":id\|name?,"radius":0.1..1000=8}`. Detect the subject on a pixel layer and blur its background within the current selection in one undo step. Preserves transparency, selection, masks and other layers. No subject or cancellation leaves the document unchanged. |
 | `layer.fill.solidColor.set` | `{"layer":id?,"document":id?,"color":"#rrggbb"}`: edit a Solid Color Fill in one undo step; RGB without alpha preserves the fill's alpha. Float RGB arrays and a stored `Color` are also accepted. `document` rejects stale dialog targets. |
 | `layer.fill.pattern.set` | `{"layer":id?,"document":id?,"pattern":id\|name?,"scale":1..1000?,"angle":-180..180?,"link":bool?,"phase":[x,y]?}`: edit a Pattern Fill (the Pattern Fill dialog's OK) in one undo step; omitted values keep the layer's, `phase` `[0,0]` is Snap to Origin. `layer.newFillLayer.pattern` from a menu (no params) and `layer.layerContentOptions` on a Pattern Fill layer open the Pattern Fill dialog. |
 | `layer.layerMask.edit` | `{"layer":id?,"document":id?,"density":0..100?,"feather":0..1000?}`: edit pixel-mask Density (%) and Feather (px) without changing mask pixels, including adjustment masks. At least one setting is required; `document` rejects stale targets. A shared `coalesce` key groups slider updates into one undo step. |
@@ -133,17 +134,24 @@ store expose and persist the same setting; scripts keep using canonical command 
 | `actions.rename` | `{"action": name or index, "name": str}` → `{action, index}`. Empty, whitespace-only or duplicate names are rejected and keep the old name. Nested `actions.play` steps that call the action by name and its function key follow the new name. In the desktop panel, double-click an action's name to rename it in place (Enter commits, Esc cancels) |
 
 The Actions list fills the resizable dock group. **PhotoCraft Essentials** supplies Auto Tone,
-Auto Contrast, Auto Color, and Select Subject. These are original, editable single-step actions
-using PhotoCraft's existing commands. The three auto adjustments work on the active pixel layer
+Auto Contrast, Auto Color, Select Subject, and Blur Background. These are original, editable
+single-step actions. The three auto adjustments work on the active pixel layer
 and respect the selection; Select Subject samples the visible image using PhotoCraft's current
-subject-detection heuristic. Each successful edit can be undone normally.
+subject-detection heuristic. Blur Background uses that detector on the active pixel layer and
+blurs only its background within the current selection, with an 8-pixel radius. Fully detected
+subject pixels are excluded from blur sampling; partial edge coverage can still contribute.
+It preserves the layer's transparency and masks, other layers and the existing selection, and
+fails without an edit when no subject is found. This is a Gaussian blur using the current
+heuristic detector, not depth-aware lens blur. Each successful edit can be undone normally.
+Actions playback currently runs synchronously; job progress and cancellation are available
+when `layer.blurBackground` is invoked directly through the UI command dispatcher.
 
 The set is added once when the desktop or web preset store opens, including for existing users.
 Saved actions keep their order and definitions; a same-name action is preserved. Deleting or
 renaming a default stays that way after restart. **Load Default Actions** in the Actions panel's
 menu (also offered by an empty panel) adds missing defaults again. CLI/MCP sessions can use
-`actions.loadDefaults` explicitly. Background blur is not included: composing Select Subject,
-Inverse, and Blur cannot safely handle the detector finding no subject.
+`actions.loadDefaults` explicitly. Blur Background calls a dedicated atomic command; it does
+not compose selection-changing steps that could act on an old selection after detection fails.
 
 The Actions panel shows replayable steps immediately while recording. Click an individual
 step to select it, then use the trash button to remove that step; selecting the action

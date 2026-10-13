@@ -3814,6 +3814,8 @@ curves	Smooth	Згладити
 
 # Actions panel: Load/Save Actions (.atn) and kept Photoshop steps
 	Load Actions…	Завантажити операції…
+	Load Default Actions	Завантажити типові дії
+	Blur Background	Розмити тло
 	Save Actions…	Зберегти операції…
 	{name} (Photoshop)	{name} (Photoshop)
 	{message} ({note})	{message} ({note})
@@ -3836,4 +3838,3 @@ curves	Smooth	Згладити
 @plural	{n} action|{n} actions	{n} операція|{n} операції|{n} операцій
 	Auto Add/Delete	Автододавання/видалення
 	ICO is limited to 256 × 256 pixels	ICO обмежено розміром 256 × 256 пікселів
-	Load Default Actions	Завантажити типові дії

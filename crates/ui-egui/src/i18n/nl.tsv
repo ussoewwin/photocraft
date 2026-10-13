@@ -3875,6 +3875,8 @@ curves	Smooth	Vloeiend maken
 
 # Actions panel: Load/Save Actions (.atn) and kept Photoshop steps
 	Load Actions…	Handelingen laden…
+	Load Default Actions	Standaardacties laden
+	Blur Background	Achtergrond vervagen
 	Save Actions…	Handelingen opslaan…
 	{name} (Photoshop)	{name} (Photoshop)
 	{message} ({note})	{message} ({note})
@@ -3897,4 +3899,3 @@ curves	Smooth	Vloeiend maken
 @plural	{n} action|{n} actions	{n} handeling|{n} handelingen
 	Auto Add/Delete	Automatisch toevoegen/verwijderen
 	ICO is limited to 256 × 256 pixels	ICO is beperkt tot 256 × 256 pixels
-	Load Default Actions	Standaardacties laden

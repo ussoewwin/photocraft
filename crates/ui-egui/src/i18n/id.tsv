@@ -3104,6 +3104,8 @@ curves	Smooth	Haluskan
 
 # Actions panel: Load/Save Actions (.atn) and kept Photoshop steps
 	Load Actions…	Muat Tindakan…
+	Load Default Actions	Muat Aksi Default
+	Blur Background	Buramkan Latar Belakang
 	Save Actions…	Simpan Tindakan…
 	{name} (Photoshop)	{name} (Photoshop)
 	{message} ({note})	{message} ({note})
@@ -3126,4 +3128,3 @@ curves	Smooth	Haluskan
 @plural	{n} action|{n} actions	{n} tindakan
 	Auto Add/Delete	Tambah/Hapus Otomatis
 	ICO is limited to 256 × 256 pixels	ICO dibatasi hingga 256 × 256 piksel
-	Load Default Actions	Muat Aksi Default

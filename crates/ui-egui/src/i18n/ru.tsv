@@ -3061,6 +3061,8 @@ curves	Smooth	Сгладить
 
 # Actions panel: Load/Save Actions (.atn) and kept Photoshop steps
 	Load Actions…	Загрузить операции…
+	Load Default Actions	Загрузить действия по умолчанию
+	Blur Background	Размыть фон
 	Save Actions…	Сохранить операции…
 	{name} (Photoshop)	{name} (Photoshop)
 	{message} ({note})	{message} ({note})
@@ -3083,7 +3085,6 @@ curves	Smooth	Сгладить
 @plural	{n} action|{n} actions	{n} операция|{n} операции|{n} операций
 	Auto Add/Delete	Автодобавление/удаление
 	ICO is limited to 256 × 256 pixels	ICO ограничен размером 256 × 256 пикселей
-	Load Default Actions	Загрузить действия по умолчанию
 
 # Dynamic selection context menu and appearance favorites
 	Select Inverse	Инвертировать выделение

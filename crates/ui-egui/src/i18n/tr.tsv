@@ -3829,6 +3829,8 @@ cameraData	Lens	Lens
 
 # Actions panel: Load/Save Actions (.atn) and kept Photoshop steps
 	Load Actions…	Eylemleri Yükle…
+	Load Default Actions	Varsayılan Eylemleri Yükle
+	Blur Background	Arka Planı Bulanıklaştır
 	Save Actions…	Eylemleri Kaydet…
 	{name} (Photoshop)	{name} (Photoshop)
 	{message} ({note})	{message} ({note})
@@ -3868,5 +3870,4 @@ cameraData	Lens	Lens
 	Color Indicates:	Rengin Gösterdiği:
 	Ink Characteristics	Mürekkep Özellikleri
 	Solidity:	Doluluk:
-	Load Default Actions	Varsayılan Eylemleri Yükle
 	Redrawing	Yeniden çiziliyor

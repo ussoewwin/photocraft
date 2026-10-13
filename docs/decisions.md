@@ -2,7 +2,7 @@
 
 ## 2026-10-13: Editable starter actions (#4779)
 
-PhotoCraft Essentials uses existing commands as ordinary editable actions. Add the set once after saved actions load, preserving names and order; persist a starter-set version so deleted or renamed actions stay that way. Explicit Load Default Actions adds missing names without replacing edits. Keep headless sessions empty until that command is called. Background blur needs a separate atomic operation: a recorded Select Subject → Inverse → Blur sequence can act on an old selection when subject detection finds nothing.
+PhotoCraft Essentials uses ordinary editable actions. Add the set once after saved actions load, preserving names and order; persist a starter-set version so deleted or renamed actions stay that way. Explicit Load Default Actions adds missing names without replacing edits. Keep headless sessions empty until that command is called. Blur Background uses a single atomic edit on the target pixel layer: detect its subject, exclude subject coverage from Gaussian sampling, and blend the background inside the existing selection while preserving alpha. Detection failure and cancellation do not commit. A recorded Select Subject → Inverse → Blur sequence can act on an old selection when detection finds nothing, so the preset calls this dedicated command instead.
 
 ## 2026-10-10: Smart Object contents identity (#2163)
 

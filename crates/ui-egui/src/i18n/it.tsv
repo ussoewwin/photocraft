@@ -4078,6 +4078,8 @@ navigator	Zoom	Zoom
 
 # Actions panel: Load/Save Actions (.atn) and kept Photoshop steps
 	Load Actions…	Carica azioni…
+	Load Default Actions	Carica azioni predefinite
+	Blur Background	Sfoca sfondo
 	Save Actions…	Salva azioni…
 	{name} (Photoshop)	{name} (Photoshop)
 	{message} ({note})	{message} ({note})
@@ -4100,4 +4102,3 @@ navigator	Zoom	Zoom
 @plural	{n} action|{n} actions	{n} azione|{n} azioni
 	Auto Add/Delete	Aggiungi/elimina automaticamente
 	ICO is limited to 256 × 256 pixels	ICO è limitato a 256 × 256 pixel
-	Load Default Actions	Carica azioni predefinite
