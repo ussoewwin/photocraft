@@ -22,6 +22,48 @@ fn sections_with_boxes_have_flags() {
     assert!(b.texture.enabled);
 }
 
+#[test]
+fn selecting_a_controls_section_keeps_its_enabled_flag_and_brush_history() {
+    use egui_kittest::kittest::Queryable;
+
+    for (section, name) in [(1, "Shape Dynamics"), (2, "Scattering"), (3, "Texture")] {
+        let mut h = harness(0, 0);
+        let before = h.state().session.tools.brush.clone();
+        let journal = h.state().session.journal.len();
+
+        h.get_by_label(name).click();
+        h.run_steps(3);
+
+        assert_eq!(h.state().ui.brush_section, section, "{name} settings are visible");
+        assert_eq!(h.state().session.tools.brush, before, "{name} remains disabled");
+        assert_eq!(h.state().session.journal.len(), journal, "selecting {name} is not a brush edit");
+    }
+}
+
+#[test]
+fn controls_section_checkbox_toggles_without_selecting_its_settings() {
+    use egui_kittest::kittest::Queryable;
+
+    let mut h = harness(0, 0);
+    let row = h.get_by_label("Scattering").rect();
+    let checkbox = egui::pos2(row.left() + 12.0, row.center().y);
+    let journal = h.state().session.journal.len();
+
+    for enabled in [true, false] {
+        h.hover_at(checkbox);
+        h.run_steps(1);
+        h.drag_at(checkbox);
+        h.run_steps(1);
+        h.drop_at(checkbox);
+        h.run_steps(3);
+
+        assert_eq!(h.state().session.tools.brush.scattering.enabled, enabled);
+        assert_eq!(h.state().ui.brush_section, 0, "the checkbox does not select Scattering");
+        assert_eq!(last_journal(h.state()).unwrap().1["brush"], json!({"scattering": {"enabled": enabled}}));
+    }
+    assert_eq!(h.state().session.journal.len(), journal + 2);
+}
+
 /// What each section's controls edit, set to non-default values.
 fn edit_section(i: usize, b: &mut BrushSettings) {
     let dynamic = |jitter: f32, control: Control, minimum: f32| paint::Dynamic { jitter, control, fade_steps: 40, minimum };
