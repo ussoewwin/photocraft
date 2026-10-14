@@ -66,9 +66,11 @@ the same.
 
 * **JPEG XL export.** Writes lossless 8/16-bit bare codestreams with `zune-jpegxl`.
   Native layouts are Gray, RGB and RGBA. GrayA is expanded to RGBA at the
-  original depth because native GrayA16 did not preserve alpha in an independent
-  decoder test. The expansion preserves sample values but is not a native
-  GrayA layout. No ICC, EXIF, XMP or DPI container boxes are written; the
+  original depth. For 16-bit RGBA (including expanded GrayA), we correct
+  zune-jpegxl 0.5.2's extra-channel header, which otherwise describes the
+  16-bit alpha samples as 8-bit. This preserves alpha precision; the independent
+  jxl-oxide decoder test checks the actual gray and alpha samples. The expansion
+  is not a native GrayA layout. No ICC, EXIF, XMP or DPI container boxes are written; the
   document pipeline converts tagged images to sRGB and reports metadata loss.
   Reading remains in the separate #2868 PR. The `ASYMMETRIC_EXCEPTIONS`
   entry stays until import is merged.
