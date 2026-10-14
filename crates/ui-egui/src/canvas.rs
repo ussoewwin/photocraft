@@ -1996,6 +1996,12 @@ fn documents(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
         paint_dots(ui, ui.available_rect_before_wrap(), app.session.prefs().interface.show_canvas_dots);
         return;
     }
+    if n > 0 && !opening && (0..n).all(|doc| crate::view_cmds::document_is_floating(app, doc)) {
+        // A torn-off document belongs to its OS window. Leaving its canvas in the main
+        // viewport would make the same page appear twice, which is what “New Window” does.
+        paint_dots(ui, ui.available_rect_before_wrap(), app.session.prefs().interface.show_canvas_dots);
+        return;
+    }
     if !app.ui.view.hides_tabs() || opening {
         // Flat Spectrum tabs sit directly against the canvas. The parent's default vertical
         // item spacing would otherwise leave a visible gap below the tab strip (#2188).
@@ -2012,6 +2018,7 @@ fn documents(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
         return;
     }
     let Some(idx) = app.session.active_index() else { return };
+    let main_focused = ui.ctx().input(|i| i.viewport().focused.unwrap_or(true));
     let rect = ui.available_rect_before_wrap();
     app.last_canvas_rect = rect;
     app.drop_canvas_rect = Some(rect);
@@ -2022,10 +2029,10 @@ fn documents(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
         for (d, cell) in shown {
             let cell = cell.shrink(1.0);
             let view = app.ui.views[d].clone();
-            let v = canvas_view(app, ui, d, cell, view, d == idx);
+            let v = canvas_view(app, ui, d, cell, view, d == idx && main_focused);
             if d != idx {
                 app.ui.views[d] = v;
-                if ui.input(|i| i.pointer.primary_pressed() && i.pointer.interact_pos().is_some_and(|p| cell.contains(p))) {
+                if main_focused && ui.input(|i| i.pointer.primary_pressed() && i.pointer.interact_pos().is_some_and(|p| cell.contains(p))) {
                     app.session.set_active(d);
                 }
             }
@@ -2035,7 +2042,8 @@ fn documents(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
         return;
     }
     let view = app.ui.views[idx].clone();
-    canvas_view(app, ui, idx, rect, view, true);
+    let owns_active_doc = !crate::view_cmds::document_is_floating(app, idx);
+    canvas_view(app, ui, idx, rect, view, main_focused && owns_active_doc);
 }
 
 /// The tab strip; returns where its document tabs are.
@@ -2819,7 +2827,8 @@ fn hdr_preview(app: &PhotocraftApp, doc: &photocraft_doc::Document) -> Option<[f
     app.session.color.hdr_preview(doc).map(|h| [h.exposure, h.gamma])
 }
 
-/// Draw one canvas view and handle its input. `primary` = main window (tools active).
+/// Draw one canvas view and handle its input. `primary` means this viewport owns active input
+/// and shared canvas controls for this frame.
 pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect: Rect, mut view: View, primary: bool) -> View {
     let ctx = ui.ctx().clone();
     // The camera as the app holds it before this frame's input. The canvas works on its own copy
@@ -5711,9 +5720,13 @@ pub fn extra_windows(app: &mut PhotocraftApp, ctx: &egui::Context) {
             if ui.ctx().input(|i| i.viewport().close_requested()) {
                 close = true;
             }
+            let focused = ui.ctx().input(|i| i.viewport().focused == Some(true));
+            if focused {
+                app.session.set_active(w.document);
+            }
             egui::CentralPanel::default().frame(egui::Frame::NONE.fill(crate::theme::Tokens::get(ui.ctx()).canvas)).show(ui, |ui| {
                 let rect = ui.available_rect_before_wrap();
-                view = canvas_view(app, ui, w.document, rect, view.clone(), false);
+                view = canvas_view(app, ui, w.document, rect, view.clone(), focused);
             });
         });
         if let Some(win) = app.ui.windows.iter_mut().find(|x| x.id == w.id) {
@@ -6429,6 +6442,28 @@ mod tests {
     }
 
     #[test]
+    fn torn_off_document_is_not_drawn_again_in_the_main_window() {
+        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", json!({"width": 80, "height": 60, "name": "floating"})).unwrap();
+        app.sync_views();
+        let ctx = egui::Context::default();
+        crate::menus::invoke(&mut app, &ctx, "window.arrange.floatInWindow", json!({"document": 0})).unwrap();
+        assert!(app.ui.windows[0].floating);
+        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(680.0, 480.0)).build_ui_state(
+            |ui, (app, ready): &mut (PhotocraftApp, bool)| {
+                if *ready {
+                    egui::CentralPanel::default().frame(egui::Frame::NONE).show(ui, |ui| document_area(app, ui));
+                }
+            },
+            (app, false),
+        );
+        PhotocraftApp::setup_context(&h.ctx, crate::theme::ThemeKind::Pro);
+        h.state_mut().1 = true;
+        h.run_steps(3);
+        assert!(h.state().0.tab_strip.is_none(), "the main window must not keep a duplicate document tab");
+    }
+
+    #[test]
     fn large_tabs_preference_increases_tab_strip_height() {
         use egui_kittest::kittest::Queryable;
         let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
@@ -6558,7 +6593,17 @@ mod tests {
             let names: Vec<&str> = app.session.documents().iter().map(|d| d.doc.name.as_str()).collect();
             assert_eq!(names, ["a", "b", "c"], "{kind:?}: tearing off doesn't reorder");
             assert_eq!(app.ui.windows.iter().map(|w| w.document).collect::<Vec<_>>(), [1], "{kind:?}: b floats in its own window");
-            assert_eq!(app.session.active_index(), Some(1), "{kind:?}: the floated document is active");
+            assert_eq!(app.session.active_index(), Some(0), "{kind:?}: the remaining docked document stays active");
+            assert!(app.ui.windows[0].floating, "{kind:?}: the page belongs exclusively to its floating window");
+            let b = h.get_by_label_contains("b").rect();
+            let target = egui::pos2(b.center().x, b.bottom() + 150.0);
+            h.drag_at(b.center());
+            h.run_steps(1);
+            h.hover_at(target);
+            h.run_steps(1);
+            h.drop_at(target);
+            h.run_steps(2);
+            assert_eq!(h.state().0.ui.windows.len(), 1, "{kind:?}: repeating the tear-off reuses the window");
         }
     }
 
