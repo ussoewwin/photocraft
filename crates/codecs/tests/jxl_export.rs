@@ -78,6 +78,35 @@ fn jpeg_xl_decodes_losslessly_with_independent_decoder() {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn jpeg_xl_preserves_sixteen_bit_alpha_across_dimension_header_sizes() {
+    use jxl_oxide::JxlImage;
+
+    // Exercise each size-header coding tier, and non-opaque alpha extremes.
+    for width in [2u32, 513, 8193] {
+        let height = 2u32;
+        let mut samples = Vec::with_capacity(width as usize * height as usize * 4);
+        for i in 0..(width as usize * height as usize) {
+            samples.extend_from_slice(&[
+                (i as u16).wrapping_mul(127),
+                65535,
+                (i as u16).wrapping_mul(9973),
+                [0u16, 1, 32768, 65535][i % 4],
+            ]);
+        }
+        let input = Image::from_u16(width, height, ChannelLayout::Rgba, &samples).unwrap();
+        let encoded = encode(&input, Format::Jxl, &EncodeOptions::default()).unwrap();
+        let decoder = JxlImage::builder().read(&encoded[..]).unwrap();
+        let render = decoder.render_frame(0).unwrap();
+        let mut stream = render.stream();
+        assert_eq!(stream.channels(), 4, "width={width}");
+        let mut output = vec![0u16; samples.len()];
+        assert_eq!(stream.write_to_buffer(&mut output), samples.len());
+        assert_eq!(output, samples, "width={width}");
+    }
+}
+
 #[test]
 fn jpeg_xl_rejects_one_pixel_images_without_panicking() {
     // zune-jpegxl currently requires at least two pixels on each axis.
