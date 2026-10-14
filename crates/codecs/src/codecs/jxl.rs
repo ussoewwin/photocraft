@@ -82,9 +82,7 @@ fn correct_16_bit_alpha_header(bytes: &[u8], width: u32, height: u32) -> Result<
     let frame_offset = pos.div_ceil(8);
     let header_matches = header_matches
         && frame_offset <= bytes.len()
-        && (pos..frame_offset * 8).all(|bit| {
-            bytes[bit / 8] & (1 << (bit % 8)) == 0
-        });
+        && (pos..frame_offset * 8).all(|bit| bytes[bit / 8] & (1 << (bit % 8)) == 0);
     if !header_matches {
         return Err(CodecError::encode(F, "unexpected zune-jpegxl header for 16-bit alpha"));
     }
