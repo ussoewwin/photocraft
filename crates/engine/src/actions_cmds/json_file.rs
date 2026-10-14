@@ -139,9 +139,7 @@ pub(super) fn import(s: &mut Session, p: &Value) -> Result<Value> {
             retarget(&mut action, &original, &mapping, CMD)?;
             let target = mapping.get(&source.name).ok_or_else(|| bad(CMD, "missing imported action name"))?;
             action.name = target.clone();
-            if let Some(found) = existing.iter().find(|a| {
-                same_contents(a, &action) && (a.name == *target || same_name_family(&source.name, &a.name))
-            }) {
+            if let Some(found) = existing.iter().find(|a| same_contents(a, &action) && (a.name == *target || same_name_family(&source.name, &a.name))) {
                 if action.name != found.name {
                     corrections.push((source.name.clone(), found.name.clone()));
                 }

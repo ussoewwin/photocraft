@@ -332,10 +332,8 @@ fn save_json_dialog(app: &mut PhotocraftApp) -> Result<Value, String> {
         let write = app.services.write.as_mut().ok_or("no writer configured")?;
         write(&path, data.as_bytes())?;
         let shown = crate::file_open::display_name(&path);
-        app.ui.status = crate::i18n::fmt(
-            &crate::i18n::trn(crate::i18n::current(), n, "Saved {n} action to {file}", "Saved {n} actions to {file}"),
-            &[("file", &shown)],
-        );
+        app.ui.status =
+            crate::i18n::fmt(&crate::i18n::trn(crate::i18n::current(), n, "Saved {n} action to {file}", "Saved {n} actions to {file}"), &[("file", &shown)]);
         app.ui.status_error = false;
         Ok(json!({"path": path, "actions": n}))
     })
