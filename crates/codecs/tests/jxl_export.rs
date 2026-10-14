@@ -88,12 +88,7 @@ fn jpeg_xl_preserves_sixteen_bit_alpha_across_dimension_header_sizes() {
         let height = 2u32;
         let mut samples = Vec::with_capacity(width as usize * height as usize * 4);
         for i in 0..(width as usize * height as usize) {
-            samples.extend_from_slice(&[
-                (i as u16).wrapping_mul(127),
-                65535,
-                (i as u16).wrapping_mul(9973),
-                [0u16, 1, 32768, 65535][i % 4],
-            ]);
+            samples.extend_from_slice(&[(i as u16).wrapping_mul(127), 65535, (i as u16).wrapping_mul(9973), [0u16, 1, 32768, 65535][i % 4]]);
         }
         let input = Image::from_u16(width, height, ChannelLayout::Rgba, &samples).unwrap();
         let encoded = encode(&input, Format::Jxl, &EncodeOptions::default()).unwrap();

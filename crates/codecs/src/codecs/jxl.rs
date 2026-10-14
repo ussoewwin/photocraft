@@ -80,9 +80,7 @@ fn correct_16_bit_alpha_header(bytes: &[u8], width: u32, height: u32) -> Result<
         && read(bytes, &mut pos, 1) == Some(1); // default transform
 
     let frame_offset = pos.div_ceil(8);
-    let header_matches = header_matches
-        && frame_offset <= bytes.len()
-        && (pos..frame_offset * 8).all(|bit| bytes[bit / 8] & (1 << (bit % 8)) == 0);
+    let header_matches = header_matches && frame_offset <= bytes.len() && (pos..frame_offset * 8).all(|bit| bytes[bit / 8] & (1 << (bit % 8)) == 0);
     if !header_matches {
         return Err(CodecError::encode(F, "unexpected zune-jpegxl header for 16-bit alpha"));
     }
@@ -143,11 +141,7 @@ pub(crate) fn encode(image: &Image, plan: Plan) -> Result<Vec<u8>, CodecError> {
         let options = ZuneOptions::new(width as usize, height as usize, space, depth);
         let mut output = Vec::new();
         JxlSimpleEncoder::new(image.data(), options).encode(&mut output).map_err(|e| CodecError::encode(F, e.to_string()))?;
-        if depth == BitDepth::Sixteen && image.layout() == ChannelLayout::Rgba {
-            correct_16_bit_alpha_header(&output, width, height)
-        } else {
-            Ok(output)
-        }
+        if depth == BitDepth::Sixteen && image.layout() == ChannelLayout::Rgba { correct_16_bit_alpha_header(&output, width, height) } else { Ok(output) }
     }))
     .unwrap_or_else(|_| Err(CodecError::encode(F, "the JPEG XL encoder failed")))
 }
