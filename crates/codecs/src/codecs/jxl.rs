@@ -50,7 +50,7 @@ fn correct_16_bit_alpha_header(bytes: &[u8], width: u32, height: u32) -> Result<
 
     fn write_bits(out: &mut Vec<u8>, pos: &mut usize, count: usize, value: u32) {
         for bit in 0..count {
-            if *pos % 8 == 0 {
+            if (*pos).is_multiple_of(8) {
                 out.push(0);
             }
             out[*pos / 8] |= (((value >> bit) & 1) as u8) << (*pos % 8);
