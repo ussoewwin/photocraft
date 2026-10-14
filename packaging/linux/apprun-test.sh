@@ -28,6 +28,7 @@ APPIMAGE="$TMP/photocraft test.AppImage" # spaces on purpose: Exec must stay quo
 export APPIMAGE
 export HOME="$TMP/home"
 export XDG_DATA_HOME="$HOME/.local/share"
+unset DESKTOPINTEGRATION PHOTOCRAFT_NO_DESKTOP_INTEGRATION
 mkdir -p "$HOME"
 
 fail() {
@@ -149,6 +150,43 @@ for baseline_kind in valid missing empty; do
   "$APPDIR/AppRun" >/dev/null
   cmp -s "$DESKTOP" "$TMP/before-external.desktop" || fail "external desktop removed $baseline_kind custom entry"
   rm -f "$ext"
+done
+
+# Linked launchers and snapshots are externally owned, even when their bytes
+# match a generated entry. Check both normal refresh and external deduplication.
+for integration in normal external; do
+  for linked in launcher dangling-launcher baseline dangling-baseline; do
+    rm -rf "$XDG_DATA_HOME"
+    "$APPDIR/AppRun" >/dev/null
+    baseline="$XDG_DATA_HOME/applications/.$APP_ID.generated"
+    target="$TMP/linked-target"
+    cp "$DESKTOP" "$target"
+    case "$linked" in
+      launcher|dangling-launcher) link="$DESKTOP" ;;
+      baseline|dangling-baseline) link="$baseline" ;;
+    esac
+    rm -f "$link"
+    case "$linked" in dangling-*) rm -f "$target" ;; esac
+    ln -s "$target" "$link"
+    [ ! -f "$target" ] || cp "$target" "$TMP/linked-target-before"
+    # A packaged metadata change would otherwise cause a symlink to be replaced.
+    template="$APPDIR/usr/share/applications/$APP_ID.desktop"
+    cp "$template" "$TMP/link-template-before"
+    printf '\nX-Link-Refresh=changed\n' >>"$template"
+    if [ "$integration" = external ]; then
+      DESKTOPINTEGRATION=AppImageLauncher "$APPDIR/AppRun" >/dev/null
+    else
+      "$APPDIR/AppRun" >/dev/null
+    fi
+    [ -L "$link" ] || fail "$integration replaced or removed $linked"
+    [ "$(readlink "$link")" = "$target" ] || fail "$integration retargeted $linked"
+    case "$linked" in
+      dangling-*) [ ! -e "$target" ] || fail "$integration created dangling target" ;;
+      *) cmp -s "$target" "$TMP/linked-target-before" || fail "$integration changed linked target" ;;
+    esac
+    [ -f "$XDG_DATA_HOME/icons/hicolor/256x256/apps/$APP_ID.png" ] || fail "link preservation skipped icons"
+    cp "$TMP/link-template-before" "$template"
+  done
 done
 
 # Reset the stub fixture so the duplicate-removal test starts with an untouched entry.

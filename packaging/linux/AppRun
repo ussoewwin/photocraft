@@ -17,7 +17,7 @@ DESK_ID=ai.storyteller.photocraft
 # A damaged snapshot is not evidence that an absent user key was newly added.
 # Treat it like a legacy installation and preserve the existing launcher.
 valid_baseline() {
-  [ -s "$1" ] || return 1
+  [ -f "$1" ] && [ ! -L "$1" ] && [ -s "$1" ] || return 1
   awk '
     /^\[/ { group = $0; if (group == "[Desktop Entry]") sections++; next }
     /^[ \t]*($|#)/ { next }
@@ -79,10 +79,16 @@ integrate() {
       fi
     done
   fi
-  if [ "$external" = 1 ]; then
+  if [ -L "$desktop" ] || [ -L "$baseline" ] ||
+    { [ -e "$desktop" ] && [ ! -f "$desktop" ]; } ||
+    { [ -e "$baseline" ] && [ ! -f "$baseline" ]; }; then
+    # A link (including a dangling one) or special file is not our installation.
+    # Leave both launcher and snapshot alone; icons may still be installed below.
+    :
+  elif [ "$external" = 1 ]; then
     # Only a byte-identical, valid generated snapshot proves this is ours to
     # remove. A customized or legacy launcher belongs to the user.
-    if valid_baseline "$baseline" && cmp -s "$baseline" "$desktop"; then
+    if [ -f "$desktop" ] && valid_baseline "$baseline" && cmp -s "$baseline" "$desktop" && [ ! -L "$desktop" ]; then
       if rm -f "$desktop" 2>/dev/null; then
         command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$apps" >/dev/null 2>&1
       fi
