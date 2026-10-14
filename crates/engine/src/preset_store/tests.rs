@@ -796,9 +796,21 @@ fn large_patterns_load_on_use() {
     let listed = t.execute("pattern.list", json!({})).unwrap();
     let big = listed.as_array().unwrap().iter().find(|p| p["name"] == "Big").unwrap();
     assert_eq!((big["width"].as_u64(), big["height"].as_u64()), (Some(300), Some(200)), "the list reports the full size");
+    // Checks that only need the pattern's id (Pattern Stamp's enabled state) don't read its file.
+    let id = t.patterns.items.iter().find(|p| p.name == "Big").unwrap().id.clone();
+    let file = dir.0.join(patterns::file_name_for_test(&id));
+    let moved = file.with_extension("moved");
+    std::fs::rename(&file, &moved).unwrap();
+    assert_eq!(crate::pattern_cmds::resolve_id(&t, "Big"), Some(id.clone()));
+    assert!(crate::pattern_cmds::resolve(&t, "Big").is_none(), "the full pixels come from the file");
+    std::fs::rename(&moved, &file).unwrap();
     let full = crate::pattern_cmds::resolve(&t, "Big").unwrap();
     assert_eq!((full.width, full.height), (300, 200));
     assert!(full.surface.pixel(280, 180)[1] < 0.01 && full.surface.pixel(10, 10)[1] > 0.99, "full pixels");
+    // Once read, it is kept: using it again doesn't read the file.
+    std::fs::rename(&file, &moved).unwrap();
+    assert_eq!(crate::pattern_cmds::resolve(&t, "Big").map(|p| p.width), Some(300));
+    std::fs::rename(&moved, &file).unwrap();
     // A Pattern Fill layer gets the full pattern into the document.
     t.execute("file.new", json!({"width": 40, "height": 40})).unwrap();
     t.execute("layer.newFillLayer.pattern", json!({"pattern": "Big"})).unwrap();

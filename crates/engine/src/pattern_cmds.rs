@@ -132,6 +132,18 @@ fn library_pattern<'a>(s: &'a Session, key: &str) -> Option<&'a Pattern> {
     photocraft_doc::pattern::find(&s.patterns.items, key, key)
 }
 
+/// The id of the pattern [`resolve`] finds, without reading a saved pattern's pixels: for checks
+/// and lookups that don't paint.
+pub fn resolve_id(s: &Session, key: &str) -> Option<String> {
+    if !key.is_empty()
+        && let Some(d) = s.active()
+        && let Some(p) = photocraft_doc::pattern::find(&d.doc.patterns, key, key)
+    {
+        return Some(p.id.clone());
+    }
+    library_pattern(s, key).map(|p| p.id.clone())
+}
+
 /// Finds a pattern by id or name: the active document's first, then the library. An empty key
 /// picks the first library pattern (Photoshop's default). `None` also when a saved pattern's
 /// pixels can't be read (see [`resolve_param`] for the reason).

@@ -561,6 +561,9 @@ pub struct PresetStore {
     warnings: Vec<String>,
     /// Full tips loaded for brushes in use (behind a lock so `&Session` paths can load).
     cache: Mutex<TipCache>,
+    /// The stored pattern last read in full, so painting with it again doesn't re-read its file
+    /// (a texture can be tens of megabytes). One: the pattern in use.
+    pattern_cache: Mutex<Option<photocraft_doc::Pattern>>,
 }
 
 /// A loaded store: the presets on disk plus what the session should hide.
@@ -667,6 +670,7 @@ pub fn open(backend: Box<dyn PresetBackend>) -> Opened {
         patterns: pattern_files,
         warnings: Vec::new(),
         cache: Mutex::new(TipCache { limit: TIP_CACHE_BYTES, ..Default::default() }),
+        pattern_cache: Mutex::new(None),
     };
     let mut presets = Vec::new();
     for (file, size, g) in parsed {
@@ -1057,12 +1061,23 @@ impl PresetStore {
     /// Write the pattern library's changes (see [`patterns`]).
     pub fn sync_patterns(&mut self, library: &crate::pattern_cmds::PatternLibrary) {
         patterns::sync(self.backend.as_ref(), &mut self.patterns, library, &mut self.warnings);
+        let cache = self.pattern_cache.get_mut().unwrap_or_else(PoisonError::into_inner);
+        if cache.as_ref().is_some_and(|p| !self.patterns.index.iter().any(|e| e.id == p.id)) {
+            *cache = None;
+        }
     }
 
-    /// The full pixels of a stored pattern the library holds as a preview.
+    /// The full pixels of a stored pattern the library holds as a preview: the last one read is
+    /// kept, so only switching patterns reads a file.
     pub fn load_pattern(&self, id: &str) -> Result<photocraft_doc::Pattern, String> {
+        let mut cache = self.pattern_cache.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(p) = cache.as_ref().filter(|p| p.id == id) {
+            return Ok(p.clone());
+        }
         let entry = self.patterns.index.iter().find(|e| e.id == id).ok_or_else(|| format!("pattern {id} is not in the preset store"))?;
-        patterns::load_full(self.backend.as_ref(), entry)
+        let p = patterns::load_full(self.backend.as_ref(), entry)?;
+        *cache = Some(p.clone());
+        Ok(p)
     }
 
     /// Write the Actions list when `rev` differs from the last load or write.
