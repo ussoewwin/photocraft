@@ -102,10 +102,7 @@ pub fn compute_histograms(doc: &Document, source: HistSource, space: ToneSpace) 
     let sel = d.selection.as_ref();
     // Document coordinate of each thumbnail pixel's centre (the reduction starts at the canvas
     // origin, so scaling alone maps between them).
-    let (fx, fy) = (
-        b.width().max(1) as f32 / img.width.max(1) as f32,
-        b.height().max(1) as f32 / img.height.max(1) as f32,
-    );
+    let (fx, fy) = (b.width().max(1) as f32 / img.width.max(1) as f32, b.height().max(1) as f32 / img.height.max(1) as f32);
     let iw = img.width.max(1) as usize;
     let n = match space {
         ToneSpace::Rgb => 4,
@@ -124,9 +121,6 @@ pub fn compute_histograms(doc: &Document, source: HistSource, space: ToneSpace) 
             if m.sample_channel(mx as i32, my as i32, 0) < 0.5 {
                 continue;
             }
-        }
-        if p[3] == 0 {
-            continue;
         }
         match space {
             ToneSpace::Rgb => {
@@ -233,10 +227,7 @@ pub fn histogram_pixels(doc: &Document) -> u64 {
                 let (x0, y0) = ((tr.x0 - tc.tx * ts) as usize, (tr.y0 - tc.ty * ts) as usize);
                 for y in 0..tr.height() as usize {
                     let off = (y0 + y) * photocraft_geom::TILE_SIZE as usize + x0;
-                    n += data
-                        .get(off..off + tr.width() as usize)
-                        .map_or(0, |row| row.iter().filter(|&&v| v >= 128).count())
-                        as u64;
+                    n += data.get(off..off + tr.width() as usize).map_or(0, |row| row.iter().filter(|&&v| v >= 128).count()) as u64;
                 }
             }
             None if absent_is_selected => n += u64::from(tr.width()) * u64::from(tr.height()),
@@ -571,11 +562,8 @@ mod hist_async_tests {
     fn frame(app: &mut PhotocraftApp, id: &str) {
         let ctx = egui::Context::default();
         ctx.begin_pass(Default::default());
-        let mut ui = egui::Ui::new(
-            ctx,
-            egui::Id::new(id),
-            egui::UiBuilder::new().max_rect(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(300.0, 400.0))),
-        );
+        let mut ui =
+            egui::Ui::new(ctx, egui::Id::new(id), egui::UiBuilder::new().max_rect(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(300.0, 400.0))));
         histogram_panel(app, &mut ui);
         if let Some((d, r, rx)) = app.hist_job.take() {
             let (did, _, h, pixels) = rx.recv().expect("the worker delivers");
