@@ -1438,12 +1438,20 @@ fn section_boxes_show_a_pressed_state() {
     let row = h.get_by_label("Shape Dynamics").rect();
     assert!(!h.state().session.tools.brush.shape_dynamics.enabled);
     assert_eq!(box_fill(&h, boxr), Some(widgets::check_box_fill(false, false, &t)));
-    // Held on the row's name: the unchecked box darkens; the release turns the section on.
+    // Selecting the controls row leaves its checkbox untouched, including while held.
     let at = egui::pos2(row.center().x, row.center().y);
     h.drag_at(at);
     h.run_steps(2);
-    assert_eq!(box_fill(&h, boxr), Some(widgets::check_box_fill(false, true, &t)), "pressed, unchecked");
+    assert_eq!(box_fill(&h, boxr), Some(widgets::check_box_fill(false, false, &t)), "row press leaves checkbox untouched");
     h.drop_at(at);
+    h.run_steps(3);
+    assert!(!h.state().session.tools.brush.shape_dynamics.enabled);
+    assert_eq!(box_fill(&h, boxr), Some(widgets::check_box_fill(false, false, &t)));
+    // The checkbox itself still shows its pressed state and toggles the section.
+    h.drag_at(boxr.center());
+    h.run_steps(2);
+    assert_eq!(box_fill(&h, boxr), Some(widgets::check_box_fill(false, true, &t)), "pressed, unchecked");
+    h.drop_at(boxr.center());
     h.run_steps(3);
     assert!(h.state().session.tools.brush.shape_dynamics.enabled);
     assert_eq!(box_fill(&h, boxr), Some(widgets::check_box_fill(true, false, &t)));
