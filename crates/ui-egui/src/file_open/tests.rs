@@ -640,7 +640,15 @@ fn views_and_windows_stay_with_their_documents() {
         v.zoom = i as f32 + 1.0;
     }
     app.ui.windows = (0..4)
-        .map(|document| crate::state::DocWindow { id: document as u64, document, view: Default::default(), open: true, floating: false, position: None })
+        .map(|document| crate::state::DocWindow {
+            id: document as u64,
+            document,
+            view: Default::default(),
+            open: true,
+            floating: false,
+            focused: false,
+            position: None,
+        })
         .collect();
     let zooms = |app: &PhotocraftApp| app.ui.views.iter().map(|v| v.zoom).collect::<Vec<_>>();
     let windows = |app: &PhotocraftApp| app.ui.windows.iter().map(|w| (w.id, w.document)).collect::<Vec<_>>();

@@ -801,7 +801,7 @@ pub(crate) fn float_window(app: &mut PhotocraftApp, doc: usize, offset: usize, f
     let wid = app.ui.alloc_id();
     let mut view = app.ui.views.get(doc).cloned().unwrap_or_default();
     view.fit_pending = offset > 0 || view.fit_pending;
-    app.ui.windows.push(crate::state::DocWindow { id: wid, document: doc, view, open: true, floating, position: None });
+    app.ui.windows.push(crate::state::DocWindow { id: wid, document: doc, view, open: true, floating, focused: false, position: None });
     wid
 }
 
@@ -851,22 +851,12 @@ fn arrange(app: &mut PhotocraftApp, k: &str, p: &Value) -> Result<Value, String>
             if let Some(w) = app.ui.windows.iter_mut().find(|w| w.id == wid) {
                 w.position = position;
             }
-            if let Some(next) = app
-                .session
-                .documents()
-                .iter()
-                .enumerate()
-                .find_map(|(i, _)| (i != doc && !app.ui.windows.iter().any(|w| w.open && w.floating && w.document == i)).then_some(i))
-            {
-                app.session.set_active(next);
-            } else {
-                app.session.set_active(doc);
-            }
+            app.session.set_active(doc);
             Ok(json!({"window": wid}))
         }
         "floatAllInWindows" | "cascade" => {
             let n = app.session.documents().len();
-            let ids: Vec<u64> = (0..n).map(|d| float_window(app, d, d, false)).collect();
+            let ids: Vec<u64> = (0..n).map(|d| float_window(app, d, d, true)).collect();
             Ok(json!({"windows": ids}))
         }
         "matchZoom" | "matchLocation" | "matchRotation" | "matchAll" => {
