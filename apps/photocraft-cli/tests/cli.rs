@@ -90,6 +90,11 @@ fn unknown_flags_are_usage_errors() {
     // Every flag still works in both forms.
     let (out, _) = ok(bin().args(["commands", "--json", "--filter=gaussian"]));
     assert!(out.contains("filter.blur.gaussianBlur"), "{out}");
+    // The Elliptical Marquee is a `select.rect` option, found by its keywords (#5060).
+    for needle in ["ellipse", "marquee"] {
+        let (out, _) = ok(bin().args(["commands", "--filter", needle]));
+        assert!(out.contains("select.rect"), "{needle}: {out}");
+    }
     ok(bin().args(["batch", "--actions"]).arg(&actions).arg(format!("--in={}", input.display())).arg("--out").arg(&out_dir).args([
         "--format=jpg",
         "--quality",
@@ -453,6 +458,40 @@ fn quality_outside_1_to_100_is_refused() {
         })
         .collect();
     assert!(sizes[0] <= sizes[1] && sizes[1] <= sizes[2], "{sizes:?}");
+}
+
+/// DPX converts both ways, `info` reports its size, mode and depth, and `--dpx-bits` picks the
+/// bits per sample (byte 803 of the header); anything but 8, 10, 12 or 16 is refused (#1049).
+#[test]
+fn dpx_converts_both_ways_with_the_bits_asked_for() {
+    let d = tmp("dpx");
+    let a = d.join("a.png");
+    write_png(&a, 8, 4, 3);
+    for (bits, want) in [(None, 8), (Some("10"), 10), (Some("12"), 12), (Some("16"), 16)] {
+        let out = d.join("a.dpx");
+        let mut convert = bin();
+        convert.arg("convert").arg(&a).arg(&out);
+        if let Some(b) = bits {
+            convert.args(["--dpx-bits", b]);
+        }
+        ok(&mut convert);
+        let bytes = std::fs::read(&out).unwrap();
+        assert_eq!((&bytes[..4], bytes[803]), (&b"SDPX"[..], want), "--dpx-bits {bits:?}");
+    }
+    let (info, _) = ok(bin().arg("info").arg(d.join("a.dpx")).arg("--compact"));
+    let v: Value = serde_json::from_str(&info).unwrap();
+    assert_eq!((v["width"].as_u64(), v["height"].as_u64()), (Some(8), Some(4)), "{v}");
+    assert!(info.contains("16") && info.to_lowercase().contains("rgb"), "{info}");
+    let back = d.join("back.png");
+    ok(bin().arg("convert").arg(d.join("a.dpx")).arg(&back));
+    assert!(back.exists());
+    for bad in ["24", "0", "abc"] {
+        let out = d.join("bad.dpx");
+        let o = bin().arg("convert").arg(&a).arg(&out).args(["--dpx-bits", bad]).output().unwrap();
+        assert_eq!(o.status.code(), Some(1), "--dpx-bits {bad}");
+        assert!(String::from_utf8_lossy(&o.stderr).contains(&format!("bad --dpx-bits `{bad}`: expected 8, 10, 12 or 16")), "--dpx-bits {bad}");
+        assert!(!out.exists(), "--dpx-bits {bad} wrote a file");
+    }
 }
 
 /// `--tga-bits` picks a TGA's bits per pixel (byte 16 of its header); anything but 24 or 32 is

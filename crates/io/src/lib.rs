@@ -18,7 +18,8 @@
 //! * Paint.NET PDN3 documents open as editable bitmap layers (import only).
 //! * OpenRaster (`.ora`) documents open and save with their layers, groups, blend modes,
 //!   opacity and visibility; see `ora`.
-//! * Krita (`.kra`) documents open as their merged composite; source layers are not imported.
+//! * Krita (`.kra`, `.krz`) documents open with their paint layers, groups and transparency
+//!   masks (import only); see `kra`.
 //! * Affinity documents (`.af`, `.afdesign`, `.afphoto`, `.afpub`) open natively
 //!   with no source save path, what isn't imported listed in the warnings; a file
 //!   whose native data can't be read opens as its embedded preview; see `affinity`.
@@ -36,17 +37,21 @@ mod adjust_map;
 pub mod affinity;
 pub mod annotations_map;
 pub mod blocks;
+pub mod camera_raw_xmp;
 mod channel_map;
 pub mod comps_map;
 pub mod effects_map;
 pub mod exr_parts;
 mod flat;
 mod gradient_bake;
+pub use gradient_bake::{Method as GradientMethod, bake as bake_gradient};
 mod kra;
 pub mod linked;
 mod multichannel_map;
 mod ora;
+pub use ora::losses as ora_losses;
 pub mod pattern_map;
+pub mod pdf;
 mod pdn;
 pub mod pixels;
 mod psd_export;
@@ -61,6 +66,7 @@ pub mod text_styles_map;
 pub mod tiff_layers;
 pub mod vector_map;
 
+pub use photocraft_codecs::DpxBits;
 use photocraft_codecs::{CodecError, EncodeOptions};
 use photocraft_doc::Document;
 use photocraft_psd::{PsdError, PsdFile};
@@ -79,12 +85,12 @@ pub enum IoError {
     /// Paint.NET document decode failure.
     #[error("PDN: {0}")]
     Pdn(String),
+    /// Krita document read failure.
+    #[error("Krita: {0}")]
+    Kra(String),
     /// OpenRaster read failure.
     #[error("OpenRaster: {0}")]
     Ora(String),
-    /// Krita document decode failure.
-    #[error("Krita: {0}")]
-    Kra(String),
     /// PSD parse/write failure.
     #[error("PSD: {0}")]
     Psd(#[from] PsdError),
@@ -268,13 +274,14 @@ fn import_stages(name: &str, bytes: &[u8], ctl: &photocraft_raster::Interrupt, m
         return Ok(ImportResult { document: photocraft_format::load_from_bytes(bytes)?, warnings: Vec::new(), source_read_only: false, preview_only: false });
     }
     if is_psd(bytes) {
-        let file = PsdFile::from_bytes(bytes)?;
+        // A merged image the import reads is decoded with the parse: a ZIP one is inflated once.
+        let (file, merged) = PsdFile::from_bytes_and_merged(bytes, |f| psd_import::check_group_depth(f).is_ok() && psd_import::merged_needed(f))?;
         // Nesting past the document model's cap could never be saved; reject the file with the
         // actionable limit.
         psd_import::check_group_depth(&file)?;
         ctl.check().map_err(|_| IoError::Cancelled)?;
         ctl.progress(0.05);
-        let (mut document, warnings) = psd_import::psd_to_document_with(&file, ctl).ok_or(IoError::Cancelled)?;
+        let (mut document, warnings) = psd_import::psd_to_document_decoded(&file, ctl, merged).ok_or(IoError::Cancelled)?;
         document.name = name.to_string();
         text_import::prepare(&mut document);
         return Ok(ImportResult { document, warnings, source_read_only: false, preview_only: false });
@@ -285,9 +292,9 @@ fn import_stages(name: &str, bytes: &[u8], ctl: &photocraft_raster::Interrupt, m
     if ora::is_ora(bytes) || has_extension(name, "ora") {
         return ora::import(name, bytes, ctl);
     }
-    // Krita files are ZIP containers carrying a merged PNG. A recognized raster signature
-    // still wins over a misleading .kra suffix (as with SVG imports).
-    if kra::is_kra(bytes) || (has_extension(name, "kra") && photocraft_codecs::detect(bytes).is_none()) {
+    // Krita files are ZIP containers. A recognized raster signature still wins over a
+    // misleading .kra suffix (as with SVG imports).
+    if kra::is_kra(bytes) || (kra::EXTENSIONS.iter().any(|e| has_extension(name, e)) && photocraft_codecs::detect(bytes).is_none()) {
         return kra::import(name, bytes, ctl);
     }
     if has_extension(name, "pdn") || bytes.starts_with(b"PDN3") {
@@ -379,8 +386,14 @@ fn export_stages(doc: &Document, name_or_ext: &str, opts: &ExportOptions, ctl: &
     if affinity::EXTENSIONS.contains(&ext.as_str()) {
         return Err(IoError::Unsupported("Affinity export is not implemented; save a new PSD, PNG or .pcraft copy".into()));
     }
+    if kra::EXTENSIONS.contains(&ext.as_str()) {
+        return Err(IoError::Unsupported("Krita files are import-only; save as .ora to open the layers in Krita, or .pcraft to keep everything".into()));
+    }
     if ext == "ora" {
         return ora::export(doc);
+    }
+    if ext == "pdf" {
+        return pdf::export(doc);
     }
     if ext == photocraft_format::EXTENSION {
         let doc = named_for_file(doc, name_or_ext);
@@ -500,7 +513,10 @@ pub fn merged_composite(file: &PsdFile) -> Result<Vec<[f32; 4]>, IoError> {
     }
     let l = doc.layers.first().ok_or_else(|| IoError::Unsupported("no merged image".into()))?;
     let s = l.surface().ok_or_else(|| IoError::Unsupported("no merged image".into()))?;
-    Ok(photocraft_compose::surface_to_buffer(s, doc.bounds()).px)
+    // CMYK reads through the file's own profile, as the compositor reads its layers, so a tagged
+    // file's merged image and its composite are compared in the same colours.
+    let cmyk = photocraft_compose::cmyk_space(&doc);
+    Ok(photocraft_color::convert::with_cmyk_space(cmyk.as_ref(), || photocraft_compose::surface_to_buffer(s, doc.bounds()).px))
 }
 
 #[cfg(test)]
