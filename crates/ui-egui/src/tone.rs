@@ -2,7 +2,8 @@
 //!
 //! The adjustment editors themselves live in `adjust_editors`; this module computes and caches
 //! the histograms they draw behind their controls, in the channels of the adjustment's space
-//! (RGB, CMYK ink brightness, Lab), and draws them.
+//! (RGB, CMYK ink brightness, Lab), and draws them. Photoshop keeps the two audiences apart
+//! (see [`HistScope`]): the panel follows the selection, the editors' dialogs do not.
 
 use std::sync::Arc;
 
@@ -42,7 +43,20 @@ pub enum HistSource {
     Layer(LayerId),
 }
 
-fn tag(source: HistSource, space: ToneSpace, sel: u64) -> u64 {
+/// Whether a histogram counts the whole input or only the selected pixels. Photoshop's Histogram
+/// panel follows the selection ("to display histogram data for a portion of the image, first
+/// select that portion" — Adobe), while its Levels/Curves/Threshold dialogs show the
+/// adjustment's whole input: with a selection active the histogram behind the curve is of the
+/// entire image, not just the selected pixels.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HistScope {
+    /// The whole input, unmasked by any selection (the tone editors' histograms).
+    WholeInput,
+    /// Only the selected pixels, partial coverage counting from ½ up (the Histogram panel).
+    Selection,
+}
+
+fn tag(source: HistSource, space: ToneSpace, scope: HistScope, sel: u64) -> u64 {
     let (k, id) = match source {
         HistSource::BelowLayer(l) => (1u64, l.0),
         HistSource::Layer(l) => (2, l.0),
@@ -52,18 +66,33 @@ fn tag(source: HistSource, space: ToneSpace, sel: u64) -> u64 {
         ToneSpace::Cmyk => 1,
         ToneSpace::Lab => 2,
     };
-    id.wrapping_mul(0x9e37_79b9_7f4a_7c15) ^ (k << 60) ^ (s << 56) ^ sel.rotate_left(31)
+    let m = match scope {
+        HistScope::WholeInput => 0u64,
+        HistScope::Selection => 1,
+    };
+    id.wrapping_mul(0x9e37_79b9_7f4a_7c15) ^ (k << 60) ^ (s << 56) ^ (m << 52) ^ sel.rotate_left(31)
 }
 
-/// Cache identity of the current selection: which tiles the mask is built from. A clone shares
-/// its tiles, so an untouched selection keeps its key across edits (the #125 fast path stays);
-/// any command that writes a new mask replaces at least the tiles it touched, which changes the
-/// key. 0 when nothing is selected.
+/// Cache identity of the current selection: the mask's default (what tile-less pixels read as),
+/// its bounds, and which tiles it is built from. A clone shares its tiles, so an untouched
+/// selection keeps its key across edits (the #125 fast path stays); any command that writes a
+/// new mask replaces at least the tiles it touched, or the default (e.g. `select.inverse`'s
+/// `prune` leaves a tile-less mask), which changes the key. 0 when nothing is selected.
+///
+/// Tile identities are pointers, and an allocator can hand a freed tile's address to a new tile
+/// (ABA), so two different selections can in principle hash alike. A stale hit needs that
+/// collision inside the single view-only revision the caches promote across, and selection
+/// commands build the new mask before dropping the old one (no free-then-allocate), so the
+/// addresses cannot meet within one command; the default and bounds in the key keep the
+/// pointer-less masks (all vs. none) apart regardless.
 fn selection_key(doc: &Document) -> u64 {
     use std::hash::{Hash, Hasher};
     let Some(m) = doc.selection.as_ref() else { return 0 };
     let mut h = std::collections::hash_map::DefaultHasher::new();
     1u8.hash(&mut h);
+    m.default_bytes().hash(&mut h);
+    let b = m.tile_bounds();
+    (b.x0, b.y0, b.x1, b.y1).hash(&mut h);
     for (c, t) in m.tiles() {
         (c.tx, c.ty).hash(&mut h);
         std::ptr::hash(Arc::as_ptr(t), &mut h);
@@ -82,10 +111,11 @@ fn isolate(layers: &mut [Layer], id: LayerId) -> bool {
     found
 }
 
-/// Histograms of `doc` as seen by `source`, in the channels of `space`. With an active
-/// selection only the selected pixels are counted (Photoshop: the panel follows the selection);
-/// partial mask coverage counts from ½ up.
-pub fn compute_histograms(doc: &Document, source: HistSource, space: ToneSpace) -> Histograms {
+/// Histograms of `doc` as seen by `source`, in the channels of `space`. [`HistScope::Selection`]
+/// counts only the selected pixels (the Histogram panel; partial coverage counts from ½ up);
+/// [`HistScope::WholeInput`] ignores the selection, like Photoshop's Levels/Curves/Threshold
+/// dialogs, which show the adjustment's whole input.
+pub fn compute_histograms(doc: &Document, source: HistSource, space: ToneSpace, scope: HistScope) -> Histograms {
     let mut d = doc.clone();
     match source {
         HistSource::BelowLayer(hide) => {
@@ -99,7 +129,10 @@ pub fn compute_histograms(doc: &Document, source: HistSource, space: ToneSpace) 
     }
     let img = photocraft_compose::thumbnail(&d, 384);
     let b = d.bounds();
-    let sel = d.selection.as_ref();
+    let sel = match scope {
+        HistScope::WholeInput => None,
+        HistScope::Selection => d.selection.as_ref(),
+    };
     // Document coordinate of each thumbnail pixel's centre (the reduction starts at the canvas
     // origin, so scaling alone maps between them).
     let (fx, fy) = (b.width().max(1) as f32 / img.width.max(1) as f32, b.height().max(1) as f32 / img.height.max(1) as f32);
@@ -146,15 +179,18 @@ pub fn compute_histograms(doc: &Document, source: HistSource, space: ToneSpace) 
             }
         }
     }
-    Histograms { tag: tag(source, space, selection_key(doc)), ch: h }
+    let sel_tag = if scope == HistScope::Selection { selection_key(doc) } else { 0 };
+    Histograms { tag: tag(source, space, scope, sel_tag), ch: h }
 }
 
 /// Cached histograms for a tone editor; recomputed only when something other than the editor's
-/// own commits changed the document (see [`keep_after_commit`]) or the selection moved.
+/// own commits changed the document (see [`keep_after_commit`]). The editors' histograms show the
+/// whole input ([`HistScope::WholeInput`]), so a selection change — view-only, no pixels moved —
+/// keeps the cache (#125); only the panel's masked histogram tracks the selection.
 pub fn histograms(app: &mut PhotocraftApp, source: HistSource, space: ToneSpace) -> Arc<Histograms> {
     let Some(st) = app.session.active() else { return Arc::new(Histograms::default()) };
     let (doc_id, rev) = (st.doc.id, st.revision);
-    let want = tag(source, space, selection_key(&st.doc));
+    let want = tag(source, space, HistScope::WholeInput, 0);
     let layer = match source {
         HistSource::BelowLayer(l) | HistSource::Layer(l) => l,
     };
@@ -169,7 +205,7 @@ pub fn histograms(app: &mut PhotocraftApp, source: HistSource, space: ToneSpace)
         return h.clone();
     }
     let t0 = crate::gpu_canvas::now_ms();
-    let h = Arc::new(compute_histograms(&st.doc, source, space));
+    let h = Arc::new(compute_histograms(&st.doc, source, space, HistScope::WholeInput));
     app.perf.span("histogram", crate::gpu_canvas::now_ms() - t0);
     app.tone_hist = Some((doc_id, layer, rev, h.clone()));
     h
@@ -302,7 +338,7 @@ pub fn histogram_panel(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
         return;
     };
     let (doc_id, rev) = (st.doc.id, st.revision);
-    let want = tag(HistSource::BelowLayer(LayerId(u64::MAX)), ToneSpace::Rgb, selection_key(&st.doc));
+    let want = tag(HistSource::BelowLayer(LayerId(u64::MAX)), ToneSpace::Rgb, HistScope::Selection, selection_key(&st.doc));
     let now = crate::gpu_canvas::now_ms();
     // A selection change moves no pixels but does change what the histogram counts, so only a
     // cache computed for the very same selection may follow a view-only revision (#125).
@@ -334,7 +370,7 @@ pub fn histogram_panel(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                     .name("histogram".into())
                     .spawn(move || {
                         let t0 = crate::gpu_canvas::now_ms();
-                        let h = Arc::new(compute_histograms(&doc, HistSource::BelowLayer(LayerId(u64::MAX)), ToneSpace::Rgb));
+                        let h = Arc::new(compute_histograms(&doc, HistSource::BelowLayer(LayerId(u64::MAX)), ToneSpace::Rgb, HistScope::Selection));
                         let pixels = histogram_pixels(&doc);
                         let _ = tx.send((doc.id, crate::gpu_canvas::now_ms() - t0, h, pixels));
                         ctx.request_repaint();
@@ -345,7 +381,7 @@ pub fn histogram_panel(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
             let spawned = false;
             if !spawned {
                 let t0 = crate::gpu_canvas::now_ms();
-                let h = Arc::new(compute_histograms(&st.doc, HistSource::BelowLayer(LayerId(u64::MAX)), ToneSpace::Rgb));
+                let h = Arc::new(compute_histograms(&st.doc, HistSource::BelowLayer(LayerId(u64::MAX)), ToneSpace::Rgb, HistScope::Selection));
                 let pixels = histogram_pixels(&st.doc);
                 let _ = tx.send((doc_id, crate::gpu_canvas::now_ms() - t0, h, pixels));
             }
@@ -424,7 +460,7 @@ mod tests {
         s.execute("file.new", json!({"width": 64, "height": 64})).unwrap(); // white
         s.execute("layer.newAdjustmentLayer.invert", json!({})).unwrap();
         let st = s.active().unwrap();
-        let h = compute_histograms(&st.doc, HistSource::BelowLayer(st.active_layer.unwrap()), ToneSpace::Rgb);
+        let h = compute_histograms(&st.doc, HistSource::BelowLayer(st.active_layer.unwrap()), ToneSpace::Rgb, HistScope::WholeInput);
         assert!(h[0][255] > 0 && h[0][0] == 0, "sees the white image, not the inverted result");
         assert_eq!(h[9], [0; 256], "out-of-range channels are empty, not a panic");
     }
@@ -438,14 +474,14 @@ mod tests {
         s.execute("select.rect", json!({"x": 0, "y": 0, "width": 32, "height": 32})).unwrap();
         s.execute("edit.fill", json!({"color": "#000000"})).unwrap();
         let st = s.active().unwrap();
-        let h = compute_histograms(&st.doc, HistSource::Layer(bg), ToneSpace::Rgb);
+        let h = compute_histograms(&st.doc, HistSource::Layer(bg), ToneSpace::Rgb, HistScope::WholeInput);
         assert!(h[0][255] > 0 && h[0][0] == 0, "the black layer above is hidden");
-        assert_eq!(compute_histograms(&st.doc, HistSource::Layer(bg), ToneSpace::Cmyk).ch.len(), 5);
-        assert_eq!(compute_histograms(&st.doc, HistSource::Layer(bg), ToneSpace::Lab).ch.len(), 3);
+        assert_eq!(compute_histograms(&st.doc, HistSource::Layer(bg), ToneSpace::Cmyk, HistScope::WholeInput).ch.len(), 5);
+        assert_eq!(compute_histograms(&st.doc, HistSource::Layer(bg), ToneSpace::Lab, HistScope::WholeInput).ch.len(), 3);
     }
 
     #[test]
-    fn a_selection_restricts_the_histogram_and_the_pixel_count() {
+    fn a_selection_restricts_the_panel_histogram_but_not_the_editors() {
         let mut s = photocraft_engine::Session::new();
         s.execute("file.new", json!({"width": 32, "height": 32})).unwrap(); // white background
         s.execute("layer.new.layer", json!({})).unwrap();
@@ -453,18 +489,20 @@ mod tests {
         s.execute("edit.fill", json!({"color": "#000000"})).unwrap(); // left half black
         s.execute("select.deselect", json!({})).unwrap();
         let st = s.active().unwrap();
-        let whole = compute_histograms(&st.doc, HistSource::BelowLayer(LayerId(u64::MAX)), ToneSpace::Rgb);
+        let whole = compute_histograms(&st.doc, HistSource::BelowLayer(LayerId(u64::MAX)), ToneSpace::Rgb, HistScope::WholeInput);
         assert!(whole[0][0] > 0 && whole[0][255] > 0, "black and white both count");
         assert_eq!(histogram_pixels(&st.doc), 32 * 32, "no selection: the whole canvas");
         s.execute("select.rect", json!({"x": 0, "y": 0, "width": 16, "height": 32})).unwrap();
         let st = s.active().unwrap();
-        let left = compute_histograms(&st.doc, HistSource::BelowLayer(LayerId(u64::MAX)), ToneSpace::Rgb);
-        assert!(left[0][0] > 0 && left[0][255] == 0, "only the selected black half counts");
+        let left = compute_histograms(&st.doc, HistSource::BelowLayer(LayerId(u64::MAX)), ToneSpace::Rgb, HistScope::Selection);
+        assert!(left[0][0] > 0 && left[0][255] == 0, "the panel counts only the selected black half");
+        let editor = compute_histograms(&st.doc, HistSource::BelowLayer(LayerId(u64::MAX)), ToneSpace::Rgb, HistScope::WholeInput);
+        assert!(editor[0][255] > 0, "the editors show the adjustment's whole input (Photoshop)");
         assert_eq!(histogram_pixels(&st.doc), 16 * 32, "Pixels counts the selection");
         s.execute("select.deselect", json!({})).unwrap();
         s.execute("select.rect", json!({"x": 12, "y": 0, "width": 8, "height": 32, "feather": 2})).unwrap();
         let st = s.active().unwrap();
-        let soft = compute_histograms(&st.doc, HistSource::BelowLayer(LayerId(u64::MAX)), ToneSpace::Rgb);
+        let soft = compute_histograms(&st.doc, HistSource::BelowLayer(LayerId(u64::MAX)), ToneSpace::Rgb, HistScope::Selection);
         assert!(soft[0][0] > 0 && soft[0][255] > 0, "a feathered mask keeps its ≥ ½ core on both sides");
     }
 
@@ -480,6 +518,23 @@ mod tests {
         assert_eq!(selection_key(&a), k, "a clone keeps the key");
         s.execute("select.rect", json!({"x": 8, "y": 8, "width": 8, "height": 8})).unwrap();
         assert_ne!(selection_key(&s.active().unwrap().doc), k, "a new mask is a new key");
+    }
+
+    /// Two masks with no tiles at all differ only in their default (what every pixel reads as):
+    /// the key must tell an all-selected mask from a none-selected one, or the panel's histogram
+    /// goes stale between them.
+    #[test]
+    fn tile_less_selection_masks_differ_by_their_default() {
+        let mut s = photocraft_engine::Session::new();
+        s.execute("file.new", json!({"width": 32, "height": 32})).unwrap();
+        let mut doc = s.active().unwrap().doc.as_ref().clone();
+        doc.selection = Some(photocraft_raster::Surface::with_default(photocraft_color::PixelFormat::GRAY8, &[1.0]));
+        let all = selection_key(&doc);
+        doc.selection = Some(photocraft_raster::Surface::with_default(photocraft_color::PixelFormat::GRAY8, &[0.0]));
+        let none = selection_key(&doc);
+        assert_ne!(all, 0);
+        assert_ne!(none, 0, "a mask selecting nothing is still a selection, not `None`");
+        assert_ne!(all, none, "tile-less masks differ by their default");
     }
 }
 
@@ -605,22 +660,19 @@ mod hist_async_tests {
         assert_eq!(after.3, 200);
     }
 
-    /// The tone editors' synchronous histogram cache treats a selection change as an
-    /// invalidation, while an unchanged state (even across view-only revisions) stays cached.
+    /// The tone editors' histogram shows the adjustment's whole input (Photoshop's dialogs are
+    /// not selection-masked), so a selection change — view-only, no pixels moved — keeps the
+    /// cached histogram (#125). The panel's masked histogram is covered above.
     #[test]
-    fn the_tone_histogram_cache_invalidates_when_the_selection_changes() {
+    fn the_tone_histogram_cache_ignores_selection_changes() {
         let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
         app.run("file.new", json!({"width": 64, "height": 64})).unwrap();
         let src = HistSource::BelowLayer(LayerId(u64::MAX));
         let first = histograms(&mut app, src, ToneSpace::Rgb);
         assert!(Arc::ptr_eq(&first, &histograms(&mut app, src, ToneSpace::Rgb)), "unchanged state reuses the cache");
         app.run("select.rect", json!({"x": 0, "y": 0, "width": 8, "height": 8})).unwrap();
-        let selected = histograms(&mut app, src, ToneSpace::Rgb);
-        assert!(!Arc::ptr_eq(&first, &selected), "a selection change is not view-only for the histogram");
-        assert!(Arc::ptr_eq(&selected, &histograms(&mut app, src, ToneSpace::Rgb)), "the same selection keeps hitting");
+        assert!(Arc::ptr_eq(&first, &histograms(&mut app, src, ToneSpace::Rgb)), "a selection change is view-only for the whole-input histogram");
         app.run("select.deselect", json!({})).unwrap();
-        let cleared = histograms(&mut app, src, ToneSpace::Rgb);
-        assert!(!Arc::ptr_eq(&selected, &cleared), "deselecting recomputes");
-        assert!(Arc::ptr_eq(&cleared, &histograms(&mut app, src, ToneSpace::Rgb)));
+        assert!(Arc::ptr_eq(&first, &histograms(&mut app, src, ToneSpace::Rgb)), "deselecting keeps it too");
     }
 }
