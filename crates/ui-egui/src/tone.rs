@@ -536,6 +536,30 @@ mod tests {
         assert_ne!(none, 0, "a mask selecting nothing is still a selection, not `None`");
         assert_ne!(all, none, "tile-less masks differ by their default");
     }
+
+    /// The key's tile identities are pointers, so two masks may only hash alike if a write kept a
+    /// tile's pointer while changing its bytes. Commands edit a staged clone whose tiles are
+    /// shared until written, and a COW write allocates a new tile (`raster` pins that). This test
+    /// pins the consequence the cache relies on: masks differing only in tile *content* — same
+    /// default, same bounds, same tile coordinates — get different keys.
+    #[test]
+    fn selection_key_distinguishes_content_only_changes() {
+        let mut s = photocraft_engine::Session::new();
+        s.execute("file.new", json!({"width": 64, "height": 64})).unwrap();
+        let mut doc = s.active().unwrap().doc.as_ref().clone();
+        let mut mask = photocraft_raster::Surface::with_default(photocraft_color::PixelFormat::GRAY8, &[0.0]);
+        mask.try_write_region(photocraft_geom::Rect::new(0, 0, 64, 64), &vec![1.0; 64 * 64]).unwrap();
+        doc.selection = Some(mask.clone());
+        let before = selection_key(&doc);
+        // A staged edit writes through the shared tiles: same default, same bounds, same tile
+        // coordinates, different content in the first quarter only.
+        let mut staged = doc.clone();
+        staged.selection.as_mut().unwrap().try_write_region(photocraft_geom::Rect::new(0, 0, 16, 64), &vec![0.5; 16 * 64]).unwrap();
+        let after = selection_key(&staged);
+        assert_ne!(before, 0);
+        assert_ne!(after, 0);
+        assert_ne!(before, after, "a content-only mask change must change the key");
+    }
 }
 
 #[cfg(test)]
