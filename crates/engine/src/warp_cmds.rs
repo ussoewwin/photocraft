@@ -335,6 +335,7 @@ fn apply_many(s: &mut Session, p: &Value, cmd: &str, ids: Vec<LayerId>) -> Resul
         for &id in &ids {
             let is_group = doc.layer(id).is_some_and(Layer::is_group);
             let group = crate::transform_cmds::group_locks(doc, id);
+            crate::extra_cmds::background_to_layer(doc, id);
             let l = doc.layer_mut(id).ok_or(EngineError::NoLayer(id))?;
             warp_layer(if is_group { None } else { sel.as_ref() }, group, l, &w, rect, interp, frames.as_ref())?;
         }
@@ -402,6 +403,9 @@ fn apply(s: &mut Session, p: &Value, cmd: &str) -> Result<Value> {
         let many = crate::transform_cmds::multi_targets(&st.doc, &ids);
         if many.len() > 1 {
             return apply_many(s, p, cmd, many);
+        }
+        if many.is_empty() {
+            return Err(bad(cmd, "nothing to warp"));
         }
         let mut p = p.clone();
         if let Some(m) = p.as_object_mut() {
