@@ -1557,6 +1557,10 @@ pub fn menu_scroll<R>(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> R
     let offset = ui.data(|d| d.get_temp::<f32>(id.with("offset"))).unwrap_or(0.0);
     let arrows = if overflow { 2.0 * MENU_ARROW_HEIGHT } else { 0.0 };
     let room = (room - arrows).max(MENU_MIN_HEIGHT);
+    // The arrows sit flush against the rows, so no item spacing is added around them that `room`
+    // doesn't count; the rows keep the menu's own spacing.
+    let spacing = ui.spacing().item_spacing.y;
+    ui.spacing_mut().item_spacing.y = 0.0;
     let mut step = 0.0;
     if overflow {
         step += menu_scroll_arrow(ui, true, offset > 0.5);
@@ -1568,12 +1572,16 @@ pub fn menu_scroll<R>(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> R
     if pending != 0.0 {
         area = area.vertical_scroll_offset((offset + pending).max(0.0));
     }
-    let out = area.show(ui, add_contents);
+    let out = area.show(ui, |ui| {
+        ui.spacing_mut().item_spacing.y = spacing;
+        add_contents(ui)
+    });
     let max = (out.content_size.y - out.inner_rect.height()).max(0.0);
     let offset = out.state.offset.y.clamp(0.0, max);
     if overflow {
         step += menu_scroll_arrow(ui, false, offset < max - 0.5);
     }
+    ui.spacing_mut().item_spacing.y = spacing;
     ui.data_mut(|d| {
         d.insert_temp(id, max > 0.5);
         d.insert_temp(id.with("offset"), offset);
