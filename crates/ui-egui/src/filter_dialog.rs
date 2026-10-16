@@ -435,6 +435,10 @@ pub fn reset_fields(app: &PhotocraftApp, fields: &mut Map<String, Value>) {
         }
     }
     apply_command_defaults(app, &command, fields);
+    // The schema has no default for the Blur Gallery's pins: start again from the opening one.
+    if crate::blur_pins::handles(&command) {
+        crate::blur_pins::reset(fields);
+    }
 }
 
 pub fn open(app: &mut PhotocraftApp, command: &str) -> Option<u64> {
@@ -454,6 +458,9 @@ pub fn open(app: &mut PhotocraftApp, command: &str) -> Option<u64> {
     }
     restore_remembered(app, command, spec.params, &mut fields);
     apply_command_defaults(app, command, &mut fields);
+    if crate::blur_pins::handles(command) {
+        crate::blur_pins::init(app, &mut fields);
+    }
     if parse_spec(spec.params).iter().any(|p| p.kind == Kind::Document) {
         // The document picker lists every open document (params refer to them by index).
         let names: Vec<String> = app.session.documents().iter().map(|d| d.doc.name.clone()).collect();
@@ -545,6 +552,14 @@ pub(crate) fn label(key: &str) -> String {
 }
 
 pub(crate) fn source_label(key: &str) -> String {
+    // Photoshop's name for the localized colour matching (Replace Color, Color Range).
+    if key == "localized" {
+        return "Localized Color Clusters".into();
+    }
+    // A name that already reads as text ("iPhone 14 Pro Max", "Web 1920") is not camelCase.
+    if key.contains(' ') {
+        return key.to_string();
+    }
     // camelCase → "Camel Case"
     let mut s = String::new();
     for (i, ch) in key.chars().enumerate() {
@@ -616,6 +631,8 @@ pub(crate) fn color_eyedropper_sample(app: &mut PhotocraftApp, x: f64, y: f64) -
         && let Some(d) = app.ui.dialog_mut(id)
     {
         d.fields.insert("color".into(), json!(crate::color_picker_ui::hex(rgb)));
+        // Where it was picked: Localized Color Clusters match the colour near this point (#4457).
+        d.fields.insert("points".into(), json!([[x.floor(), y.floor()]]));
     }
     true
 }
@@ -645,6 +662,8 @@ pub fn body(ui: &mut egui::Ui, f: &mut Map<String, Value>) {
                     f.insert(p.key, json!(count));
                     continue;
                 }
+                // Replace Color's Range only applies with Localized Color Clusters on, as in Photoshop.
+                let enabled = !(cmd == REPLACE_COLOR && p.key == "range") || f.get("localized").and_then(Value::as_bool) == Some(true);
                 let unit = if is_pixel_param_of(&cmd, &p.key) {
                     "px"
                 } else if p.key == "angle" {
@@ -654,28 +673,33 @@ pub fn body(ui: &mut egui::Ui, f: &mut Map<String, Value>) {
                 } else {
                     ""
                 };
-                if uses_angle_dial(&cmd, &p.key) {
-                    crate::widgets::angle_dial_row(ui, &label(&p.key), &mut v, min..=max);
-                    ui.add_space(4.0);
-                } else if uses_logarithmic_slider(min, max) {
-                    // Keep one numeric field for direct entry and one log-scaled slider for
-                    // wide ranges. slider_row would add a second, linear slider (#146).
-                    ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new(label(&p.key)).color(t.text_dim));
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            crate::widgets::value_field(ui, &mut v, min..=max, unit, 74.0);
-                        });
-                    });
-                    let mut lv = v.clamp(min, max).ln();
-                    if crate::widgets::slider(ui, &mut lv, min.ln()..=max.ln(), None).changed() {
-                        v = lv.exp();
+                ui.scope(|ui| {
+                    if !enabled {
+                        ui.disable();
                     }
-                    ui.add_space(4.0);
-                } else {
-                    // A double-click on the slider puts it back to the filter's default.
-                    let gestures = crate::widgets::RowGestures { reset: Some(default), wheel_step: None };
-                    crate::widgets::slider_row_with(ui, &label(&p.key), &mut v, min..=max, unit, None, gestures);
-                }
+                    if uses_angle_dial(&cmd, &p.key) {
+                        crate::widgets::angle_dial_row(ui, &label(&p.key), &mut v, min..=max);
+                        ui.add_space(4.0);
+                    } else if uses_logarithmic_slider(min, max) {
+                        // Keep one numeric field for direct entry and one log-scaled slider for
+                        // wide ranges. slider_row would add a second, linear slider (#146).
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new(label(&p.key)).color(t.text_dim));
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                crate::widgets::value_field(ui, &mut v, min..=max, unit, 74.0);
+                            });
+                        });
+                        let mut lv = v.clamp(min, max).ln();
+                        if crate::widgets::slider(ui, &mut lv, min.ln()..=max.ln(), None).changed() {
+                            v = lv.exp();
+                        }
+                        ui.add_space(4.0);
+                    } else {
+                        // A double-click on the slider puts it back to the filter's default.
+                        let gestures = crate::widgets::RowGestures { reset: Some(default), wheel_step: None };
+                        crate::widgets::slider_row_with(ui, &label(&p.key), &mut v, min..=max, unit, None, gestures);
+                    }
+                });
                 // Small ranges (0–1 thresholds and centres) keep the two decimals their field shows.
                 let scale = if max - min <= 10.0 { 100.0 } else { 10.0 };
                 f.insert(p.key, json!((v * scale).round() / scale));
@@ -798,6 +822,11 @@ pub fn body(ui: &mut egui::Ui, f: &mut Map<String, Value>) {
                 ui.horizontal(|ui| {
                     ui.label(egui::RichText::new(label(&p.key)).color(t.text_dim));
                     crate::widgets::value_field(ui, &mut v, -30000.0..=30000.0, "", 80.0);
+                    // A seed gets a fresh random value in one click (#5710): Clouds, Add Noise,
+                    // Fibers… then render a new pattern, as each run of Photoshop's does.
+                    if p.key == "seed" && ui.button(tl!("Random")).clicked() {
+                        v = random_seed(ui.input(|i| i.time).to_bits(), v as i64) as f32;
+                    }
                 });
                 f.insert(p.key, json!(v.round() as i64));
             }
@@ -813,6 +842,15 @@ pub fn body(ui: &mut egui::Ui, f: &mut Map<String, Value>) {
         crate::widgets::checkbox(ui, &mut preview, tl!("Preview"));
         f.insert("__preview".into(), json!(preview));
     }
+}
+
+/// A new seed for a dialog's Random button: 0..=30000 (what the field takes), never `current`.
+/// `entropy` varies per click (the input time); the process's random hasher keys mix it.
+fn random_seed(entropy: u64, current: i64) -> i64 {
+    use std::hash::BuildHasher;
+    let h = std::collections::hash_map::RandomState::new().hash_one(entropy);
+    let seed = (h % 30_001) as i64;
+    if seed == current { (seed + 1) % 30_001 } else { seed }
 }
 
 /// User-facing params (strip the dialog's private `__` keys).
@@ -893,6 +931,10 @@ pub(crate) fn preview_document_for_target(
             }
         }
     }
+    // Blur Gallery pins carry their blur in document pixels too.
+    if command.starts_with("filter.blurGallery.") {
+        crate::blur_pins::scale_for_proxy(&mut p, run_k);
+    }
     s.execute(command, p).ok()?;
     s.active().map(|d| crate::proxy::proxy_document(&d.doc, reduce_k))
 }
@@ -934,7 +976,13 @@ pub struct FilterPreview {
     pub committing: bool,
 }
 
-/// Match the full request before accepting a worker result, including a reopened dialog.
+/// Identity of one filter dialog's live preview.
+///
+/// `PartialEq` is the whole request: it says a worker result is exactly what the dialog is asking
+/// for now. [`Self::same_target`] is the looser question of whether a result belongs to this
+/// preview at all; two keys that agree on it name the same dialog, layer, document and preview
+/// resolution, and differ only in parameters — which is what a slider drag produces, since the
+/// worker computed for the value the pointer passed a moment ago.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FilterPreviewKey {
     pub doc: photocraft_doc::DocId,
@@ -947,9 +995,100 @@ pub struct FilterPreviewKey {
     pub k: u32,
 }
 
+impl FilterPreviewKey {
+    /// Everything except the parameters: same dialog, document, revision, layer, channel target,
+    /// command and proxy factor.
+    ///
+    /// The canvas shows whatever this preview was computed for, so a result whose parameters are
+    /// a few frames old still belongs on screen while a slider is moving; matching on everything
+    /// would mean no frame of a drag is ever shown, because every completion lands after the
+    /// parameters moved on. A reopened dialog has a new id, a different command or a different
+    /// document, and a committed document a new revision, so neither survives this test.
+    pub fn same_target(&self, other: &Self) -> bool {
+        self.doc == other.doc
+            && self.revision == other.revision
+            && self.dialog == other.dialog
+            && self.active == other.active
+            && self.target == other.target
+            && self.command == other.command
+            && self.k == other.k
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// #5710: the seed field's Random button always gives a different seed the field can hold.
+    #[test]
+    fn random_seeds_stay_in_range_and_change() {
+        let mut seen = std::collections::HashSet::new();
+        for i in 0..200u64 {
+            let s = random_seed(i, 7);
+            assert!((0..=30_000).contains(&s), "{s}");
+            assert_ne!(s, 7, "a click always changes the seed");
+            seen.insert(s);
+        }
+        assert!(seen.len() > 100, "seeds spread out: {}", seen.len());
+        assert_ne!(random_seed(1, 30_000), 30_000);
+        // Every seed dialog shows the button: Clouds, Add Noise and the like carry a `seed` param.
+        let specs = photocraft_engine::command_specs();
+        assert!(
+            specs
+                .iter()
+                .filter(|c| c.id.starts_with("filter."))
+                .any(|c| parse_spec(c.params).iter().any(|p| p.key == "seed" && matches!(p.kind, Kind::Int { .. })))
+        );
+    }
+
+    /// Preset names such as "iPhone 14 Pro Max" (the artboard dialog's choices) are text, not
+    /// camelCase keys: they used to read "I Phone 14  Pro  Max".
+    #[test]
+    fn display_names_are_not_split_like_camel_case_keys() {
+        assert_eq!(source_label("iPhone 14 Pro Max"), "iPhone 14 Pro Max");
+        assert_eq!(source_label("Web 1920"), "Web 1920");
+        assert_eq!(source_label("centerX"), "Center X");
+    }
+
+    fn key() -> FilterPreviewKey {
+        FilterPreviewKey {
+            doc: photocraft_doc::DocId(7),
+            revision: 11,
+            dialog: 3,
+            active: Some(photocraft_doc::LayerId(2)),
+            target: Default::default(),
+            command: "filter.blur.gaussianBlur".into(),
+            params: json!({"radius": 4.0}),
+            k: 1,
+        }
+    }
+
+    #[test]
+    fn same_target_ignores_parameters_but_nothing_else() {
+        // A drag only changes the parameters, and that must not hide the finished frame.
+        let base = key();
+        let mut moved = base.clone();
+        moved.params = json!({"radius": 40.0});
+        assert!(base.same_target(&moved));
+        assert!(moved.same_target(&base));
+
+        // Anything else names a different preview and must not be shown.
+        for break_it in [
+            |k: &mut FilterPreviewKey| k.doc = photocraft_doc::DocId(8),
+            |k: &mut FilterPreviewKey| k.revision = 12,
+            |k: &mut FilterPreviewKey| k.dialog = 4,
+            |k: &mut FilterPreviewKey| k.active = Some(photocraft_doc::LayerId(5)),
+            |k: &mut FilterPreviewKey| k.active = None,
+            |k: &mut FilterPreviewKey| k.target = photocraft_engine::channel_cmds::ChannelTarget::LayerMask,
+            |k: &mut FilterPreviewKey| k.command = "filter.blur.motionBlur".into(),
+            |k: &mut FilterPreviewKey| k.k = 2,
+        ] {
+            let mut other = base.clone();
+            break_it(&mut other);
+            assert!(!other.same_target(&base), "{other:?} must not pass as {base:?}");
+            assert!(!base.same_target(&other));
+        }
+    }
 
     #[test]
     fn only_direction_angles_get_the_dial() {
@@ -1328,6 +1467,12 @@ mod tests {
     fn italian_covers_generated_filter_options_and_gallery_names() {
         let missing = missing_generated_filter_labels(crate::i18n::lang_from_tag("it-IT").unwrap());
         assert!(missing.is_empty(), "missing Italian dynamic labels: {missing:#?}");
+    }
+
+    #[test]
+    fn spanish_covers_generated_filter_options_and_gallery_names() {
+        let missing = missing_generated_filter_labels(crate::i18n::lang_from_tag("es-ES").unwrap());
+        assert!(missing.is_empty(), "missing Spanish dynamic labels: {missing:#?}");
     }
 
     /// The Select menu's generated dialogs (Select and Mask, Modify ▸ …) show their
@@ -1787,6 +1932,42 @@ mod tests {
         assert_eq!(photocraft_compose::flatten(&shown).px, photocraft_compose::flatten(&full).px);
     }
 
+    /// #5766: Curves on a smart object adds a smart filter, which re-renders the source through
+    /// the object's placement. On a reduced proxy that placement stayed in full-size document
+    /// coordinates, so the preview showed the object `k` times too large until OK.
+    #[test]
+    fn smart_object_curves_preview_keeps_its_size_on_a_reduced_proxy() {
+        let mut s = photocraft_engine::Session::new();
+        s.execute("file.new", json!({"width": 64, "height": 64})).unwrap();
+        s.execute("layer.new.layer", json!({})).unwrap();
+        s.execute("select.rect", json!({"x": 16, "y": 16, "width": 16, "height": 16})).unwrap();
+        s.execute("edit.fill", json!({"contents": "black"})).unwrap();
+        s.execute("select.deselect", json!({})).unwrap();
+        s.execute("layer.smartObjects.convertToSmartObject", json!({})).unwrap();
+        let st = s.active().unwrap();
+        let (doc, layer) = ((*st.doc).clone(), st.active_layer.unwrap());
+        let alpha = |d: &Document, x: i32, y: i32| match &d.layer(layer).unwrap().content {
+            photocraft_doc::LayerContent::Smart(sm) => sm.cache.as_ref().unwrap().pixel(x, y).last().copied().unwrap(),
+            _ => panic!("a smart object"),
+        };
+        let k = 4;
+        let shown = preview_document(&doc, Some(layer), "image.adjustments.curves", &json!({"points": [[0, 20], [90, 150], [255, 230]]}), k).unwrap();
+        let photocraft_doc::LayerContent::Smart(sm) = &shown.layer(layer).unwrap().content else { panic!("a smart object") };
+        assert_eq!(sm.smart_filters.len(), 1, "the preview adds the Curves smart filter");
+        assert_eq!(shown.size, crate::proxy::proxy_document(&doc, k).size);
+        // The 16 px square at (16, 16) is a 4 px square at (4, 4) on the proxy, not 16 px at (16, 16).
+        // Its corners are partly covered by the smart object's resampling (220/255), its inside fully.
+        for (x, y) in [(5, 5), (5, 6), (6, 6)] {
+            assert!(alpha(&shown, x, y) > 0.99, "({x}, {y}) is inside the reduced square");
+        }
+        for (x, y) in [(4, 4), (7, 7)] {
+            assert!(alpha(&shown, x, y) > 0.5, "({x}, {y}) is a corner of the reduced square");
+        }
+        for (x, y) in [(2, 2), (9, 9), (12, 12), (15, 15)] {
+            assert!(alpha(&shown, x, y) < 0.01, "({x}, {y}) is outside the reduced square");
+        }
+    }
+
     /// #2063: a pixel-sized parameter divided by the proxy factor was clamped to the command's
     /// minimum (Pointillize's 5 px cells became 3 px proxy cells = 12 px), so the preview factor
     /// drops until every pixel-sized value fits its range.
@@ -2169,6 +2350,8 @@ mod tests {
         assert!(color_eyedropper_armed(&app));
         assert!(color_eyedropper_sample(&mut app, 4.0, 4.0));
         assert_eq!(app.ui.dialogs.last().unwrap().fields["color"], json!("#00ff00"));
+        // #4457: where it was picked, for Localized Color Clusters.
+        assert_eq!(app.ui.dialogs.last().unwrap().fields["points"], json!([[4.0, 4.0]]));
         // Off-image: the click is consumed, nothing changes and the eyedropper stays armed.
         assert!(color_eyedropper_sample(&mut app, -1.0, 4.0));
         assert_eq!(app.ui.dialogs.last().unwrap().fields["color"], json!("#00ff00"));
@@ -2198,5 +2381,38 @@ mod tests {
         h.get_by_label("Pick Color From Image").click();
         h.run_steps(2);
         assert!(!color_eyedropper_armed(h.state()));
+    }
+
+    /// #4457: Localized Color Clusters and its Range, as in Photoshop's dialog; the sampled point
+    /// and both settings reach the command.
+    #[test]
+    fn replace_color_localized_color_clusters() {
+        use egui_kittest::Harness;
+        use egui_kittest::kittest::Queryable;
+
+        // Left half red, right half red too: localized on the left point, the right half stays.
+        let mut s = photocraft_engine::Session::new();
+        s.execute("file.new", json!({"width": 40, "height": 10, "background": "#ff0000"})).unwrap();
+        let mut app = PhotocraftApp::new(s, crate::Services::default());
+        let mut h = Harness::builder().with_size(egui::vec2(900.0, 800.0)).build_ui_state(|ui, app| crate::dialogs::show(app, ui.ctx()), &mut app);
+        PhotocraftApp::setup_context(&h.ctx, crate::theme::ThemeKind::ALL[0]);
+        let id = open(h.state_mut(), REPLACE_COLOR).unwrap();
+        h.run_steps(3);
+        let _ = h.get_by_label("Localized Color Clusters");
+        h.state_mut().ui.dialog_mut(id).unwrap().fields.insert(COLOR_EYEDROPPER.into(), json!(true));
+        assert!(color_eyedropper_sample(h.state_mut(), 2.0, 5.0));
+        h.get_by_label("Localized Color Clusters").click();
+        h.run_steps(2);
+        let f = h.state().ui.dialogs.last().unwrap().fields.clone();
+        assert_eq!((f["localized"].clone(), f["points"].clone()), (json!(true), json!([[2.0, 5.0]])));
+        // The command with the dialog's fields, small range and a hue shift: only near (2, 5).
+        let mut p: Map<String, Value> = f.iter().filter(|(k, _)| !k.starts_with("__")).map(|(k, v)| (k.clone(), v.clone())).collect();
+        p.insert("range".into(), json!(10));
+        p.insert("hue".into(), json!(120));
+        h.state_mut().run(REPLACE_COLOR, Value::Object(p)).unwrap();
+        let doc = &h.state().session.active().unwrap().doc;
+        let px = |x: i32| doc.layers[0].surface().unwrap().read_region(photocraft_geom::Rect::new(x, 5, x + 1, 6));
+        assert!(px(2)[1] > 0.5, "near the point: shifted to green {:?}", px(2));
+        assert!(px(38)[0] > 0.9 && px(38)[1] < 0.1, "far away: still red {:?}", px(38));
     }
 }
