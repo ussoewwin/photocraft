@@ -124,6 +124,27 @@ fn video_frames_to_layers_takes_every_tiff_page() {
     assert_eq!(s.execute("file.import.videoFramesToLayers", json!({"path": single})).unwrap()["layers"], 1);
 }
 
+/// #6379 review: a TIFF whose page chain loops back (or is cut short, or runs past the directory
+/// limit) lists only its first pages. The import is refused, and the document is left as it was,
+/// instead of reporting part of the file as all of it.
+#[test]
+fn video_frames_to_layers_refuses_a_tiff_with_an_incomplete_page_list() {
+    let dir = tmpdir("tiff-loop");
+    let path = format!("{dir}/loop.tif");
+    write_tiff(&path, &[(2, 2, 51, 0), (2, 2, 204, 0)]);
+    // The last directory's next-IFD offset points back to the first directory.
+    let mut f = std::fs::read(&path).unwrap();
+    let first: [u8; 4] = f[4..8].try_into().unwrap();
+    let end = f.len();
+    f[end - 4..].copy_from_slice(&first);
+    std::fs::write(&path, f).unwrap();
+    let mut s = session();
+    let before = s.active().unwrap().doc.layers.len();
+    let err = s.execute("file.import.videoFramesToLayers", json!({"path": path})).unwrap_err().to_string();
+    assert!(err.contains("only the first 2 pages"), "{err}");
+    assert_eq!(s.active().unwrap().doc.layers.len(), before, "nothing imported");
+}
+
 #[test]
 fn new_video_layer_from_image_sequence() {
     let dir = tmpdir("seq");
