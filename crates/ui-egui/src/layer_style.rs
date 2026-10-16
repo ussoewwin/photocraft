@@ -1393,16 +1393,8 @@ fn blend_if_bar(ui: &mut egui::Ui, id: egui::Id, q: &mut [u8; 4]) -> bool {
     if resp.drag_started()
         && let Some(pos) = resp.interact_pointer_pos()
     {
-        let d_black = if q[0] == q[1] {
-            (pos.x - x_of(q[0])).abs()
-        } else {
-            (pos.x - (x_of(q[0]) - 2.5)).abs().min((pos.x - (x_of(q[1]) + 2.5)).abs())
-        };
-        let d_white = if q[2] == q[3] {
-            (pos.x - x_of(q[2])).abs()
-        } else {
-            (pos.x - (x_of(q[2]) - 2.5)).abs().min((pos.x - (x_of(q[3]) + 2.5)).abs())
-        };
+        let d_black = if q[0] == q[1] { (pos.x - x_of(q[0])).abs() } else { (pos.x - (x_of(q[0]) - 2.5)).abs().min((pos.x - (x_of(q[1]) + 2.5)).abs()) };
+        let d_white = if q[2] == q[3] { (pos.x - x_of(q[2])).abs() } else { (pos.x - (x_of(q[2]) - 2.5)).abs().min((pos.x - (x_of(q[3]) + 2.5)).abs()) };
         let mode = if d_black <= d_white {
             if q[0] == q[1] {
                 if alt {
@@ -1437,7 +1429,6 @@ fn blend_if_bar(ui: &mut egui::Ui, id: egui::Id, q: &mut [u8; 4]) -> bool {
         if n != *q {
             *q = n;
             changed = true;
-            ui.ctx().request_repaint_after(std::time::Duration::from_millis(35));
         }
     }
     let base = ramp.bottom() + 1.0;
