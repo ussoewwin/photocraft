@@ -53,6 +53,17 @@ fn picker_lists_english_first_then_names_alphabetically() {
 }
 
 #[test]
+fn finnish_tags_resolve() {
+    let fi = Lang::from_code("fi").expect("fi registered");
+    for tag in ["fi", "fi-FI", "fi_FI", "fi_FI.UTF-8"] {
+        assert_eq!(lang_from_tag(tag), Some(fi), "{tag}");
+    }
+    assert_eq!(fi.name(), "Suomi");
+    assert!(fi.complete_menus(), "Finnish translates every source key");
+    assert_eq!(Lang::from_pref("fi"), fi);
+}
+
+#[test]
 fn tags_map_to_languages() {
     western_and_legacy_tags_resolve();
     chinese_tags_resolve_by_region_and_script();
