@@ -207,3 +207,27 @@ fn bad_layers_params_are_errors_not_panics() {
     }
     assert!(s.active().unwrap().doc == before);
 }
+
+#[test]
+fn straighten_layer_rotates_every_selected_layer() {
+    // Photoshop's Straighten Layer turns all the selected layers, not just the active one; it
+    // goes through `edit.transform` without a layer, so it takes the selection like Free Transform.
+    let (mut s, paint, text) = two_layers();
+    let (p0, m0) = (bounds(&s, paint), text_matrix(&s, text));
+    s.execute("image.analysis.rulerTool", json!({"start": [10, 30], "end": [70, 25]})).unwrap();
+    let steps = s.active().unwrap().history.past_len();
+    let r = s.execute("image.analysis.straightenLayer", json!({})).unwrap();
+    assert_eq!(r["cropped"], false);
+    assert!(bounds(&s, paint) != p0, "the selected pixel layer turned too");
+    assert!(text_matrix(&s, text)[1].abs() > 0.05 && m0[1].abs() < 1e-9, "the active type layer turned");
+    assert_eq!(s.active().unwrap().history.past_len(), steps + 1, "one history step");
+    assert!(s.undo());
+    assert_eq!((bounds(&s, paint), text_matrix(&s, text)), (p0, m0), "and one Undo takes both back");
+
+    // With one layer selected, only that layer turns.
+    s.execute("layer.select", json!({"layer": paint.0})).unwrap();
+    s.execute("image.analysis.rulerTool", json!({"start": [10, 30], "end": [70, 25]})).unwrap();
+    s.execute("image.analysis.straightenLayer", json!({})).unwrap();
+    assert!(bounds(&s, paint) != p0);
+    assert_eq!(text_matrix(&s, text), m0, "an unselected layer stays put");
+}
