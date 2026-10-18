@@ -437,6 +437,33 @@ mod tests {
         assert!(!super::exceeds(&st.doc, &[id], super::LIVE_LIMIT), "an ordinary layer follows the pointer");
     }
 
+    /// A drag whose layers are past the limit shows no live copy (the outline and arrow stay), and
+    /// the release still moves the layer once (#6114, #6163).
+    #[test]
+    fn a_drag_over_the_limit_shows_no_live_copy_and_still_commits() {
+        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+        app.session.execute("file.new", json!({"width": 64, "height": 64})).unwrap();
+        app.sync_views();
+        app.session.execute("layer.new.layer", json!({})).unwrap();
+        app.session.execute("select.rect", json!({"x": 8, "y": 8, "width": 16, "height": 16})).unwrap();
+        app.session.execute("edit.fill", json!({"color": "#ff0000"})).unwrap();
+        app.session.execute("select.deselect", json!({})).unwrap();
+        let id = app.session.active().unwrap().active_layer.unwrap();
+        app.ui.tool = Tool::Move;
+        app.ui.extras.snap = false;
+        app.ui.view.show.smart_guides = false;
+        let m = egui::Modifiers::NONE;
+        crate::canvas::tool_event(&mut app, ToolEvent::Down { x: 16.0, y: 16.0, pressure: 1.0 }, m);
+        crate::canvas::tool_event(&mut app, ToolEvent::Move { x: 36.0, y: 16.0, pressure: 1.0 }, m);
+        assert!(super::display_doc(&mut app, 0).is_some(), "an ordinary layer follows the pointer");
+        app.move_preview.as_mut().unwrap().too_big = true;
+        crate::canvas::tool_event(&mut app, ToolEvent::Move { x: 40.0, y: 16.0, pressure: 1.0 }, m);
+        assert!(super::display_doc(&mut app, 0).is_none(), "a layer over the limit isn't copied for the frame");
+        crate::canvas::tool_event(&mut app, ToolEvent::Up { x: 40.0, y: 16.0 }, m);
+        let d = &app.session.active().unwrap().doc;
+        assert!(d.layer(id).and_then(|l| l.surface()).is_some_and(|s| s.pixel(32, 16)[3] > 0.5), "the release moved the layer");
+    }
+
     #[test]
     fn bounding_box_preference_turns_the_live_drag_off() {
         assert!(live(false), "by default the layer follows the pointer");
