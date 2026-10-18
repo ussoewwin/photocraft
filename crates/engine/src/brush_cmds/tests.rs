@@ -1110,6 +1110,12 @@ fn mixer_load_fills_the_reservoir_from_the_canvas_and_keeps_the_foreground() {
     s.execute("tools.setColors", json!({"foreground": "#00ff00"})).unwrap();
     s.execute("paint.mixerBrush", dry(36, 4)).unwrap();
     assert_eq!(rgba(&s, 20, 36), [0.0, 1.0, 0.0, 1.0]);
-    // Bad coordinates are an error, not a panic.
+    // Bad coordinates are an error, not a panic, and leave the reservoir, the foreground and the
+    // document untouched.
+    let (mixer, foreground) = (s.tools.mixer.clone(), s.tools.foreground);
+    let revision = s.active().unwrap().revision;
     assert!(s.execute("paint.mixerLoad", json!({"x": "a", "y": 1})).is_err());
+    assert_eq!(s.tools.mixer, mixer);
+    assert_eq!(s.tools.foreground, foreground);
+    assert_eq!(s.active().unwrap().revision, revision);
 }
