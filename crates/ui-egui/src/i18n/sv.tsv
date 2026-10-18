@@ -4217,3 +4217,38 @@ shape	Appearance	Utseende
 	There are too many sets: delete one first.	Det finns för många uppsättningar: radera en först.
 	set name	namn på uppsättning
 	{set} (modified)	{set} (ändrad)
+	Sampling Brush Tool	Samplingspensel
+	Sampling Area Overlay	Överlägg för samplingsarea
+	Show Sampling Area	Visa samplingsarea
+	Indicates	Anger
+	Sampling Area	Samplingsarea
+	Excluded Area	Utesluten area
+	Sampling Area Options	Alternativ för samplingsarea
+	Rectangular	Rektangulär
+	Fill Settings	Fyllningsinställningar
+	Rotation Adaptation	Rotationsanpassning
+	Very High	Mycket hög
+	Full	Full
+	Mirror	Spegel
+	Output Settings	Utdatainställningar
+	Output To	Utdata till
+	Accept and Go to Conflict	Acceptera och gå till konflikt
+	Changes undone.	Ändringarna har ångrats.
+	Choose a new shortcut for this command, or leave it without one.	Välj ett nytt kortkommando för det här kommandot, eller lämna det utan.
+	Put this command's shortcuts back as they were	Återställ kommandots kortkommandon som de var
+	Take the shortcut from the other command and select it	Ta kortkommandot från det andra kommandot och markera det
+	Undo Changes	Ångra ändringar
+	{shortcut} is reserved by the system and can't be assigned.	{shortcut} är reserverat av systemet och kan inte tilldelas.
+	Low-Latency Drawing (vsync off, applies at next launch)	Ritning med låg latens (vsync av, gäller från nästa start)
+	Free Transform is still being applied; try again when it has finished.	Fri transformering håller fortfarande på att tillämpas. Försök igen när den är klar.
+	The transform couldn't be applied.	Transformeringen kunde inte tillämpas.
+	Its layers need {needed} of GPU memory; the budget leaves them {budget}.	Dess lager behöver {needed} GPU-minne. Budgeten ger dem {budget}.
+	Set GPU Memory in Preferences › Performance to what your graphics card can hold, at most 3/8 of its memory. Automatic follows Memory Usage, within a quarter of this computer's memory and 3/8 of the card's, and doesn't count the document against a card whose memory is known. The status bar shows GPU Memory Full while they don't fit.	Ställ in GPU-minne under Inställningar › Prestanda till så mycket som ditt grafikkort rymmer, högst 3/8 av dess minne. Automatisk följer Minnesanvändning, inom en fjärdedel av datorns minne och 3/8 av kortets, och räknar inte dokumentet mot ett kort vars minne är känt. Statusfältet visar GPU-minnet fullt så länge de inte får plats.
+	GPU Memory Full	GPU-minnet fullt
+	The layers need {needed} of GPU memory and may hold {budget}, so edits that redraw the whole document do it on the CPU. Click to set GPU Memory.	Lagren behöver {needed} GPU-minne men får använda {budget}, så redigeringar som ritar om hela dokumentet görs på CPU:n. Klicka för att ställa in GPU-minne.
+	GPU memory budget: {budget}	Minnesbudget för GPU: {budget}
+	This document's layers: {needed} of {budget} for layers	Lagren i det här dokumentet: {needed} av {budget} för lager
+	This document's layers need {needed} but may hold {budget}: whole-document redraws use the CPU	Lagren i det här dokumentet behöver {needed} men får använda {budget}: omritningar av hela dokumentet använder CPU:n
+	GPU Memory (MB, 0 = Automatic)	GPU-minne (MB, 0 = automatisk)
+	{name} was changed by another app after it was opened or saved here.	{name} har ändrats av en annan app efter att den öppnades eller sparades här.
+	Replace it with this document, or cancel and use File › Save As to keep both.	Ersätt den med det här dokumentet, eller avbryt och använd Arkiv › Spara som för att behålla båda.
