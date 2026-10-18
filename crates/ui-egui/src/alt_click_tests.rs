@@ -247,12 +247,17 @@ fn alt_click_with_the_zoom_tool_zooms_out_held_or_latched() {
 }
 
 #[test]
-fn alt_click_with_the_mixer_brush_samples_the_foreground() {
+fn alt_click_with_the_mixer_brush_loads_the_reservoir_not_the_foreground() {
     let mut h = harness(two_colours());
     h.state_mut().ui.tool = Tool::MixerBrush;
     h.state_mut().run("tools.setColors", json!({"foreground": [0.0, 0.0, 1.0, 1.0]})).unwrap();
     let rev = h.state().session.active().unwrap().revision;
+    assert!(h.state().session.tools.mixer.reservoir.is_none());
     click(&mut h, 50.0, 50.0, Modifiers::ALT);
-    assert_eq!(h.state().session.tools.foreground, [1.0, 0.0, 0.0, 1.0], "⌥-click sampled red");
+    assert_eq!(h.state().session.tools.mixer.reservoir, Some([1.0, 0.0, 0.0, 1.0]), "⌥-click loaded red into the reservoir");
+    assert_eq!(h.state().session.tools.foreground, [0.0, 0.0, 1.0, 1.0], "the foreground colour is unchanged");
     assert_eq!(h.state().session.active().unwrap().revision, rev, "nothing was painted");
+    click(&mut h, 150.0, 50.0, Modifiers::ALT);
+    assert_eq!(h.state().session.tools.mixer.reservoir, Some([0.0, 1.0, 0.0, 1.0]), "⌥-click loaded green");
+    assert_eq!(h.state().session.tools.foreground, [0.0, 0.0, 1.0, 1.0]);
 }
