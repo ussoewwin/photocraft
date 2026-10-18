@@ -60,7 +60,7 @@ fn jpeg_xl_decodes_losslessly_with_independent_decoder() {
             // GrayA is losslessly widened to RGBA. Keep the oracle comparison
             // against original gray and alpha samples, not only against a converted image.
             let (output_channels, expected_output) = if layout == ChannelLayout::GrayA {
-                let expanded: Vec<u16> = expected.chunks_exact(2).flat_map(|ga| [ga[0], ga[0], ga[0], ga[1]]).collect();
+                let expanded: Vec<u16> = expected.as_chunks::<2>().0.iter().flat_map(|[gray, alpha]| [*gray, *gray, *gray, *alpha]).collect();
                 (4, expanded)
             } else {
                 (channels, expected.clone())

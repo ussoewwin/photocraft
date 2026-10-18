@@ -145,3 +145,15 @@ pub(crate) fn encode(image: &Image, plan: Plan) -> Result<Vec<u8>, CodecError> {
     }))
     .unwrap_or_else(|_| Err(CodecError::encode(F, "the JPEG XL encoder failed")))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn alpha_header_correction_rejects_unexpected_or_truncated_headers() {
+        for bytes in [&[][..], &[0xff, 0x0a][..], &[0; 32][..]] {
+            assert!(correct_16_bit_alpha_header(bytes, 2, 2).is_err());
+        }
+    }
+}

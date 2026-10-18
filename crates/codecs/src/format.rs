@@ -35,6 +35,8 @@ pub enum Format {
     Dpx,
     /// JPEG XL: lossless export-only until the separate importer lands.
     Jxl,
+    /// Kodak Cineon (`.cin`, the 10-bit film-scan format DPX grew from): read-only.
+    Cineon,
 }
 
 /// What a format can hold **and** what this crate reads/writes for it.
@@ -82,6 +84,11 @@ pub const ASYMMETRIC_EXCEPTIONS: &[(Format, &str)] = &[
     ),
     (Format::Jxl, "Lossless JPEG XL export uses the pure-Rust zune-jpegxl encoder; JPEG XL reading is tracked separately and is not yet available."),
     (
+        Format::Cineon,
+        "Cineon frames are imported for film work; this crate has no Cineon writer, so save an \
+         imported frame as DPX, TIFF or EXR instead.",
+    ),
+    (
         Format::Heif,
         "HEIC decode uses heic-rs (pure Rust, in the optional photocraft-heif crate behind the \
          non-default `heif` feature, which official builds enable), so iPhone and Mac photos open; \
@@ -95,10 +102,12 @@ use SampleType as S;
 
 const RGB_GRAY: &[ChannelLayout] = &[L::Gray, L::GrayA, L::Rgb, L::Rgba];
 const ALL_LAYOUTS: &[ChannelLayout] = &[L::Gray, L::GrayA, L::Rgb, L::Rgba, L::Cmyk, L::CmykA];
+/// TIFF also stores CIE L*a*b* (CIELab).
+const TIFF_LAYOUTS: &[ChannelLayout] = &[L::Gray, L::GrayA, L::Rgb, L::Rgba, L::Cmyk, L::CmykA, L::Lab, L::LabA];
 
 impl Format {
     /// Every format known to the crate (enabled or not).
-    pub const ALL: [Format; 20] = [
+    pub const ALL: [Format; 21] = [
         Format::Png,
         Format::Jpeg,
         Format::Tiff,
@@ -119,6 +128,7 @@ impl Format {
         Format::Fits,
         Format::Dpx,
         Format::Jxl,
+        Format::Cineon,
     ];
 
     pub fn caps(self) -> FormatCaps {
@@ -153,6 +163,7 @@ impl Format {
             Format::Fits => "FITS",
             Format::Dpx => "DPX",
             Format::Jxl => "JPEG XL",
+            Format::Cineon => "Cineon",
         }
     }
 
@@ -180,6 +191,7 @@ impl Format {
             Format::Fits => &["fits", "fit", "fts"],
             Format::Dpx => &["dpx"],
             Format::Jxl => &["jxl"],
+            Format::Cineon => &["cin"],
         }
     }
 
@@ -205,6 +217,7 @@ impl Format {
             Format::Fits => "image/fits",
             Format::Dpx => "image/x-dpx",
             Format::Jxl => "image/jxl",
+            Format::Cineon => "image/x-cin",
         }
     }
 
@@ -240,7 +253,7 @@ pub fn caps(format: Format) -> FormatCaps {
             FormatCaps { depths: &[S::U8, S::U16], layouts: RGB_GRAY, icc: true, exif: true, xmp: true, dpi: true, text: true, animation: true, ..base }
         }
         Format::Jpeg => FormatCaps { layouts: &[L::Gray, L::Rgb, L::Cmyk], alpha: false, icc: true, exif: true, xmp: true, dpi: true, lossy: true, ..base },
-        Format::Tiff => FormatCaps { depths: &[S::U8, S::U16, S::F32], layouts: ALL_LAYOUTS, icc: true, exif: true, xmp: true, dpi: true, text: true, ..base },
+        Format::Tiff => FormatCaps { depths: &[S::U8, S::U16, S::F32], layouts: TIFF_LAYOUTS, icc: true, exif: true, xmp: true, dpi: true, text: true, ..base },
         Format::WebP => FormatCaps { icc: true, exif: true, xmp: true, animation: true, ..base },
         Format::Gif => FormatCaps { layouts: &[L::Rgba], animation: true, lossy: true, ..base },
         Format::Bmp => base,
@@ -262,6 +275,7 @@ pub fn caps(format: Format) -> FormatCaps {
         Format::Dpx => FormatCaps { depths: &[S::U8, S::U16], layouts: &[L::Gray, L::Rgb, L::Rgba], text: true, ..base },
         // GrayA is widened to RGBA at the same depth; the 16-bit alpha header is corrected.
         Format::Jxl => FormatCaps { read: false, depths: &[S::U8, S::U16], layouts: &[L::Gray, L::Rgb, L::Rgba], ..base },
+        Format::Cineon => FormatCaps { read: true, write: false, depths: &[S::U16], layouts: &[L::Gray, L::Rgb], alpha: false, ..base },
     }
 }
 
@@ -319,6 +333,9 @@ pub fn detect(bytes: &[u8]) -> Option<Format> {
     }
     if b.starts_with(b"SDPX") || b.starts_with(b"XPDS") {
         return Some(Format::Dpx);
+    }
+    if crate::codecs::dpx::is_cineon(b) {
+        return Some(Format::Cineon);
     }
     if b.starts_with(b"SIMPLE  =") {
         return Some(Format::Fits);
