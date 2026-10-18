@@ -4297,3 +4297,5 @@ layerLabel	Magenta	მეწამული
 	This document's layers: {needed} of {budget} for layers	ამ დოკუმენტის შრეები: {needed} / {budget} (შრეებისთვის)
 	This document's layers need {needed} but may hold {budget}: whole-document redraws use the CPU	ამ დოკუმენტის შრეებს სჭირდება {needed}, დასაშვებია კი {budget}: მთელი დოკუმენტის გადახატვა CPU-ს იყენებს
 	GPU Memory (MB, 0 = Automatic)	GPU-ის მეხსიერება (მბ, 0 = ავტომატური)
+	{name} was changed by another app after it was opened or saved here.	{name} სხვა აპლიკაციამ შეცვალა მას შემდეგ, რაც აქ გაიხსნა ან შეინახა.
+	Replace it with this document, or cancel and use File › Save As to keep both.	ჩაანაცვლეთ ის ამ დოკუმენტით, ან გააუქმეთ და ორივეს შესანარჩუნებლად გამოიყენეთ ფაილი › შენახვა როგორც.
