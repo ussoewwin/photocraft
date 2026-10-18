@@ -55,10 +55,16 @@ pub(crate) fn float_selected(app: &mut PhotocraftApp, copy: bool, dx: f64, dy: f
 /// Show bounding box when dragging layer, and the release moves the layers once.
 const LIVE_LIMIT: u64 = 512 << 20;
 
-/// Bytes of pixel tiles stored by the layers `ids` of `doc` (their content and linked masks),
-/// which a live drag frame copies: whether they exceed `limit`.
+/// Whether the pixel memory a live drag frame writes for the layers `ids` of `doc` (their content
+/// and linked masks, worst case four tiles per stored tile) exceeds `limit`.
 fn exceeds(doc: &Document, ids: &[LayerId], limit: u64) -> bool {
-    let bytes = |s: &photocraft_raster::Surface| s.tile_count() as u64 * (photocraft_geom::TILE_SIZE as u64).pow(2) * s.format().bytes_per_pixel() as u64;
+    // A shift by a pixel offset that isn't a whole tile writes up to four new tiles per stored one.
+    let bytes = |s: &photocraft_raster::Surface| {
+        (s.tile_count() as u64)
+            .saturating_mul((photocraft_geom::TILE_SIZE as u64).pow(2))
+            .saturating_mul(s.format().bytes_per_pixel() as u64)
+            .saturating_mul(4)
+    };
     let mut total = 0u64;
     for l in ids.iter().filter_map(|id| doc.layer(*id)) {
         total = total.saturating_add(l.surface().map_or(0, bytes)).saturating_add(l.mask.as_ref().map_or(0, |m| bytes(&m.surface)));
@@ -432,6 +438,7 @@ mod tests {
         let id = st.active_layer.unwrap();
         let one_tile = u64::from(photocraft_geom::TILE_SIZE.unsigned_abs()).pow(2) * 4;
         assert!(super::exceeds(&st.doc, &[id], one_tile - 1), "a tile of pixels is over a limit below its size");
+        assert!(super::exceeds(&st.doc, &[id], one_tile * 4 - 1), "a shift can write four tiles for each stored one");
         assert!(!super::exceeds(&st.doc, &[id], u64::MAX), "nothing is over an unlimited drag");
         assert!(!super::exceeds(&st.doc, &[], 0), "no layers hold no pixels");
         assert!(!super::exceeds(&st.doc, &[id], super::LIVE_LIMIT), "an ordinary layer follows the pointer");
@@ -449,19 +456,30 @@ mod tests {
         app.session.execute("edit.fill", json!({"color": "#ff0000"})).unwrap();
         app.session.execute("select.deselect", json!({})).unwrap();
         let id = app.session.active().unwrap().active_layer.unwrap();
+        // Enough stored tiles, all sharing one allocation, to be past the limit before the drag starts.
+        let step = photocraft_geom::TILE_SIZE;
+        app.session
+            .edit("paint", |doc, a| {
+                let surface = doc.layer_mut(a.unwrap()).unwrap().surface_mut().unwrap();
+                let tile_bytes = u64::from(step.unsigned_abs()).pow(2) * surface.format().bytes_per_pixel() as u64;
+                let count = (super::LIVE_LIMIT / (tile_bytes * 4) + 1) as i32;
+                let tile = surface.solid_tile(&[1.0, 0.0, 0.0, 1.0]);
+                surface.put_tiles((0..count).map(|x| (photocraft_geom::TileCoord::new(x, 0), tile.clone())));
+                Ok(())
+            })
+            .unwrap();
         app.ui.tool = Tool::Move;
         app.ui.extras.snap = false;
         app.ui.view.show.smart_guides = false;
         let m = egui::Modifiers::NONE;
+        let to = 16.0 + f64::from(step); // a whole tile, so the release shares the tiles too
         crate::canvas::tool_event(&mut app, ToolEvent::Down { x: 16.0, y: 16.0, pressure: 1.0 }, m);
-        crate::canvas::tool_event(&mut app, ToolEvent::Move { x: 36.0, y: 16.0, pressure: 1.0 }, m);
-        assert!(super::display_doc(&mut app, 0).is_some(), "an ordinary layer follows the pointer");
-        app.move_preview.as_mut().unwrap().too_big = true;
-        crate::canvas::tool_event(&mut app, ToolEvent::Move { x: 40.0, y: 16.0, pressure: 1.0 }, m);
+        crate::canvas::tool_event(&mut app, ToolEvent::Move { x: to, y: 16.0, pressure: 1.0 }, m);
         assert!(super::display_doc(&mut app, 0).is_none(), "a layer over the limit isn't copied for the frame");
-        crate::canvas::tool_event(&mut app, ToolEvent::Up { x: 40.0, y: 16.0 }, m);
+        assert!(!super::showing(&app));
+        crate::canvas::tool_event(&mut app, ToolEvent::Up { x: to, y: 16.0 }, m);
         let d = &app.session.active().unwrap().doc;
-        assert!(d.layer(id).and_then(|l| l.surface()).is_some_and(|s| s.pixel(32, 16)[3] > 0.5), "the release moved the layer");
+        assert!(d.layer(id).and_then(|l| l.surface()).is_some_and(|s| s.pixel(to as i32, 16)[3] > 0.5), "the release moved the layer");
     }
 
     #[test]
