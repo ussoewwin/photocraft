@@ -101,8 +101,10 @@ fn zero_padding(bytes: &[u8]) -> Result<()> {
     Ok(())
 }
 
-// The generic PSD reader is deliberately lenient; importing presets must not silently
-// turn a truncated or miscounted shape into different geometry.
+/// Enforce subpath structure more strictly than the generic PSD path reader.
+/// Each length record must be followed by exactly its declared number of knots, with matching
+/// open/closed selectors. Fill and clipboard records are accepted only between subpaths.
+/// Rejecting inconsistent records prevents a damaged preset from silently changing geometry.
 fn validate_path(path: &PathData) -> Result<()> {
     let mut pending = 0u16;
     let mut closed = false;

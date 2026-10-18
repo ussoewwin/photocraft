@@ -33,7 +33,11 @@ pub(crate) fn file_bytes(p: &Value, cmd: &str, what: &str) -> Result<(Vec<u8>, S
     file_bytes_limited(p, cmd, what, MAX_FILE_BYTES)
 }
 
-/// Read with the format's own input budget, before allocating file or decoded base64 bytes.
+/// Load preset bytes with a format-specific limit; `data` takes precedence over `path`.
+/// Inline base64 returns an empty group name; a file returns its filename stem.
+/// The encoded-length check bounds base64 allocation, then decoded length is checked exactly.
+/// File reads are capped at `max_bytes + 1` so growth after the metadata check is still rejected.
+/// This helper does not authorize paths; automation callers must enforce their workspace policy.
 pub(crate) fn file_bytes_limited(p: &Value, cmd: &str, what: &str, max_bytes: u64) -> Result<(Vec<u8>, String)> {
     if let Some(d) = p.get("data") {
         let s = d.as_str().ok_or_else(|| bad(cmd, "`data` must be a base64 string"))?;

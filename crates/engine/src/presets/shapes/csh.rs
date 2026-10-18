@@ -22,6 +22,10 @@ pub(super) fn spec() -> CommandSpec {
     }
 }
 
+/// Parse and convert the complete set before applying any library changes.
+/// Group and shape names are resolved against the live library on apply, not the worker's
+/// snapshot, so edits made while the job runs do not introduce duplicate addressable names.
+/// Conversion fits each path into a 100-by-100 reference box while preserving its aspect ratio.
 fn import(s: &mut Session, p: &Value) -> Result<Value> {
     let group = p
         .get("group")
