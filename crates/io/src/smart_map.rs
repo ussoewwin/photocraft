@@ -39,6 +39,8 @@ use crate::blocks::{enum_of, get_desc, num};
 mod camera_raw;
 #[path = "displace_map.rs"]
 mod displace;
+#[path = "puppet_map.rs"]
+mod puppet;
 
 pub use displace::embedded_map as displace_embedded_map;
 
@@ -105,8 +107,30 @@ pub fn parse_sold(data: &[u8]) -> Option<Placed> {
     let d = sold_descriptor(data)?;
     let (idnt, transform) = crate::blocks::parse_smart(b"SoLd", data);
     let placed = text_of(&d, "placed").unwrap_or_default();
-    let stack = get_desc(&d, "filterFX").map(filter_stack);
+    let mut stack = get_desc(&d, "filterFX").map(filter_stack);
+    if let Some(stack) = &mut stack {
+        drop_moved_puppet_meshes(stack, &d);
+    }
     Some(Placed { descriptor: d, idnt, placed, transform, stack })
+}
+
+/// A Puppet Warp's stored mesh sits where the layer was when it was built (document pixels); one
+/// built on other corners than the layer's own doesn't fit it, so its pins are solved instead.
+fn drop_moved_puppet_meshes(stack: &mut FilterStack, d: &Descriptor) {
+    let corners = |k: &str| match d.get(k) {
+        Some(Value::List(v)) if v.len() == 8 => v.iter().map(|x| num(Some(x))).collect::<Option<Vec<f64>>>(),
+        _ => None,
+    };
+    let quad = corners("nonAffineTransform").or_else(|| corners("Trnf"));
+    for f in stack.filters.iter_mut().filter(|f| f.command == puppet::COMMAND) {
+        let fits = match (&quad, puppet::built_on(&f.params)) {
+            (Some(q), Some(b)) => q.iter().zip(b).all(|(a, b)| (a - b).abs() < 0.01),
+            _ => false,
+        };
+        if !fits && let Some(p) = f.params.as_object_mut() {
+            p.remove("mesh");
+        }
+    }
 }
 
 /// Reads a `filterFX` object.
@@ -469,6 +493,7 @@ pub fn filter_from_item(item: &Descriptor) -> SmartFilter {
     let known = match class.as_deref() {
         Some(camera_raw::CLASS) => camera_raw::import_params(item).map(|p| (camera_raw::COMMAND, p)),
         Some(displace::CLASS) => displace::import_params(item).map(|p| (displace::COMMAND, p)),
+        Some(puppet::CLASS) => puppet::import_params(item).map(|p| (puppet::COMMAND, p)),
         Some(GALLERY_CLASS) => fltr.and_then(|f| gallery_params(item, f)).map(|p| (GALLERY_COMMAND, p)),
         c => c.and_then(|c| known_params(c, fltr)),
     };
@@ -623,6 +648,12 @@ pub fn item_for_filter(f: &SmartFilter) -> Result<Descriptor, String> {
     }
     if f.command == GALLERY_COMMAND {
         return gallery_item(f);
+    }
+    if f.command == puppet::COMMAND && f.params.get(puppet::TEMPLATE_KEY).is_some() {
+        let mut d = puppet::export_item(&f.params)?;
+        set(&mut d, "blendOptions", blend_options(f));
+        set(&mut d, "enab", Value::Boolean(f.visible));
+        return Ok(d);
     }
     if f.command == UNSUPPORTED_FILTER {
         let raw = f.params.get("psd").and_then(J::as_str).and_then(from_hex).ok_or("its filter data is missing")?;

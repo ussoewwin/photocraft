@@ -14,7 +14,7 @@ use std::cell::RefCell;
 
 use photocraft_algo::liquify::{LiquifyField, LiquifyStroke, apply_liquify, auto_cell};
 use photocraft_algo::perspective::{PerspectiveMap, Plane, Straighten, straighten};
-use photocraft_algo::puppet::{PuppetDensity, PuppetMode, PuppetPin, PuppetWarp, puppet_warp, puppet_warp_with_mask};
+use photocraft_algo::puppet::{PuppetDensity, PuppetMesh, PuppetMode, PuppetPin, PuppetWarp, puppet_warp, puppet_warp_with_mask, warp_with_mesh};
 use photocraft_algo::transform::Interp;
 use photocraft_algo::warp::{warp_mesh_gray, warp_mesh_surface};
 use photocraft_color::PixelFormat;
@@ -84,6 +84,34 @@ pub fn puppet_params(cmd: &str, p: &Value) -> Result<PuppetWarp> {
         return Err(bad(cmd, "`expansion` must be -200..200 px"));
     }
     Ok(PuppetWarp { pins, mode, density, expansion })
+}
+
+/// The most vertices a stored Puppet Warp mesh may have (Photoshop's meshes have hundreds).
+const MAX_STORED_VERTS: usize = 1 << 20;
+
+/// A Puppet Warp's stored mesh, as a Photoshop file keeps it (`mesh`: `{"pins", "verts",
+/// "deformed", "tris"}`, document pixels): the mesh solved for `pins`, drawn as it is instead of
+/// solving again. `None` when there is none, it is malformed, or the filter's pins are no longer
+/// the ones it was solved for.
+pub fn stored_puppet_mesh(p: &Value) -> Option<(PuppetMesh, Vec<[f64; 2]>)> {
+    let m = p.get("mesh")?;
+    if m.get("pins") != p.get("pins") {
+        return None;
+    }
+    let points = |k: &str| -> Option<Vec<[f64; 2]>> {
+        let v = m.get(k)?.as_array()?;
+        if v.len() > MAX_STORED_VERTS {
+            return None;
+        }
+        v.iter().map(|q| serde_json::from_value::<[f64; 2]>(q.clone()).ok()).collect()
+    };
+    let (verts, deformed) = (points("verts")?, points("deformed")?);
+    let tris = m.get("tris")?.as_array()?;
+    if tris.len() > 2 * MAX_STORED_VERTS {
+        return None;
+    }
+    let tris: Vec<[usize; 3]> = tris.iter().map(|t| serde_json::from_value(t.clone()).ok()).collect::<Option<_>>()?;
+    Some((PuppetMesh { verts, tris, spacing: 0.0 }, deformed))
 }
 
 /// Perspective Warp params (planes, after the optional straighten).
@@ -182,7 +210,17 @@ pub fn apply_to_surface(id: &str, params: &Value, surf: &Surface, canvas: Rect) 
             Some(liquify_surface(surf, &strokes, cell, canvas))
         }
         // A stored warp too far to render leaves the smart object as it is (#1019).
-        PUPPET | PUPPET_SMART => Some(puppet_surface(surf, &puppet_params(id, params).ok()?, interp(params)).unwrap_or_else(|| surf.clone())),
+        PUPPET | PUPPET_SMART => {
+            // A mesh stored with the filter (from a Photoshop file) is drawn as it is; one that
+            // can't be drawn leaves the pins to solve.
+            let b = surf.content_bounds();
+            if let Some((mesh, deformed)) = stored_puppet_mesh(params).filter(|_| !b.is_empty())
+                && let Some(out) = warp_with_mesh(surf, b, &mesh, &deformed, interp(params))
+            {
+                return Some(out);
+            }
+            Some(puppet_surface(surf, &puppet_params(id, params).ok()?, interp(params)).unwrap_or_else(|| surf.clone()))
+        }
         PERSPECTIVE | PERSPECTIVE_SMART => Some(perspective_surface(surf, &perspective_params(id, params).ok()?, interp(params))),
         _ => None,
     }

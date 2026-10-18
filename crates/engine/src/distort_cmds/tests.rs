@@ -473,3 +473,36 @@ fn unlocked_or_position_locked_smart_objects_take_distortions() {
         }
     }
 }
+
+#[test]
+fn a_stored_puppet_mesh_is_drawn_while_its_pins_hold() {
+    // A Photoshop file's Puppet Warp carries its solved mesh: it is drawn as it is (here a whole
+    // move by (2, 1), although one pin alone would move the block by (6, 4)), until the pins
+    // change; then the pins are solved.
+    let surf = active_surface(&session(8));
+    let canvas = Rect::new(0, 0, 80, 60);
+    let pins = json!([{"src": [30, 25], "dst": [36, 29]}]);
+    let verts = [[8.0, 8.0], [62.0, 8.0], [62.0, 42.0], [8.0, 42.0]];
+    let moved: Vec<[f64; 2]> = verts.iter().map(|v| [v[0] + 2.0, v[1] + 1.0]).collect();
+    let mesh = json!({"pins": pins, "verts": verts, "deformed": moved, "tris": [[0, 1, 2], [0, 2, 3]]});
+    let shifted = |dx, dy| photocraft_algo::resample::translate_surface(&surf, dx, dy);
+    let p = json!({"pins": pins, "mode": "rigid", "interpolation": "bilinear", "mesh": mesh});
+    let out = apply_to_surface(PUPPET_SMART, &p, &surf, canvas).unwrap();
+    assert_eq!(out.content_bounds(), Rect::new(12, 11, 62, 41));
+    assert!(worst(&out, &shifted(2, 1), Rect::new(12, 11, 62, 41)) <= 1.0 / 255.0);
+    // Pins edited after import: the stored mesh no longer applies.
+    let mut edited = p.clone();
+    edited["mesh"]["pins"][0]["dst"] = json!([40, 29]);
+    let out = apply_to_surface(PUPPET_SMART, &edited, &surf, canvas).unwrap();
+    assert_eq!(out.content_bounds(), Rect::new(16, 14, 66, 44));
+    // A malformed mesh is ignored the same way.
+    for bad in [
+        json!({"pins": pins, "verts": verts, "deformed": [[0, 0]], "tris": [[0, 1, 2]]}),
+        json!({"pins": pins, "verts": verts, "deformed": moved, "tris": [[0, 1, 9]]}),
+    ] {
+        let mut q = p.clone();
+        q["mesh"] = bad;
+        let out = apply_to_surface(PUPPET_SMART, &q, &surf, canvas).unwrap();
+        assert_eq!(out.content_bounds(), Rect::new(16, 14, 66, 44));
+    }
+}
