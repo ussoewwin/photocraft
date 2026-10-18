@@ -414,6 +414,24 @@ fn twirl_keeps_centre_and_outside() {
     assert_ne!(out.pixel(20, 12), s.pixel(20, 12));
 }
 
+/// #5643: on a wide image Twirl, Pinch and Spherize fill the ellipse inscribed in the bounds, as
+/// Photoshop's do, not just a circle fitted to the height: a point near the left and right edges
+/// on the middle row changes, the corners don't, and a square still uses its inscribed circle.
+#[test]
+fn round_distortions_fill_the_inscribed_ellipse() {
+    let b = Rect::new(0, 0, 80, 40);
+    let s = pattern(SampleType::F32, b);
+    for p in [FilterParams::Twirl { angle: 180.0 }, FilterParams::Pinch { amount: 80.0 }, FilterParams::Spherize { amount: 80.0, mode: SpherizeMode::Normal }] {
+        let out = apply(&s, &p, b, b, None);
+        // 30 px left of centre on the middle row: outside the old 20 px circle, inside the ellipse.
+        assert_ne!(out.pixel(10, 21), s.pixel(10, 21), "{p:?}");
+        assert_ne!(out.pixel(69, 18), s.pixel(69, 18), "{p:?}");
+        for (x, y) in [(0, 0), (79, 0), (0, 39), (79, 39)] {
+            assert_eq!(out.pixel(x, y), s.pixel(x, y), "{p:?}: corner ({x}, {y}) is outside the ellipse");
+        }
+    }
+}
+
 #[test]
 fn motion_blur_spreads_along_angle_only() {
     let mut s = flat(SampleType::F32, R, [0.0, 0.0, 0.0, 1.0]);
@@ -446,6 +464,10 @@ fn halos_and_output_area() {
     assert_eq!(output_area(&FilterParams::Twirl { angle: 1.0 }, content, R, None), R);
     assert_eq!(output_area(&FilterParams::BoxBlur { radius: 1.0 }, content, R, Some(Rect::new(0, 0, 12, 12))), Rect::new(8, 8, 12, 12));
     assert!(output_area(&FilterParams::Invert, Rect::EMPTY, R, None).is_empty());
+    // Fibers renders without reading the layer: an empty layer still fills the bounds (#5241).
+    let fibers = FilterParams::Fibers { variance: 16.0, strength: 4.0, seed: 0, foreground: [0.0; 4], background: [1.0; 4] };
+    assert_eq!(output_area(&fibers, Rect::EMPTY, R, None), R);
+    assert_eq!(output_area(&fibers, content, R, Some(Rect::new(0, 0, 12, 12))), Rect::new(0, 0, 12, 12));
 }
 
 #[test]
@@ -486,6 +508,21 @@ fn layer_filters_repeat_the_canvas_edge() {
         let faded = apply(&s, &p, area, canvas, None);
         assert!(faded.pixel(0, 0)[3] < 0.9, "{depth:?}: unclamped path should read transparency");
     }
+}
+
+/// Photoshop 27.11's Polar Coordinates turn counter-clockwise from 12 o'clock: just left of the
+/// top centre, Rectangular to Polar samples the source's left edge (clockwise would take its right).
+#[test]
+fn polar_coordinates_turn_counter_clockwise() {
+    let r = Rect::new(0, 0, 64, 64);
+    let mut s = flat(SampleType::U8, r, [0.0, 0.0, 1.0, 1.0]);
+    s.fill_rect(Rect::new(0, 0, 32, 64), &[1.0, 0.0, 0.0, 1.0]);
+    let p = FilterParams::PolarCoordinates { mode: PolarMode::RectangularToPolar };
+    let out = apply(&s, &p, r, r, None);
+    let left_of_top = out.rgba(28, 12);
+    assert!(left_of_top[0] > 0.9 && left_of_top[2] < 0.1, "{left_of_top:?}");
+    // The corners outside the circle repeat the source's edge instead of going transparent.
+    assert!(out.rgba(0, 0)[3] > 0.99, "{:?}", out.rgba(0, 0));
 }
 
 /// `mix_selection` before #4533, one selection lookup per pixel: the oracle for the per-tile read.

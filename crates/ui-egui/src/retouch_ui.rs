@@ -29,6 +29,7 @@ pub(crate) fn clone_params(app: &PhotocraftApp) -> Option<Value> {
     let o = &app.ui.tool_options;
     let mut p = json!({"aligned": o.clone_aligned, "sampleLayer": o.clone_sample});
     if app.ui.tool == Tool::CloneStamp {
+        p["wrap"] = json!(app.ui.view.pattern_preview);
         p["opacity"] = json!(app.session.tools.brush.opacity * 100.0);
         p["flow"] = json!(app.session.tools.brush.flow * 100.0);
     }
@@ -176,7 +177,7 @@ pub fn remove_pending_add(app: &mut PhotocraftApp, points: &[[f64; 3]]) {
         app.remove_pending_doc = Some(doc);
     }
     let diameter = app.session.tools.brush.size;
-    app.remove_trail.get_or_insert_with(|| crate::stroke_trail::Trail::new(size)).feed(points, diameter);
+    app.remove_trail.get_or_insert_with(|| crate::stroke_trail::Trail::new(size)).feed_stroke(points, diameter);
     app.remove_pending.push(points.to_vec());
     app.ui.status = crate::i18n::fmt(tl!("Strokes to remove: {n} (Enter applies, Esc cancels)"), &[("n", &app.remove_pending.len().to_string())]);
     app.ui.status_error = false;
@@ -694,6 +695,30 @@ mod tests {
     }
 
     #[test]
+    fn clone_stamp_in_pattern_preview_wraps_a_dab_across_the_right_edge() {
+        for pattern_preview in [false, true] {
+            let mut app = app();
+            app.run("paint.pencil", json!({"points": [[10, 10]], "size": 24, "color": "#ff0000"})).unwrap();
+            app.ui.tool = Tool::CloneStamp;
+            app.ui.clone_source = Some([10.0, 10.0]);
+            app.ui.view.pattern_preview = pattern_preview;
+            let modifiers = egui::Modifiers::NONE;
+            tool_event(&mut app, ToolEvent::Down { x: 98.0, y: 30.0, pressure: 1.0 }, modifiers);
+            tool_event(&mut app, ToolEvent::Up { x: 98.0, y: 30.0 }, modifiers);
+            assert!(!app.ui.status_error, "{}", app.ui.status);
+            let surface = active(&app).surface().unwrap();
+            let center = surface.rgba(98, 30);
+            assert!(center[0] > 0.9 && center[1] < 0.1, "clone center: {center:?}");
+            let opposite = surface.rgba(1, 30);
+            if pattern_preview {
+                assert!(opposite[0] > 0.9 && opposite[1] < 0.1, "Pattern Preview must wrap the clone footprint: {opposite:?}");
+            } else {
+                assert!(opposite[0] > 0.9 && opposite[1] > 0.9, "ordinary cloning must not wrap: {opposite:?}");
+            }
+        }
+    }
+
+    #[test]
     fn alt_flips_dodge_burn_and_blur_sharpen() {
         for (tool, flipped) in [(Tool::Dodge, Tool::Burn), (Tool::Burn, Tool::Dodge), (Tool::Blur, Tool::Sharpen), (Tool::Sharpen, Tool::Blur)] {
             assert_eq!(alt_flipped(tool, true), flipped);
@@ -1114,6 +1139,46 @@ mod tests {
         let px = active(&app).surface().unwrap().rgba(30, 30);
         assert!(px.iter().zip(bg).all(|(a, b)| (a - b).abs() < 0.02), "{px:?} vs {bg:?}");
         assert!(!remove_pending_commit(&mut app), "nothing left to apply");
+    }
+
+    #[test]
+    fn every_waiting_remove_stroke_is_tinted_in_full() {
+        // #6555: each stroke used to be stamped only past the previous stroke's point count.
+        let mut app = app();
+        app.ui.tool = Tool::Remove;
+        app.ui.tool_options.remove_after_each_stroke = false;
+        let strokes: [&[[f64; 3]]; 3] = [
+            &[[10.0, 10.0, 1.0], [40.0, 10.0, 1.0], [70.0, 10.0, 1.0]],
+            &[[10.0, 30.0, 1.0], [40.0, 30.0, 1.0]],
+            &[[10.0, 50.0, 1.0], [20.0, 50.0, 1.0], [30.0, 50.0, 1.0], [50.0, 50.0, 1.0], [90.0, 50.0, 1.0]],
+        ];
+        for s in strokes {
+            remove_pending_add(&mut app, s);
+        }
+        assert_eq!(app.remove_pending.len(), 3);
+        let t = app.remove_trail.as_ref().expect("the waiting strokes are tinted");
+        let k = f64::from(t.scale());
+        for s in strokes {
+            for w in s.windows(2) {
+                for i in 0..=8 {
+                    let f = f64::from(i) / 8.0;
+                    let (x, y) = (w[0][0] + (w[1][0] - w[0][0]) * f, w[0][1] + (w[1][1] - w[0][1]) * f);
+                    assert_eq!(t.coverage((x / k) as usize, (y / k) as usize), 255, "({x}, {y}) on a waiting stroke is tinted");
+                }
+            }
+        }
+        // Enter, Esc, another tool and another document all drop the tint with the strokes.
+        assert!(remove_pending_commit(&mut app));
+        assert!(app.remove_trail.is_none());
+        remove_pending_add(&mut app, strokes[0]);
+        assert!(remove_pending_cancel(&mut app) && app.remove_trail.is_none());
+        remove_pending_add(&mut app, strokes[1]);
+        app.ui.tool = Tool::SpotHealing;
+        assert!(!remove_pending_live(&mut app) && app.remove_trail.is_none());
+        app.ui.tool = Tool::Remove;
+        remove_pending_add(&mut app, strokes[2]);
+        app.run("file.new", json!({"width": 100, "height": 60})).unwrap();
+        assert!(!remove_pending_live(&mut app) && app.remove_trail.is_none());
     }
 
     #[test]
