@@ -124,16 +124,25 @@ fn status_info_text_with_units(doc: &Document, key: &str, tool: &str, profile: &
 fn status_bounds_text(doc: &Document, active_layer: Option<photocraft_doc::LayerId>) -> String {
     let selection = doc.selection.as_ref().map(|s| s.content_bounds()).filter(|r| !r.is_empty());
     let (label, bounds) = if let Some(r) = selection {
-        ("Selection", r)
+        (tl!("Selection"), r)
     } else if let Some(layer) = active_layer.and_then(|id| doc.layer(id)) {
-        ("Layer", photocraft_compose::layer_bounds(layer, doc.bounds()))
+        (tl!("Layer"), photocraft_compose::layer_bounds(layer, doc.bounds()))
     } else {
-        return "No selection or layer".into();
+        return tl!("No selection or layer").into();
     };
     if bounds.is_empty() {
-        return format!("{label}: empty");
+        return crate::i18n::fmt(tl!("{label}: empty"), &[("label", label)]);
     }
-    format!("{label}: X {}  Y {}  W {}  H {}", bounds.x0, bounds.y0, bounds.width(), bounds.height())
+    crate::i18n::fmt(
+        tl!("{label}: X {x}  Y {y}  W {w}  H {h}"),
+        &[
+            ("label", label),
+            ("x", &bounds.x0.to_string()),
+            ("y", &bounds.y0.to_string()),
+            ("w", &bounds.width().to_string()),
+            ("h", &bounds.height().to_string()),
+        ],
+    )
 }
 
 fn profile_name(doc: &Document) -> String {

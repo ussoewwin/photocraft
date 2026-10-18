@@ -3876,3 +3876,7 @@ cameraData	Lens	Lens
 	Ink Characteristics	Mürekkep Özellikleri
 	Solidity:	Doluluk:
 	Redrawing	Yeniden çiziliyor
+	Selection / Layer Bounds	Seçim / Katman Sınırları
+	No selection or layer	Seçim veya katman yok
+	{label}: empty	{label}: boş
+	{label}: X {x}  Y {y}  W {w}  H {h}	{label}: X {x}  Y {y}  W {w}  H {h}

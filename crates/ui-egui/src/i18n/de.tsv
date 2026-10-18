@@ -3142,3 +3142,7 @@ curves	Smooth	Glätten
 	Sent to {printer}	An {printer} gesendet
 	set in Print Settings…	in den Druckeinstellungen festlegen…
 	ICO is limited to 256 × 256 pixels	ICO ist auf 256 × 256 Pixel begrenzt
+	Selection / Layer Bounds	Auswahl / Ebenengrenzen
+	No selection or layer	Keine Auswahl oder Ebene
+	{label}: empty	{label}: leer
+	{label}: X {x}  Y {y}  W {w}  H {h}	{label}: X {x}  Y {y}  W {w}  H {h}

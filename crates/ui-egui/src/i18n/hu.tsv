@@ -4065,3 +4065,7 @@ cameraRaw	Yellow	Sárga
 	Ink Characteristics	Festék jellemzői
 	Solidity:	Fedőképesség:
 	Redrawing	Újrarajzolás
+	Selection / Layer Bounds	Kijelölés / Réteghatárok
+	No selection or layer	Nincs kijelölés vagy réteg
+	{label}: empty	{label}: üres
+	{label}: X {x}  Y {y}  W {w}  H {h}	{label}: X {x}  Y {y}  W {w}  H {h}

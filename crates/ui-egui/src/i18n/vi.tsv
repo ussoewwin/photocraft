@@ -3631,3 +3631,7 @@ curves	Smooth	Làm mượt
 	Sent to {printer}	Đã gửi tới {printer}
 	set in Print Settings…	đặt trong thiết lập in…
 	ICO is limited to 256 × 256 pixels	ICO giới hạn ở 256 × 256 pixel
+	Selection / Layer Bounds	Giới hạn vùng chọn / lớp
+	No selection or layer	Không có vùng chọn hoặc lớp
+	{label}: empty	{label}: trống
+	{label}: X {x}  Y {y}  W {w}  H {h}	{label}: X {x}  Y {y}  W {w}  H {h}

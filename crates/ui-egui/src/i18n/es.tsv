@@ -2829,3 +2829,7 @@ curves	Smooth	Suavizar
 	Sent to {printer}	Enviado a {printer}
 	set in Print Settings…	se establece en Ajustes de impresión…
 	ICO is limited to 256 × 256 pixels	ICO está limitado a 256 × 256 píxeles
+	Selection / Layer Bounds	Límites de selección / capa
+	No selection or layer	Sin selección ni capa
+	{label}: empty	{label}: vacío
+	{label}: X {x}  Y {y}  W {w}  H {h}	{label}: X {x}  Y {y}  W {w}  H {h}
