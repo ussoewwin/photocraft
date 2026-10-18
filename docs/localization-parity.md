@@ -52,7 +52,7 @@ Polish `pl` (3,366), Greek `el` (3,481), Dutch `nl` (3,568), Italian `it` (4,164
 other catalogs translate; reviewed by a native speaker, [notes](localization-it.md)). Turkish `tr`
 (3,731 rows) also covers every measured key. Serbian `sr` (4,022 rows, Latin script, Ekavian, added 2026-10-12) covers every
 measured key and the union of the other catalogs' dynamic labels; its one/few/many plurals reuse
-the Russian rule. Swedish `sv` (4,208 rows, added 2026-10-15) covers every measured key; Photoshop
+the Russian rule. Swedish `sv` (4,243 rows, added 2026-10-15) covers every measured key; Photoshop
 2026 ships a Swedish pack too.
 
 Czech UI follow-up (2026-10-11): status and notice wrappers, hardware labels, brush and
