@@ -181,7 +181,13 @@ impl WebSettings {
         if let Some(a) = p.get("ditherAmount").and_then(Value::as_f64) {
             st.dither_amount = (a as f32 / 100.0).clamp(0.0, 1.0);
         }
-        if let Some(b) = p.get("transparency").and_then(Value::as_bool) {
+        // An on/off option given as anything but true or false is an error, not its default.
+        let flag = |k: &str| match p.get(k) {
+            None | Some(Value::Null) => Ok(None),
+            Some(Value::Bool(b)) => Ok(Some(*b)),
+            Some(_) => Err(bad(cmd, format!("`{k}` must be true or false"))),
+        };
+        if let Some(b) = flag("transparency")? {
             st.transparency = b;
         }
         match s("matte") {
@@ -197,7 +203,7 @@ impl WebSettings {
             ("embedIcc", &mut st.embed_icc),
             ("convertToSrgb", &mut st.convert_to_srgb),
         ] {
-            if let Some(b) = p.get(k).and_then(Value::as_bool) {
+            if let Some(b) = flag(k)? {
                 *slot = b;
             }
         }

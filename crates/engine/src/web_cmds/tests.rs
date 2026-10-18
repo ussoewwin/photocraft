@@ -343,6 +343,31 @@ fn webp_too_large_is_an_error() {
     }
 }
 
+/// An on/off option that isn't true or false is refused (`"lossless": "true"` would otherwise
+/// write lossy WebP), and the refused export writes and remembers nothing.
+#[test]
+fn non_boolean_flags_are_refused_without_changing_anything() {
+    let dir = tmp("flags");
+    let mut s = session(8);
+    let out = format!("{dir}/out.webp");
+    let flags = ["transparency", "interlaced", "progressive", "lossless", "optimized", "embedIcc", "convertToSrgb"];
+    for k in flags {
+        for v in [json!("true"), json!(1), json!([true])] {
+            let rev = s.active().unwrap().revision;
+            let mut p = json!({"format": "webp", "path": out});
+            p[k] = v.clone();
+            let err = s.execute("file.export.saveForWebLegacy", p).unwrap_err().to_string();
+            assert!(err.contains(k), "{k}: {v}: {err}");
+            assert_eq!(s.active().unwrap().revision, rev, "{k}: the document is untouched");
+            assert!(!std::path::Path::new(&out).exists(), "{k}: nothing written");
+            assert!(s.file_menu.last_web.is_none(), "{k}: nothing remembered");
+        }
+    }
+    // null is the same as leaving it out.
+    s.execute("file.export.saveForWebLegacy", json!({"format": "webp", "path": out, "lossless": null})).unwrap();
+    assert!(std::path::Path::new(&out).exists());
+}
+
 #[test]
 fn slices_export_with_html_table() {
     let dir = tmp("slices");
