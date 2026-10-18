@@ -226,7 +226,7 @@ what an agent can't finish alone.
   write (FILE-215-10, #2541; a single flattened page now saves via Save As / Save a Copy / CLI,
   2026-10-11, #3401), AVIF read (#463) and default-build AVIF write, JPEG XL, JPEG 2000 (#1047),
   Cineon write (read landed), DICOM, EPS/DCS, Pixar, IFF, WBMP, MPO/JPS, PICT, Scitex CT, Photoshop
-  Raw; layered TIFF extra alpha channels (FILE-215-7); spot plates (FILE-215-17); .atn, .asl,
+  Raw; layered TIFF extra alpha channels (FILE-215-7); spot plates (FILE-215-17); .asl,
   .shc presets and .csh export (FILE-215-15); C2PA (#1050).
 - **CSH import:** Version 2 custom-shape sets load into persistent Shapes groups (#5359).
   Original synthetic geometry is independently cross-read; Photoshop-written fixture verification remains open.
