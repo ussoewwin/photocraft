@@ -47,7 +47,15 @@ fn knot(cmd: &str, p: &Value) -> Result<[usize; 2]> {
 
 /// Applies `f` to the targeted path in one undoable step labelled `label`.
 fn edit_path(s: &mut Session, cmd: &str, p: &Value, label: &str, f: impl FnOnce(&mut Path) -> std::result::Result<(), String>) -> Result<Value> {
-    let name = p.get("name").and_then(Value::as_str).unwrap_or("work").to_owned();
+    // A malformed target is an error, never a silent edit of the Work Path or the active layer.
+    let name = match p.get("name") {
+        Some(v) => v.as_str().ok_or_else(|| bad(cmd, "`name` must be a path name, \"work\" or \"layer\""))?,
+        None => "work",
+    }
+    .to_owned();
+    if name == "layer" && p.get("layer").is_some_and(|v| !v.is_u64()) {
+        return Err(bad(cmd, "`layer` must be a layer id"));
+    }
     let layer = if name == "layer" { Some(layer_id(s, p)?) } else { None };
     let shape = layer.filter(|id| s.active().and_then(|d| d.doc.layer(*id)).is_some_and(|l| matches!(l.content, LayerContent::Shape(_))));
     let path = match shape {
@@ -156,8 +164,16 @@ fn merge_components(s: &mut Session, p: &Value) -> Result<Value> {
         Some(v) => v.as_f64().filter(|t| t.is_finite()).ok_or_else(|| bad(CMD, "`tolerance` must be a number"))?.clamp(0.05, 10.0),
         None => 0.1,
     };
+    let mask = p.get("name").and_then(Value::as_str) == Some("layer")
+        && layer_id(s, p).ok().and_then(|id| s.active()?.doc.layer(id).map(|l| !matches!(l.content, LayerContent::Shape(_)))).unwrap_or(false);
     edit_path(s, CMD, p, "Merge Shape Components", |path| {
-        *path = crate::vector_cmds::bake_path(path, tol).map_err(|e| e.to_string())?;
+        let mut merged = crate::vector_cmds::bake_path(path, tol).map_err(|e| e.to_string())?;
+        // Components that cancel out cover nothing, but an empty vector mask reveals the whole
+        // layer (hides it when inverted): flip it so the mask still shows what it did.
+        if mask && merged.is_empty() && !path.is_empty() {
+            merged.inverted = !path.inverted;
+        }
+        *path = merged;
         Ok(())
     })
 }
@@ -463,6 +479,55 @@ mod tests {
         assert!(cache.is_some());
     }
 
+    /// Mask components that cancel out (a square minus itself) cover nothing. Merged, the mask
+    /// must still hide (or, inverted, reveal) what it did, not turn into an empty revealing mask.
+    #[test]
+    fn merging_a_vector_mask_to_nothing_keeps_what_it_shows() {
+        for inverted in [false, true] {
+            let mut s = session();
+            let id = s.active().unwrap().active_layer.unwrap().0;
+            let mut cancelled = square();
+            cancelled["subpaths"].as_array_mut().unwrap().push(json!({"closed": true, "op": "subtract", "knots": [[10, 10], [60, 10], [60, 60], [10, 60]]}));
+            cancelled["inverted"] = json!(inverted);
+            s.execute("layer.vectorMask.add", json!({"layer": id, "path": cancelled})).unwrap();
+            let mask = |s: &Session| s.active().unwrap().doc.layer(LayerId(id)).unwrap().vector_mask.clone().unwrap();
+            let shown = |s: &Session| photocraft_vector::vector_mask_values(&mask(s), photocraft_geom::Rect::from_xywh(0, 0, 120, 100));
+            let before = shown(&s);
+            assert!(before.iter().all(|v| *v == if inverted { 1.0 } else { 0.0 }), "inverted {inverted}");
+            s.execute("path.mergeShapeComponents", json!({"name": "layer", "layer": id})).unwrap();
+            assert!(mask(&s).path.is_empty());
+            assert_eq!(shown(&s), before, "inverted {inverted}");
+        }
+    }
+
+    /// Rejected merges name the problem and leave every path as it was, including the one a
+    /// malformed target would otherwise have fallen back to (the Work Path, the active layer).
+    #[test]
+    fn bad_merge_params_change_nothing() {
+        let mut s = session();
+        s.execute("path.set", json!({"path": square()})).unwrap();
+        let hole = json!({"subpaths": [{"closed": true, "knots": [[25, 25], [45, 25], [45, 45], [25, 45]]}]});
+        s.execute("path.set", json!({"path": hole, "op": "subtract"})).unwrap();
+        let id = s.active().unwrap().active_layer.unwrap().0;
+        s.execute("layer.vectorMask.add", json!({"layer": id, "path": square()})).unwrap();
+        let state = |s: &Session| {
+            let d = s.active().unwrap();
+            (d.doc.work_path.clone(), d.doc.paths.clone(), d.doc.layer(LayerId(id)).unwrap().vector_mask.clone(), d.history.entries().len())
+        };
+        let before = state(&s);
+        for (p, msg) in [
+            (json!({"tolerance": "fine"}), "tolerance"),
+            (json!({"name": 5}), "`name`"),
+            (json!({"name": "nope"}), "no path named"),
+            (json!({"name": "layer", "layer": "x"}), "`layer`"),
+            (json!({"name": "layer", "layer": 999}), "999"),
+        ] {
+            let e = s.execute("path.mergeShapeComponents", p.clone()).unwrap_err().to_string();
+            assert!(e.contains(msg), "{p}: {e}");
+            assert!(state(&s) == before, "{p}: nothing changed");
+        }
+    }
+
     #[test]
     fn bad_params_fail_without_an_edit() {
         let mut s = session();
@@ -496,9 +561,6 @@ mod tests {
             ("path.deleteAnchor", json!({"subpath": 0, "knot": -1})),
             ("path.deleteAnchor", json!({"subpath": 0})),
             ("path.deleteAnchor", json!({"name": "layer", "subpath": 0, "knot": 0})),
-            ("path.mergeShapeComponents", json!({"tolerance": "fine"})),
-            ("path.mergeShapeComponents", json!({"name": "nope"})),
-            ("path.mergeShapeComponents", json!({"name": "layer"})),
         ] {
             assert!(s.execute(id, p.clone()).is_err(), "{id} {p}");
         }
