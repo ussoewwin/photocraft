@@ -208,9 +208,16 @@ mod tests {
         assert_eq!(id, empty.0, "the empty layer itself is filled");
         assert_eq!(s.active().unwrap().doc.layers.len(), count, "no layer is added");
         assert!(matches!(fill(&s, empty), Fill::Pattern { .. }));
+        assert!(s.active().unwrap().doc.layer(empty).unwrap().name.starts_with("Pattern Fill"), "a default name follows the content");
         assert_eq!(*s.active().unwrap().doc, shown, "the preview shows what OK commits");
         s.undo();
         assert_eq!(*s.active().unwrap().doc, *before);
+        // A name the user gave the layer is kept.
+        s.execute("layer.renameLayer", json!({"layer": empty.0, "name": "Sky"})).unwrap();
+        s.execute(CREATE, json!({"pattern": "Checkerboard"})).unwrap();
+        assert_eq!(s.active().unwrap().doc.layer(empty).unwrap().name, "Sky");
+        s.undo();
+        s.undo();
         // A layer with pixels (the white Background) keeps them: the fill goes above it.
         let bg = s.active().unwrap().doc.layers[0].id;
         s.execute("layer.select", json!({"layer": bg.0})).unwrap();
