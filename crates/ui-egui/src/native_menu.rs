@@ -9,8 +9,8 @@
 //!   use the same app menu;
 //! - **Window** gets Minimize, Zoom and Bring All to Front, with the open documents after it
 //!   (where a Mac app lists its windows), and **Help** the system search field;
-//! - **clashes** with the system's keys (⌘H, ⌘M, ⌘W, ⌘,) are resolved in PhotoCraft's favour, and
-//!   reported; Hide and Minimize move to ⌃⌘H and ⌃⌘M, as Photoshop does.
+//! - Mac defaults leave ⌘H, ⌘M and ⌘, to Hide, Minimize and Settings. Explicit custom
+//!   bindings are preserved; clashes are reported and system items give way when needed.
 //!
 //! **Keys stay with egui.** AppKit runs a menu's key equivalents before the window sees the key,
 //! which would skip PhotoCraft's key rules (text fields keep ⌘C/⌘V/⌘Z, dialogs and Camera Raw are
@@ -835,10 +835,15 @@ mod tests {
         assert_eq!(titles, ["PhotoCraft", "File", "Edit", "Image", "Layer", "Type", "Select", "Filter", "View", "Window", "Help"]);
     }
 
-    /// PhotoCraft keeps Photoshop's ⌘H, ⌘M, ⌘W and ⌘, (Hide Layers): the system items give way.
+    /// Explicit saved creative bindings still take priority over the system fallbacks.
     #[test]
     fn clashes_are_resolved_in_photocrafts_favour() {
-        let l = layout(true);
+        let mut a = app(true);
+        for (id, sc) in [("view.extras", "Cmd+H"), ("image.adjustments.curves", "Cmd+M"), ("layer.hideLayers", "Cmd+,"), ("edit.preferences.general", "Cmd+K")]
+        {
+            a.run("edit.keyboardShortcuts", json!({"set": {id: sc}})).unwrap();
+        }
+        let l = photocraft_layout(&crate::menus::menu_items(&a), Lang::EN, "auto");
         let clash = |sc: &str| l.clashes.iter().find(|c| c.shortcut == sc).map(|c| c.command.as_str());
         assert_eq!(clash("Cmd+H"), Some("view.extras"));
         assert_eq!(clash("Cmd+M"), Some("image.adjustments.curves"));
@@ -851,6 +856,31 @@ mod tests {
         assert!(ids(&window.children).ends_with(&["<BringAllToFront>".into(), "---".into(), "window.document.0".into()]));
         let file = l.bar.menus.iter().find(|m| m.title == "File").unwrap();
         assert!(!file.children.contains(&Node::Standard(Standard::CloseWindow)), "⌘W stays File › Close");
+    }
+
+    #[test]
+    fn platform_defaults_keep_mac_actions_and_creative_actions_separate() {
+        let a = app(true);
+        let keys = crate::shortcut_dispatch::bindings(&a);
+        let binding = |key: &str| keys.iter().find(|(_, sc)| Some(*sc) == crate::shortcuts::parse(key)).map(|(id, _)| id.as_str());
+        if cfg!(target_os = "macos") {
+            assert_eq!(binding("Cmd+,"), Some("edit.preferences.general"));
+            assert_eq!(binding("Cmd+H"), None);
+            assert_eq!(binding("Cmd+M"), None);
+            assert_eq!(binding("Ctrl+Cmd+H"), Some("view.extras"));
+            assert_eq!(binding("Ctrl+Cmd+M"), Some("image.adjustments.curves"));
+            assert_eq!(binding("Ctrl+Cmd+,"), Some("layer.hideLayers"));
+            let l = layout(true);
+            assert_eq!(l.bar.find(HIDE).unwrap().shortcut.as_deref(), Some("Cmd+H"));
+            assert!(l.bar.menu(MenuRole::Window).unwrap().children.contains(&Node::Standard(Standard::Minimize)));
+            assert_eq!(l.bar.find("edit.preferences.general").unwrap().shortcut.as_deref(), Some("Cmd+,"));
+            assert!(!l.clashes.iter().any(|c| ["Cmd+H", "Cmd+M", "Cmd+,"].contains(&c.shortcut)));
+        } else {
+            assert_eq!(binding("Cmd+K"), Some("edit.preferences.general"));
+            assert_eq!(binding("Cmd+H"), Some("view.extras"));
+            assert_eq!(binding("Cmd+M"), Some("image.adjustments.curves"));
+            assert_eq!(binding("Cmd+,"), Some("layer.hideLayers"));
+        }
     }
 
     /// Themes and the appearance-mode cycle move from Window to the app menu's Appearance.
@@ -916,7 +946,7 @@ mod tests {
         assert_eq!(sc("edit.undo").as_deref(), Some("Cmd+Z"));
         assert_eq!(sc("edit.copy").as_deref(), Some("Cmd+C"));
         assert_eq!(sc("edit.paste").as_deref(), Some("Cmd+V"));
-        assert_eq!(sc("layer.hideLayers").as_deref(), Some("Cmd+,"));
+        assert_eq!(sc("layer.hideLayers").as_deref(), Some(photocraft_engine::shell_commands::HIDE_LAYERS_SHORTCUT));
         let app = app(true);
         let bindings = crate::shortcut_dispatch::bindings(&app);
         for it in crate::menus::menu_items(&app).iter().filter(|it| it.enabled) {
