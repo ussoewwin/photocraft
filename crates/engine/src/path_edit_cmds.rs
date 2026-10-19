@@ -148,6 +148,20 @@ fn delete_anchor(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(r)
 }
 
+/// Merge Shape Components on a path (the Pen's and Path Selection's Path Operations menu): the
+/// components' operations are baked into plain combined outlines, as for a shape layer.
+fn merge_components(s: &mut Session, p: &Value) -> Result<Value> {
+    const CMD: &str = "path.mergeShapeComponents";
+    let tol = match p.get("tolerance") {
+        Some(v) => v.as_f64().filter(|t| t.is_finite()).ok_or_else(|| bad(CMD, "`tolerance` must be a number"))?.clamp(0.05, 10.0),
+        None => 0.1,
+    };
+    edit_path(s, CMD, p, "Merge Shape Components", |path| {
+        *path = crate::vector_cmds::bake_path(path, tol).map_err(|e| e.to_string())?;
+        Ok(())
+    })
+}
+
 pub fn specs() -> Vec<CommandSpec> {
     const TARGET: &str = r#""name":str|"work"|"layer"="work","layer":id? (with "layer": a shape layer's path or a vector mask)"#;
     let spec = |id: &'static str, label: &'static str, params: String, run: fn(&mut Session, &Value) -> Result<Value>| CommandSpec {
@@ -191,6 +205,12 @@ pub fn specs() -> Vec<CommandSpec> {
             "Delete Anchor Point",
             r#""subpath":i,"knot":j (its neighbours are joined, keeping their handles; a subpath's last anchor removes the subpath; the path's only anchor is refused) (the result also has subpathRemoved:bool)"#.into(),
             delete_anchor,
+        ),
+        spec(
+            "path.mergeShapeComponents",
+            "Merge Shape Components",
+            r#""tolerance":px=0.1 (bakes the components' path operations into plain combined outlines, traced from the exact coverage)"#.into(),
+            merge_components,
         ),
     ]
 }
@@ -395,6 +415,54 @@ mod tests {
         assert_eq!(s.active().unwrap().history.entries().len(), steps);
     }
 
+    /// Coverage of `path` at the pixel `(x, y)`.
+    fn covered(path: &photocraft_doc::Path, x: i32, y: i32) -> f32 {
+        photocraft_vector::fill_rasterizer(path, photocraft_vector::DEFAULT_TOLERANCE).render(photocraft_geom::Rect::from_xywh(x, y, 1, 1))[0]
+    }
+
+    /// A 10..60 square with a front 25..45 square cut out of it (Subtract Front Shape), then
+    /// Merge Shape Components: plain combined outlines covering the same area, in one step.
+    #[test]
+    fn merge_shape_components_bakes_a_paths_operations() {
+        let mut s = session();
+        s.execute("path.set", json!({"path": square()})).unwrap();
+        let hole = json!({"subpaths": [{"closed": true, "knots": [[25, 25], [45, 25], [45, 45], [25, 45]]}]});
+        s.execute("path.set", json!({"path": hole, "op": "subtract"})).unwrap();
+        let before = work(&s);
+        let r = s.execute("path.mergeShapeComponents", json!({})).unwrap();
+        assert_eq!(r["name"], json!("work"));
+        assert_eq!(s.active().unwrap().history.undo_label(), Some("Merge Shape Components"));
+        let merged = work(&s);
+        assert_eq!(merged.subpaths.len(), 2, "the outline and its hole");
+        for (x, y) in [(15, 15), (35, 35), (55, 50), (5, 5)] {
+            assert!((covered(&merged, x, y) - covered(&before, x, y)).abs() < 0.01, "({x}, {y})");
+        }
+        assert_eq!((covered(&merged, 35, 35), covered(&merged, 15, 15)), (0.0, 1.0), "the hole stays a hole");
+        assert!(s.undo());
+        assert_eq!(work(&s), before);
+        // A saved path and a vector mask merge the same way; an inverted mask stays inverted.
+        s.execute("path.set", json!({"name": "Mug", "path": square()})).unwrap();
+        s.execute("path.mergeShapeComponents", json!({"name": "Mug"})).unwrap();
+        let id = s.active().unwrap().active_layer.unwrap().0;
+        s.execute("layer.vectorMask.add", json!({"layer": id, "path": square()})).unwrap();
+        s.execute("layer.vectorMask.edit", json!({"layer": id, "path": {"subpaths": square()["subpaths"], "inverted": true}})).unwrap();
+        s.execute("path.mergeShapeComponents", json!({"name": "layer", "layer": id})).unwrap();
+        let vm = s.active().unwrap().doc.layer(LayerId(id)).unwrap().vector_mask.clone().unwrap();
+        assert!(vm.path.inverted && !vm.path.subpaths.is_empty());
+    }
+
+    #[test]
+    fn merge_shape_components_on_a_shape_layer_rerenders_it() {
+        let mut s = session();
+        let id = s.execute("shape.create", json!({"kind": "rect", "rect": [10, 10, 50, 50], "fill": "#ff0000"})).unwrap()["layer"].as_u64().unwrap();
+        s.execute("shape.create", json!({"kind": "rect", "rect": [25, 25, 20, 20], "addTo": id, "op": "subtract"})).unwrap();
+        s.execute("path.mergeShapeComponents", json!({"name": "layer", "layer": id})).unwrap();
+        let st = s.active().unwrap();
+        let photocraft_doc::LayerContent::Shape(ShapeLayer { path, cache, .. }) = &st.doc.layer(LayerId(id)).unwrap().content else { panic!("shape") };
+        assert_eq!(covered(path, 35, 35), 0.0);
+        assert!(cache.is_some());
+    }
+
     #[test]
     fn bad_params_fail_without_an_edit() {
         let mut s = session();
@@ -428,6 +496,9 @@ mod tests {
             ("path.deleteAnchor", json!({"subpath": 0, "knot": -1})),
             ("path.deleteAnchor", json!({"subpath": 0})),
             ("path.deleteAnchor", json!({"name": "layer", "subpath": 0, "knot": 0})),
+            ("path.mergeShapeComponents", json!({"tolerance": "fine"})),
+            ("path.mergeShapeComponents", json!({"name": "nope"})),
+            ("path.mergeShapeComponents", json!({"name": "layer"})),
         ] {
             assert!(s.execute(id, p.clone()).is_err(), "{id} {p}");
         }
