@@ -317,6 +317,18 @@ pub(crate) fn insert_fill_layer(doc: &mut Document, active: &mut Option<photocra
     let fill = Fill::Pattern { name: pat.name.clone(), scale, id: pat.id.clone(), angle, link, phase };
     let mut l = Layer::new(doc.next_layer_name("Pattern Fill"), LayerContent::Fill(fill));
     crate::commands::mask_new_layer(doc, &mut l, p, "layer.newFillLayer.pattern")?;
+    // Like Photoshop, an empty pixel layer selected becomes the fill layer instead of getting one
+    // above it; it keeps its place, opacity and blending.
+    if let Some(id) = *active
+        && crate::stamp_cmds::is_empty_pixel_layer(doc, id)
+    {
+        let target = doc.layer_mut(id).ok_or(EngineError::NoLayer(id))?;
+        target.name = l.name;
+        target.content = l.content;
+        target.mask = l.mask;
+        target.vector_mask = l.vector_mask;
+        return Ok(id);
+    }
     let id = doc.insert_above(*active, l);
     *active = Some(id);
     Ok(id)
