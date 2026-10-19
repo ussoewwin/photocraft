@@ -1081,10 +1081,37 @@ mod tests {
         remove_directory_link(&link);
     }
 
+    /// TEMP can name the same directory differently from canonicalize (8.3 on Windows).
+    /// A junction makes that mismatch deterministic even when 8.3 names are disabled.
+    #[cfg(windows)]
+    #[test]
+    fn root_alias_tests_work_with_an_aliased_windows_temp() {
+        let (inside, outside, _) = roots("aliased-temp");
+        let temp_alias = outside.join("temp-alias");
+        link_directory(&inside, &temp_alias);
+        let exe = std::env::current_exe().unwrap();
+        for test in [
+            "workspace::tests::ungranted_absolute_aliases_and_link_escapes_are_refused",
+            "workspace::tests::retargeting_root_alias_does_not_regrant_the_held_authority",
+        ] {
+            // Set TEMP only in the child; changing the process environment races other tests.
+            let output =
+                std::process::Command::new(&exe).args(["--exact", test, "--nocapture"]).env("TEMP", &temp_alias).env("TMP", &temp_alias).output().unwrap();
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            assert!(output.status.success(), "{test}: {stdout}\n{stderr}");
+            assert!(stdout.contains("1 passed;"), "child must run the requested test: {stdout}");
+        }
+        remove_directory_link(&temp_alias);
+    }
+
     #[cfg(any(unix, windows))]
     #[test]
     fn ungranted_absolute_aliases_and_link_escapes_are_refused() {
         let (inside, outside, workspace) = roots("request-alias");
+        // TEMP may use an 8.3 name or a junction. A grant through `alias` below recognises
+        // that configured alias and the canonical target, not every other name for `inside`.
+        let resolved_inside = std::fs::canonicalize(&inside).unwrap();
         let alias = outside.join("inside-alias");
         link_directory(&inside, &alias);
         workspace.write("new.bin", b"inside").unwrap();
@@ -1101,7 +1128,7 @@ mod tests {
         assert!(!outside.join("frames").exists());
         assert_eq!(std::fs::read(outside.join("secret.bin")).unwrap(), b"outside");
         let read_only = AuthorizedWorkspace::new(Some(&alias), Some(&outside)).unwrap();
-        assert_eq!(read_only.read(&inside.join("new.bin").to_string_lossy()).unwrap(), b"inside");
+        assert_eq!(read_only.read(&resolved_inside.join("new.bin").to_string_lossy()).unwrap(), b"inside");
         assert!(read_only.write(&alias.join("denied.bin").to_string_lossy(), b"no").is_err());
         assert!(!inside.join("denied.bin").exists());
         remove_directory_link(&escape);
@@ -1112,6 +1139,7 @@ mod tests {
     #[test]
     fn retargeting_root_alias_does_not_regrant_the_held_authority() {
         let (inside, outside, _) = roots("retargeted-root");
+        let resolved_inside = std::fs::canonicalize(&inside).unwrap();
         let alias = outside.join("root-alias");
         link_directory(&inside, &alias);
         let workspace = AuthorizedWorkspace::new(Some(&alias), Some(&alias)).unwrap();
@@ -1119,7 +1147,7 @@ mod tests {
         link_directory(&outside, &alias);
         std::fs::write(outside.join("secret.bin"), b"secret").unwrap();
         workspace.write("held.bin", b"held").unwrap();
-        assert_eq!(workspace.read(&inside.join("held.bin").to_string_lossy()).unwrap(), b"held");
+        assert_eq!(workspace.read(&resolved_inside.join("held.bin").to_string_lossy()).unwrap(), b"held");
         assert!(workspace.read(&alias.join("secret.bin").to_string_lossy()).is_err());
         workspace.write(&alias.join("held-alias.bin").to_string_lossy(), b"original grant").unwrap();
         assert_eq!(std::fs::read(inside.join("held-alias.bin")).unwrap(), b"original grant");
