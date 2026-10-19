@@ -43,7 +43,7 @@ fn validate(file: &ActionsFile, cmd: &str) -> Result<()> {
 }
 
 fn same_contents(a: &Action, b: &Action) -> bool {
-    a.steps == b.steps && a.disabled == b.disabled && a.dialogs == b.dialogs && a.set == b.set
+    a.steps == b.steps && a.disabled == b.disabled && a.dialogs == b.dialogs && a.set == b.set && a.color == b.color
 }
 
 fn same_name_family(source: &str, candidate: &str) -> bool {
@@ -212,6 +212,23 @@ mod tests {
         let rev = s.actions.rev;
         assert_eq!(s.execute("actions.import", json!({"data": exported["data"]})).unwrap()["imported"], 0);
         assert_eq!(s.actions.rev, rev);
+    }
+
+    #[test]
+    fn reimport_after_changing_button_color_keeps_names_unique() {
+        let mut s = Session::new();
+        s.actions.list.push(Action::new("Draw", vec![]));
+        let data = s.execute("actions.export", json!({})).unwrap()["data"].clone();
+        s.execute("actions.setColor", json!({"action": "Draw", "color": "red"})).unwrap();
+        let params = json!({"data": data});
+        assert_eq!(s.execute("actions.import", params.clone()).unwrap()["imported"], 1);
+        assert_eq!(s.actions.list[0].name, "Draw");
+        assert_eq!(s.actions.list[0].color, "red");
+        assert_eq!(s.actions.list[1].name, "Draw (Imported 2)");
+        assert!(s.actions.list[1].color.is_empty());
+        let before = s.actions.clone();
+        assert_eq!(s.execute("actions.import", params).unwrap()["imported"], 0);
+        assert_eq!(s.actions, before);
     }
 
     #[test]
