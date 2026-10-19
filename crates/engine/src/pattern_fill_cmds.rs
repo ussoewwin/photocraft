@@ -196,6 +196,31 @@ mod tests {
     }
 
     #[test]
+    fn an_empty_pixel_layer_becomes_the_fill_other_layers_get_one_above() {
+        let mut s = Session::new();
+        s.execute("file.new", json!({"width": 40, "height": 30})).unwrap();
+        let empty = LayerId(s.execute("layer.new.layer", json!({})).unwrap()["layer"].as_u64().unwrap());
+        let before = s.active().unwrap().doc.clone();
+        let count = s.active().unwrap().doc.layers().count();
+        let p = json!({"pattern": "Checkerboard"});
+        let shown = preview(&s, CREATE, &p).unwrap();
+        let id = s.execute(CREATE, p).unwrap()["layer"].as_u64().unwrap();
+        assert_eq!(id, empty.0, "the empty layer itself is filled");
+        assert_eq!(s.active().unwrap().doc.layers().count(), count, "no layer is added");
+        assert!(matches!(fill(&s, empty), Fill::Pattern { .. }));
+        assert_eq!(*s.active().unwrap().doc, shown, "the preview shows what OK commits");
+        s.undo();
+        assert_eq!(*s.active().unwrap().doc, *before);
+        // A layer with pixels (the white Background) keeps them: the fill goes above it.
+        let bg = s.active().unwrap().doc.layers().next().unwrap().id;
+        s.execute("layer.select", json!({"layer": bg.0})).unwrap();
+        let id = LayerId(s.execute(CREATE, json!({"pattern": "Checkerboard"})).unwrap()["layer"].as_u64().unwrap());
+        assert_ne!(id, bg);
+        assert!(matches!(s.active().unwrap().doc.layer(bg).unwrap().content, LayerContent::Raster(_)));
+        assert_eq!(s.active().unwrap().doc.layers().count(), count + 1);
+    }
+
+    #[test]
     fn preview_matches_what_the_command_commits() {
         let (mut s, id) = session(8);
         let p = json!({"layer": id.0, "pattern": "Dots", "scale": 50, "angle": 30});
