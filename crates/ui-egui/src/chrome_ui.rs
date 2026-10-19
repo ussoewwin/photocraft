@@ -204,7 +204,7 @@ pub fn status_bar_pro(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
         ui.set_min_width(200.0);
         for (key, label) in STATUS_INFO {
             let on = app.ui.chrome.status_info == *key;
-            if ui.add(egui::Button::selectable(on, *label)).clicked() {
+            if ui.add(egui::Button::selectable(on, tl!(*label))).clicked() {
                 app.ui.chrome.status_info = (*key).to_string();
                 ui.close();
             }
