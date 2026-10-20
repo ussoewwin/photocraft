@@ -2988,6 +2988,22 @@ cameraData	Lens	ობიექტივი
 	Snap to Origin	სათავესთან მიბმა
 	Search settings…	პარამეტრების ძიება…
 	No matching settings	შესაბამისი პარამეტრები არ არის
+# Edit › Content-Aware Fill workspace
+	Sampling Brush Tool	ნიმუშის აღების ფუნჯის ხელსაწყო
+	Sampling Area Overlay	ნიმუშის აღების არის გადაფარვა
+	Show Sampling Area	ნიმუშის აღების არის ჩვენება
+	Indicates	აღნიშნავს
+	Sampling Area	ნიმუშის აღების არე
+	Excluded Area	გამორიცხული არე
+	Sampling Area Options	ნიმუშის აღების არის პარამეტრები
+	Rectangular	მართკუთხა
+	Fill Settings	შევსების პარამეტრები
+	Rotation Adaptation	ბრუნვის ადაპტაცია
+	Very High	ძალიან მაღალი
+	Full	სრული
+	Mirror	არეკვლა
+	Output Settings	გამოტანის პარამეტრები
+	Output To	გამოტანის ადგილი
 	Loading fonts…	შრიფტები იტვირთება…
 # Select and Mask view modes (#1754)
 	Onion Skin	ხახვის ფენები
@@ -4299,3 +4315,17 @@ layerLabel	Magenta	მეწამული
 	GPU Memory (MB, 0 = Automatic)	GPU-ის მეხსიერება (მბ, 0 = ავტომატური)
 	{name} was changed by another app after it was opened or saved here.	{name} სხვა აპლიკაციამ შეცვალა მას შემდეგ, რაც აქ გაიხსნა ან შეინახა.
 	Replace it with this document, or cancel and use File › Save As to keep both.	ჩაანაცვლეთ ის ამ დოკუმენტით, ან გააუქმეთ და ორივეს შესანარჩუნებლად გამოიყენეთ ფაილი › შენახვა როგორც.
+	Pasting from other apps is unavailable	სხვა აპლიკაციებიდან ჩასმა მიუწვდომელია
+	PhotoCraft can't reach the system clipboard in this session. On Wayland, a Flatpak sandbox hides the protocol that images from other apps are read through.	PhotoCraft ამ სესიაში სისტემის გაცვლის ბუფერთან წვდომას ვერ ახერხებს. Wayland-ზე Flatpak-ის იზოლირებული გარემო მალავს პროტოკოლს, რომლითაც სხვა აპლიკაციების გამოსახულებები იკითხება.
+	To paste from other apps, start PhotoCraft under XWayland: `{command}`	სხვა აპლიკაციებიდან ჩასასმელად გაუშვით PhotoCraft XWayland-ში: `{command}`
+	Nothing to paste: PhotoCraft can't read the system clipboard here	ჩასასმელი არაფერია: PhotoCraft აქ სისტემის გაცვლის ბუფერს ვერ კითხულობს
+	Show file name in title	ფაილის სახელის ჩვენება სათაურში
+	Memory Usage	მეხსიერების გამოყენება
+	Per-document RAM limit (MB)	RAM-ის ლიმიტი თითო დოკუმენტზე (მბ)
+	Installed RAM: {ram} MB; this limit: {percent}%	კომპიუტერის RAM: {ram} მბ; ეს ლიმიტი: {percent}%
+	Limits each open document's pixels plus History. Oldest undo states are discarded when the limit is exceeded.	ზღუდავს თითოეული ღია დოკუმენტის პიქსელებსა და ისტორიას ერთად. ლიმიტის გადაჭარბებისას დაბრუნების უძველესი მდგომარეობები იშლება.
+	Applies immediately when saved. Memory is not reserved in advance.	შენახვისთანავე მოქმედებს. მეხსიერება წინასწარ არ რეზერვდება.
+	With GPU Memory set to Automatic, this also limits the GPU layer budget. That budget is capped at one quarter of installed RAM and, when known, three eighths of the graphics card's memory, with a 512 MB minimum. Raising this limit beyond those caps does not increase the GPU budget.	როცა GPU-ის მეხსიერება ავტომატურზეა დაყენებული, ეს GPU-ზე შრეების ლიმიტსაც ზღუდავს. ის არ აღემატება კომპიუტერის RAM-ის მეოთხედს და, თუ ცნობილია, ვიდეობარათის მეხსიერების სამ მერვედს; მინიმუმი 512 მბ-ია. ამ ზღვრებს ზემოთ ამ ლიმიტის გაზრდა GPU-ის ლიმიტს არ ზრდის.
+	Use	გამოყენება
+	In Front	წინ
+	Behind	უკან
