@@ -200,17 +200,16 @@ fn save_round_trips_through_photoshop_events() {
 }
 
 /// Photoshop's integer fields cannot hold a fractional setting. Rounding one into the file wrote
-/// an edit the user never recorded -- `cellSize: 5.4` as `ClSz 5`, `amount: 81.4` as `Amnt 81`,
-/// `width: 2.4` as `Wdth 2` -- and replay then changed the image with `skipped` empty and nothing
-/// in the file to say so (#7669, #7670, #7671). Such a step is refused, as a step with no
-/// equivalent event already is.
+/// an edit the user never recorded -- `cellSize: 5.4` as `ClSz 5`, `amount: 81.4` as `Amnt 81` --
+/// and replay then changed the image with `skipped` empty and nothing in the file to say so
+/// (#7669, #7670). Such a step is refused, as a step with no equivalent event already is.
+///
+/// Only for the fields whose command uses the setting as written: `edit.stroke` ceils its width,
+/// so 2.4 renders as 3 and the integer field holds it faithfully -- that one belongs in #7696,
+/// not here (#7742 review).
 #[test]
 fn a_fractional_setting_an_integer_field_cannot_hold_is_refused_not_rounded() {
-    for (id, params) in [
-        ("filter.pixelate.crystallize", json!({"cellSize": 5.4})),
-        ("filter.distort.ripple", json!({"amount": 81.4, "size": "small"})),
-        ("edit.stroke", json!({"width": 2.4, "color": "#d03060", "location": "inside"})),
-    ] {
+    for (id, params) in [("filter.pixelate.crystallize", json!({"cellSize": 5.4})), ("filter.distort.ripple", json!({"amount": 81.4, "size": "small"}))] {
         let mut s = Session::new();
         s.actions.list.push(Action::new("A", vec![(id.into(), params)]));
         let e = s.execute("actions.save", json!({"action": "A"})).unwrap_err().to_string();

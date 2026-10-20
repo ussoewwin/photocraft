@@ -188,8 +188,8 @@ fn long(v: f64) -> D {
 
 /// `v` as a Photoshop integer field, or `None` when it is not one. A fractional setting written
 /// here would export an edit the user did not record -- `cellSize: 5.4` as `ClSz 5` plays back as
-/// a different image, with nothing in the file to say so (#7669, #7670, #7671). The step is
-/// refused instead: strict export names it, and `skipUnsupported` leaves it out.
+/// a different image, with nothing in the file to say so (#7669, #7670). The step is refused
+/// instead: strict export names it, and `skipUnsupported` leaves it out.
 fn long_exact(v: f64) -> Option<D> {
     let whole = v.fract() == 0.0 && (f64::from(i32::MIN)..=f64::from(i32::MAX)).contains(&v);
     whole.then_some(D::Integer(v as i32))
@@ -398,6 +398,11 @@ enum Kind {
     Pct,
     Ang,
     Long,
+    /// An integer field whose command uses the setting as written, so a fraction cannot be
+    /// exported: see [`long_exact`]. Only for the fields that have been checked against their
+    /// command -- an event whose command rounds the setting itself can hold it after all
+    /// (`edit.stroke` ceils its width, so 2.4 really is 3; #7742 review).
+    LongExact,
     Dbl,
     Bool,
     /// An enumeration: its type id and the Photoshop ↔ PhotoCraft value pairs.
@@ -415,7 +420,7 @@ fn fields_from(d: &Descriptor, fields: &[F]) -> Option<Map<String, Value>> {
     let mut m = Map::new();
     for F(key, param, kind) in fields {
         let v = match kind {
-            Kind::Px | Kind::Pct | Kind::Ang | Kind::Long | Kind::Dbl => get_num(d, key).map(Value::from),
+            Kind::Px | Kind::Pct | Kind::Ang | Kind::Long | Kind::LongExact | Kind::Dbl => get_num(d, key).map(Value::from),
             Kind::Bool => get_bool(d, key).map(Value::from),
             Kind::Enum(_, table) => match get_enum(d, key) {
                 Some(e) => Some(Value::from(lookup(table, &e)?)),
@@ -444,7 +449,8 @@ fn fields_to(p: &Value, fields: &[F], mut d: Descriptor) -> Option<Descriptor> {
             Kind::Px => px(v.as_f64()?),
             Kind::Pct => pct(v.as_f64()?),
             Kind::Ang => ang(v.as_f64()?),
-            Kind::Long => long_exact(v.as_f64()?)?,
+            Kind::Long => long(v.as_f64()?),
+            Kind::LongExact => long_exact(v.as_f64()?)?,
             Kind::Dbl => D::Double(v.as_f64()?),
             Kind::Bool => D::Boolean(v.as_bool()?),
             Kind::Enum(ty, table) => enm(ty, lookup_back(table, v.as_str()?)?),
@@ -2736,8 +2742,8 @@ const EVENTS: &[Event] = &[
         "filter.other.offset",
         &[F("Hrzn", "horizontal", Kind::Long), F("Vrtc", "vertical", Kind::Long), F("Fl  ", "undefinedAreas", Kind::Enum("FlMd", OFFSET_FILL))]
     ),
-    ev!("Rple", "ripple", "Ripple", "filter.distort.ripple", &[F("Amnt", "amount", Kind::Long), F("RplS", "size", Kind::Enum("RplS", RIPPLE_SIZE))]),
-    ev!("Crst", "crystallize", "Crystallize", "filter.pixelate.crystallize", &[F("ClSz", "cellSize", Kind::Long)]),
+    ev!("Rple", "ripple", "Ripple", "filter.distort.ripple", &[F("Amnt", "amount", Kind::LongExact), F("RplS", "size", Kind::Enum("RplS", RIPPLE_SIZE))]),
+    ev!("Crst", "crystallize", "Crystallize", "filter.pixelate.crystallize", &[F("ClSz", "cellSize", Kind::LongExact)]),
     Event { code: "GEfc", name: "filterGallery", label: "Filter Gallery", ids: GALLERY_IDS, from: gallery_from, to: gallery_to },
     // Adjustments (Image › Adjustments).
     Event {
