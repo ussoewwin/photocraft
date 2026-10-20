@@ -236,7 +236,15 @@ fn whole_number_settings_for_integer_fields_still_round_trip() {
         let (back_id, back) = &imported.actions[0].steps[0];
         assert_eq!(back_id, id);
         for (key, want) in params.as_object().unwrap() {
-            assert_eq!(back.get(key).and_then(Value::as_f64), want.as_f64(), "{id}: {key} is {:?}", back.get(key));
+            let got = back.get(key);
+            match want.as_f64() {
+                // A number can come back as an integer where it went out as a float, so these are
+                // compared by value. Anything else is compared as it is: `as_f64` is `None` for a
+                // string on both sides, so `size`, `color` and `location` went unchecked
+                // (#7742 review).
+                Some(n) => assert_eq!(got.and_then(Value::as_f64), Some(n), "{id}: {key} is {got:?}"),
+                None => assert_eq!(got, Some(want), "{id}: {key} is {got:?}"),
+            }
         }
     }
 }
