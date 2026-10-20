@@ -25,6 +25,9 @@ static EMPTY: [u32; 256] = [0; 256];
 pub struct Histograms {
     pub tag: u64,
     pub ch: Vec<[u32; 256]>,
+    /// Photoshop's histogram cache level of a composite histogram: 1 when every document pixel
+    /// was counted, `n` when a proxy 2^(n-1) times smaller stood in; 0 for a gray plane's.
+    pub level: u32,
 }
 
 impl std::ops::Index<usize> for Histograms {
@@ -124,6 +127,7 @@ fn isolate(layers: &mut [Layer], id: LayerId) -> bool {
 /// [`HistScope::WholeInput`] ignores the selection, like Photoshop's Levels/Curves/Threshold
 /// dialogs, which show the adjustment's whole input.
 pub fn compute_histograms(doc: &Document, source: HistSource, space: ToneSpace, scope: HistScope) -> Histograms {
+    let mut level = 0;
     let mut h = vec![
         [0u32; 256];
         match space {
@@ -148,16 +152,26 @@ pub fn compute_histograms(doc: &Document, source: HistSource, space: ToneSpace, 
             }
         }
         HistSource::BelowLayer(_) | HistSource::Layer(_) => {
-            composite_bins(doc, source, space, scope, &mut h);
+            level = composite_bins(doc, source, space, scope, &mut h);
         }
     }
     let sel_tag = if scope == HistScope::Selection { selection_key(doc) } else { 0 };
-    Histograms { tag: tag(source, space, scope, sel_tag), ch: h }
+    Histograms { tag: tag(source, space, scope, sel_tag), ch: h, level }
 }
 
 /// Bins of the composited image below (`BelowLayer`) or of one layer alone (`Layer`), in `space`,
-/// counting the whole input or only the selected pixels per `scope`.
-fn composite_bins(doc: &Document, source: HistSource, space: ToneSpace, scope: HistScope, h: &mut [[u32; 256]]) {
+/// counting the whole input or only the selected pixels per `scope`. Returns the cache level
+/// counted: 1 when every document pixel was counted, higher when a downsampled proxy stood in
+/// (like Photoshop's histogram cache levels). The proxy only stands in for the whole input: the
+/// selection mask is sampled in document space, so a masked count stays exact (level 1).
+///
+/// The pixels are counted as they are, never blended: an area-averaged thumbnail invented greys
+/// that aren't in the image wherever an edge fell inside one of its cells (#6538). Documents up to
+/// [`photocraft_compose::PROXY_THUMBNAIL_PIXELS`] (and those a proxy can't reduce faithfully) are
+/// composited in bands and counted exactly, which costs what the thumbnail did (it reduced the
+/// same full composite). Larger ones count a nearest-neighbour proxy composite of about the old
+/// thumbnail's work: it only holds values the layers have.
+fn composite_bins(doc: &Document, source: HistSource, space: ToneSpace, scope: HistScope, h: &mut [[u32; 256]]) -> u32 {
     let mut d = doc.clone();
     match source {
         HistSource::BelowLayer(hide) => {
@@ -170,49 +184,111 @@ fn composite_bins(doc: &Document, source: HistSource, space: ToneSpace, scope: H
         }
         HistSource::Channel { .. } => {}
     }
-    let img = photocraft_compose::thumbnail(&d, 384);
-    let b = d.bounds();
     let sel = match scope {
         HistScope::WholeInput => None,
-        HistScope::Selection => d.selection.as_ref(),
+        HistScope::Selection => d.selection.clone(),
     };
-    // Document coordinate of each thumbnail pixel's centre (the reduction starts at the canvas
-    // origin, so scaling alone maps between them).
-    let (fx, fy) = (b.width().max(1) as f32 / img.width.max(1) as f32, b.height().max(1) as f32 / img.height.max(1) as f32);
-    let iw = img.width.max(1) as usize;
+    let longest = d.size.width.max(d.size.height);
+    let k = longest / 768;
+    let (d, level) = if k >= 2
+        && scope == HistScope::WholeInput
+        && d.size.area() > photocraft_compose::PROXY_THUMBNAIL_PIXELS
+        && photocraft_compose::proxy::proxy_faithful(&d)
+    {
+        (photocraft_compose::proxy::proxy_document(&d, k), k.next_power_of_two().ilog2() + 1)
+    } else {
+        (d, 1)
+    };
+    let _ = photocraft_compose::render_bands(&d, d.bounds(), 0, |band| -> Result<(), ()> {
+        // Selection coverage per band pixel (≥ ½ counts), sampled from the mask in document
+        // coordinates: each band pixel is one document pixel (or proxy cell) at `rect` + index.
+        let sel_pass: Option<Vec<bool>> = sel.as_ref().map(|m| {
+            let w = band.rect.width().max(1) as usize;
+            band.px.iter().enumerate().map(|(i, _)| m.sample_channel(band.rect.x0 + (i % w) as i32, band.rect.y0 + (i / w) as i32, 0) >= 0.5).collect()
+        });
+        #[cfg(not(target_arch = "wasm32"))]
+        let part = {
+            use rayon::prelude::*;
+            let count = |px: &[[f32; 4]], mask: Option<&[bool]>| {
+                let mut part = vec![[0u32; 256]; h.len()];
+                count_pixels(px, mask, space, &mut part);
+                part
+            };
+            match sel_pass.as_deref() {
+                Some(mask) => band
+                    .px
+                    .par_chunks(64 * 1024)
+                    .zip(mask.par_chunks(64 * 1024))
+                    .map(|(px, m)| count(px, Some(m)))
+                    .reduce(|| vec![[0u32; 256]; h.len()], add_bins),
+                None => band.px.par_chunks(64 * 1024).map(|px| count(px, None)).reduce(|| vec![[0u32; 256]; h.len()], add_bins),
+            }
+        };
+        #[cfg(target_arch = "wasm32")]
+        let part = {
+            let mut part = vec![[0u32; 256]; h.len()];
+            count_pixels(&band.px, sel_pass.as_deref(), space, &mut part);
+            part
+        };
+        for (dst, src) in h.iter_mut().zip(&part) {
+            for (a, b) in dst.iter_mut().zip(src) {
+                *a = a.saturating_add(*b);
+            }
+        }
+        Ok(())
+    });
+    level
+}
+
+/// Bin-wise sum of two sets of histograms (saturating: a hostile canvas can exceed `u32`).
+#[cfg(not(target_arch = "wasm32"))]
+fn add_bins(mut a: Vec<[u32; 256]>, b: Vec<[u32; 256]>) -> Vec<[u32; 256]> {
+    for (dst, src) in a.iter_mut().zip(&b) {
+        for (x, y) in dst.iter_mut().zip(src) {
+            *x = x.saturating_add(*y);
+        }
+    }
+    a
+}
+
+/// Counts straight-alpha composite pixels into `h` (one histogram per channel of `space`);
+/// transparent pixels are skipped. `sel`, when given, keeps only the pixels whose mask coverage
+/// is ≥ ½ (the Histogram panel's [`HistScope::Selection`]).
+fn count_pixels(px: &[[f32; 4]], sel: Option<&[bool]>, space: ToneSpace, h: &mut [[u32; 256]]) {
     let bin = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as usize;
-    for (i, p) in img.pixels.as_chunks::<4>().0.iter().enumerate() {
-        if p[3] == 0 {
+    let mut add = |c: usize, b: usize| {
+        if let Some(n) = h.get_mut(c).and_then(|ch| ch.get_mut(b)) {
+            *n = n.saturating_add(1);
+        }
+    };
+    for (i, p) in px.iter().enumerate() {
+        // Skips NaN alpha too.
+        if p[3].is_nan() || p[3] <= 0.0 {
             continue;
         }
-        if let Some(m) = sel {
-            let mx = ((i % iw) as f32 + 0.5) * fx;
-            let my = ((i / iw) as f32 + 0.5) * fy;
-            if m.sample_channel(mx as i32, my as i32, 0) < 0.5 {
-                continue;
-            }
+        if sel.is_some_and(|s| !s.get(i).copied().unwrap_or(true)) {
+            continue;
         }
         match space {
             ToneSpace::Rgb => {
-                for c in 0..3 {
-                    h[c + 1][p[c] as usize] += 1;
+                let q = [p[0], p[1], p[2]].map(bin);
+                for (c, v) in q.iter().enumerate() {
+                    add(c + 1, *v);
                 }
-                h[0][((p[0] as u32 + p[1] as u32 + p[2] as u32) / 3) as usize] += 1;
+                add(0, (q[0] + q[1] + q[2]) / 3);
             }
             ToneSpace::Cmyk => {
-                let rgb = [p[0], p[1], p[2]].map(|v| f32::from(v) / 255.0);
-                let ink = photocraft_color::convert::rgb_to_cmyk(rgb);
+                let ink = photocraft_color::convert::rgb_to_cmyk([p[0], p[1], p[2]].map(|v| v.clamp(0.0, 1.0)));
                 for (c, v) in ink.iter().enumerate() {
-                    h[c + 1][bin(1.0 - v)] += 1;
+                    add(c + 1, bin(1.0 - v));
                 }
-                h[0][bin(1.0 - ink.iter().sum::<f32>() / 4.0)] += 1;
+                add(0, bin(1.0 - ink.iter().sum::<f32>() / 4.0));
             }
             ToneSpace::Lab => {
-                let rgb = [p[0], p[1], p[2]].map(|v| f32::from(v) / 255.0);
-                let l = photocraft_color::convert::srgb_to_lab(rgb);
-                h[0][bin(l[0] / 100.0)] += 1;
-                h[1][bin((l[1] + 128.0) / 255.0)] += 1;
-                h[2][bin((l[2] + 128.0) / 255.0)] += 1;
+                let l = photocraft_color::convert::srgb_to_lab([p[0], p[1], p[2]].map(|v| v.clamp(0.0, 1.0)));
+                add(0, bin(l[0] / 100.0));
+                add(1, bin((l[1] + 128.0) / 255.0));
+                add(2, bin((l[2] + 128.0) / 255.0));
             }
         }
     }
@@ -285,55 +361,17 @@ pub fn keep_after_commit(app: &mut PhotocraftApp, layer: LayerId, before: Option
     }
 }
 
-/// The pixel count the Histogram panel reports: the whole canvas, or with a selection the
-/// selected pixels (Photoshop). Counts mask coverage ≥ ½ at full resolution, exactly.
-pub fn histogram_pixels(doc: &Document) -> u64 {
-    let Some(m) = doc.selection.as_ref() else {
-        return u64::from(doc.size.width) * u64::from(doc.size.height);
-    };
-    let b = doc.bounds();
-    let row_n = b.width().max(1) as usize;
-    if m.format() != photocraft_color::PixelFormat::GRAY8 {
-        // Selection masks are 8-bit today; anything else scans one strided row at a time.
-        let mut row = Vec::new();
-        let mut n = 0u64;
-        for y in b.y0..b.y1 {
-            row.clear();
-            row.resize(row_n, 0.0);
-            m.sample_row_strided(y, b.x0, 1, 0, &mut row);
-            n += row.iter().filter(|&&v| v >= 0.5).count() as u64;
-        }
-        return n;
-    }
-    let absent_is_selected = m.default_bytes().first().is_some_and(|&v| v >= 128);
-    let ts = photocraft_geom::TILE_SIZE;
-    let mut n = 0u64;
-    for tc in b.tiles() {
-        let tr = tc.rect().intersect(&b);
-        if tr.is_empty() {
-            continue;
-        }
-        match m.tile(tc) {
-            Some(t) => {
-                let data = t.bytes();
-                let (x0, y0) = ((tr.x0 - tc.tx * ts) as usize, (tr.y0 - tc.ty * ts) as usize);
-                for y in 0..tr.height() as usize {
-                    let off = (y0 + y) * photocraft_geom::TILE_SIZE as usize + x0;
-                    n += data.get(off..off + tr.width() as usize).map_or(0, |row| row.iter().filter(|&&v| v >= 128).count()) as u64;
-                }
-            }
-            None if absent_is_selected => n += u64::from(tr.width()) * u64::from(tr.height()),
-            None => {}
-        }
-    }
-    n
+/// Display scale for a 256-bin histogram: bar heights are `v / top` clamped to 1, linear
+/// to the tallest bin like Photoshop. A percentile of the sorted bins degenerates on
+/// sparse histograms (few occupied levels sort 0 into every low index), drawing tiny
+/// counts as tall as the real peaks (#6574).
+/// Extracted from [`draw_histogram`] so the scaling is unit-testable.
+pub fn histogram_scale_top(h: &[u32; 256]) -> f32 {
+    h.iter().copied().max().unwrap_or(1).max(1) as f32 * 1.1
 }
 
 pub fn draw_histogram(p: &egui::Painter, r: Rect, h: &[u32; 256], color: Color32) {
-    // Scale to a high percentile so a single spike (e.g. pure white) doesn't flatten the rest.
-    let mut sorted: Vec<u32> = h.to_vec();
-    sorted.sort_unstable();
-    let top = sorted.get(250).copied().unwrap_or(1).max(1) as f32 * 1.1;
+    let top = histogram_scale_top(h);
     let mut pts = vec![egui::pos2(r.left(), r.bottom())];
     for (i, v) in h.iter().enumerate() {
         let x = r.left() + (i as f32 + 0.5) / 256.0 * r.width();
@@ -399,15 +437,15 @@ pub fn histogram_panel(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     // A selection change moves no pixels but does change what the histogram counts, so only a
     // cache computed for the very same selection may follow a view-only revision (#125).
     if view_only(st)
-        && let Some((d, r, _, _, h)) = app.doc_hist.as_mut()
+        && let Some((d, r, _, h)) = app.doc_hist.as_mut()
         && *d == doc_id
         && *r + 1 == rev
         && h.tag == want
     {
         *r = rev;
     }
-    let stale = !matches!(&app.doc_hist, Some((d, r, _, _, h)) if *d == doc_id && *r == rev && h.tag == want);
-    let due = app.doc_hist.as_ref().is_none_or(|(d, _, at, _, _)| *d != doc_id || now - at > 250.0);
+    let stale = !matches!(&app.doc_hist, Some((d, r, _, h)) if *d == doc_id && *r == rev && h.tag == want);
+    let due = app.doc_hist.as_ref().is_none_or(|(d, _, at, _)| *d != doc_id || now - at > 250.0);
     if stale && due {
         // Computed off the UI thread (doc clone + proxy + pixel counts cost tens of ms on
         // large documents): the panel keeps showing the previous histogram with the existing
@@ -427,8 +465,7 @@ pub fn histogram_panel(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                     .spawn(move || {
                         let t0 = crate::gpu_canvas::now_ms();
                         let h = Arc::new(compute_histograms(&doc, HistSource::BelowLayer(LayerId(u64::MAX)), ToneSpace::Rgb, HistScope::Selection));
-                        let pixels = histogram_pixels(&doc);
-                        let _ = tx.send((doc.id, crate::gpu_canvas::now_ms() - t0, h, pixels));
+                        let _ = tx.send((doc.id, crate::gpu_canvas::now_ms() - t0, h));
                         ctx.request_repaint();
                     })
                     .is_ok()
@@ -438,8 +475,7 @@ pub fn histogram_panel(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
             if !spawned {
                 let t0 = crate::gpu_canvas::now_ms();
                 let h = Arc::new(compute_histograms(&st.doc, HistSource::BelowLayer(LayerId(u64::MAX)), ToneSpace::Rgb, HistScope::Selection));
-                let pixels = histogram_pixels(&st.doc);
-                let _ = tx.send((doc_id, crate::gpu_canvas::now_ms() - t0, h, pixels));
+                let _ = tx.send((doc_id, crate::gpu_canvas::now_ms() - t0, h));
             }
             app.hist_job = Some((doc_id, rev, rx));
         }
@@ -451,10 +487,10 @@ pub fn histogram_panel(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     // frame schedules a new one.
     if let Some((jd, jr, rx)) = &app.hist_job {
         match rx.try_recv() {
-            Ok((_, ms, h, pixels)) => {
+            Ok((_, ms, h)) => {
                 app.perf.span("histogram", ms);
                 if *jd == doc_id {
-                    app.doc_hist = Some((doc_id, *jr, crate::gpu_canvas::now_ms(), pixels, h));
+                    app.doc_hist = Some((doc_id, *jr, crate::gpu_canvas::now_ms(), h));
                 }
                 app.hist_job = None;
             }
@@ -462,10 +498,9 @@ pub fn histogram_panel(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
             Err(std::sync::mpsc::TryRecvError::Empty) => {}
         }
     }
-    let Some((_, _, _, pixels, h)) = app.doc_hist.clone() else { return };
-    let size = app.session.active().map_or(photocraft_doc::Size::new(0, 0), |s| s.doc.size);
-    // Statistics come from a downsampled cache (like Photoshop's cache levels).
-    let level = (size.width.max(size.height) as f32 / 384.0).max(1.0).log2().ceil() as u32 + 1;
+    let Some((_, _, _, h)) = app.doc_hist.clone() else { return };
+    // 1 when the statistics count every pixel; higher when a downsampled proxy stood in.
+    let level = h.level.max(1);
     let ch = channel_picker(ui, egui::Id::new("histogram-panel-ch"), "Channel:");
     let w = ui.available_width();
     let (r, _) = ui.allocate_exact_size(vec2(w, 100.0), Sense::hover());
@@ -495,7 +530,7 @@ pub fn histogram_panel(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
             (tl!("Mean:"), format!("{mean:.2}")),
             (tl!("Std Dev:"), format!("{:.2}", var.sqrt())),
             (tl!("Median:"), median.unwrap_or(0).to_string()),
-            (tl!("Pixels:"), pixels.to_string()),
+            (tl!("Pixels:"), n.to_string()),
             (tl!("Cache Level:"), level.to_string()),
         ] {
             ui.label(egui::RichText::new(k).color(t.text_dim).size(11.5));
@@ -547,14 +582,14 @@ mod tests {
         let st = s.active().unwrap();
         let whole = compute_histograms(&st.doc, HistSource::BelowLayer(LayerId(u64::MAX)), ToneSpace::Rgb, HistScope::WholeInput);
         assert!(whole[0][0] > 0 && whole[0][255] > 0, "black and white both count");
-        assert_eq!(histogram_pixels(&st.doc), 32 * 32, "no selection: the whole canvas");
+        assert_eq!(whole[1].iter().map(|v| *v as u64).sum::<u64>(), 32 * 32, "no selection: the whole canvas");
         s.execute("select.rect", json!({"x": 0, "y": 0, "width": 16, "height": 32})).unwrap();
         let st = s.active().unwrap();
         let left = compute_histograms(&st.doc, HistSource::BelowLayer(LayerId(u64::MAX)), ToneSpace::Rgb, HistScope::Selection);
         assert!(left[0][0] > 0 && left[0][255] == 0, "the panel counts only the selected black half");
         let editor = compute_histograms(&st.doc, HistSource::BelowLayer(LayerId(u64::MAX)), ToneSpace::Rgb, HistScope::WholeInput);
         assert!(editor[0][255] > 0, "the editors show the adjustment's whole input (Photoshop)");
-        assert_eq!(histogram_pixels(&st.doc), 16 * 32, "Pixels counts the selection");
+        assert_eq!(left[1].iter().map(|v| *v as u64).sum::<u64>(), 16 * 32, "Pixels counts the selection");
         s.execute("select.deselect", json!({})).unwrap();
         s.execute("select.rect", json!({"x": 12, "y": 0, "width": 8, "height": 32, "feather": 2})).unwrap();
         let st = s.active().unwrap();
@@ -654,6 +689,111 @@ mod tests {
             tag(HistSource::Layer(layer), ToneSpace::Rgb, HistScope::WholeInput, 0)
         );
     }
+
+    /// #6574: bar heights scale linearly to the tallest bin. A 90/10 black/white
+    /// histogram draws the small bar at a ninth of the big one, not full height.
+    #[test]
+    fn histogram_scale_is_proportional_for_two_level_images() {
+        let mut h = [0u32; 256];
+        h[0] = 100_000;
+        h[255] = 900_000;
+        let top = histogram_scale_top(&h);
+        let small = (h[0] as f32 / top).min(1.0);
+        let big = (h[255] as f32 / top).min(1.0);
+        assert!((small / big - 1.0 / 9.0).abs() < 0.02, "small/big = {}, top = {top}", small / big);
+    }
+
+    /// #6574: a sparse histogram (few occupied levels) must not scale to a bin
+    /// index that is 0: the old `sorted.get(250)` degenerated to `top = 1.1`,
+    /// drawing a few hundred samples as tall as hundreds of thousands.
+    #[test]
+    fn histogram_scale_does_not_degenerate_on_sparse_histograms() {
+        let mut h = [0u32; 256];
+        h[0] = 500_000;
+        h[128] = 300;
+        h[255] = 500_000;
+        let top = histogram_scale_top(&h);
+        assert!(top > h[128] as f32, "scale {top} must exceed the tiny middle bin");
+        let tiny = (h[128] as f32 / top).min(1.0);
+        assert!(tiny < 0.05, "tiny bin draws near-flat, got {tiny}");
+    }
+
+    /// A white document with black filled over columns `0..split` (a layer above the background).
+    fn split_doc(w: u32, h: u32, split: u32, depth: Option<u32>) -> photocraft_engine::Session {
+        let mut s = photocraft_engine::Session::new();
+        let mut p = json!({"width": w, "height": h});
+        if let Some(bits) = depth {
+            p["depth"] = json!(bits);
+        }
+        s.execute("file.new", p).unwrap(); // white
+        s.execute("layer.new.layer", json!({})).unwrap();
+        s.execute("select.rect", json!({"x": 0, "y": 0, "width": split, "height": h})).unwrap();
+        s.execute("edit.fill", json!({"color": "#000000"})).unwrap();
+        s.execute("select.deselect", json!({})).unwrap();
+        s
+    }
+
+    fn panel_histograms(s: &photocraft_engine::Session) -> Histograms {
+        compute_histograms(&s.active().unwrap().doc, HistSource::BelowLayer(LayerId(u64::MAX)), ToneSpace::Rgb, HistScope::Selection)
+    }
+
+    fn mean(h: &[u32; 256]) -> f64 {
+        let n: u64 = h.iter().map(|v| u64::from(*v)).sum();
+        h.iter().enumerate().map(|(i, v)| i as f64 * f64::from(*v)).sum::<f64>() / n as f64
+    }
+
+    /// #6538: a black/white split counts only black and white, wherever the edge falls (the old
+    /// 384 px area-averaged thumbnail turned the cell holding the edge mid-grey), and counts
+    /// every pixel: cache level 1.
+    #[test]
+    fn split_image_histogram_counts_only_black_and_white() {
+        for (w, h, split) in [(1000, 1000, 334), (1000, 1000, 500), (1000, 600, 1), (777, 333, 389), (2000, 50, 1999), (64, 64, 32)] {
+            let s = split_doc(w, h, split, None);
+            let hist = panel_histograms(&s);
+            assert_eq!(hist.level, 1, "{w}x{h}: every pixel is counted");
+            for c in 0..4 {
+                let stray: Vec<(usize, u32)> = hist[c].iter().copied().enumerate().filter(|&(i, v)| v > 0 && i != 0 && i != 255).collect();
+                assert!(stray.is_empty(), "{w}x{h} split {split}, channel {c}: invented values {stray:?}");
+                assert_eq!(u64::from(hist[c][0]), u64::from(split) * u64::from(h), "{w}x{h} split {split}: black pixels");
+                assert_eq!(u64::from(hist[c][255]), u64::from(w - split) * u64::from(h), "{w}x{h} split {split}: white pixels");
+            }
+        }
+        let half = panel_histograms(&split_doc(1000, 1000, 500, None));
+        assert!((mean(&half[0]) - 127.5).abs() < 1e-9, "a 50/50 split has mean 127.5, got {}", mean(&half[0]));
+    }
+
+    /// The same at 16 and 32 bits per channel: the count does not go through an 8-bit thumbnail.
+    #[test]
+    fn split_image_histogram_is_exact_at_high_bit_depths() {
+        for bits in [16, 32] {
+            let s = split_doc(1000, 400, 334, Some(bits));
+            assert_eq!(s.active().unwrap().doc.depth.bits(), bits, "the document is {bits}-bit");
+            let hist = panel_histograms(&s);
+            for c in 0..4 {
+                let stray: Vec<(usize, u32)> = hist[c].iter().copied().enumerate().filter(|&(i, v)| v > 0 && i != 0 && i != 255).collect();
+                assert!(stray.is_empty(), "{bits}-bit channel {c}: invented values {stray:?}");
+                assert_eq!(hist[c][0], 334 * 400);
+                assert_eq!(hist[c][255], 666 * 400);
+            }
+        }
+    }
+
+    /// Above the exact-count size a nearest-neighbour proxy stands in (cache level > 1): it is
+    /// smaller, yet still only holds black and white. The proxy only stands in for the whole
+    /// input: a selection-masked count stays exact, so this asks for [`HistScope::WholeInput`].
+    #[test]
+    fn large_split_image_counts_a_nearest_proxy_without_inventing_greys() {
+        let s = split_doc(6000, 3000, 2001, None);
+        let hist = compute_histograms(&s.active().unwrap().doc, HistSource::BelowLayer(LayerId(u64::MAX)), ToneSpace::Rgb, HistScope::WholeInput);
+        assert!(hist.level > 1, "a proxy stood in, level {}", hist.level);
+        let n: u64 = hist[0].iter().map(|v| u64::from(*v)).sum();
+        assert!(n > 0 && n < 6000 * 3000, "counted {n} proxy pixels");
+        for c in 0..4 {
+            let stray: Vec<(usize, u32)> = hist[c].iter().copied().enumerate().filter(|&(i, v)| v > 0 && i != 0 && i != 255).collect();
+            assert!(stray.is_empty(), "channel {c}: invented values {stray:?}");
+        }
+        assert!((mean(&hist[0]) - 255.0 * 3999.0 / 6000.0).abs() < 1.0, "mean {}", mean(&hist[0]));
+    }
 }
 
 #[cfg(test)]
@@ -690,12 +830,12 @@ mod hist_async_tests {
             assert_eq!(job.0, doc_id);
             assert_eq!(job.1, rev);
             // The worker delivers (its repaint request is a no-op outside a frame).
-            let (did, _, h, pixels) = job.2.recv().expect("the worker delivers the histogram");
+            let (did, _, h) = job.2.recv().expect("the worker delivers the histogram");
             assert_eq!(did, doc_id);
             assert!(!h.ch.is_empty(), "the histogram has data");
-            assert_eq!(pixels, 640 * 480, "no selection: every canvas pixel is counted");
+            assert_eq!(h[1].iter().map(|v| *v as u64).sum::<u64>(), 640 * 480, "no selection: every canvas pixel is counted");
             // Delivering it for the revision it was computed from lands in the cache.
-            app.doc_hist = Some((doc_id, rev, crate::gpu_canvas::now_ms(), pixels, h));
+            app.doc_hist = Some((doc_id, rev, crate::gpu_canvas::now_ms(), h));
         }
         assert_eq!(app.doc_hist.as_ref().map(|h| (h.0, h.1)), Some((doc_id, rev)));
         // …and a newer revision keeps the old entry stale instead of being overwritten by it.
@@ -739,15 +879,15 @@ mod hist_async_tests {
             egui::Ui::new(ctx, egui::Id::new(id), egui::UiBuilder::new().max_rect(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(300.0, 400.0))));
         histogram_panel(app, &mut ui);
         if let Some((d, r, rx)) = app.hist_job.take() {
-            let (did, _, h, pixels) = rx.recv().expect("the worker delivers");
+            let (did, _, h) = rx.recv().expect("the worker delivers");
             if did == d {
-                app.doc_hist = Some((did, r, crate::gpu_canvas::now_ms(), pixels, h));
+                app.doc_hist = Some((did, r, crate::gpu_canvas::now_ms(), h));
             }
         }
     }
 
     fn age_cache(app: &mut PhotocraftApp) {
-        if let Some((_, _, at, _, _)) = app.doc_hist.as_mut() {
+        if let Some((_, _, at, _)) = app.doc_hist.as_mut() {
             *at -= 1000.0; // let the 250 ms throttle pass so the next stale frame recomputes
         }
     }
@@ -757,25 +897,26 @@ mod hist_async_tests {
     /// Pixels statistic reports the selection's size.
     #[test]
     fn the_panel_histogram_follows_the_selection() {
+        let pixels = |h: &std::sync::Arc<crate::tone::Histograms>| h[1].iter().map(|v| *v as u64).sum::<u64>();
         let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
         app.run("file.new", json!({"width": 640, "height": 480})).unwrap();
         frame(&mut app, "hist-follow-1");
         let whole = app.doc_hist.clone().expect("landed");
-        assert_eq!(whole.3, 640 * 480);
+        assert_eq!(pixels(&whole.3), 640 * 480);
         app.run("select.rect", json!({"x": 0, "y": 0, "width": 20, "height": 10})).unwrap();
         age_cache(&mut app);
         frame(&mut app, "hist-follow-2");
         let selected = app.doc_hist.clone().expect("landed");
         assert_eq!(selected.1, app.session.active().unwrap().revision, "fresh for the selection revision");
-        assert_eq!(selected.3, 200, "Pixels counts the selection");
-        assert_ne!(selected.4.tag, whole.4.tag, "the selection changed the histogram's identity");
+        assert_eq!(pixels(&selected.3), 200, "Pixels counts the selection");
+        assert_ne!(selected.3.tag, whole.3.tag, "the selection changed the histogram's identity");
         // A later view-only edit (no selection change) keeps the selection histogram.
         app.run("layer.new.layer", json!({})).unwrap();
         age_cache(&mut app);
         frame(&mut app, "hist-follow-3");
         let after = app.doc_hist.clone().unwrap();
-        assert_eq!(after.4.tag, selected.4.tag, "same selection, same histogram");
-        assert_eq!(after.3, 200);
+        assert_eq!(after.3.tag, selected.3.tag, "same selection, same histogram");
+        assert_eq!(pixels(&after.3), 200);
     }
 
     /// The tone editors' histogram shows the adjustment's whole input (Photoshop's dialogs are
