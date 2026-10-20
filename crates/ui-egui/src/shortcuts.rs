@@ -546,6 +546,37 @@ pub fn handle(app: &mut PhotocraftApp, ctx: &egui::Context) {
     // reaches Edit › Clear while a polygon is being drawn.
     if !app.ui.polygon.is_empty() {
         let mods = ctx.input(|i| i.modifiers);
+        //Mahefa ajout
+        // Ctrl + Shift + Entrée -> Ajout à la sélection active (mode "add")
+        // Ctrl + Alt + Entrée -> Soustraction de la sélection active (mode "subtract")
+        if focus == Focus::None && !ctx.text_edit_focused() {
+            let mods = ctx.input(|i| i.modifiers);
+            if mods.command && mods.shift && !mods.alt && ctx.input_mut(|i| i.consume_key(mods, Key::Enter)) {
+                if let Err(e) = app.run("path.toSelection", json!({"mode": "add"})) {
+                    app.ui.status = e;
+                    app.ui.status_error = true;
+                }
+                return;
+            }
+            if mods.command && mods.alt && !mods.shift && ctx.input_mut(|i| i.consume_key(mods, Key::Enter)) {
+                if let Err(e) = app.run("path.toSelection", json!({"mode": "subtract"})) {
+                    app.ui.status = e;
+                    app.ui.status_error = true;
+                }
+                return;
+            }
+        }
+
+        // Ligne que vous avez repérée :
+        if !app.ui.polygon.is_empty() {
+            let mods = ctx.input(|i| i.modifiers);
+            if !mods.command && !mods.ctrl && !mods.shift && ctx.input_mut(|i| i.consume_key(mods, Key::Backspace) || i.consume_key(mods, Key::Delete)) {
+                crate::canvas::polygon_retract(app);
+                return;
+            }
+        }
+        //Mahefa ajout
+
         if !mods.command && !mods.ctrl && !mods.shift && ctx.input_mut(|i| i.consume_key(mods, Key::Backspace) || i.consume_key(mods, Key::Delete)) {
             crate::canvas::polygon_retract(app);
             return;
