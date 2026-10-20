@@ -199,7 +199,18 @@ fn composite_bins(doc: &Document, source: HistSource, space: ToneSpace, scope: H
     } else {
         (d, 1)
     };
-    let _ = photocraft_compose::render_bands(&d, d.bounds(), 0, |band| -> Result<(), ()> {
+    // A selection whose default reads as unselected (marquee/lasso masks) can only pass the
+    // ≥ ½ threshold inside its content bounds, so composite just that region: a fraction of
+    // the canvas for a small selection. An inverted selection (default selected) still scans
+    // the whole canvas; an empty selection counts nothing.
+    let region = match &sel {
+        Some(m) if m.default_pixel().iter().all(|&v| v < 0.5) => m.content_bounds().intersect(&d.bounds()),
+        _ => d.bounds(),
+    };
+    if region.is_empty() {
+        return level;
+    }
+    let _ = photocraft_compose::render_bands(&d, region, 0, |band| -> Result<(), ()> {
         // Selection coverage per band pixel (≥ ½ counts), sampled from the mask in document
         // coordinates: each band pixel is one document pixel (or proxy cell) at `rect` + index.
         let sel_pass: Option<Vec<bool>> = sel.as_ref().map(|m| {
@@ -626,6 +637,24 @@ mod tests {
         assert_ne!(all, 0);
         assert_ne!(none, 0, "a mask selecting nothing is still a selection, not `None`");
         assert_ne!(all, none, "tile-less masks differ by their default");
+    }
+
+    /// A tile-less mask that selects nothing (default 0; the engine's marquee deselects instead,
+    /// but Quick Mask and scripted documents can leave one) composites over an empty region:
+    /// every bin stays 0. A default-selected mask (inverse of a selection) counts everything.
+    #[test]
+    fn a_selection_outside_the_canvas_counts_nothing() {
+        let mut s = photocraft_engine::Session::new();
+        s.execute("file.new", json!({"width": 32, "height": 32})).unwrap();
+        let mut doc = s.active().unwrap().doc.as_ref().clone();
+        doc.selection = Some(photocraft_raster::Surface::with_default(photocraft_color::PixelFormat::GRAY8, &[0.0]));
+        let h = compute_histograms(&doc, HistSource::BelowLayer(LayerId(u64::MAX)), ToneSpace::Rgb, HistScope::Selection);
+        assert!(h.ch.iter().all(|b| b.iter().all(|&v| v == 0)), "nothing passes the threshold");
+        assert_eq!(h.level, 1);
+        doc.selection = Some(photocraft_raster::Surface::with_default(photocraft_color::PixelFormat::GRAY8, &[1.0]));
+        let all = compute_histograms(&doc, HistSource::BelowLayer(LayerId(u64::MAX)), ToneSpace::Rgb, HistScope::Selection);
+        assert!(all.ch.iter().all(|b| b.iter().sum::<u32>() > 0), "a default-selected mask scans the whole canvas");
+        assert_eq!(all.level, 1);
     }
 
     /// The key's tile identities are pointers, so two masks may only hash alike if a write kept a

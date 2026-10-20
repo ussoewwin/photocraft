@@ -567,7 +567,7 @@ pub struct Services {
 }
 
 /// A document histogram being computed off the UI thread: (document, revision, receiver of
-/// (document, compute ms, histograms, counted pixels)).
+/// (document, compute ms, histograms)).
 pub(crate) type HistJob = (DocId, u64, std::sync::mpsc::Receiver<(DocId, f64, std::sync::Arc<tone::Histograms>)>);
 
 /// The Info panel's cached sample: pixel x, y, document revision and Eyedropper Sample Size.
