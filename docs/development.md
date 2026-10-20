@@ -34,6 +34,8 @@ building locally; the downloaded app is still subject to Windows application-con
 
 ## Build and run
 
+On GNOME/Wayland, **System Title Bar** uses winit's font-free Adwaita controls; existing custom-title-bar preferences and defaults are unchanged.
+
 ```sh
 cargo run --release -p photocraft -- path/to/image.psd      # desktop app
 cargo run --release -p photocraft -- --control 7878 --control-token-file .private/control.token \
