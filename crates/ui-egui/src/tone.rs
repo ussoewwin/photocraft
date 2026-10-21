@@ -167,8 +167,9 @@ pub fn compute_histograms(doc: &Document, source: HistSource, space: ToneSpace, 
 /// counting the whole input or only the selected pixels per `scope` into `h`; `pixels` counts
 /// every pixel the count kept, transparent ones included. Returns the cache level counted: 1
 /// when every document pixel was counted, higher when a downsampled proxy stood in (like
-/// Photoshop's histogram cache levels). The proxy only stands in for the whole input: the
-/// selection mask is sampled in document space, so a masked count stays exact (level 1).
+/// Photoshop's histogram cache levels). The proxy only stands in while there is no selection
+/// mask to sample (the editors always, the panel while nothing is selected): a masked count
+/// samples the mask in document space and stays exact (level 1).
 ///
 /// The pixels are counted as they are, never blended: an area-averaged thumbnail invented greys
 /// that aren't in the image wherever an edge fell inside one of its cells (#6538). Documents up to
@@ -195,11 +196,10 @@ fn composite_bins(doc: &Document, source: HistSource, space: ToneSpace, scope: H
     };
     let longest = d.size.width.max(d.size.height);
     let k = longest / 768;
-    let (d, level) = if k >= 2
-        && scope == HistScope::WholeInput
-        && d.size.area() > photocraft_compose::PROXY_THUMBNAIL_PIXELS
-        && photocraft_compose::proxy::proxy_faithful(&d)
-    {
+    // The proxy stands in only while there is no selection mask to sample: the editors never
+    // have one, and the panel has none while nothing is selected — either way the count is the
+    // whole input. A masked count samples the mask in document space and stays exact (level 1).
+    let (d, level) = if k >= 2 && sel.is_none() && d.size.area() > photocraft_compose::PROXY_THUMBNAIL_PIXELS && photocraft_compose::proxy::proxy_faithful(&d) {
         (photocraft_compose::proxy::proxy_document(&d, k), k.next_power_of_two().ilog2() + 1)
     } else {
         (d, 1)
@@ -838,20 +838,24 @@ mod tests {
     }
 
     /// Above the exact-count size a nearest-neighbour proxy stands in (cache level > 1): it is
-    /// smaller, yet still only holds black and white. The proxy only stands in for the whole
-    /// input: a selection-masked count stays exact, so this asks for [`HistScope::WholeInput`].
+    /// smaller, yet still only holds black and white. It stands in whenever no selection mask is
+    /// sampled — the editors always, the panel while nothing is selected — and a
+    /// selection-masked count stays exact (level 1).
     #[test]
     fn large_split_image_counts_a_nearest_proxy_without_inventing_greys() {
         let s = split_doc(6000, 3000, 2001, None);
-        let hist = compute_histograms(&s.active().unwrap().doc, HistSource::BelowLayer(LayerId(u64::MAX)), ToneSpace::Rgb, HistScope::WholeInput);
-        assert!(hist.level > 1, "a proxy stood in, level {}", hist.level);
-        let n: u64 = hist[0].iter().map(|v| u64::from(*v)).sum();
-        assert!(n > 0 && n < 6000 * 3000, "counted {n} proxy pixels");
-        for c in 0..4 {
-            let stray: Vec<(usize, u32)> = hist[c].iter().copied().enumerate().filter(|&(i, v)| v > 0 && i != 0 && i != 255).collect();
-            assert!(stray.is_empty(), "channel {c}: invented values {stray:?}");
+        let doc = &s.active().unwrap().doc;
+        for scope in [HistScope::WholeInput, HistScope::Selection] {
+            let hist = compute_histograms(doc, HistSource::BelowLayer(LayerId(u64::MAX)), ToneSpace::Rgb, scope);
+            assert!(hist.level > 1, "{scope:?}: a proxy stood in, level {}", hist.level);
+            let n: u64 = hist[0].iter().map(|v| u64::from(*v)).sum();
+            assert!(n > 0 && n < 6000 * 3000, "{scope:?}: counted {n} proxy pixels");
+            for c in 0..4 {
+                let stray: Vec<(usize, u32)> = hist[c].iter().copied().enumerate().filter(|&(i, v)| v > 0 && i != 0 && i != 255).collect();
+                assert!(stray.is_empty(), "{scope:?} channel {c}: invented values {stray:?}");
+            }
+            assert!((mean(&hist[0]) - 255.0 * 3999.0 / 6000.0).abs() < 1.0, "{scope:?} mean {}", mean(&hist[0]));
         }
-        assert!((mean(&hist[0]) - 255.0 * 3999.0 / 6000.0).abs() < 1.0, "mean {}", mean(&hist[0]));
     }
 }
 
