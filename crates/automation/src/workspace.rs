@@ -184,6 +184,8 @@ fn request_path(raw: &str, root: Option<&RootCapability>) -> Result<PathBuf, Aut
     relative_path(&rest.join("/"))
 }
 
+/// Strip a granted root prefix without resolving the client path with ambient authority.
+/// Windows ASCII case variants name the same grant; the unstripped suffix keeps its case.
 fn path_beneath_root<'a>(path: &'a Path, root: &Path) -> Option<Components<'a>> {
     let mut request = path.components();
     for want in root.components() {
@@ -197,6 +199,8 @@ fn path_beneath_root<'a>(path: &'a Path, root: &Path) -> Option<Components<'a>> 
                 }
                 _ => a.as_os_str().eq_ignore_ascii_case(b.as_os_str()),
             },
+            #[cfg(windows)]
+            (Component::Normal(a), Component::Normal(b)) => a.eq_ignore_ascii_case(b),
             (got, want) => got == want,
         };
         if !same {
@@ -1027,18 +1031,49 @@ mod tests {
         assert_eq!(std::fs::read(inside.join("a.bin")).unwrap(), b"one");
     }
 
+    /// Equivalent drive, UNC and ASCII-case root spellings need no ambient path resolution.
     #[cfg(windows)]
     #[test]
     fn canonical_windows_prefixes_match_without_ambient_resolution() {
-        for (request, root) in
-            [(r"c:\root\new.bin", r"\\?\C:\root"), (r"\\?\C:\root\new.bin", r"C:\root"), (r"\\server\share\root\new.bin", r"\\?\UNC\SERVER\SHARE\root")]
-        {
+        for (request, root) in [
+            (r"c:\root\new.bin", r"\\?\C:\root"),
+            (r"\\?\C:\root\new.bin", r"C:\root"),
+            (r"\\server\share\root\new.bin", r"\\?\UNC\SERVER\SHARE\root"),
+            (r"c:\ROOT\new.bin", r"\\?\C:\root"),
+            (r"\\?\C:\ROOT\new.bin", r"c:\root"),
+            (r"\\server\share\ROOT\new.bin", r"\\?\UNC\SERVER\SHARE\root"),
+        ] {
             let remaining = path_beneath_root(Path::new(request), Path::new(root)).unwrap();
             assert_eq!(remaining.as_path(), Path::new("new.bin"));
         }
         for request in [r"C:\root-sibling\new.bin", r"D:\root\new.bin", r"\\.\C:\root\new.bin", r"\\other\share\root\new.bin"] {
             assert!(path_beneath_root(Path::new(request), Path::new(r"\\?\C:\root")).is_none());
         }
+    }
+
+    /// Case variants of the granted Windows prefix still use its held directory capability.
+    #[cfg(windows)]
+    #[test]
+    fn windows_root_case_variants_keep_io_inside_the_grant() {
+        let (inside, outside, workspace) = roots("root-case");
+        let configured = PathBuf::from(inside.to_string_lossy().to_ascii_uppercase());
+        let canonical = PathBuf::from(std::fs::canonicalize(&inside).unwrap().to_string_lossy().to_ascii_uppercase());
+        for spelling in [&configured, &canonical] {
+            let path = spelling.join("new.bin");
+            workspace.write(&path.to_string_lossy(), b"inside").unwrap();
+            assert_eq!(workspace.read(&path.to_string_lossy()).unwrap(), b"inside");
+            assert!(workspace.write(&spelling.join("..").join("outside").join("blocked.bin").to_string_lossy(), b"no").is_err());
+        }
+        assert_eq!(std::fs::read(inside.join("new.bin")).unwrap(), b"inside");
+        assert!(workspace.write(&configured.with_file_name("INSIDE-SIBLING").join("blocked.bin").to_string_lossy(), b"no").is_err());
+        assert!(!outside.join("blocked.bin").exists());
+    }
+
+    /// Unix roots with different case must not become aliases of the granted prefix.
+    #[cfg(unix)]
+    #[test]
+    fn unix_root_prefixes_remain_case_sensitive() {
+        assert!(path_beneath_root(Path::new("/Root/new.bin"), Path::new("/root")).is_none());
     }
 
     #[test]
