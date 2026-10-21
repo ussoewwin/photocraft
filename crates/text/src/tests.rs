@@ -437,11 +437,94 @@ fn a_hanging_run_steps_back_onto_the_line_above() {
         .iter()
         .find(|c| c.range.start == 3)
         .unwrap_or_else(|| panic!("the ellipsis is its own cluster: {:?}", on.clusters));
+    // The row above keeps its trailing breaking space (as a blank cluster); the mark starts
+    // past it, so hit-testing can tell the space from the mark.
+    let space = on
+        .clusters
+        .iter()
+        .find(|c| c.range.start == 2)
+        .unwrap_or_else(|| panic!("the space is its own cluster: {:?}", on.clusters));
+    assert!((mark.x - (space.x + space.advance)).abs() < 1e-3, "mark follows the space: {mark:?} {space:?}");
     assert_eq!(mark.line, 0, "the mark's caret lives on the merged row: {mark:?}");
     assert!(
         on.glyphs.iter().any(|g| g.x >= w && (g.y - ln.baseline).abs() < 1e-3),
         "the mark's glyphs draw on that row past the edge: {ln:?}"
     );
+}
+
+/// A merged row of several marks keeps its clusters and glyphs in step: each cluster starts
+/// where the previous one's advance ended, and a mark's glyphs sit relative to its own cluster
+/// (a per-cluster pen), not wherever a shared pen would drop them.
+#[test]
+fn a_merged_mark_row_keeps_its_clusters_and_glyphs_in_step() {
+    let mut e = TextEngine::new();
+    let probe = e.layout(&point("xx", 20.0), 72.0);
+    let w = probe.lines[0].x1 - probe.lines[0].x0;
+    let mut t = point("xx ……", 20.0);
+    t.shape = TextShape::Box { x: 0.0, y: 0.0, width: w + 0.5, height: 100.0 };
+    let on = e.layout(&with_para(t, ParagraphStyle { hanging: true, ..Default::default() }), 72.0);
+    assert_eq!(on.lines.len(), 1, "both marks step back up: {:?}", on.lines);
+    // The row above keeps its trailing breaking space (as a blank cluster); the mark starts
+    // past it, so hit-testing can tell the space from the mark.
+
+    let space = on
+        .clusters
+        .iter()
+        .find(|c| c.range.start == 2)
+        .unwrap_or_else(|| panic!("the space is its own cluster: {:?}", on.clusters));
+    let marks: Vec<_> = on.clusters.iter().filter(|c| c.range.start >= 3).collect();
+    assert_eq!(marks.len(), 2, "the two ellipses are two clusters: {:?}", on.clusters);
+    let first = marks[0];
+    let second = marks[1];
+    assert!((first.x - (space.x + space.advance)).abs() < 1e-3, "run starts past the space: {first:?} {space:?}");
+    assert!((second.x - (first.x + first.advance)).abs() < 1e-3, "chain: {first:?} {second:?}");
+    // The same glyph in both clusters carries the same offset from its own cluster: a shared
+    // (run-wide) pen would leave the second mark's glyph an advance too far right.
+    let glyph_shift = |c: &crate::ClusterInfo| on.glyphs.iter().filter(|g| g.x >= c.x - 0.5).map(|g| g.x - c.x).min_by(|a, b| a.partial_cmp(b).unwrap());
+    let (d1, d2) = (glyph_shift(first), glyph_shift(second));
+    assert!(d1.zip(d2).is_some_and(|(a, b)| (a - b).abs() < 1e-3), "glyph pens belong to their clusters: {d1:?} vs {d2:?}");
+}
+
+/// Hanging punctuation trims out of centered box lines too, not only ones at the margin: a
+/// centered `Hello…` line that doesn't come near the box edges still centers its text and
+/// lets the mark hang.
+#[test]
+fn hanging_centers_the_box_content_behind_its_marks() {
+    let mut e = TextEngine::new();
+    let mut boxed = |hanging: bool| {
+        let mut t = point("Hello…", 20.0);
+        t.shape = TextShape::Box { x: 0.0, y: 0.0, width: 400.0, height: 60.0 };
+        e.layout(&with_para(t, ParagraphStyle { align: TextAlign::Center, hanging, ..Default::default() }), 72.0)
+    };
+    let off = boxed(false);
+    let on = boxed(true);
+    let lo = &off.lines[0];
+    let ln = &on.lines[0];
+    assert_eq!(off.lines.len(), 1);
+    assert_eq!(on.lines.len(), 1);
+    assert!((lo.x0 + lo.x1) * 0.5 - 200.0 < 0.01, "without the flag the whole line centers: {lo:?}");
+    // With hanging, the text before the mark is centered and the mark starts at the content's
+    // right edge.
+    let ell = on
+        .clusters
+        .iter()
+        .find(|c| c.range.start == 5)
+        .unwrap_or_else(|| panic!("the mark is its own cluster: {:?}", on.clusters));
+    assert!((ln.x0 + ell.x) * 0.5 - 200.0 < 0.01, "content centered: {ln:?} mark at {}", ell.x);
+    assert!(ln.x1 > ell.x, "the mark hangs past the content: {ln:?}");
+}
+
+/// Two forced breaks in a row keep their blank paragraph row with hanging on: a row with no
+/// glyphs must not be read as a hanging run and merged into the line above.
+#[test]
+fn hanging_keeps_empty_rows_between_forced_breaks() {
+    let mut e = TextEngine::new();
+    let mut boxed = |hanging: bool| {
+        let mut t = point("abc\u{3}\u{3}def", 16.0);
+        t.shape = TextShape::Box { x: 0.0, y: 0.0, width: 300.0, height: 300.0 };
+        e.layout(&with_para(t, ParagraphStyle { hanging, ..Default::default() }), 72.0)
+    };
+    assert_eq!(boxed(false).lines.len(), boxed(true).lines.len(), "same rows either way");
 }
 
 /// Hanging changes nothing when no line ends in a mark: the same breaks at the same place.
