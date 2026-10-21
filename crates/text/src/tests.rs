@@ -368,6 +368,99 @@ fn alignment_point_and_box() {
     assert!((l.lines[0].x1 - 200.0).abs() < 0.5, "{:?}", l.lines[0]);
 }
 
+/// Hanging punctuation (Roman Hanging Punctuation): trailing marks don't steer the alignment.
+/// A centered line keeps its text centered and lets the marks hang right instead of pulling
+/// everything left — a centered text ending in an ellipsis no longer sits off-center.
+#[test]
+fn hanging_marks_do_not_steer_the_alignment() {
+    let mut e = TextEngine::new();
+    // The comma and the ellipsis both hang, so the content is exactly "Hello" (bytes 0..5).
+    let mut centered = |hanging: bool| {
+        e.layout(
+            &with_para(point("Hello,…", 20.0), ParagraphStyle { align: TextAlign::Center, hanging, ..Default::default() }),
+            72.0,
+        )
+    };
+    let off = centered(false);
+    let on = centered(true);
+    let lo = &off.lines[0];
+    let ln = &on.lines[0];
+    assert!((lo.x0 + lo.x1) * 0.5 < 0.01, "without the flag the whole line centers: {lo:?}");
+    // With hanging, the content before the marks sits centered on the anchor: the first mark
+    // (the comma) starts at the anchor's far side.
+    let comma = on
+        .clusters
+        .iter()
+        .find(|c| c.range.start == 5)
+        .unwrap_or_else(|| panic!("the comma is its own cluster: {:?}", on.clusters));
+    assert!((ln.x0 + comma.x) * 0.5 < 0.01, "content centered: {ln:?} comma at {}", comma.x);
+    assert!(ln.x1 > comma.x, "the marks hang past the anchor: {ln:?}");
+    assert!(ln.x0 > lo.x0 + 0.5, "the content sits further right than with the marks counted: {ln:?} vs {lo:?}");
+
+    // Right-aligned point text: the content stays flush at the anchor, marks hang past it.
+    let mut right = |hanging: bool| {
+        e.layout(
+            &with_para(point("Hello,…", 20.0), ParagraphStyle { align: TextAlign::Right, hanging, ..Default::default() }),
+            72.0,
+        )
+    };
+    let roff = right(false);
+    let ron = right(true);
+    assert!(roff.lines[0].x1.abs() < 0.01, "everything ends at the anchor: {:?}", roff.lines[0]);
+    assert!(ron.lines[0].x1 > 0.5, "the marks hang past the anchor: {:?}", ron.lines[0]);
+    assert!(ron.lines[0].x0 > roff.lines[0].x0 + 0.5, "the content stays put: {:?}", ron.lines[0]);
+}
+
+/// Hanging punctuation steps a wrapped run of marks back onto the line above: a box holding
+/// text plus a mark nobody could fit keeps one row, the mark hanging past the box edge, and
+/// the mark belongs to that row for carets and selection.
+#[test]
+fn a_hanging_run_steps_back_onto_the_line_above() {
+    let mut e = TextEngine::new();
+    // A box just wide enough for "xx" (probed left-aligned at the same size).
+    let probe = e.layout(&point("xx", 20.0), 72.0);
+    let w = probe.lines[0].x1 - probe.lines[0].x0;
+    let mut boxed = |hanging: bool| {
+        let mut t = point("xx …", 20.0);
+        t.shape = TextShape::Box { x: 0.0, y: 0.0, width: w + 0.5, height: 100.0 };
+        e.layout(&with_para(t, ParagraphStyle { hanging, ..Default::default() }), 72.0)
+    };
+    let off = boxed(false);
+    assert_eq!(off.lines.len(), 2, "the ellipsis wraps onto its own row: {:?}", off.lines);
+    let on = boxed(true);
+    assert_eq!(on.lines.len(), 1, "the mark steps back up: {:?}", on.lines);
+    let ln = &on.lines[0];
+    assert!(ln.x1 > w + 0.5, "the mark hangs past the box edge: {ln:?}");
+    assert_eq!(ln.range.end, 6, "the row's range now covers the mark ({})", ln.range.end);
+    let mark = on
+        .clusters
+        .iter()
+        .find(|c| c.range.start == 3)
+        .unwrap_or_else(|| panic!("the ellipsis is its own cluster: {:?}", on.clusters));
+    assert_eq!(mark.line, 0, "the mark's caret lives on the merged row: {mark:?}");
+    assert!(
+        on.glyphs.iter().any(|g| g.x >= w && (g.y - ln.baseline).abs() < 1e-3),
+        "the mark's glyphs draw on that row past the edge: {ln:?}"
+    );
+}
+
+/// Hanging changes nothing when no line ends in a mark: the same breaks at the same place.
+#[test]
+fn hanging_leaves_plain_paragraphs_untouched() {
+    let mut e = TextEngine::new();
+    let mut boxed = |hanging: bool| {
+        let mut t = point("The quick brown fox jumps over the lazy dog", 16.0);
+        t.shape = TextShape::Box { x: 0.0, y: 0.0, width: 160.0, height: 300.0 };
+        e.layout(&with_para(t, ParagraphStyle { hanging, ..Default::default() }), 72.0)
+    };
+    let off = boxed(false);
+    let on = boxed(true);
+    assert_eq!(off.lines.len(), on.lines.len(), "same breaks");
+    for (a, b) in off.lines.iter().zip(&on.lines) {
+        assert!((a.x0 - b.x0).abs() < 1e-3 && (a.x1 - b.x1).abs() < 1e-3, "same place: {a:?} vs {b:?}");
+    }
+}
+
 #[test]
 fn rtl_text_is_reordered() {
     let mut e = TextEngine::new();
@@ -1498,6 +1591,27 @@ fn legacy_tysh_point_origin_imports_and_round_trips_on_canvas() {
 
 /// Regression: a PSD whose text engine data has no `EngineDict` (or isn't a dictionary)
 /// panicked with `expect("EngineDict")` when the layer was written back (PSD export).
+/// Hanging travels in the text engine data under the paragraph sheet's `Hanging` key, written
+/// explicitly on and off so Photoshop keeps the flag; the corpus files show it right after
+/// `/LeadingType` (false), as Photoshop's own writer places it.
+#[test]
+fn hanging_punctuation_writes_into_the_paragraph_sheet() {
+    let raw = |t: &TextLayer, what: &str| {
+        let data = crate::engine_data::write(&crate::psd::build_engine_data(t, None, 72.0));
+        String::from_utf8_lossy(&data).lines()
+            .find(|l| l.contains("Hanging"))
+            .unwrap_or("<no Hanging key>")
+            .to_owned()
+            + format!(" ({what})").as_str()
+    };
+    let on = with_para(point("Hello, world.", 12.0), ParagraphStyle { hanging: true, ..Default::default() });
+    let got = raw(&on, "on");
+    assert!(got.contains("/Hanging true"), "flag on: {got}");
+    let off = with_para(point("Hello, world.", 12.0), ParagraphStyle::default());
+    let got = raw(&off, "off");
+    assert!(got.contains("/Hanging false"), "flag off: {got}");
+}
+
 #[test]
 fn engine_data_template_without_engine_dict() {
     use crate::engine_data::{self as ed, Value as E};
