@@ -12,7 +12,7 @@
 	Channel Color	Kanalfärg
 	Color Indicates:	Färgen anger:
 	Solidity:	Täckning:
-	Ink Characteristics	Bläckegenskaper
+	Ink Characteristics	Tryckfärgsegenskaper
 	Paper Width	Pappersbredd
 	Paper Height	Pappershöjd
 	Columns	Kolumner
@@ -99,7 +99,7 @@
 	Contact Sheet II…	Kontaktark II…
 	Conditional Mode Change…	Villkorsstyrt lägesbyte…
 	Fit Image…	Anpassa bild…
-	Lens Correction…	Linskorrigering…
+	Lens Correction…	Objektivkorrigering…
 	Merge to HDR Pro…	Sammanfoga till HDR Pro…
 	Photomerge…	Fotosammanfogning…
 	Scripts	Skript
@@ -195,7 +195,7 @@
 	Preferences	Inställningar
 	General…	Allmänt…
 	Interface…	Gränssnitt…
-	Workspace…	Arbetsyta…
+	Workspace…	Arbetslayout…
 	Tools…	Verktyg…
 	History Log…	Historiklogg…
 	File Handling…	Filhantering…
@@ -206,7 +206,7 @@
 	Transparency & Gamut…	Transparens och färgomfång…
 	Units & Rulers…	Enheter och linjaler…
 	Guides, Grid & Slices…	Stödlinjer, rutnät och skivor…
-	Plug-ins…	Insticksprogram…
+	Plug-ins…	Plugins…
 	Type…	Text…
 	Enhanced Controls…	Utökade kontroller…
 	Camera Raw…	Camera Raw…
@@ -325,7 +325,7 @@
 	Gradient Overlay…	Gradientöverlägg…
 	Pattern Overlay…	Mönsteröverlägg…
 	Outer Glow…	Yttre glöd…
-	Drop Shadow…	Släppskugga…
+	Drop Shadow…	Slagskugga…
 	Copy Layer Style	Kopiera lagerstil
 	Paste Layer Style	Klistra in lagerstil
 	Clear Layer Style	Rensa lagerstil
@@ -418,8 +418,8 @@
 	Flatten Image	Platta till bild
 	Matting	Kantbehandling
 	Color Decontaminate…	Färgsanering…
-	Remove Black Matte	Ta bort svart matte
-	Remove White Matte	Ta bort vit matte
+	Remove Black Matte	Ta bort svart kantfärg
+	Remove White Matte	Ta bort vit kantfärg
 	Defringe…	Ta bort kantfärg…
 	Group Layers	Gruppera lager
 	Ungroup Layers	Dela upp lagergrupp
@@ -480,7 +480,7 @@
 	Contextual Alternates	Kontextuella alternativ
 	Discretionary Ligatures	Valfria ligaturer
 	Swash	Swash
-	Oldstyle	Gammaldags siffror
+	Oldstyle	Medievalsiffror
 	Stylistic Alternates	Stilistiska alternativ
 	Titling Alternates	Rubrikalternativ
 	Ornaments	Ornament
@@ -498,7 +498,7 @@
 	Update All Text Layers	Uppdatera alla textlager
 	Replace All Missing Fonts	Ersätt alla saknade typsnitt
 	Resolve Missing Fonts…	Lös saknade typsnitt…
-	Font Preview Size	Storlek på teckensnittsförhandsgranskning
+	Font Preview Size	Storlek på typsnittsförhandsgranskning
 	None	Ingen
 	Small	Liten
 	Medium	Medel
@@ -615,7 +615,7 @@
 	Maximum…	Maximum…
 	Minimum…	Minimum…
 	Offset…	Förskjutning…
-	Plug-ins	Insticksprogram
+	Plug-ins	Plugins
 	Proof Setup	Provtrycksinställningar
 	Proof Colors	Provtrycksfärger
 	Gamut Warning	Färgomfångsvarning
@@ -715,18 +715,18 @@
 	Float in Window	Gör flytande i fönster
 	Float All in Windows	Gör alla flytande i fönster
 	New Window for Document	Nytt fönster för dokument
-	Workspace	Arbetsyta
+	Workspace	Arbetslayout
 	Essentials	Grundläggande
 	Graphic and Web	Grafik och webb
 	Painting	Målning
 	Photography	Fotografi
-	New Workspace…	Ny arbetsyta…
-	Delete Workspace…	Radera arbetsmiljö…
-	Reset Workspace	Återställ arbetsyta
+	New Workspace…	Ny arbetslayout…
+	Delete Workspace…	Radera arbetslayout…
+	Reset Workspace	Återställ arbetslayout
 	Reset Tool	Återställ verktyg
 	Reset All Tools	Återställ alla verktyg
 	Reset all tools to their default settings?	Vill du återställa alla verktyg till standardinställningarna?
-	Lock Workspace	Lås arbetsmiljö
+	Lock Workspace	Lås arbetslayout
 	Theme	Tema
 	Pro Theme	Pro-tema
 	Pro Medium Gray Theme	Pro medelgrått tema
@@ -1094,7 +1094,7 @@
 	Embedded Profile Mismatch	Inbäddad profil matchar inte
 	Enable airbrush-style build-up effects	Aktivera uppbyggnadseffekter som med airbrush
 	Enhance Edge	Förbättra kant
-	Entire Font	Hela teckensnittet
+	Entire Font	Hela typsnittet
 	Exact	Exakt
 	Expansion:	Expansion:
 	Export Presets	Exportförinställningar
@@ -1134,7 +1134,7 @@
 	Flow	Flöde
 	Flow Jitter	Flödesvariation
 	Focal Length	Brännvidd
-	Font	Teckensnitt
+	Font	Typsnitt
 	Font Size:	Teckenstorlek:
 	Font size	Teckenstorlek
 	Foreground	Förgrund
@@ -1249,7 +1249,7 @@
 	Mask Options	Maskalternativ
 	Masking	Maskering
 	Master	Huvud
-	Matte	Matte
+	Matte	Kantfärg
 	Median:	Median:
 	Menus	Menyer
 	Mesh Size	Nätstorlek
@@ -1280,7 +1280,7 @@
 	Next note	Nästa anteckning
 	No Color	Ingen färg
 	No Color Management	Ingen färghantering
-	No Dither	Ingen rastrering
+	No Dither	Ingen dithering
 	No author	Ingen författare
 	No character style	Ingen teckenstil
 	No document	Inget dokument
@@ -1318,7 +1318,7 @@
 	PRESET DETAILS	DETALJER FÖR FÖRINSTÄLLNING
 	PSD	PSD
 	Paint Overlay	Målningsöverlägg
-	Panel locations are saved in the workspace. Keyboard shortcuts, menus and toolbar are optional.	Panelernas placering sparas i arbetsmiljön. Kortkommandon, menyer och verktygsfält är valfria.
+	Panel locations are saved in the workspace. Keyboard shortcuts, menus and toolbar are optional.	Panelernas placering sparas i arbetslayouten. Kortkommandon, menyer och verktygsfält är valfria.
 	Paper	Papper
 	Path	Bana
 	Pattern	Mönster
@@ -1612,7 +1612,7 @@
 	Brush Tip Shape	Penselspetsens form
 	Brush Tool	Penselverktyg
 	Build-up	Uppbyggnad
-	Burn Tool	Bränningsverktyg
+	Burn Tool	Efterbelysningsverktyg
 	Centimeters	Centimeter
 	Choke	Krympning
 	Classic	Klassisk
@@ -1636,7 +1636,7 @@
 	Custom Shape Tool	Verktyg för anpassad form
 	Cyans	Cyantoner
 	Default PhotoCraft Size	Standardstorlek för PhotoCraft
-	Delete Workspace	Radera arbetsmiljö
+	Delete Workspace	Radera arbetslayout
 	Diamond	Romb
 	Dimensions:	Dimensioner:
 	Direction	Riktning
@@ -1644,12 +1644,12 @@
 	Document Dimensions	Dokumentdimensioner
 	Document Profile	Dokumentprofil
 	Document Sizes	Dokumentstorlekar
-	Dodge Tool	Uppljusningsverktyg
+	Dodge Tool	Skuggningsverktyg
 	Down	Ned
 	Drag to draw a gradient	Dra för att rita en gradient
 	Drag to move the active layer	Dra för att flytta det aktiva lagret
 	Drag to pan  ·  hold Space with any tool	Dra för att panorera  ·  håll ned Blanksteg med valfritt verktyg
-	Drop Shadow	Släppskugga
+	Drop Shadow	Slagskugga
 	Dual Brush	Dubbel pensel
 	Edge	Kant
 	Efficiency	Effektivitet
@@ -1676,7 +1676,7 @@
 	Hand Tool	Handverktyg
 	Hard	Hård
 	Hard Mix	Hård blandning
-	Healing Brush Tool	Läkningspenselverktyg
+	Healing Brush Tool	Retuscheringspenselverktyg
 	Highlights from:	Högdagrar från:
 	History Brush Tool	Historikpenselverktyg
 	Horizontal Type Tool	Horisontellt textverktyg
@@ -1696,7 +1696,7 @@
 	Lasso	Lasso
 	Lasso Tool	Lassoverktyg
 	Layer Count	Antal lager
-	Layer Knocks Out Drop Shadow	Lagret sparar ut släppskuggan
+	Layer Knocks Out Drop Shadow	Lagret sparar ut slagskuggan
 	Legal	Legal
 	Letter	Brev
 	Light	Ljus
@@ -1721,7 +1721,7 @@
 	Multiply	Multiplicera
 	My Brushes	Mina penslar
 	Neutrals	Neutrala toner
-	New Workspace	Ny arbetsyta
+	New Workspace	Ny arbetslayout
 	Note Tool	Anteckningsverktyg
 	Object Selection Tool	Objektmarkeringsverktyg
 	Off	Av
@@ -1844,7 +1844,7 @@
 @plural	{n} Layer|{n} Layers	{n} lager|{n} lager
 @plural	{n} layer|{n} layers	{n} lager|{n} lager
 @plural	Group · {n} layer|Group · {n} layers	Grupp · {n} lager|Grupp · {n} lager
-	Additional plugins folder	Ytterligare mapp för plugin-program
+	Additional plugins folder	Ytterligare mapp för plugins
 	Adobe	Adobe
 	Adobe rgb	Adobe rgb
 	Allow agent control	Tillåt agentstyrning
@@ -1892,7 +1892,7 @@
 	Disks	Skivor
 	Display p3	Display P3
 	Double click layer mask launches select and mask	Dubbelklick på lagermask öppnar Markera och maskera
-	Drop shadow	Släppskugga
+	Drop shadow	Slagskugga
 	Dynamic color sliders	Dynamiska färgreglage
 	East asian	Östasiatisk
 	Effect cache mb	Effektcache (MB)
@@ -1906,7 +1906,7 @@
 	File Handling	Filhantering
 	File path	Sökväg
 	Fill new type layers with placeholder	Fyll nya textlager med platshållartext
-	Font preview	Förhandsgranskning av teckensnitt
+	Font preview	Förhandsgranskning av typsnitt
 	Full size tip	Spets i full storlek
 	Gamut warning color	Färg för färgomfångsvarning
 	Gamut warning opacity	Opacitet för färgomfångsvarning
@@ -1970,7 +1970,7 @@
 	Recent files	Senaste filer
 	Recent fonts	Senaste typsnitt
 	Recover on launch	Återställ vid start
-	Remember workspace changes	Kom ihåg ändringar i arbetsmiljön
+	Remember workspace changes	Kom ihåg ändringar i arbetslayouten
 	Resize image during place	Ändra bildstorlek vid placering
 	Rotate view with trackpad	Rotera vyn med styrplattan
 	Same folder	Samma mapp
@@ -1984,7 +1984,7 @@
 	Show channels in color	Visa kanaler i färg
 	Show crosshair in brush tip	Visa hårkors i penselspetsen
 	Show extension panels	Visa tilläggspaneler
-	Show font names in english	Visa teckensnittsnamn på engelska
+	Show font names in english	Visa typsnittsnamn på engelska
 	Show menu colors	Visa menyfärger
 	Show only crosshair while painting	Visa bara hårkors vid målning
 	Show slice numbers	Visa skivnummer
@@ -2015,7 +2015,7 @@
 	UI font size	Teckenstorlek i gränssnittet
 	UI scale	Gränssnittsskala
 	Units & Rulers	Enheter och linjaler
-	Use additional plugins folder	Använd ytterligare mapp för plugin-program
+	Use additional plugins folder	Använd ytterligare mapp för plugins
 	Use esc to commit	Använd Esc för att verkställa
 	Use gpu	Använd GPU
 	Use legacy free transform	Använd äldre fri transformering
@@ -2045,7 +2045,7 @@
 	Adjustment Preview	Förhandsgranskning av justering
 	Airbrush: keeps depositing paint while the pointer rests.	Airbrush: fortsätter att lägga på färg medan pekaren står still.
 	Angle:	Vinkel:
-	Blend If	Blanda om
+	Blend If	Blandningsvillkor
 	Close Tab Group	Stäng flikgrupp
 	Collapse	Komprimera
 	Collapse All Groups	Komprimera alla grupper
@@ -2126,7 +2126,7 @@
 	Mixer Brush	Mixerpensel
 	Mixer Brush Tool	Verktyget Mixerpensel
 	Color Replacement Tool	Färgersättningsverktyg
-	Wet	Effektsignal
+	Wet	Våt
 	Mix	Blandning
 	Wetness Jitter	Vätevariation
 	Mix Jitter	Mixvariation
@@ -2212,8 +2212,8 @@
 	Move	Flytta
 	Pencil	Blyertspenna
 	Clone Stamp	Klonstämpel
-	Dodge	Ljusa upp
-	Burn	Bränn
+	Dodge	Skuggning
+	Burn	Efterbelysning
 	Quick Selection	Snabbmarkering
 	History Brush	Historikpensel
 	Color Replacement	Färgersättning
@@ -2250,7 +2250,7 @@
 	Pixel	Pixel
 	Adjustment	Justering
 	Drag (lasso) or click points (polygonal) · {add} add · {sub} subtract	Dra (lasso) eller klicka på punkter (polygonal) · {add} addera · {sub} subtrahera
-	Drag a crop box · drag inside to move · edges resize ({ratio} ratio, {centre} centre) · Space moves while drawing · arrows nudge · X swaps orientation · {commit} commits · Esc cancels	Dra en beskärningsram · dra inuti för att flytta · kanterna ändrar storlek ({ratio} kvot, {centre} centrerat) · Blanksteg flyttar medan du ritar · piltangenterna knuffar · X byter orientering · {commit} bekräftar · Esc avbryter
+	Drag a crop box · drag inside to move · edges resize ({ratio} ratio, {centre} centre) · Space moves while drawing · arrows nudge · X swaps orientation · {commit} commits · Esc cancels	Dra en beskärningsram · dra inuti för att flytta · kanterna ändrar storlek ({ratio} kvot, {centre} centrerat) · Blanksteg flyttar medan du ritar · piltangenterna flyttar stegvis · X byter orientering · {commit} bekräftar · Esc avbryter
 	{mode} Color · {bits} bit	{mode}-färg · {bits} bitar
 	Scrubby Zoom	Dragzoom
 	Auto Erase	Radera automatiskt
@@ -2378,8 +2378,8 @@ cameraRaw	Amount	Antal
 	Version	Version
 	% of all commits	% av alla commits
 	Lines +/−	Rader +/−
-	@{login}: {prs} PRs, {commits} commits, +{added} / −{deleted} lines (Δ {delta}), +{binAdded} / −{binDeleted} binary assets, {first} – {last}	@{login}: {prs} PR:er, {commits} commits, +{added} / −{deleted} rader (Δ {delta}), +{binAdded} / −{binDeleted} binära tillgångar, {first} – {last}
-	Blend If:	Blanda om:
+	@{login}: {prs} PRs, {commits} commits, +{added} / −{deleted} lines (Δ {delta}), +{binAdded} / −{binDeleted} binary assets, {first} – {last}	@{login}: {prs} PR:er, {commits} commits, +{added} / −{deleted} rader (Δ {delta}), +{binAdded} / −{binDeleted} binära resurser, {first} – {last}
+	Blend If:	Blandningsvillkor:
 	Channels:	Kanaler:
 	Knockout	Utsparning
 	Create new swatch	Skapa ny färgruta
@@ -2448,8 +2448,8 @@ cameraRaw	Amount	Antal
 	Set White Point	Ange vitpunkt
 	Unavailable in this color mode	Inte tillgängligt i det här färgläget
 	Selection Preview:	Förhandsvisning av markering:
-	Black Matte	Svart matte
-	White Matte	Vit matte
+	Black Matte	Svart kantfärg
+	White Matte	Vit kantfärg
 	Seafoam	Havsskum
 	Indigo	Indigo
 	Fuchsia	Fuchsia
@@ -2513,8 +2513,8 @@ fontWeight	Italic	Kursiv
 	Color Picker (Layer Style Color)	Färgväljare (lagerstilsfärg)
 	Auto Hide Notifications	Dölj aviseringar automatiskt
 	Notification Duration (seconds)	Visningstid för aviseringar (sekunder)
-	Bundle Arrow-Key Nudges	Samla knuffar med piltangenterna
-	Nudge Bundle Pause (ms)	Paus för knuffgruppering (ms)
+	Bundle Arrow-Key Nudges	Samla stegvisa flyttningar med piltangenterna
+	Nudge Bundle Pause (ms)	Paus för gruppering av stegvisa flyttningar (ms)
 	Appearance Mode	Utseendeläge
 	Dark Theme	Mörkt tema
 	Light Theme	Ljust tema
@@ -2645,7 +2645,7 @@ cameraData	Lens	Objektiv
 	Simulate Pressure	Simulera tryck
 	Stroke Path…	Kontur på bana…
 	Background Eraser	Bakgrundssuddgummi
-	Healing Brush	Läkningspensel
+	Healing Brush	Retuscheringspensel
 	Spot Healing Brush	Punktretuscheringspensel
 	Smudge	Smeta ut
 	Sponge	Svamp
@@ -2726,7 +2726,7 @@ curves	Smooth	Mjuk
 	3D	3D
 	Toolbars	Verktygsfält
 	Wand	Trollstav
-	Healing	Läkning
+	Healing	Retuschering
 	Pen	Penna
 	Hand	Hand
 	Sampler	Samplare
@@ -2737,7 +2737,7 @@ curves	Smooth	Mjuk
 	Patch	Lapp
 	Content-Aware Move	Innehållsmedveten flytt
 	Perspective Crop	Perspektivbeskärning
-	Dodge/Burn	Ljusa upp/mörka ned
+	Dodge/Burn	Skuggning/efterbelysning
 	Dynamics	Dynamik
 	Tilt	Lutning
 	Defaults restored.	Standardvärdena har återställts.
@@ -2754,7 +2754,7 @@ curves	Smooth	Mjuk
 	HSL/Grayscale	HSL/gråskala
 	Tone Curve	Tonkurva
 	Split Toning	Delad toning
-	Lens Corrections	Linskorrigeringar
+	Lens Corrections	Objektivkorrigeringar
 	Camera Calibration	Kamerakalibrering
 	Snapshots	Ögonblicksbilder
 	Recovery	Återställning
@@ -2763,7 +2763,7 @@ curves	Smooth	Mjuk
 	Sharpness	Skärpa
 	Color Noise Reduction	Brusreducering för färg
 	Luminance Smoothness	Luminansmjukhet
-	Lens	Lins
+	Lens	Objektiv
 	ISO	ISO
 	Focal Length35mm	Brännvidd (35 mm)
 	Aspect Ratio	Bildförhållande
@@ -2859,7 +2859,7 @@ curves	Smooth	Mjuk
 	Audio	Ljud
 	Frame Duration	Bildrutelängd
 	Loop	Loopa
-	Split at Playhead	Dela vid spelhuvudet
+	Split at Playhead	Dela vid spelmarkören
 	Flatten Frames Into Clips	Platta till bildrutor till klipp
 	Flatten Frames Into Layers	Platta till bildrutor till lager
 	Convert Frames > Video Layers	Konvertera bildrutor > videolager
@@ -2887,7 +2887,7 @@ curves	Smooth	Mjuk
 	Grayscale Slider	Gråskalereglage
 	Web Color	Webbfärg
 	HSB Color	HSB-färg
-	Total Ink	Total bläckmängd
+	Total Ink	Total färgmängd
 	Opacity Mask	Opacitetsmask
 	Document Size	Dokumentstorlek
 	Timing	Tidsinställning
@@ -2937,7 +2937,7 @@ curves	Smooth	Mjuk
 	Metering Mode	Mätmetod
 	Light Source	Ljuskälla
 	Flash	Blixt
-	Lens Info	Linsinfo
+	Lens Info	Objektivinfo
 	ISO Speed	ISO-känslighet
 	Subject Distance	Motivavstånd
 	DateTime Original	Ursprungligt datum och tid
@@ -3014,13 +3014,13 @@ curves	Smooth	Mjuk
 	Rotate Fixed	Rotera fast
 	Select Plane	Välj plan
 	Measure	Mät upp
-	Heal	Läk
-	Heal Off	Läk av
-	Heal On	Läk på
-	Heal Auto	Läk auto
+	Heal	Retuschera
+	Heal Off	Retuschera av
+	Heal On	Retuschera på
+	Heal Auto	Retuschera auto
 	Blend	Blanda
 	Brush Size	Penselstorlek
-	Heal Color	Läk färg
+	Heal Color	Retuschera färg
 	Result	Resultat
 	Duplicate	Duplicera
 	Fast	Snabb
@@ -3088,7 +3088,7 @@ layerLabel	No Color	Ingen färg
 	Clipping Mask	Klippmask
 	Tool Options	Verktygsalternativ
 	Color Picker	Färgväljare
-	Color Swatches	Färgprover
+	Color Swatches	Färgrutor
 	Linear Dodge	Linjär skuggning
 	Preview Image	Förhandsgranskningsbild
 	Save As	Spara som
@@ -3123,7 +3123,7 @@ layerLabel	No Color	Ingen färg
 	Snap to Grid	Fäst mot rutnät
 	Full Screen	Helskärm
 	Fullscreen	Helskärm
-	Workspaces	Arbetsytor
+	Workspaces	Arbetslayouter
 	Show All	Visa alla
 	Hidden	Dold
 	Duplicate Layer	Duplicera lager
@@ -3521,7 +3521,7 @@ layerLabel	No Color	Ingen färg
 	Hexagon	Hexagon
 	Horizontal Only	Endast horisontellt
 	Infinite	Oändlig
-	Ink Outlines	Bläckkonturer
+	Ink Outlines	Tryckfärgskonturer
 	Ivy	Murgröna
 	Left Diagonal	Vänster diagonal
 	Level Based	Nivåbaserad
@@ -3730,7 +3730,7 @@ layerLabel	No Color	Ingen färg
 	Layers to Files	Lager till filer
 	Legacy	Äldre
 	Lens Blur	Linsoskärpa
-	Lens Correction	Linskorrigering
+	Lens Correction	Objektivkorrigering
 	Lens Flare	Linsreflex
 	Lighting Effects	Ljuseffekter
 	Liquify	Gör flytande
@@ -4252,3 +4252,25 @@ shape	Appearance	Utseende
 	GPU Memory (MB, 0 = Automatic)	GPU-minne (MB, 0 = automatisk)
 	{name} was changed by another app after it was opened or saved here.	{name} har ändrats av en annan app efter att den öppnades eller sparades här.
 	Replace it with this document, or cancel and use File › Save As to keep both.	Ersätt den med det här dokumentet, eller avbryt och använd Arkiv › Spara som för att behålla båda.
+	Current Brush Load	Aktuell penselladdning
+	Load Brush	Ladda pensel
+	Clean Brush	Rengör pensel
+	Load the brush after each stroke	Ladda penseln efter varje penseldrag
+	Clean the brush after each stroke	Rengör penseln efter varje penseldrag
+	Pasting from other apps is unavailable	Det går inte att klistra in från andra appar
+	PhotoCraft can't reach the system clipboard in this session. On Wayland, a Flatpak sandbox hides the protocol that images from other apps are read through.	PhotoCraft kommer inte åt systemets urklipp i den här sessionen. Under Wayland döljer en Flatpak-sandlåda protokollet som bilder från andra appar läses via.
+	To paste from other apps, start PhotoCraft under XWayland: `{command}`	Starta PhotoCraft under XWayland för att klistra in från andra appar: `{command}`
+	Nothing to paste: PhotoCraft can't read the system clipboard here	Inget att klistra in: PhotoCraft kan inte läsa systemets urklipp här
+	Show file name in title	Visa filnamn i titeln
+	Memory Usage	Minnesanvändning
+	Per-document RAM limit (MB)	RAM-gräns per dokument (MB)
+	Installed RAM: {ram} MB; this limit: {percent}%	Installerat RAM: {ram} MB; denna gräns: {percent} %
+	Limits each open document's pixels plus History. Oldest undo states are discarded when the limit is exceeded.	Begränsar pixlarna i varje öppet dokument plus historiken. De äldsta ångrastegen tas bort när gränsen överskrids.
+	Applies immediately when saved. Memory is not reserved in advance.	Gäller direkt när du sparar. Minnet reserveras inte i förväg.
+	With GPU Memory set to Automatic, this also limits the GPU layer budget. That budget is capped at one quarter of installed RAM and, when known, three eighths of the graphics card's memory, with a 512 MB minimum. Raising this limit beyond those caps does not increase the GPU budget.	När GPU-minne är inställt på Automatiskt begränsar detta även GPU:ns lagerbudget. Budgeten är begränsad till en fjärdedel av det installerade RAM-minnet och, när det är känt, tre åttondelar av grafikkortets minne, med minst 512 MB. Att höja den här gränsen utöver dessa tak ökar inte GPU-budgeten.
+	Use	Använd
+	In Front	Framför
+	Behind	Bakom
+	DDS Options	DDS-alternativ
+	Generate Mipmaps	Generera mipmaps
+	GPU adapter	GPU-adapter
