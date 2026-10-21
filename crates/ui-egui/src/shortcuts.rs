@@ -546,37 +546,6 @@ pub fn handle(app: &mut PhotocraftApp, ctx: &egui::Context) {
     // reaches Edit › Clear while a polygon is being drawn.
     if !app.ui.polygon.is_empty() {
         let mods = ctx.input(|i| i.modifiers);
-        //Mahefa ajout
-        // Ctrl + Shift + Entrée -> Ajout à la sélection active (mode "add")
-        // Ctrl + Alt + Entrée -> Soustraction de la sélection active (mode "subtract")
-        if focus == Focus::None && !ctx.text_edit_focused() {
-            let mods = ctx.input(|i| i.modifiers);
-            if mods.command && mods.shift && !mods.alt && ctx.input_mut(|i| i.consume_key(mods, Key::Enter)) {
-                if let Err(e) = app.run("path.toSelection", json!({"mode": "add"})) {
-                    app.ui.status = e;
-                    app.ui.status_error = true;
-                }
-                return;
-            }
-            if mods.command && mods.alt && !mods.shift && ctx.input_mut(|i| i.consume_key(mods, Key::Enter)) {
-                if let Err(e) = app.run("path.toSelection", json!({"mode": "subtract"})) {
-                    app.ui.status = e;
-                    app.ui.status_error = true;
-                }
-                return;
-            }
-        }
-
-        // Ligne que vous avez repérée :
-        if !app.ui.polygon.is_empty() {
-            let mods = ctx.input(|i| i.modifiers);
-            if !mods.command && !mods.ctrl && !mods.shift && ctx.input_mut(|i| i.consume_key(mods, Key::Backspace) || i.consume_key(mods, Key::Delete)) {
-                crate::canvas::polygon_retract(app);
-                return;
-            }
-        }
-        //Mahefa ajout
-
         if !mods.command && !mods.ctrl && !mods.shift && ctx.input_mut(|i| i.consume_key(mods, Key::Backspace) || i.consume_key(mods, Key::Delete)) {
             crate::canvas::polygon_retract(app);
             return;
@@ -906,6 +875,84 @@ mod tests {
         assert!(crate::menus::is_enabled(&app, "edit.undo"));
         crate::menus::invoke(&mut app, &ctx, "edit.undo", serde_json::json!({})).unwrap();
         assert!(app.ui.pen.is_none());
+    }
+
+    /// A document with a work path, and a `press` helper that feeds one key press to `handle`.
+    fn selection_app() -> PhotocraftApp {
+        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), Default::default());
+        app.run("file.new", serde_json::json!({"width": 200, "height": 200})).unwrap();
+        app
+    }
+
+    fn set_work_rect(app: &mut PhotocraftApp, x: i32, y: i32, w: i32, h: i32) {
+        let knots = serde_json::json!([[x, y], [x + w, y], [x + w, y + h], [x, y + h]]);
+        app.run("path.set", serde_json::json!({"path": {"subpaths": [{"closed": true, "op": "combine", "knots": knots}]}})).unwrap();
+    }
+
+    fn selected(app: &PhotocraftApp) -> bool {
+        app.session.active().unwrap().doc.selection.is_some()
+    }
+
+    fn press_key(app: &mut PhotocraftApp, ctx: &egui::Context, key: Key, modifiers: Modifiers) {
+        ctx.begin_pass(egui::RawInput {
+            events: vec![
+                egui::Event::ModifiersChanged(modifiers),
+                egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers },
+            ],
+            ..Default::default()
+        });
+        handle(app, ctx);
+        ctx.end_pass().textures_delta.clear();
+    }
+
+    #[test]
+    fn ctrl_shift_enter_adds_the_path_to_the_selection() {
+        let mut app = selection_app();
+        let ctx = egui::Context::default();
+        set_work_rect(&mut app, 10, 10, 40, 40);
+        app.run("path.toSelection", serde_json::json!({})).unwrap();
+        let history = app.session.active().unwrap().history.past_len();
+
+        set_work_rect(&mut app, 100, 100, 40, 40);
+        press_key(&mut app, &ctx, Key::Enter, Modifiers::COMMAND | Modifiers::SHIFT);
+        assert_eq!(app.session.active().unwrap().history.past_len(), history + 2, "path.set + selection");
+        assert!(selected(&app));
+
+        // Removing the second rectangle leaves the first one: the key added, it did not replace.
+        press_key(&mut app, &ctx, Key::Enter, Modifiers::COMMAND | Modifiers::ALT);
+        assert!(selected(&app));
+    }
+
+    #[test]
+    fn ctrl_alt_enter_subtracts_the_path_from_the_selection() {
+        let mut app = selection_app();
+        let ctx = egui::Context::default();
+        set_work_rect(&mut app, 10, 10, 40, 40);
+        app.run("path.toSelection", serde_json::json!({})).unwrap();
+        assert!(selected(&app));
+
+        press_key(&mut app, &ctx, Key::Enter, Modifiers::COMMAND | Modifiers::ALT);
+        assert!(!selected(&app), "the only selected area was subtracted");
+    }
+
+    #[test]
+    fn add_and_subtract_path_keys_are_ignored_while_a_text_field_has_focus() {
+        let mut app = selection_app();
+        let ctx = egui::Context::default();
+        set_work_rect(&mut app, 10, 10, 40, 40);
+        app.run("path.toSelection", serde_json::json!({})).unwrap();
+
+        // Give a text field the keyboard focus, as a panel's numeric field would have it.
+        let mut text = String::new();
+        ctx.begin_pass(egui::RawInput::default());
+        egui::CentralPanel::default().show(&ctx, |ui| ui.text_edit_singleline(&mut text).request_focus());
+        ctx.end_pass().textures_delta.clear();
+
+        let history = app.session.active().unwrap().history.past_len();
+        press_key(&mut app, &ctx, Key::Enter, Modifiers::COMMAND | Modifiers::ALT);
+        press_key(&mut app, &ctx, Key::Enter, Modifiers::COMMAND | Modifiers::SHIFT);
+        assert_eq!(app.session.active().unwrap().history.past_len(), history);
+        assert!(selected(&app));
     }
 
     #[test]
