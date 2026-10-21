@@ -1,7 +1,10 @@
 //! Pointer, keyboard, colour precision and history regressions for shape appearance controls.
 use super::*;
-use egui::{Event, Key, Modifiers, PointerButton};
-use egui_kittest::{Harness, kittest::Queryable};
+use egui::{Key, Modifiers};
+use egui_kittest::{
+    Harness,
+    kittest::{NodeT, Queryable},
+};
 use photocraft_doc::ShapeLayer;
 
 fn app(mode: &str, depth: u32) -> PhotocraftApp {
@@ -57,11 +60,6 @@ fn harness(app: PhotocraftApp, properties: bool) -> Harness<'static, PhotocraftA
     h
 }
 
-fn pointer(h: &mut Harness<'_, PhotocraftApp>, pos: Pos2, pressed: bool) {
-    h.event(Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE });
-    h.step();
-}
-
 #[test]
 fn fill_and_stroke_swatches_open_with_pointer_and_keyboard_without_changing_paint() {
     for label in ["Fill color", "Stroke color"] {
@@ -94,32 +92,90 @@ fn fill_and_stroke_swatches_open_with_pointer_and_keyboard_without_changing_pain
     }
 }
 
+/// Open the popover's swatch folder `folder` and click its swatch `name`.
+fn click_swatch(h: &mut Harness<'_, PhotocraftApp>, folder: &str, name: &str) {
+    if h.query_by_label(name).is_none() {
+        h.get_by_label(folder).click();
+        h.run_steps(2);
+    }
+    h.get_by_label(name).click();
+    h.run_steps(2);
+}
+
 #[test]
 fn picking_tool_colours_enables_paint_and_reaches_the_next_shape() {
     let mut app = app("rgb", 32);
-    let mut picks = std::collections::VecDeque::from([[0.91, 0.17, 0.32], [0.12, 0.68, 0.93]]);
-    app.services.screen_pick = Some(Box::new(move |_| {
-        let (tx, receiver) = std::sync::mpsc::channel();
-        tx.send(Ok(crate::screen_picker::Capture::Color(picks.pop_front()))).unwrap();
-        crate::screen_picker::Pending { receiver, cancelled: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)) }
-    }));
     app.ui.tool_options.shape_fill = false;
     let mut h = harness(app, false);
-    for label in ["Fill color", "Stroke color"] {
+    for (label, swatch) in [("Fill color", "RGB Red"), ("Stroke color", "RGB Blue")] {
         h.get_by_label(label).click();
         h.run_steps(3);
-        h.get_by_label("Pick screen color").click();
-        h.run_steps(4);
+        click_swatch(&mut h, "RGB", swatch);
         h.key_press(Key::Escape);
         h.run_steps(2);
     }
     assert!(h.state().ui.tool_options.shape_fill);
     assert_eq!(h.state().ui.tool_options.stroke_width, 3.0);
-    assert_eq!(h.state().session.tools.foreground, [0.91, 0.17, 0.32, 1.0]);
-    assert_eq!(h.state().session.tools.background, [0.12, 0.68, 0.93, 1.0]);
+    assert_eq!(h.state().session.tools.foreground, [1.0, 0.0, 0.0, 1.0]);
+    assert_eq!(h.state().session.tools.background, [0.0, 0.0, 1.0, 1.0]);
+    // Both join the Recently Used Colors, newest first.
+    let recent: Vec<String> = crate::paint_picker::recent_colors(&h.state().session).into_iter().map(crate::color_picker_ui::hex).collect();
+    assert_eq!(recent, ["#0000ff", "#ff0000"]);
     finish_shape(h.state_mut(), Tool::Rectangle, [20.0, 20.0], [100.0, 80.0], Modifiers::NONE);
-    assert_eq!(shape(h.state()).fill, Some(solid_paint([0.91, 0.17, 0.32, 1.0])));
-    assert_eq!(shape(h.state()).stroke.as_ref().unwrap().paint, solid_paint([0.12, 0.68, 0.93, 1.0]));
+    assert_eq!(shape(h.state()).fill, Some(solid_paint([1.0, 0.0, 0.0, 1.0])));
+    assert_eq!(shape(h.state()).stroke.as_ref().unwrap().paint, solid_paint([0.0, 0.0, 1.0, 1.0]));
+}
+
+/// The popover is Photoshop's: the four paint types along the top with the Color Picker button at
+/// the right, then Recently Used Colors over the swatch folders. Without a selected shape, the
+/// next shape's defaults hold colours only, so Gradient is off; Pattern is off until shapes
+/// render pattern paint.
+#[test]
+fn popover_lays_out_photoshops_paint_types_recent_colours_and_folders() {
+    let mut app = app("rgb", 8);
+    crate::paint_picker::remember(&mut app, [0.2, 0.4, 0.6]);
+    let mut h = harness(app, false);
+    h.get_by_label("Fill color").click();
+    h.run_steps(3);
+    let types: Vec<Rect> = ["No Color", "Solid Color", "Gradient", "Pattern"].iter().map(|l| h.get_by_label(l).rect()).collect();
+    for w in types.windows(2) {
+        assert!((w[0].top() - w[1].top()).abs() < 0.5 && w[0].right() <= w[1].left(), "one row, Photoshop's order");
+    }
+    let picker = h.get_by_label("Color Picker").rect();
+    assert!((picker.center().y - types[0].center().y).abs() < 2.0 && picker.left() > types[3].right() + 40.0, "Color Picker at the top right");
+    assert!(h.get_by_label("Gradient").accesskit_node().is_disabled() && h.get_by_label("Pattern").accesskit_node().is_disabled());
+    assert!(!h.get_by_label("Solid Color").accesskit_node().is_disabled());
+    let recent = h.get_by_label("Recently Used Colors").rect();
+    let swatch = h.get_by_label("#336699").rect();
+    assert!(recent.top() > types[0].bottom() && swatch.top() > recent.bottom());
+    let folders: Vec<Rect> = ["Grays", "RGB", "Pastel", "Pure", "Dark"].iter().map(|l| h.get_by_label(l).rect()).collect();
+    assert!(folders[0].top() > swatch.bottom() && folders.windows(2).all(|w| w[1].top() > w[0].top()), "folders below, in library order");
+    assert!(h.query_by_label("RGB Red").is_none(), "folders start closed");
+    // The egui picker's channel fields are gone.
+    assert!(h.query_by_label("U8").is_none());
+}
+
+#[test]
+fn colour_picker_button_opens_the_full_picker_on_the_paint() {
+    let mut app = app("rgb", 8);
+    app.run("tools.setColors", json!({"foreground": "#102030", "background": "#405060"})).unwrap();
+    let mut h = harness(app, false);
+    h.get_by_label("Stroke color").click();
+    h.run_steps(3);
+    h.get_by_label("Color Picker").click();
+    h.run_steps(3);
+    let d = h.state().ui.dialogs.last().expect("the Color Picker dialog");
+    assert_eq!(d.fields["__label"], "Color Picker (Stroke Color)");
+    assert_eq!(d.fields["color"], "#405060", "on the next shape's stroke colour");
+    assert!(!egui::Popup::is_any_open(&h.ctx), "the popover gives way to the dialog");
+    let id = d.id;
+    h.state_mut().ui.dialog_mut(id).unwrap().fields.insert("color".into(), json!("#ff8800"));
+    crate::dialogs::confirm(h.state_mut(), id).unwrap();
+    let app = h.state();
+    assert_eq!(crate::color_picker_ui::hex([app.session.tools.background[0], app.session.tools.background[1], app.session.tools.background[2]]), "#ff8800");
+    assert_eq!(app.ui.tool_options.stroke_width, 3.0, "picking a stroke colour turns the stroke on");
+    assert_eq!(app.session.active().unwrap().history.past_len(), 0, "tool defaults do not edit the document");
+    assert_eq!(crate::paint_picker::recent_colors(&app.session).first().copied().map(crate::color_picker_ui::hex).as_deref(), Some("#ff8800"));
 }
 
 #[test]
@@ -130,14 +186,14 @@ fn no_colour_and_solid_choices_are_explicit_live_tool_defaults() {
     h.get_by_label("No Color").click();
     h.run_steps(2);
     assert!(!h.state().ui.tool_options.shape_fill);
-    h.get_by_label("Solid").click();
+    h.get_by_label("Solid Color").click();
     h.run_steps(2);
     assert!(h.state().ui.tool_options.shape_fill);
     h.key_press(Key::Escape);
     h.run_steps(2);
     h.get_by_label("Stroke color").click();
     h.run_steps(3);
-    h.get_by_label("Solid").click();
+    h.get_by_label("Solid Color").click();
     h.run_steps(2);
     assert_eq!(h.state().ui.tool_options.stroke_width, 3.0, "choosing unchanged white enables a stroke");
     h.get_by_label("No Color").click();
@@ -235,55 +291,69 @@ fn selected_shape_style_is_available_when_absent_and_dismissal_does_not_enable_i
     assert_eq!(shape(h.state()).stroke.as_ref().unwrap().dashes, [0.0, 2.0]);
 }
 
-fn popup_rect(h: &Harness<'_, PhotocraftApp>) -> Rect {
-    h.ctx
-        .memory(|m| m.areas().visible_layer_ids().into_iter().filter(|l| l.order == egui::Order::Foreground).find_map(|l| m.area_rect(l.id)))
-        .expect("colour picker is open")
-}
-
 #[test]
-fn selected_shape_colour_drags_apply_live_coalesce_per_gesture_and_keep_tool_defaults() {
+fn selected_shape_swatch_clicks_are_one_undo_step_each_and_keep_tool_defaults() {
     let mut app = app("rgb", 32);
-    app.run("shape.create", json!({"rect": [20,20,80,60], "fill": "#3270c0", "stroke": {"width": 5, "color": "#ee3355"}})).unwrap();
+    app.run("shape.create", json!({"rect": [20,20,80,60], "fill": [0.2, 0.4, 0.6, 0.5], "stroke": {"width": 5, "color": "#ee3355"}})).unwrap();
     let original = shape(&app).clone();
     let defaults = (app.session.tools.foreground, app.session.tools.background, app.ui.tool_options.clone());
     let history = app.session.active().unwrap().history.past_len();
     let mut h = harness(app, true);
     h.get_by_label("Set shape fill type").click();
     h.run_steps(4);
-    assert_eq!(h.state().session.active().unwrap().history.past_len(), history);
-    let rect = popup_rect(&h);
-    let start = rect.min + vec2(55.0, rect.height() * 0.5);
-    h.hover_at(start);
-    h.step();
-    pointer(&mut h, start, true);
-    for offset in [10.0, 20.0, 30.0] {
-        h.event(Event::PointerMoved(start + vec2(offset, 6.0)));
-        h.step();
-    }
-    pointer(&mut h, start + vec2(30.0, 6.0), false);
-    h.run_steps(2);
-    let first = shape(h.state()).clone();
-    assert_ne!(first.fill, original.fill);
-    assert_eq!(h.state().session.active().unwrap().history.past_len(), history + 1);
-    let next = start + vec2(60.0, 15.0);
-    h.hover_at(next);
-    h.step();
-    pointer(&mut h, next, true);
-    h.event(Event::PointerMoved(next + vec2(12.0, 4.0)));
-    h.step();
-    pointer(&mut h, next + vec2(12.0, 4.0), false);
-    h.run_steps(2);
+    assert_eq!(h.state().session.active().unwrap().history.past_len(), history, "opening changes nothing");
+    click_swatch(&mut h, "RGB", "RGB Green");
+    assert_eq!(shape(h.state()).fill, Some(solid_paint([0.0, 1.0, 0.0, 0.5])), "the fill's alpha stays");
+    click_swatch(&mut h, "RGB", "RGB Blue");
     assert_eq!(h.state().session.active().unwrap().history.past_len(), history + 2);
+    assert_eq!(shape(h.state()).stroke, original.stroke);
     h.key_press(Key::Escape);
     h.run_steps(2);
     assert_eq!((h.state().session.tools.foreground, h.state().session.tools.background, h.state().ui.tool_options.clone()), defaults);
     h.state_mut().run("edit.undo", json!({})).unwrap();
-    assert_eq!(shape(h.state()).fill, first.fill);
+    assert_eq!(shape(h.state()).fill, Some(solid_paint([0.0, 1.0, 0.0, 0.5])));
     h.state_mut().run("edit.undo", json!({})).unwrap();
     assert_eq!(shape(h.state()).fill, original.fill);
-    h.state_mut().run("edit.redo", json!({})).unwrap();
-    assert_eq!(shape(h.state()).fill, first.fill);
+}
+
+#[test]
+fn selected_shape_gradient_and_full_picker_edit_the_layer() {
+    let mut app = app("rgb", 8);
+    app.run("shape.create", json!({"rect": [20,20,80,60], "fill": "#3270c0", "stroke": null})).unwrap();
+    let history = app.session.active().unwrap().history.past_len();
+    let mut h = harness(app, true);
+    h.get_by_label("Set shape fill type").click();
+    h.run_steps(3);
+    h.get_by_label("Gradient").click();
+    h.run_steps(2);
+    let group = h.state().session.presets.gradients[0].name.clone();
+    let preset = h.state().session.presets.gradients[0].items[0].name.clone();
+    click_swatch(&mut h, &group, &preset);
+    assert!(matches!(shape(h.state()).fill, Some(photocraft_doc::Fill::Gradient { .. })), "a gradient preset fills the shape");
+    assert_eq!(h.state().session.active().unwrap().history.past_len(), history + 1);
+    h.key_press(Key::Escape);
+    h.run_steps(2);
+    // The stroke is off: the Color Picker turns it on in the picked colour, as one edit.
+    h.get_by_label("Set shape stroke type").click();
+    h.run_steps(3);
+    h.get_by_label("Color Picker").click();
+    h.run_steps(3);
+    let d = h.state().ui.dialogs.last().expect("the Color Picker dialog");
+    assert_eq!(d.fields["__label"], "Color Picker (Stroke Color)");
+    let id = d.id;
+    h.state_mut().ui.dialog_mut(id).unwrap().fields.insert("color".into(), json!("#00ff00"));
+    crate::dialogs::confirm(h.state_mut(), id).unwrap();
+    let stroke = shape(h.state()).stroke.clone().expect("the stroke is on");
+    assert_eq!((stroke.paint, stroke.width), (solid_paint([0.0, 1.0, 0.0, 1.0]), 3.0));
+    assert_eq!(h.state().session.active().unwrap().history.past_len(), history + 2);
+    // The fill's picker from the gradient: OK on the colour it opened with still makes it solid.
+    h.get_by_label("Set shape fill type").click();
+    h.run_steps(3);
+    h.get_by_label("Color Picker").click();
+    h.run_steps(3);
+    let id = h.state().ui.dialogs.last().unwrap().id;
+    crate::dialogs::confirm(h.state_mut(), id).unwrap();
+    assert_eq!(shape(h.state()).fill, Some(solid_paint(h.state().session.tools.foreground)));
 }
 
 /// #3997, #3999: after drawing a shape, the options bar's Fill swatch recolours it, as Stroke
@@ -296,17 +366,11 @@ fn options_bar_fill_swatch_recolours_the_shape_just_drawn() {
     finish_shape(&mut app, Tool::Rectangle, [20.0, 20.0], [100.0, 80.0], Modifiers::NONE);
     let original = shape(&app).clone();
     let history = app.session.active().unwrap().history.past_len();
+    crate::paint_picker::remember(&mut app, [0.2, 0.4, 0.6]);
     let mut h = harness(app, false);
     h.get_by_label("Fill color").click();
     h.run_steps(4);
-    let rect = popup_rect(&h);
-    let start = rect.min + vec2(55.0, rect.height() * 0.5);
-    h.hover_at(start);
-    h.step();
-    pointer(&mut h, start, true);
-    h.event(Event::PointerMoved(start + vec2(30.0, 6.0)));
-    h.step();
-    pointer(&mut h, start + vec2(30.0, 6.0), false);
+    h.get_by_label("#336699").click();
     h.run_steps(2);
     let edited = shape(h.state()).clone();
     assert_ne!(edited.fill, original.fill, "the Fill swatch recoloured the shape");

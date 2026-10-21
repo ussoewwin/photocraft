@@ -3265,3 +3265,12 @@ curves	Smooth	Lisser
 
 # Graphics Adapter preference (#1885)
 	GPU adapter	Adaptateur GPU
+
+# Shape Fill/Stroke popover and colour swatches opening the Color Picker
+	Color Picker	Sélecteur de couleurs
+	Recently Used Colors	Couleurs récemment utilisées
+	Stop Color	Couleur du point
+	Select a shape layer to use a gradient	Sélectionnez un calque de forme pour utiliser un dégradé
+	Shapes can't use patterns yet	Les formes ne peuvent pas encore utiliser de motifs
+	Solid Color	Couleur unie
+	Tint Color	Couleur de nuance

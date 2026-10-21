@@ -4175,3 +4175,9 @@ cameraRaw	Yellow	Sárga
 
 # Graphics Adapter preference (#1885)
 	GPU adapter	GPU-adapter
+
+# Shape Fill/Stroke popover and colour swatches opening the Color Picker
+	Recently Used Colors	Legutóbb használt színek
+	Stop Color	Színpont színe
+	Select a shape layer to use a gradient	Színátmenethez jelöljön ki egy alakzatréteget
+	Shapes can't use patterns yet	Az alakzatok még nem használhatnak mintákat

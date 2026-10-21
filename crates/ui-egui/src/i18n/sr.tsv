@@ -4329,3 +4329,9 @@ shape	Appearance	Izgled
 
 # Graphics Adapter preference (#1885)
 	GPU adapter	GPU adapter
+
+# Shape Fill/Stroke popover and colour swatches opening the Color Picker
+	Recently Used Colors	Nedavno korišćene boje
+	Stop Color	Boja tačke
+	Select a shape layer to use a gradient	Izaberite sloj oblika da biste koristili gradijent
+	Shapes can't use patterns yet	Oblici još ne mogu da koriste šare

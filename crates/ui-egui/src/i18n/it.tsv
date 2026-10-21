@@ -4373,3 +4373,9 @@ shape	Appearance	Aspetto
 
 # Graphics Adapter preference (#1885)
 	GPU adapter	Adattatore GPU
+
+# Shape Fill/Stroke popover and colour swatches opening the Color Picker
+	Recently Used Colors	Colori usati di recente
+	Stop Color	Colore del punto
+	Select a shape layer to use a gradient	Seleziona un livello forma per usare una sfumatura
+	Shapes can't use patterns yet	Le forme non possono ancora usare pattern

@@ -4046,3 +4046,9 @@ layerLabel	No Color	Sem cor
 
 # Graphics Adapter preference (#1885)
 	GPU adapter	Adaptador de GPU
+
+# Shape Fill/Stroke popover and colour swatches opening the Color Picker
+	Recently Used Colors	Cores usadas recentemente
+	Stop Color	Cor da parada
+	Select a shape layer to use a gradient	Selecione uma camada de forma para usar um gradiente
+	Shapes can't use patterns yet	Formas ainda não podem usar padrões

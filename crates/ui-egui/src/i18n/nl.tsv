@@ -4016,3 +4016,9 @@ curves	Smooth	Vloeiend maken
 
 # Graphics Adapter preference (#1885)
 	GPU adapter	GPU-adapter
+
+# Shape Fill/Stroke popover and colour swatches opening the Color Picker
+	Recently Used Colors	Recent gebruikte kleuren
+	Stop Color	Kleur van het punt
+	Select a shape layer to use a gradient	Selecteer een vormlaag om een verloop te gebruiken
+	Shapes can't use patterns yet	Vormen kunnen nog geen patronen gebruiken

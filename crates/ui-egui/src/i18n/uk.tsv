@@ -3965,3 +3965,10 @@ curves	Smooth	Згладити
 
 # Graphics Adapter preference (#1885)
 	GPU adapter	Адаптер GPU
+
+# Shape Fill/Stroke popover and colour swatches opening the Color Picker
+	Color Picker	Вибір кольору
+	Recently Used Colors	Нещодавно використані кольори
+	Stop Color	Колір контрольної точки
+	Select a shape layer to use a gradient	Виберіть шар фігури, щоб використати градієнт
+	Shapes can't use patterns yet	Фігури поки не можуть використовувати візерунки

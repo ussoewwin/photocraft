@@ -3744,3 +3744,10 @@ curves	Smooth	Làm mượt
 
 # Graphics Adapter preference (#1885)
 	GPU adapter	Bộ điều hợp GPU
+
+# Shape Fill/Stroke popover and colour swatches opening the Color Picker
+	Color Picker	Bộ chọn màu
+	Recently Used Colors	Màu dùng gần đây
+	Stop Color	Màu điểm dừng
+	Select a shape layer to use a gradient	Chọn một lớp hình để dùng dải màu
+	Shapes can't use patterns yet	Hình chưa thể dùng mẫu tô

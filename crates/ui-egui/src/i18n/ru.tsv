@@ -3231,3 +3231,12 @@ curves	Smooth	Сгладить
 
 # Graphics Adapter preference (#1885)
 	GPU adapter	Адаптер GPU
+
+# Shape Fill/Stroke popover and colour swatches opening the Color Picker
+	Color Picker	Палитра цветов
+	Recently Used Colors	Недавно использованные цвета
+	Stop Color	Цвет контрольной точки
+	Select a shape layer to use a gradient	Выберите слой-фигуру, чтобы использовать градиент
+	Shapes can't use patterns yet	Фигуры пока не могут использовать узоры
+	Solid Color	Сплошной цвет
+	Tint Color	Цвет оттенка
