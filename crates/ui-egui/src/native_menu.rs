@@ -636,6 +636,31 @@ pub fn photocraft_layout(items: &[MenuItem], lang: Lang, language: &str) -> Layo
     layout
 }
 
+/// [`photocraft_layout`] for the running app. A key equivalent comes back as a key press
+/// ([`NativeMenu::raw_input`]), so a ⌘, the user gave a command with no menu item (Fill with
+/// Foreground's key, say) runs that command: no menu item may show ⌘, then.
+pub fn app_layout(app: &PhotocraftApp, items: &[MenuItem], lang: Lang, language: &str) -> Layout {
+    fn clear(nodes: &mut [Node]) {
+        for n in nodes {
+            match n {
+                Node::Item(it) if it.shortcut.as_deref() == Some("Cmd+,") => it.shortcut = None,
+                Node::Submenu { children, .. } => clear(children),
+                _ => {}
+            }
+        }
+    }
+    let mut layout = photocraft_layout(items, lang, language);
+    let comma = crate::shortcuts::parse("Cmd+,");
+    let owner = crate::shortcut_dispatch::bindings(app).into_iter().find(|(_, sc)| Some(*sc) == comma).map(|(id, _)| id);
+    if let Some(command) = owner.filter(|id| layout.bar.find(id).is_none()) {
+        for m in &mut layout.bar.menus {
+            clear(&mut m.children);
+        }
+        layout.clashes.push(Clash { shortcut: "Cmd+,", system: "Settings", command, resolution: "Settings has no shortcut" });
+    }
+    layout
+}
+
 // ----------------------------------------------------------------------------- the app's side
 
 /// What the native menu reports.
@@ -734,7 +759,7 @@ pub fn sync(app: &mut PhotocraftApp, ctx: &egui::Context) {
     for it in &mut items {
         it.enabled &= crate::menus::modal_allows(app, &it.id);
     }
-    let layout = photocraft_layout(&items, lang, &app.session.prefs().interface.language);
+    let layout = app_layout(app, &items, lang, &app.session.prefs().interface.language);
     let Some(menu) = app.services.native_menu.as_mut() else { return };
     if !menu.logged {
         for c in &layout.clashes {
@@ -884,6 +909,28 @@ mod tests {
         assert_eq!(l.bar.find("edit.preferences.general").unwrap().shortcut, None);
         let clash = l.clashes.iter().find(|c| c.shortcut == "Cmd+,").unwrap();
         assert_eq!((clash.command.as_str(), clash.resolution), ("layer.hideLayers", "Settings has no shortcut"));
+    }
+
+    /// A saved ⌘, on a command with no menu item: the key press runs that command, so the live
+    /// menu bar must not show ⌘, on Settings.
+    #[test]
+    fn a_saved_cmd_comma_without_a_menu_item_takes_the_key_from_settings() {
+        let mut a = app(true);
+        a.session.prefs.edit(|p| p.shortcuts.insert("edit.fillForeground".into(), "Cmd+,".into()));
+        let items = crate::menus::menu_items(&a);
+        assert!(!items.iter().any(|it| it.id == "edit.fillForeground"), "the test needs a command with no menu item");
+        let comma = crate::shortcuts::parse("Cmd+,");
+        let keys = crate::shortcut_dispatch::bindings(&a);
+        assert_eq!(keys.iter().find(|(_, sc)| Some(*sc) == comma).map(|(id, _)| id.as_str()), Some("edit.fillForeground"));
+        let l = app_layout(&a, &items, Lang::EN, "auto");
+        assert!(l.bar.items().iter().all(|it| it.shortcut.as_deref() != Some("Cmd+,")));
+        assert_eq!(l.clashes.iter().find(|c| c.shortcut == "Cmd+,").map(|c| c.command.as_str()), Some("edit.fillForeground"));
+        if cfg!(target_os = "macos") {
+            // Without that key, Settings keeps its ⌘, default.
+            let plain = app(true);
+            let l = app_layout(&plain, &crate::menus::menu_items(&plain), Lang::EN, "auto");
+            assert_eq!(l.bar.find("edit.preferences.general").unwrap().shortcut.as_deref(), Some("Cmd+,"));
+        }
     }
 
     /// The same for an item that moves to the app menu ahead of Settings (About).
