@@ -806,6 +806,11 @@ fn take_turned_page(f: &mut Map<String, Value>, r: &Value) {
     };
     f.insert("printerSettings".into(), json!(settings));
     f.insert("paper".into(), json!([w, h]));
+    // The printable area turns with the paper; left portrait, it wouldn't fit the turned sheet.
+    match r.get("printable").filter(|v| v.as_array().is_some_and(|a| a.len() == 4 && a.iter().all(Value::is_number))) {
+        Some(area) => f.insert("printable".into(), area.clone()),
+        None => f.remove("printable"),
+    };
     f.insert("orientation".into(), json!("portrait"));
     f.remove("__pageError");
 }
@@ -1666,6 +1671,32 @@ mod tests {
             take_turned_page(&mut f, &partial);
             assert_eq!((f.get("printerSettings"), f.get("paper")), (Some(&json!("old")), Some(&json!([595.28, 841.89]))), "{partial}");
             assert!(f.get("__pageError").is_some(), "{partial}");
+        }
+    }
+
+    /// #7782: the driver's printable area turns with the paper. Left portrait on a landscape
+    /// sheet, Scale to Fit Media refused the print instead of fitting it.
+    #[test]
+    fn a_turn_takes_the_printable_area_with_the_paper() {
+        let (mut app, ctx) = app();
+        crate::menus::invoke(&mut app, &ctx, "file.new", json!({"width": 500, "height": 1000})).unwrap();
+        let doc = app.session.active().unwrap().doc.clone();
+        let mut f = Map::new();
+        f.insert("scaleToFit".into(), json!(true));
+        f.insert("dryRun".into(), json!(false));
+        f.insert("printerSettings".into(), json!("old"));
+        f.insert("paper".into(), json!([842.29, 1191.14]));
+        f.insert("printable".into(), json!([12.0, 12.0, 818.29, 1167.14]));
+        f.insert("orientation".into(), json!("portrait"));
+        take_turned_page(&mut f, &json!({"printerSettings": "new", "paper": [1191.14, 842.29], "printable": [12.0, 12.0, 1167.14, 818.29]}));
+        let l = photocraft_engine::print_cmds::layout(&doc, &print_params(&f), "file.print");
+        assert_eq!(l.map(|l| l.paper).map_err(|e| e.to_string()), Ok((1191.14, 842.29)));
+        assert_eq!(f.get("printable"), Some(&json!([12.0, 12.0, 1167.14, 818.29])));
+        // An answer without a usable area drops the old one: the fixed margin, not a stale area.
+        for area in [Value::Null, json!([12.0, 12.0, 818.29]), json!("x")] {
+            f.insert("printable".into(), json!([12.0, 12.0, 1167.14, 818.29]));
+            take_turned_page(&mut f, &json!({"printerSettings": "newer", "paper": [842.29, 1191.14], "printable": area}));
+            assert!(f.get("printable").is_none(), "{area}");
         }
     }
 }
