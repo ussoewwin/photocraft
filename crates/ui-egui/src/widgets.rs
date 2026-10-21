@@ -1658,7 +1658,10 @@ pub fn menu_scroll<R>(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> R
     // A popup's Ui is only as tall as the popup was last frame (400 pt on the first), so ask for
     // the whole room: the area still shrinks to its rows when they need less.
     let mut area = egui::ScrollArea::vertical().id_salt(id).max_height(room).min_scrolled_height(room);
-    let pending = ui.data(|d| d.get_temp::<f32>(id.with("step"))).unwrap_or(0.0);
+    // A step is taken on the pass after the arrow was hovered, and only then: a menu closed while
+    // an arrow was hovered doesn't jump when it next opens.
+    let now = ui.ctx().cumulative_pass_nr();
+    let pending = ui.data(|d| d.get_temp::<(f32, u64)>(id.with("step"))).filter(|&(_, pass)| pass.saturating_add(1) == now).map_or(0.0, |(step, _)| step);
     if pending != 0.0 {
         area = area.vertical_scroll_offset((offset + pending).max(0.0));
     }
@@ -1675,15 +1678,16 @@ pub fn menu_scroll<R>(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> R
     ui.data_mut(|d| {
         d.insert_temp(id, max > 0.5);
         d.insert_temp(id.with("offset"), offset);
-        d.insert_temp(id.with("step"), step);
+        d.insert_temp(id.with("step"), (step, now));
     });
     out.inner
 }
 
-/// One scroll arrow of an overflowing menu: hovering scrolls that way (as in Photoshop's and the
-/// system menus), clicking jumps a page. Returns the scroll step for the next frame.
+/// One scroll arrow of an overflowing menu: hovering scrolls that way, as in Photoshop's and the
+/// system menus. It doesn't page on a click: egui closes a context menu on any click inside it,
+/// so the page would never be seen. Returns the scroll step for the next frame.
 fn menu_scroll_arrow(ui: &mut Ui, up: bool, enabled: bool) -> f32 {
-    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width().max(MENU_ARROW_HEIGHT), MENU_ARROW_HEIGHT), Sense::click());
+    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width().max(MENU_ARROW_HEIGHT), MENU_ARROW_HEIGHT), Sense::hover());
     let t = Tokens::get(ui.ctx());
     let color = if enabled { t.text } else { t.text_dim.gamma_multiply(0.5) };
     let (c, h) = (rect.center(), 3.5);
@@ -1696,25 +1700,21 @@ fn menu_scroll_arrow(ui: &mut Ui, up: bool, enabled: bool) -> f32 {
     if !enabled {
         return 0.0;
     }
-    let sign = if up { -1.0 } else { 1.0 };
-    if resp.clicked() {
-        sign * MENU_ARROW_PAGE
-    } else if resp.hovered() {
-        ui.ctx().request_repaint();
-        sign * MENU_ARROW_SPEED * ui.input(|i| i.stable_dt).clamp(0.0, 0.1)
-    } else {
-        0.0
+    if !resp.hovered() {
+        return 0.0;
     }
+    ui.ctx().request_repaint();
+    let sign = if up { -1.0 } else { 1.0 };
+    sign * MENU_ARROW_SPEED * ui.input(|i| i.stable_dt).clamp(0.0, 0.1)
 }
 
 /// Gap kept between a context menu and the window's edges, and the shortest it gets.
 const MENU_EDGE: f32 = 4.0;
 const MENU_MIN_HEIGHT: f32 = 120.0;
-/// Height of an overflowing menu's scroll arrows, how fast hovering one scrolls (points per
-/// second) and how far a click on one jumps.
+/// Height of an overflowing menu's scroll arrows, and how fast hovering one scrolls (points per
+/// second).
 const MENU_ARROW_HEIGHT: f32 = 14.0;
 const MENU_ARROW_SPEED: f32 = 400.0;
-const MENU_ARROW_PAGE: f32 = 200.0;
 
 /// The colour picker popup of a colour swatch: a click on `swatch` toggles it, a click outside
 /// closes it. While open, its left edge stays where it first showed (at the swatch, or further
@@ -2079,6 +2079,40 @@ mod tests {
         long.event(egui::Event::PointerMoved(below));
         long.run_steps(10);
         assert!(long.state().2 > 0.0, "hovering the lower arrow scrolls down");
+    }
+
+    /// #2091: the step a hovered arrow leaves for the next frame isn't taken when a menu closed
+    /// while hovering it opens again.
+    #[test]
+    fn a_reopened_menu_takes_no_stale_scroll_step() {
+        // (shown, scroll offset, bottom of the menu)
+        type S = (bool, f32, f32);
+        let mut h = Harness::builder().with_size(egui::vec2(220.0, 300.0)).build_ui_state(
+            |ui, s: &mut S| {
+                let id = ui.id().with("menu_scroll");
+                if s.0 {
+                    super::menu_scroll(ui, |ui| {
+                        for i in 0..80 {
+                            ui.label(format!("Item {i}"));
+                        }
+                    });
+                    s.2 = ui.min_rect().bottom();
+                }
+                s.1 = ui.data(|d| d.get_temp::<f32>(id.with("offset"))).unwrap_or(0.0);
+            },
+            (true, 0.0, 0.0),
+        );
+        h.run_steps(3);
+        h.event(egui::Event::PointerMoved(egui::pos2(100.0, h.state().2 - super::MENU_ARROW_HEIGHT / 2.0)));
+        h.run_steps(3);
+        let offset = h.state().1;
+        assert!(offset > 0.0, "hovering the lower arrow scrolls down");
+        h.state_mut().0 = false;
+        h.run();
+        h.state_mut().0 = true;
+        h.event(egui::Event::PointerGone);
+        h.run();
+        assert_eq!(h.state().1, offset, "the reopened menu stays where it was left");
     }
 
     /// Sets up a test with one value field. Its state is its value and how many times it changed.
