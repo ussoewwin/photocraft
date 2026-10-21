@@ -405,8 +405,14 @@ pub fn mac_layout(bar: &MenuBar, lang: Lang) -> Layout {
         menu.extend([Node::Item(it), Node::Separator]);
     }
     if let Some(s) = settings {
+        // Scan the items, not `bound`: a saved key (Hide Layers on ⌘,, as in Photoshop) and
+        // Settings' own default can both name ⌘,, and the map keeps only one of them.
         let own = node_ids(&s);
-        let comma = bound.get("Cmd+,").filter(|cmd| !own.contains(*cmd)).cloned();
+        let comma = bar
+            .items()
+            .into_iter()
+            .find(|it| !own.contains(&it.id) && it.shortcut.as_deref().and_then(Chord::parse).is_some_and(|c| c.portable() == "Cmd+,"))
+            .map(|it| it.id.clone());
         menu.push(settings_node(s, comma, lang, &mut clashes));
     }
     menu.extend(appearance);
@@ -495,9 +501,14 @@ fn settings_node(node: Node, comma_taken: Option<String>, lang: Lang, clashes: &
     if let Some(command) = &comma_taken {
         clashes.push(Clash { shortcut: "Cmd+,", system: "Settings", command: command.clone(), resolution: "Settings has no shortcut" });
     }
+    // Another command's ⌘, wins: Settings drops the key even when it is Settings' own default.
     let give = |it: &mut Item| {
-        if comma_taken.is_none() && it.shortcut.is_none() {
-            it.shortcut = Some("Cmd+,".into());
+        if comma_taken.is_none() {
+            if it.shortcut.is_none() {
+                it.shortcut = Some("Cmd+,".into());
+            }
+        } else if it.shortcut.as_deref().and_then(Chord::parse).is_some_and(|c| c.portable() == "Cmd+,") {
+            it.shortcut = None;
         }
     };
     match node {
@@ -856,6 +867,21 @@ mod tests {
         assert!(ids(&window.children).ends_with(&["<BringAllToFront>".into(), "---".into(), "window.document.0".into()]));
         let file = l.bar.menus.iter().find(|m| m.title == "File").unwrap();
         assert!(!file.children.contains(&Node::Standard(Standard::CloseWindow)), "⌘W stays File › Close");
+    }
+
+    /// A restored profile that gives Hide Layers ⌘, (Photoshop's key) while Settings keeps its
+    /// macOS default: the saved key wins and Settings drops ⌘, rather than sharing it.
+    #[test]
+    fn a_saved_cmd_comma_takes_the_key_from_settings() {
+        let mut a = app(true);
+        // Loaded as saved, not set through Edit › Keyboard Shortcuts (which would clear Settings' row).
+        a.session.prefs.edit(|p| p.shortcuts.insert("layer.hideLayers".into(), "Cmd+,".into()));
+        let l = photocraft_layout(&crate::menus::menu_items(&a), Lang::EN, "auto");
+        let comma: Vec<&str> = l.bar.items().into_iter().filter(|it| it.shortcut.as_deref() == Some("Cmd+,")).map(|it| it.id.as_str()).collect();
+        assert_eq!(comma, ["layer.hideLayers"]);
+        assert_eq!(l.bar.find("edit.preferences.general").unwrap().shortcut, None);
+        let clash = l.clashes.iter().find(|c| c.shortcut == "Cmd+,").unwrap();
+        assert_eq!((clash.command.as_str(), clash.resolution), ("layer.hideLayers", "Settings has no shortcut"));
     }
 
     #[test]
