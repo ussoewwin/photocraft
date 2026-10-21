@@ -1825,7 +1825,8 @@ pub(crate) fn ensure_filter_preview(app: &mut PhotocraftApp, idx: usize, ctx: &e
         params = crate::select_mask_view::request_params(&d.fields, params);
     }
     let st = app.session.documents().get(idx)?;
-    let k = filter_preview_factor(app, &st.doc, &cmd, &params);
+    let fade = cmd == "edit.fade";
+    let k = if fade { 1 } else { filter_preview_factor(app, &st.doc, &cmd, &params) };
     let request = crate::filter_dialog::FilterPreviewKey {
         doc: st.doc.id,
         revision: st.revision,
@@ -1837,6 +1838,21 @@ pub(crate) fn ensure_filter_preview(app: &mut PhotocraftApp, idx: usize, ctx: &e
         k,
     };
     let key = request.doc.0 ^ (1u64 << 61);
+    // Fade blends the layer back towards its pixels before the last step, which only the
+    // session's history holds: one blend over the changed area at full size, computed here (#8230).
+    if fade {
+        if app.filter_preview.as_ref().is_none_or(|p| p.key != request) {
+            let t0 = crate::gpu_canvas::now_ms();
+            let computed = photocraft_engine::edit_menu_cmds::fade_preview(&app.session, &request.params).ok().map(|doc| {
+                let buffer = photocraft_compose::flatten(&doc);
+                (std::sync::Arc::new(doc), buffer)
+            });
+            publish_filter_preview(app, idx, request, computed, crate::gpu_canvas::now_ms() - t0);
+        }
+        let preview = app.filter_preview.as_ref()?;
+        let result = preview.result.as_ref()?;
+        return Some((preview.key.k, key, [result.size.width, result.size.height]));
+    }
     // Every filter's preview computes off the UI thread in the desktop app: Gaussian Blur at
     // 1000 px takes long enough to freeze the window. Once the slider settles, a preview still
     // running for an older value is cancelled.
