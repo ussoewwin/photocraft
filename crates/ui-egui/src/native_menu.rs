@@ -388,6 +388,14 @@ pub fn mac_layout(bar: &MenuBar, lang: Lang) -> Layout {
     let mut clashes = Vec::new();
     let bound: HashMap<String, String> = bar.items().iter().filter_map(|it| Some((Chord::parse(it.shortcut.as_deref()?)?.portable(), it.id.clone()))).collect();
     let taken = |sc: &str, own: Option<&str>| bound.get(sc).filter(|cmd| Some(cmd.as_str()) != own).cloned();
+    // Every ⌘, owner, read before About, Quit and Appearance leave the bar: `bound` keeps only one
+    // per key, and a saved key (Hide Layers on ⌘,, as in Photoshop) can share it with Settings.
+    let comma_owners: Vec<String> = bar
+        .items()
+        .into_iter()
+        .filter(|it| it.shortcut.as_deref().and_then(Chord::parse).is_some_and(|c| c.portable() == "Cmd+,"))
+        .map(|it| it.id.clone())
+        .collect();
     let named = |s: &str| crate::i18n::fmt(tr(lang, s), &[("app", APP_NAME)]);
 
     let about = take(&mut bar, |n| matches!(n, Node::Item(it) if it.role == Some(ItemRole::About)));
@@ -405,14 +413,8 @@ pub fn mac_layout(bar: &MenuBar, lang: Lang) -> Layout {
         menu.extend([Node::Item(it), Node::Separator]);
     }
     if let Some(s) = settings {
-        // Scan the items, not `bound`: a saved key (Hide Layers on ⌘,, as in Photoshop) and
-        // Settings' own default can both name ⌘,, and the map keeps only one of them.
         let own = node_ids(&s);
-        let comma = bar
-            .items()
-            .into_iter()
-            .find(|it| !own.contains(&it.id) && it.shortcut.as_deref().and_then(Chord::parse).is_some_and(|c| c.portable() == "Cmd+,"))
-            .map(|it| it.id.clone());
+        let comma = comma_owners.iter().find(|id| !own.contains(*id)).cloned();
         menu.push(settings_node(s, comma, lang, &mut clashes));
     }
     menu.extend(appearance);
@@ -882,6 +884,18 @@ mod tests {
         assert_eq!(l.bar.find("edit.preferences.general").unwrap().shortcut, None);
         let clash = l.clashes.iter().find(|c| c.shortcut == "Cmd+,").unwrap();
         assert_eq!((clash.command.as_str(), clash.resolution), ("layer.hideLayers", "Settings has no shortcut"));
+    }
+
+    /// The same for an item that moves to the app menu ahead of Settings (About).
+    #[test]
+    fn a_saved_cmd_comma_on_about_takes_the_key_from_settings() {
+        let mut a = app(true);
+        a.session.prefs.edit(|p| p.shortcuts.insert("help.about".into(), "Cmd+,".into()));
+        let l = photocraft_layout(&crate::menus::menu_items(&a), Lang::EN, "auto");
+        let comma: Vec<&str> = l.bar.items().into_iter().filter(|it| it.shortcut.as_deref() == Some("Cmd+,")).map(|it| it.id.as_str()).collect();
+        assert_eq!(comma, ["help.about"]);
+        assert_eq!(l.bar.find("edit.preferences.general").unwrap().shortcut, None);
+        assert_eq!(l.clashes.iter().find(|c| c.shortcut == "Cmd+,").map(|c| c.command.as_str()), Some("help.about"));
     }
 
     #[test]
