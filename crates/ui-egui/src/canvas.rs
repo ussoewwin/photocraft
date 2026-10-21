@@ -6333,6 +6333,32 @@ mod tests {
         assert_eq!(app.perf.frame_refresh_ms, app.perf.composite_ms + app.perf.upload_ms);
     }
 
+    /// #8230: Edit › Fade opens with a Preview checkbox, as in Photoshop, and the canvas shows the
+    /// layer faded with the dialog's opacity, at full size, on the desktop and the inline path
+    /// alike. The document and its history stay as they were until OK.
+    #[test]
+    fn fade_dialog_previews_the_faded_layer() {
+        for background in [false, true] {
+            let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+            app.background_jobs = background;
+            app.run("file.new", json!({"width": 40, "height": 30, "background": "white"})).unwrap();
+            app.run("edit.fill", json!({"color": "#000000"})).unwrap();
+            let id = crate::filter_dialog::open(&mut app, "edit.fade").expect("Fade has a dialog");
+            let d = app.ui.dialogs.iter_mut().find(|d| d.id == id).expect("the dialog");
+            assert_eq!(d.fields.get("__preview"), Some(&json!(true)), "a Preview checkbox, on");
+            d.fields.insert("opacity".into(), json!(25));
+            let steps = app.session.active().unwrap().history.past_len();
+            let (k, _, size) = ensure_filter_preview(&mut app, 0, &egui::Context::default()).expect("a preview");
+            assert_eq!((k, size), (1, [40, 30]), "background jobs {background}");
+            let st = app.session.active().unwrap();
+            let layer = st.active_layer.unwrap();
+            let shown = app.filter_preview.as_ref().and_then(|p| p.result.as_ref()).expect("a result").layer(layer).unwrap().surface().unwrap().pixel(3, 3);
+            assert!((shown[0] - 0.75).abs() < 0.01, "background jobs {background}: {shown:?}");
+            assert_eq!(st.doc.layer(layer).unwrap().surface().unwrap().pixel(3, 3)[0], 0.0, "the layer itself is untouched");
+            assert_eq!(st.history.past_len(), steps, "no history step");
+        }
+    }
+
     /// #6326: a filter's live preview is never coarser than the screen. On a document big enough
     /// for a reduced proxy, the view at 100 % previews at full resolution, and only a view zoomed
     /// out far enough uses the proxy. Through `ensure_filter_preview`, so the factor the canvas
