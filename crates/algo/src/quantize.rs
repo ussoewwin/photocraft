@@ -178,7 +178,7 @@ fn histogram(px: &[[f32; 4]]) -> Vec<(Rgb8, u32)> {
 }
 
 /// Median cut over `pts` (feature vectors + weights) into at most `n` boxes; returns box means.
-fn median_cut(pts: &[([f32; 3], u32)], n: usize) -> Vec<[f32; 3]> {
+pub(crate) fn median_cut(pts: &[([f32; 3], u32)], n: usize) -> Vec<[f32; 3]> {
     if pts.is_empty() || n == 0 {
         return Vec::new();
     }
@@ -230,7 +230,7 @@ fn median_cut(pts: &[([f32; 3], u32)], n: usize) -> Vec<[f32; 3]> {
 }
 
 /// Lloyd refinement of `centers` over weighted points.
-fn kmeans(pts: &[([f32; 3], u32)], centers: &mut [[f32; 3]], iters: usize) {
+pub(crate) fn kmeans(pts: &[([f32; 3], u32)], centers: &mut [[f32; 3]], iters: usize) {
     if centers.is_empty() {
         // No room left (the forced colours fill the palette): nothing to refine.
         return;
