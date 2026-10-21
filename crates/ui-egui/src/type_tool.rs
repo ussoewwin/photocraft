@@ -1018,12 +1018,12 @@ pub fn commit_with(app: &mut PhotocraftApp, mods: egui::Modifiers) {
 /// Selection highlight, caret and text frame over the canvas.
 pub fn draw_overlay(app: &mut PhotocraftApp, painter: &egui::Painter, xf: &ViewXform) {
     app.ui.type_box_overflow = false;
-    let Some(ed) = app.ui.text_edit.clone() else { return };
+    let Some(ed) = app.ui.text_edit.clone() else { app.ui.type_port_hover = None; return };
     if ed.dragging {
         app.ui.caret_blink_time = painter.ctx().input(|i| i.time);
     }
     let id = LayerId(ed.layer);
-    let Some((l, aff, text)) = layout(app, id) else { return };
+    let Some((l, aff, text)) = layout(app, id) else { app.ui.type_port_hover = None; return };
     if ed.mask {
         draw_mask_overlay(app, painter, xf, id);
     }
@@ -1071,9 +1071,15 @@ pub fn draw_overlay(app: &mut PhotocraftApp, painter: &egui::Painter, xf: &ViewX
             app.ui.type_box_overflow = over;
             if over {
                 overflow_port(app, painter, scr_t(x + width, y + height));
+            } else {
+                // The port is gone under a resting pointer: a stale hover clock would show the
+                // hint instantly when it comes back, instead of after a fresh hover.
+                app.ui.type_port_hover = None;
             }
         }
         _ => {
+            // No box, no port: the hover clock is meaningless there too.
+            app.ui.type_port_hover = None;
             for ln in &l.lines {
                 // Horizontal: just under the baseline; vertical: the column's centre line.
                 let y = if l.vertical { ln.baseline } else { ln.baseline + ln.descent * 0.25 };
@@ -1165,8 +1171,18 @@ fn overflow_port(app: &mut PhotocraftApp, painter: &egui::Painter, corner: Pos2)
         t.text,
     );
     let (pad, lead) = (vec2(7.0, 5.0), vec2(10.0, 6.0));
-    let a = c + lead;
-    let rect = egui::Rect::from_min_size(a, galley.size() + pad);
+    let size = galley.size() + pad;
+    // Down-right of the port by default; a port near the screen's right/bottom edge flips the
+    // card left/up instead, so the guidance never runs off the visible area.
+    let screen = ctx.content_rect();
+    let mut a = c + lead;
+    if a.x + size.x > screen.right() {
+        a.x = c.x - lead.x - size.x;
+    }
+    if a.y + size.y > screen.bottom() {
+        a.y = c.y - lead.y - size.y;
+    }
+    let rect = egui::Rect::from_min_size(a, size);
     painter.rect_filled(rect.expand(1.0), 2.0, t.shadow);
     painter.rect_filled(rect, 2.0, t.card);
     painter.galley(rect.min + pad * 0.5, galley, t.text);

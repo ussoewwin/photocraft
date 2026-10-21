@@ -268,10 +268,11 @@ impl TextLayout {
     /// overflow (`layout` breaks out of the line loop), so any character the laid-out lines
     /// don't cover — the last line's range ends short of the whole text — points at dropped
     /// content. Text that fits completely covers its end: paragraph breaks are inside their
-    /// lines, and a trailing empty paragraph that fits gains its own (empty) line. Callers
-    /// gate this on the shape being a box; point text has no box to overflow.
+    /// lines, and a trailing empty paragraph that fits gains its own (empty) line. Empty text
+    /// has nothing to drop. Callers gate this on the shape being a box; point text has no box
+    /// to overflow.
     pub fn overflows(&self, text: &str) -> bool {
-        self.lines.last().is_none_or(|ln| ln.range.end < text.len())
+        !text.is_empty() && self.lines.last().is_none_or(|ln| ln.range.end < text.len())
     }
 
     /// Byte offset of the caret nearest to a text-space point.

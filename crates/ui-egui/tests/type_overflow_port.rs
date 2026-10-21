@@ -10,24 +10,34 @@ use photocraft_ui_egui::PhotocraftApp;
 use serde_json::json;
 
 type Harness = egui_kittest::Harness<'static, PhotocraftApp>;
+/// An offscreen wgpu harness running the app: the only part that can fail for lack of a GPU is
+/// the adapter creation, which kittest turns into a panic — caught and read as a skip.
+/// An offscreen wgpu harness running the app: the only part that can fail for lack of a GPU is
+/// the adapter creation, which kittest turns into a panic — caught and read as a skip. The
+/// harness build itself isn't caught, so a real failure fails the test.
 fn harness() -> Option<Harness> {
-    let built = std::panic::catch_unwind(|| {
-        egui_kittest::Harness::builder().with_size(egui::vec2(900.0, 640.0)).with_max_steps(64).wgpu().build_eframe(|cc| {
-            PhotocraftApp::setup_context(&cc.egui_ctx, Default::default());
-            let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), Default::default());
-            if let Some(rs) = cc.wgpu_render_state.as_ref() {
-                app.set_wgpu(rs.clone());
-            }
-            app
-        })
-    });
-    match built {
-        Ok(h) => Some(h),
-        Err(_) => {
-            eprintln!("skipping: no GPU adapter");
-            None
-        }
-    }
+    let probed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        egui_kittest::wgpu::create_render_state(photocraft_ui_egui::gpu_canvas::wgpu_setup(), Default::default())
+    }))
+    .ok();
+    let Some(rs) = probed else {
+        eprintln!("skipping: no GPU adapter");
+        return None;
+    };
+    Some(
+        egui_kittest::Harness::builder()
+            .with_size(egui::vec2(900.0, 640.0))
+            .with_max_steps(64)
+            .renderer(egui_kittest::wgpu::WgpuTestRenderer::from_render_state(rs))
+            .build_eframe(|cc| {
+                PhotocraftApp::setup_context(&cc.egui_ctx, Default::default());
+                let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), Default::default());
+                if let Some(rs) = cc.wgpu_render_state.as_ref() {
+                    app.set_wgpu(rs.clone());
+                }
+                app
+            }),
+    )
 }
 
 /// An 800 × 600 white page, a paragraph box almost three lines tall holding six lines of 24 pt
