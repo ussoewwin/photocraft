@@ -343,6 +343,25 @@ fn webp_too_large_is_an_error() {
     }
 }
 
+#[test]
+fn platform_writer_checks_settings_before_dropping_floating_pixels() {
+    let mut s = session(8);
+    s.execute("select.rect", json!({"x": 8, "y": 8, "width": 4, "height": 4})).unwrap();
+    s.execute("select.float", json!({"dx": 32})).unwrap();
+    let rev = s.active().unwrap().revision;
+    let params = json!({"format": "webp", "path": "moved.webp", "lossless": "yes"});
+    let mut output = Vec::new();
+    let refused = save_for_web_with_writer(&mut s, &params, &mut |_, bytes| {
+        output.extend_from_slice(bytes);
+        Ok(())
+    });
+    assert!(refused.unwrap_err().to_string().contains("lossless"));
+    assert!(output.is_empty());
+    assert!(s.file_menu.last_web.is_none());
+    assert_eq!(s.active().unwrap().revision, rev, "the document is untouched");
+    assert!(crate::float_cmds::floating(s.active().unwrap()).is_some(), "a refused export must not commit a floating move");
+}
+
 /// An on/off option that isn't true or false is refused (`"lossless": "true"` would otherwise
 /// write lossy WebP), and the refused export writes and remembers nothing.
 #[test]
