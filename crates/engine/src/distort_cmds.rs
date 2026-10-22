@@ -91,11 +91,12 @@ const MAX_STORED_VERTS: usize = 1 << 20;
 
 /// A Puppet Warp's stored mesh, as a Photoshop file keeps it (`mesh`: `{"pins", "verts",
 /// "deformed", "tris"}`, document pixels): the mesh solved for `pins`, drawn as it is instead of
-/// solving again. `None` when there is none, it is malformed, or the filter's pins are no longer
-/// the ones it was solved for.
+/// solving again. `None` when there is none, it is malformed, or the filter was edited since: its
+/// pins are no longer the ones it was solved for, or a solver setting is set (imported params
+/// set none).
 pub fn stored_puppet_mesh(p: &Value) -> Option<(PuppetMesh, Vec<[f64; 2]>)> {
     let m = p.get("mesh")?;
-    if m.get("pins") != p.get("pins") {
+    if m.get("pins") != p.get("pins") || ["mode", "density", "expansion"].iter().any(|k| p.get(*k).is_some()) {
         return None;
     }
     let points = |k: &str| -> Option<Vec<[f64; 2]>> {
@@ -112,6 +113,21 @@ pub fn stored_puppet_mesh(p: &Value) -> Option<(PuppetMesh, Vec<[f64; 2]>)> {
     }
     let tris: Vec<[usize; 3]> = tris.iter().map(|t| serde_json::from_value(t.clone()).ok()).collect::<Option<_>>()?;
     Some((PuppetMesh { verts, tris, spacing: 0.0 }, deformed))
+}
+
+/// `params` of smart filter `command` on `sm`, without a stored Puppet Warp mesh made for another
+/// placement than `sm`'s (`mesh.placement`, recorded on import): a mesh in document pixels doesn't
+/// fit a smart object moved, transformed or warped since, so its pins are solved instead.
+pub fn placed_puppet_params<'a>(command: &str, params: &'a Value, sm: &photocraft_doc::SmartObject) -> std::borrow::Cow<'a, Value> {
+    let stale = command == PUPPET_SMART && params.get("mesh").is_some_and(|m| m.get("placement") != Some(&sm.placement_json()));
+    if !stale {
+        return std::borrow::Cow::Borrowed(params);
+    }
+    let mut p = params.clone();
+    if let Some(o) = p.as_object_mut() {
+        o.remove("mesh");
+    }
+    std::borrow::Cow::Owned(p)
 }
 
 /// Perspective Warp params (planes, after the optional straighten).

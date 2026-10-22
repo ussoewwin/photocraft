@@ -417,7 +417,7 @@ impl Ctx<'_> {
                 }
                 _ => stored,
             };
-            LayerContent::Smart(SmartObject {
+            let mut sm = SmartObject {
                 contents_id,
                 source: SmartSource::Linked { path: id },
                 transform,
@@ -429,7 +429,9 @@ impl Ctx<'_> {
                 warp,
                 stack_mode: None,
                 perspective,
-            })
+            };
+            crate::smart_map::pin_puppet_meshes(&mut sm);
+            LayerContent::Smart(sm)
         } else if let Some((f, soft)) = soft_shape_fill(rec, vector_key.is_some(), fill_key) {
             // A shape whose vector mask has a density or feather is a fill layer seen through a
             // soft vector mask: the fill shows beyond the path, which the stored pixels (the

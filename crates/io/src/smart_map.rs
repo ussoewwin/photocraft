@@ -23,7 +23,7 @@
 //! (Displace's carries the embedded displacement map, see `displace_map.rs`).
 
 use photocraft_color::{BlendMode, ColorMode, PixelFormat, SampleType};
-use photocraft_doc::{LayerMask, SmartFilter};
+use photocraft_doc::{LayerMask, SmartFilter, SmartObject};
 use photocraft_geom::warp::{BezierMesh, Warp, WarpStyle};
 use photocraft_geom::{Affine, Rect as GeomRect};
 use photocraft_psd::Compression;
@@ -129,6 +129,18 @@ fn drop_moved_puppet_meshes(stack: &mut FilterStack, d: &Descriptor) {
         };
         if !fits && let Some(p) = f.params.as_object_mut() {
             p.remove("mesh");
+        }
+    }
+}
+
+/// Records on each imported Puppet Warp mesh the placement it was solved for (`mesh.placement`,
+/// [`SmartObject::placement_json`]): once the smart object is moved, transformed or warped, the
+/// mesh no longer fits it and the pins are solved instead.
+pub(crate) fn pin_puppet_meshes(sm: &mut SmartObject) {
+    let placement = sm.placement_json();
+    for f in sm.smart_filters.iter_mut().filter(|f| f.command == puppet::COMMAND) {
+        if let Some(m) = f.params.get_mut("mesh").and_then(J::as_object_mut) {
+            m.insert("placement".into(), placement.clone());
         }
     }
 }

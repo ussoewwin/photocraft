@@ -147,6 +147,10 @@ pub(super) fn export_item(params: &J) -> Result<Descriptor, String> {
     if params.get("pins") != imported.get("pins") {
         return Err("Puppet Warp pins moved in PhotoCraft are not written to PSD".into());
     }
+    // Imported params set no solver settings, so a set one is an edit the template doesn't hold.
+    if let Some(k) = ["mode", "density", "expansion"].into_iter().find(|k| params.get(*k).is_some()) {
+        return Err(format!("the Puppet Warp `{k}` set in PhotoCraft is not written to PSD"));
+    }
     Ok(item)
 }
 
@@ -226,6 +230,23 @@ mod tests {
         let mut moved = f.clone();
         moved.params["pins"][0]["dst"] = json!([70.0, 120.0]);
         assert!(item_for_filter(&moved).is_err());
+        // Nor are solver settings set after import (the template holds the imported ones).
+        for (k, v) in [("mode", json!("rigid")), ("density", json!("more")), ("expansion", json!(2.0))] {
+            let mut edited = f.clone();
+            edited.params[k] = v;
+            assert!(item_for_filter(&edited).is_err(), "{k}");
+        }
+        // The import records the placement the mesh was solved for; the item written back is
+        // unchanged by it.
+        let mut sm = photocraft_doc::SmartObject::new(
+            photocraft_doc::SmartSource::Linked { path: String::new() },
+            photocraft_geom::Affine { m: [1.0, 0.0, 0.0, 1.0, 3.0, 4.0] },
+            None,
+        );
+        sm.smart_filters.push(f.clone());
+        crate::smart_map::pin_puppet_meshes(&mut sm);
+        assert_eq!(sm.smart_filters[0].params["mesh"]["placement"], sm.placement_json());
+        assert_eq!(item_for_filter(&sm.smart_filters[0]).unwrap(), src);
         // A Puppet Warp made in PhotoCraft has no template: not written, as before.
         let own = SmartFilter { params: json!({"pins": f.params["pins"]}), ..f };
         assert!(item_for_filter(&own).is_err());
