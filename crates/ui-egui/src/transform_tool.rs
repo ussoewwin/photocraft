@@ -206,6 +206,9 @@ fn corners(r: [f64; 4]) -> [[f64; 2]; 4] {
 /// Start Free Transform on the active layer (or its selected pixels), or on the targeted unlinked
 /// layer mask, alpha channel or Quick Mask.
 pub fn begin(app: &mut PhotocraftApp, ctx: &egui::Context) -> Result<(), String> {
+    if app.multi_transform.is_some() {
+        return Err("Commit or cancel the transform first".into());
+    }
     if let Some((params, path)) = crate::vector_ui::free_transform_path(app) {
         return begin_path(app, ctx, params, path);
     }
@@ -367,6 +370,9 @@ pub(crate) fn begin_layers(app: &mut PhotocraftApp, layers: Vec<LayerId>, rect: 
 /// Free Transform on a copy (⌥⌘T, no menu item): duplicates the active layer (with a selection,
 /// its selected pixels, as Layer via Copy) and transforms the copy (#352).
 pub fn begin_copy(app: &mut PhotocraftApp, ctx: &egui::Context) -> Result<(), String> {
+    if app.multi_transform.is_some() {
+        return Err("Commit or cancel the transform first".into());
+    }
     let selection = app.session.active().is_some_and(|d| d.doc.selection.is_some());
     let params = if selection { json!({}) } else { json!({"inPlace": true}) };
     app.run(if selection { "layer.new.layerViaCopy" } else { "layer.duplicate" }, params)?;
@@ -4410,6 +4416,30 @@ mod tests {
         assert_eq!(app.ui.transform.as_ref().unwrap().rect, [8.0, 8.0, 16.0, 24.0]);
         cancel(&mut app);
         assert_eq!(app.session.active().unwrap().doc.layers.len(), layers);
+    }
+
+    #[test]
+    fn free_transform_copy_rejects_an_open_multi_transform_without_making_a_layer() {
+        let mut app = app_with_square(64, photocraft_geom::Rect::new(8, 8, 24, 24));
+        let first = app.session.active().unwrap().active_layer.unwrap();
+        app.session.execute("layer.new.layer", json!({})).unwrap();
+        let second = app.session.active().unwrap().active_layer.unwrap();
+        app.session
+            .edit("paint second", |doc, _| {
+                doc.layer_mut(second).unwrap().surface_mut().unwrap().fill_rect(photocraft_geom::Rect::new(32, 8, 48, 24), &[0.0, 1.0, 0.0, 1.0]);
+                Ok(())
+            })
+            .unwrap();
+        begin_layers(&mut app, vec![first, second], [8.0, 8.0, 48.0, 24.0]).unwrap();
+        let before = {
+            let st = app.session.active().unwrap();
+            (st.doc.layers.len(), st.revision, st.history.past_len())
+        };
+
+        assert_eq!(begin_copy(&mut app, &egui::Context::default()), Err("Commit or cancel the transform first".into()));
+        let st = app.session.active().unwrap();
+        assert_eq!((st.doc.layers.len(), st.revision, st.history.past_len()), before, "a rejected start is mutation-free");
+        assert!(app.multi_transform.is_some() && app.ui.transform.is_some(), "the existing transform stays open");
     }
 
     /// #1099: cancel, frame cleanup and a commit before the next frame all belong to the

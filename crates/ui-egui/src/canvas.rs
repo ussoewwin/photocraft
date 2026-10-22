@@ -4971,7 +4971,12 @@ fn transform_controls_layers(app: &PhotocraftApp) -> Vec<&photocraft_doc::Layer>
         return Vec::new();
     }
     let Some(st) = app.session.active() else { return Vec::new() };
-    st.selected_layers().into_iter().filter_map(|id| st.doc.layer(id)).filter(|l| !crate::doc_props_ui::is_background(&st.doc, l)).collect()
+    let layers: Vec<_> =
+        st.selected_layers().into_iter().filter_map(|id| st.doc.layer(id)).filter(|l| !crate::doc_props_ui::is_background(&st.doc, l)).collect();
+    if layers.len() > 1 && layers.iter().any(|l| photocraft_engine::transform_cmds::locked_for_transform(&st.doc, l.id)) {
+        return Vec::new();
+    }
+    layers
 }
 
 /// Several layers are selected: Show Transform Controls frames and transforms them together.
@@ -8630,6 +8635,37 @@ mod transform_controls_tests {
         let st = app.session.active().unwrap();
         assert_eq!(photocraft_engine::transform_cmds::whole_layer_bounds(&st.doc, st.doc.layer(a).unwrap()), photocraft_geom::Rect::new(30, 35, 70, 75));
         assert_eq!(photocraft_engine::transform_cmds::whole_layer_bounds(&st.doc, st.doc.layer(b).unwrap()), photocraft_geom::Rect::new(110, 125, 160, 155));
+    }
+
+    #[test]
+    fn shared_transform_controls_hide_if_any_selected_layer_is_locked() {
+        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+        app.session.execute("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.session.execute("shape.create", json!({"kind": "rect", "rect": [20, 30, 40, 40], "fill": "#ff0000"})).unwrap();
+        let a = app.session.active().unwrap().active_layer.unwrap();
+        app.session.execute("shape.create", json!({"kind": "rect", "rect": [100, 120, 50, 30], "fill": "#ff0000"})).unwrap();
+        let b = app.session.active().unwrap().active_layer.unwrap();
+        app.session.execute("layer.select", json!({"layer": a.0, "mode": "add"})).unwrap();
+        app.session
+            .edit("lock", |doc, _| {
+                doc.layer_mut(b).unwrap().locks.position = true;
+                Ok(())
+            })
+            .unwrap();
+        app.sync_views();
+        app.ui.tool = Tool::Move;
+        app.ui.tool_options.move_show_transform = true;
+        let xf =
+            ViewXform { rect: Rect::from_min_size(Pos2::ZERO, vec2(200.0, 200.0)), zoom: 1.0, center: [100.0, 100.0], flip: false, rotation: 0.0, aspect: 1.0 };
+
+        assert!(transform_controls_layers(&app).is_empty(), "a shared box that cannot start must not be shown");
+        assert!(transform_controls_rect(&app, &xf).is_none());
+
+        // Preserve the existing single-layer behaviour: a locked layer still shows its controls;
+        // pressing one reports the lock rather than silently removing the frame.
+        app.session.execute("layer.select", json!({"layer": b.0})).unwrap();
+        assert_eq!(transform_controls_layers(&app).len(), 1);
+        assert!(transform_controls_rect(&app, &xf).is_some());
     }
 
     #[test]

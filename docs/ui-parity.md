@@ -96,7 +96,7 @@ Triangle and Curvature Pen (minus legacy Rounded Rectangle and Targeted Adjustme
 | ⌥-drag duplicates, ⇧ constrains to 45° | done | `move_mods.rs` |
 | Auto-Select with hover outline, box-select layers, double-click fit | missing | TOOL-214-4 |
 | Auto-Select bounding box and snapping follow the picked layer | partial | follow the previous layer (#2666) |
-| Several layers selected (⇧-click adds, box-select): Show Transform Controls frames them all, with every selected shape's outline | done: the shared frame has eight transform handles and opens one multi-layer Free Transform; scale/rotate/skew are previewed and committed to all selected top-level layers in one history step (`canvas.rs` `transform_controls_layers`, `several_selected_layers_share_one_frame_with_handles_and_transform_session`; `transform_tool.rs`; `transform_cmds.rs`) | |
+| Several layers selected (⇧-click adds, box-select): Show Transform Controls frames them all, with every selected shape's outline | done | The shared frame has eight transform handles and opens one multi-layer Free Transform; scale/rotate/skew are previewed and committed to all selected top-level layers in one history step (`canvas.rs` `transform_controls_layers`, `several_selected_layers_share_one_frame_with_handles_and_transform_session`; `transform_tool.rs`; `transform_cmds.rs`) |
 | ⌘-drag temporary Move shows the box and snaps | partial | #2681 |
 | ⌘-right-click layer list under the pointer | done | `layer_pick_ui.rs` |
 | Double-click type to edit it (caret at the pointer, Type tool) | done | #1132, `type_tool::edit_at` |
@@ -262,5 +262,4 @@ Paragraph; the rest open as in-app floating windows.
 | 2026-10-14 | minor | Last selected tool restored across launches; temporary overrides excluded, explicit Eraser choices retained, and final selection flushed on normal exit |
 | 2026-10-13 | minor | Free Transform with a selection: the box is the selection's rectangle, and the marching ants follow it while it is transformed (#5297) |
 | 2026-10-14 | minor | Move › Show Transform Controls frames every selected layer and outlines the selected shapes |
-
 | 2026-10-22 | minor | Move › Show Transform Controls: multi-layer selections now show all eight handles and transform the selected top-level layers together in one Free Transform/history step |
