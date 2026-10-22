@@ -104,7 +104,7 @@ because engine messages are still English. Detail: [localization-parity](docs/lo
 | Korean | `ko` | 100% | partial |
 | Vietnamese | `vi` | 0% | none |
 
-Also shipped: Traditional Chinese, Russian (every dynamic label, [notes](docs/localization-ru.md)), Ukrainian, Czech, Polish, Greek, Dutch, Italian, Georgian (9).
+Also shipped: Traditional Chinese, Russian (every dynamic label, [notes](docs/localization-ru.md)), Ukrainian, Czech, Polish, Greek, Dutch, Italian (8).
 
 ## Upcoming
 

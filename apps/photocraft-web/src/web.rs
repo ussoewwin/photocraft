@@ -374,7 +374,7 @@ impl eframe::App for WebShell {
                         self.presets.retry();
                         ui.ctx().request_repaint();
                     }
-                    ui.colored_label(tokens.warning, i18n::fmt(i18n::t("Brush preset changes are not saved: {error}"), &[("error", i18n::t(&error))]));
+                    ui.colored_label(tokens.warning, i18n::fmt(i18n::t("Brush preset changes are not saved: {error}"), &[("error", &error)]));
                 });
                 ui.label(if self.database.is_some() {
                     i18n::t("Keep this tab open to retain your brushes.")
