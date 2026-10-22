@@ -27,7 +27,14 @@ pub(crate) fn open(app: &mut PhotocraftApp) -> Option<u64> {
     let layer = st.active_layer?;
     let LayerContent::Fill(Fill::Solid(color)) = st.doc.layer(layer)?.content else { return None };
     let params = json!({"layer": layer.0, "document": st.doc.id.0});
-    Some(color_picker_ui::open_for_command(app, "Color Picker (Solid Color)", color.to_rgb(), cmds::SET, params))
+    let id = color_picker_ui::open_for_command(app, "Color Picker (Solid Color)", color.to_rgb(), cmds::SET, params);
+    // A CMYK fill reopens showing its own inks, not ones recomputed from its sRGB stand-in (#8568).
+    if color.mode == photocraft_color::ColorMode::Cmyk
+        && let Some(d) = app.ui.dialog_mut(id)
+    {
+        d.fields.insert("__cmyk".into(), json!(color.c));
+    }
+    Some(id)
 }
 
 /// Creating a Solid Color fill is transactional: the document is unchanged until OK.
@@ -57,7 +64,8 @@ pub(crate) fn confirm_new(app: &mut PhotocraftApp, f: &Map<String, Value>) -> Re
         return Err("the target document is no longer active".into());
     }
     let color = f.get("color").and_then(Value::as_str).ok_or("missing Solid Color colour")?;
-    app.run("layer.newFillLayer.solidColor", json!({"color": color}))
+    // CMYK typed into the picker stays those inks in a CMYK document (#8568).
+    app.run("layer.newFillLayer.solidColor", json!({"color": color, "cmyk": color_picker_ui::picked_cmyk(f)}))
 }
 
 pub(crate) fn owns(f: &Map<String, Value>) -> bool {
@@ -98,6 +106,9 @@ pub(crate) fn confirm(app: &mut PhotocraftApp, f: &Map<String, Value>) -> Result
     let color = f.get("color").cloned().ok_or("missing color")?;
     let object = params.as_object_mut().ok_or("invalid Solid Color target")?;
     object.insert("color".into(), color);
+    if let Some(inks) = color_picker_ui::picked_cmyk(f) {
+        object.insert("cmyk".into(), json!(inks));
+    }
     app.run(cmds::SET, params)
 }
 
