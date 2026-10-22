@@ -669,6 +669,9 @@ fn rect_to_quad_affine(r: [f64; 4], q: [[f64; 2]; 4]) -> Option<photocraft_geom:
 /// Start Select › Transform Selection: the same box over the selection's bounds, previewing the
 /// selection mask (the marching ants are hidden meanwhile); commits `select.transformSelection`.
 pub fn begin_selection(app: &mut PhotocraftApp, ctx: &egui::Context) -> Result<(), String> {
+    if app.multi_transform.is_some() {
+        return Err("Commit or cancel the transform first".into());
+    }
     let st = app.session.active().ok_or("no document")?;
     let doc = st.doc.clone();
     let sel = doc.selection.clone().ok_or("no selection")?;
@@ -1261,6 +1264,17 @@ pub(crate) fn committing(app: &PhotocraftApp) -> Option<JobId> {
     app.transform_preview.as_ref().and_then(|pv| pv.committing).or_else(|| app.multi_transform.as_ref().and_then(|m| m.committing))
 }
 
+/// Whether the selected transformable layers no longer match a shared transform session.
+fn multi_selection_changed(app: &PhotocraftApp, m: &MultiTransform) -> bool {
+    let Some(st) = app.session.active() else { return true };
+    if st.doc.id != m.document {
+        return true;
+    }
+    let selected =
+        st.selected_layers().into_iter().filter(|id| st.doc.layer(*id).is_some_and(|l| !crate::doc_props_ui::is_background(&st.doc, l))).collect::<Vec<_>>();
+    selected.len() != m.layers.len() || m.layers.iter().any(|id| !selected.contains(id))
+}
+
 /// A job ended (see [`crate::jobs_ui`]): when it was the commit, the session ends with it. Its
 /// status and errors are reported like any job's.
 pub fn on_job_event(app: &mut PhotocraftApp, e: &JobEvent) {
@@ -1272,7 +1286,7 @@ pub fn on_job_event(app: &mut PhotocraftApp, e: &JobEvent) {
         let Some(mut m) = app.multi_transform.take() else { return };
         if let JobOutcome::Failed(msg) = &e.outcome {
             app.ui.status = msg.clone();
-            if m.tool == app.ui.tool {
+            if m.tool == app.ui.tool && !multi_selection_changed(app, &m) {
                 m.committing = None;
                 app.ui.transform = Some(t);
                 app.multi_transform = Some(m);
@@ -1319,12 +1333,7 @@ pub fn end_if_left(app: &mut PhotocraftApp) {
         let switched_document = st.doc.id != m.document;
         let missing = m.layers.iter().any(|id| st.doc.layer(*id).is_none());
         let switched_tool = m.tool != app.ui.tool;
-        let selected = st
-            .selected_layers()
-            .into_iter()
-            .filter(|id| st.doc.layer(*id).is_some_and(|l| !crate::doc_props_ui::is_background(&st.doc, l)))
-            .collect::<Vec<_>>();
-        let changed_selection = selected.len() != m.layers.len() || m.layers.iter().any(|id| !selected.contains(id));
+        let changed_selection = multi_selection_changed(app, m);
         if switched_document || missing {
             cancel(app);
         } else if switched_tool || changed_selection {
@@ -4666,6 +4675,44 @@ mod tests {
         assert_eq!(app.session.active().unwrap().doc.layers.len(), layers);
     }
 
+    /// A shared session is kept only while the same transformable layers stay selected.
+    #[test]
+    fn shared_transform_detects_a_changed_layer_selection() {
+        let mut app = app_with_square(64, photocraft_geom::Rect::new(8, 8, 24, 24));
+        let first = app.session.active().unwrap().active_layer.unwrap();
+        app.session.execute("layer.new.layer", json!({})).unwrap();
+        let second = app.session.active().unwrap().active_layer.unwrap();
+        app.session.execute("layer.select", json!({"layer": first.0, "mode": "add"})).unwrap();
+        begin_layers(&mut app, vec![first, second], [8.0, 8.0, 48.0, 24.0]).unwrap();
+        assert!(!multi_selection_changed(&app, app.multi_transform.as_ref().unwrap()));
+
+        app.session.execute("layer.select", json!({"layer": first.0})).unwrap();
+        assert!(multi_selection_changed(&app, app.multi_transform.as_ref().unwrap()));
+    }
+
+    /// Transform Selection cannot replace a shared transform that is already open.
+    #[test]
+    fn transform_selection_rejects_an_open_multi_transform_without_replacing_it() {
+        let mut app = app_with_square(64, photocraft_geom::Rect::new(8, 8, 24, 24));
+        let first = app.session.active().unwrap().active_layer.unwrap();
+        app.session.execute("layer.new.layer", json!({})).unwrap();
+        let second = app.session.active().unwrap().active_layer.unwrap();
+        app.session
+            .edit("paint second", |doc, _| {
+                doc.layer_mut(second).unwrap().surface_mut().unwrap().fill_rect(photocraft_geom::Rect::new(32, 8, 48, 24), &[0.0, 1.0, 0.0, 1.0]);
+                Ok(())
+            })
+            .unwrap();
+        app.session.execute("select.rect", json!({"x": 4, "y": 4, "width": 48, "height": 24})).unwrap();
+        begin_layers(&mut app, vec![first, second], [8.0, 8.0, 48.0, 24.0]).unwrap();
+        let session = app.ui.transform.as_ref().unwrap().session;
+
+        assert_eq!(begin_selection(&mut app, &egui::Context::default()), Err("Commit or cancel the transform first".into()));
+        assert_eq!(app.ui.transform.as_ref().map(|t| t.session), Some(session));
+        assert!(app.multi_transform.is_some(), "the existing shared transform stays open");
+    }
+
+    /// Transform Copy rejects an overlapping shared transform before it creates a layer.
     #[test]
     fn free_transform_copy_rejects_an_open_multi_transform_without_making_a_layer() {
         let mut app = app_with_square(64, photocraft_geom::Rect::new(8, 8, 24, 24));

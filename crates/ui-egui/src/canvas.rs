@@ -5447,6 +5447,8 @@ fn begin_transform_controls_at(app: &mut PhotocraftApp, ctx: &egui::Context, xf:
     }
     let result = if transform_controls_several(app) {
         let Some(b) = transform_controls_bounds(app) else { return false };
+        let (dx, dy) = crate::move_ui::floating_offset(app).unwrap_or((0, 0));
+        let b = b.translate(dx, dy);
         let ids = transform_controls_layers(app).into_iter().map(|l| l.id).collect();
         crate::transform_tool::begin_layers(app, ids, [b.x0 as f64, b.y0 as f64, b.x1 as f64, b.y1 as f64])
     } else {
@@ -9429,6 +9431,13 @@ mod transform_controls_tests {
         let r = transform_controls_rect(&app, &xf).unwrap();
         let (lt, rb) = (xf.to_doc(r.left_top()), xf.to_doc(r.right_bottom()));
         assert!(rb[0] - lt[0] > 60.0 && rb[1] - lt[1] > 60.0, "the frame isn't shrunk to the one piece: {lt:?} {rb:?}");
+
+        let ctx = egui::Context::default();
+        assert!(begin_transform_controls_at(&mut app, &ctx, &xf, r.right_bottom()));
+        let shown = app.ui.transform.as_ref().unwrap().rect;
+        for (actual, expected) in shown.into_iter().zip([lt[0], lt[1], rb[0], rb[1]]) {
+            assert!((actual - expected).abs() < 1e-3, "the transform starts on the displayed shared frame: {shown:?}");
+        }
     }
 
     #[test]
