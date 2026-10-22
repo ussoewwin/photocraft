@@ -187,10 +187,10 @@ fn corners(r: [f64; 4]) -> [[f64; 2]; 4] {
     [[r[0], r[1]], [r[2], r[1]], [r[2], r[3]], [r[0], r[3]]]
 }
 
-/// The transform choices supported by the options bar, from Preferences › General › Image Interpolation.
+/// The transform choices supported by the options bar, using its remembered choice or the general default.
 pub(crate) fn default_interpolation(app: &PhotocraftApp) -> &'static str {
     use photocraft_engine::prefs::Interpolation;
-    match app.session.prefs().general.image_interpolation {
+    match app.ui.tool_options.transform_interpolation.unwrap_or(app.session.prefs().general.image_interpolation) {
         Interpolation::Nearest => "nearest",
         Interpolation::Bilinear => "bilinear",
         _ => "bicubic",
@@ -2867,7 +2867,7 @@ fn transform_fields(app: &mut PhotocraftApp, ui: &mut egui::Ui, t: &TransformSes
         && let Some(s) = app.ui.transform.as_mut()
     {
         s.interpolation = interp;
-        app.session.prefs.edit(|p| p.general.image_interpolation = preference);
+        app.ui.tool_options.transform_interpolation = Some(preference);
     }
 }
 
@@ -3337,7 +3337,8 @@ mod tests {
         h.run();
         assert!(h.state().ui.transform.is_some(), "second interpolation step keeps the transform open");
         assert_eq!(h.state().ui.transform.as_ref().unwrap().interpolation, "nearest");
-        assert_eq!(h.state().session.prefs().general.image_interpolation, photocraft_engine::prefs::Interpolation::Nearest);
+        assert_eq!(h.state().ui.tool_options.transform_interpolation, Some(photocraft_engine::prefs::Interpolation::Nearest));
+        assert_eq!(h.state().session.prefs().general.image_interpolation, photocraft_engine::prefs::Interpolation::BicubicAutomatic);
 
         let transform = h.state_mut().ui.transform.as_mut().unwrap();
         transform.quad = transform.quad.map(|[x, y]| [x + 1.0, y]);
