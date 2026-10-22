@@ -1025,7 +1025,11 @@ fn decode_band(lay: &Layout, dec: &mut Decoder<Patched<'_>>, scratch: &mut Vec<u
             if lay.direct() && pref.len == band.len() && stride == out_row {
                 match dec.read_chunk_bytes(chunk, band) {
                     Ok(()) => tally.decoded += 1,
-                    Err(e) if is_eof(&e) => tally.missing += 1,
+                    // The rows read before the end stay in `band`: a missing strip is zeros.
+                    Err(e) if is_eof(&e) => {
+                        band.fill(0);
+                        tally.missing += 1;
+                    }
                     Err(e) => return Err(map_err(e)),
                 }
                 continue;

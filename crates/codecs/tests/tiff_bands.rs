@@ -177,6 +177,21 @@ fn cut_off_data_matches_and_warns() {
 }
 
 #[test]
+fn a_strip_cut_off_partway_decodes_as_zeros() {
+    // An uncompressed strip read straight into its output rows, whose data starts in the file
+    // and ends past it: the bytes read before the end must not survive (#8536 review).
+    let n = (W * H) as usize;
+    let mut built = build(true, false, &[strips(W, H, 8, 3, 2, 4, &noise(n * 3, 31))], &[0]);
+    let strip = W as usize * 3 * 4;
+    let near_end = built.bytes.len() as u64 - 100;
+    patch_value(&mut built, true, false, 0, 273, 6, near_end);
+    let img = banded(&built.bytes, None, &Limits::banded(), false).unwrap();
+    assert!(img.warnings.contains(&DecodeWarning::Truncated { format: Format::Tiff }));
+    assert!(img.data()[6 * strip..7 * strip].iter().all(|&v| v == 0), "partial strip bytes kept");
+    assert!(img.data()[..6 * strip] == whole(&built.bytes, None, false).data()[..6 * strip]);
+}
+
+#[test]
 fn other_pages_and_the_more_pages_warning_match() {
     let n = (W * H) as usize;
     let a = strips(W, H, 8, 1, 1, 5, &noise(n, 40));
