@@ -9382,7 +9382,7 @@ mod transform_controls_tests {
         app.session.execute("select.rect", json!({"x": 20, "y": 20, "width": 100, "height": 90})).unwrap();
         app.ui.tool = Tool::Move;
         app.ui.tool_options.move_show_transform = true;
-        assert!(transform_controls_several(&app), "two layers framed");
+        assert_eq!(transform_controls_layers(&app).len(), 2, "two layers framed");
         app.session.execute("select.float", json!({"dx": 5, "dy": 0})).unwrap();
         assert!(photocraft_engine::float_cmds::floating(app.session.active().unwrap()).is_some());
         let xf =
