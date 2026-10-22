@@ -224,7 +224,7 @@ fn picker_button(ui: &mut egui::Ui) -> bool {
     const STEPS: usize = 6;
     for i in 0..=STEPS {
         let x = inner.left() + inner.width() * i as f32 / STEPS as f32;
-        let hue = crate::color_picker_ui::hsv_to_rgb(360.0 * i as f32 / STEPS as f32, 1.0, 1.0);
+        let hue = photocraft_color::convert::hsb_to_rgb([360.0 * i as f32 / STEPS as f32, 1.0, 1.0]);
         mesh.colored_vertex(pos2(x, inner.top()), c32(hue));
         mesh.colored_vertex(pos2(x, inner.bottom()), Color32::WHITE);
         if i > 0 {
