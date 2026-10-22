@@ -5367,10 +5367,15 @@ fn transform_controls_bounds(app: &PhotocraftApp) -> Option<photocraft_geom::Rec
     let st = app.session.active()?;
     let layers = transform_controls_layers(app);
     let several = layers.len() > 1;
+    let floating = photocraft_engine::float_cmds::floating(st).map(|f| f.layer);
+    let floating_piece = app.session.active_index().and_then(|idx| floating_outline(app, idx)).map(|o| o.content_bounds());
+    let (dx, dy) = crate::move_ui::floating_offset(app).unwrap_or((0, 0));
     layers
         .into_iter()
         .map(|l| {
-            if several {
+            if several && floating == Some(l.id) {
+                floating_piece.unwrap_or_else(|| photocraft_engine::transform_cmds::whole_layer_bounds(&st.doc, l)).translate(dx, dy)
+            } else if several {
                 photocraft_engine::transform_cmds::whole_layer_bounds(&st.doc, l)
             } else {
                 photocraft_engine::transform_cmds::transform_frame(&st.doc, l)
@@ -5389,9 +5394,13 @@ fn transform_controls_rect(app: &PhotocraftApp, xf: &ViewXform) -> Option<Rect> 
     // Floating selected pixels are framed by their outline, as their ants are (#7538), not by the
     // selection they were cut with; a frame round other selected layers too keeps them all.
     let alone = matches!(layers.as_slice(), [l] if photocraft_engine::float_cmds::floating(st).is_some_and(|f| f.layer == l.id));
-    let b = app.session.active_index().filter(|_| alone).and_then(|idx| floating_outline(app, idx)).map_or(b, |o| o.content_bounds());
-    let (dx, dy) = crate::move_ui::floating_offset(app).unwrap_or((0, 0));
-    let b = b.translate(dx, dy);
+    let b = if alone {
+        let b = app.session.active_index().and_then(|idx| floating_outline(app, idx)).map_or(b, |o| o.content_bounds());
+        let (dx, dy) = crate::move_ui::floating_offset(app).unwrap_or((0, 0));
+        b.translate(dx, dy)
+    } else {
+        b
+    };
     if b.is_empty() {
         return None;
     }
@@ -5452,8 +5461,6 @@ fn begin_transform_controls_at(app: &mut PhotocraftApp, ctx: &egui::Context, xf:
     }
     let result = if transform_controls_several(app) {
         let Some(b) = transform_controls_bounds(app) else { return false };
-        let (dx, dy) = crate::move_ui::floating_offset(app).unwrap_or((0, 0));
-        let b = b.translate(dx, dy);
         let ids = transform_controls_layers(app).into_iter().map(|l| l.id).collect();
         crate::transform_tool::begin_layers(app, ids, [b.x0 as f64, b.y0 as f64, b.x1 as f64, b.y1 as f64])
     } else {
@@ -9435,7 +9442,7 @@ mod transform_controls_tests {
             ViewXform { rect: Rect::from_min_size(Pos2::ZERO, vec2(200.0, 200.0)), zoom: 1.0, center: [100.0, 100.0], flip: false, rotation: 0.0, aspect: 1.0 };
         let r = transform_controls_rect(&app, &xf).unwrap();
         let (lt, rb) = (xf.to_doc(r.left_top()), xf.to_doc(r.right_bottom()));
-        assert!(rb[0] - lt[0] > 60.0 && rb[1] - lt[1] > 60.0, "the frame isn't shrunk to the one piece: {lt:?} {rb:?}");
+        assert_eq!([lt[0], lt[1], rb[0], rb[1]], [55.0, 45.0, 170.0, 170.0], "only the floating piece moves; the other selected layer stays put");
 
         let ctx = egui::Context::default();
         assert!(begin_transform_controls_at(&mut app, &ctx, &xf, r.right_bottom()));

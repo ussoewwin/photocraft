@@ -102,6 +102,7 @@ pub(crate) struct MultiTransform {
     layers: Vec<LayerId>,
     gesture: Option<Gesture>,
     shown_quad: Option<[[f64; 2]; 4]>,
+    shown_interpolation: Option<String>,
     shown: Option<Arc<Document>>,
     generation: u64,
     tool: Tool,
@@ -343,6 +344,7 @@ pub(crate) fn begin_layers(app: &mut PhotocraftApp, layers: Vec<LayerId>, rect: 
         layers: ids,
         gesture: None,
         shown_quad: None,
+        shown_interpolation: None,
         shown: None,
         generation: 0,
         tool: app.ui.tool,
@@ -1382,9 +1384,9 @@ pub(crate) fn multi_display_doc(app: &mut PhotocraftApp, idx: usize) -> Option<(
     let t = app.ui.transform.as_ref()?.clone();
     let st = app.session.documents().get(idx)?;
     let (doc_id, revision) = (st.doc.id, st.revision);
-    let (document, ids, old_revision, shown_quad, committing) = {
+    let (document, ids, old_revision, shown_quad, shown_interpolation, committing) = {
         let m = app.multi_transform.as_ref()?;
-        (m.document, m.layers.clone(), m.revision, m.shown_quad, m.committing)
+        (m.document, m.layers.clone(), m.revision, m.shown_quad, m.shown_interpolation.clone(), m.committing)
     };
     if document != doc_id {
         return None;
@@ -1393,6 +1395,7 @@ pub(crate) fn multi_display_doc(app: &mut PhotocraftApp, idx: usize) -> Option<(
         if let Some(m) = app.multi_transform.as_mut() {
             m.shown = None;
             m.shown_quad = None;
+            m.shown_interpolation = None;
             m.revision = revision;
         }
         return None;
@@ -1404,7 +1407,7 @@ pub(crate) fn multi_display_doc(app: &mut PhotocraftApp, idx: usize) -> Option<(
             (doc.clone(), key)
         });
     }
-    let fresh = old_revision == revision && shown_quad == Some(t.quad);
+    let fresh = old_revision == revision && shown_quad == Some(t.quad) && shown_interpolation.as_deref() == Some(t.interpolation.as_str());
     if !fresh {
         let st = app.session.documents().get(idx)?;
         let source =
@@ -1419,6 +1422,7 @@ pub(crate) fn multi_display_doc(app: &mut PhotocraftApp, idx: usize) -> Option<(
         if let Some(m) = app.multi_transform.as_mut() {
             m.revision = revision;
             m.shown_quad = Some(t.quad);
+            m.shown_interpolation = Some(t.interpolation.clone());
             m.shown = shown;
             m.generation = m.generation.wrapping_add(1);
         }
@@ -4676,6 +4680,31 @@ mod tests {
         assert_eq!(app.ui.transform.as_ref().unwrap().rect, [8.0, 8.0, 16.0, 24.0]);
         cancel(&mut app);
         assert_eq!(app.session.active().unwrap().doc.layers.len(), layers);
+    }
+
+    /// Changing interpolation rerenders a shared preview even when its geometry is unchanged.
+    #[test]
+    fn shared_transform_preview_refreshes_when_interpolation_changes() {
+        let mut app = app_with_square(64, photocraft_geom::Rect::new(8, 8, 24, 24));
+        let first = app.session.active().unwrap().active_layer.unwrap();
+        app.session.execute("layer.new.layer", json!({})).unwrap();
+        let second = app.session.active().unwrap().active_layer.unwrap();
+        app.session
+            .edit("paint second", |doc, _| {
+                doc.layer_mut(second).unwrap().surface_mut().unwrap().fill_rect(photocraft_geom::Rect::new(32, 8, 48, 24), &[0.0, 1.0, 0.0, 1.0]);
+                Ok(())
+            })
+            .unwrap();
+        begin_layers(&mut app, vec![first, second], [8.0, 8.0, 48.0, 24.0]).unwrap();
+        for p in &mut app.ui.transform.as_mut().unwrap().quad {
+            p[0] += 4.0;
+        }
+
+        let (_, first_key) = multi_display_doc(&mut app, 0).expect("bicubic preview");
+        app.ui.transform.as_mut().unwrap().interpolation = "nearest".into();
+        let (_, second_key) = multi_display_doc(&mut app, 0).expect("nearest preview");
+        assert_ne!(first_key, second_key, "changing interpolation invalidates the cached shared preview");
+        assert_eq!(app.multi_transform.as_ref().unwrap().shown_interpolation.as_deref(), Some("nearest"));
     }
 
     /// A shared session is kept only while the same transformable layers stay selected.
