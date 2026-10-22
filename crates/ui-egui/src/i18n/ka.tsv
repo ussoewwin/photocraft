@@ -924,7 +924,6 @@
 	Contiguous	მომიჯნავე
 	Contrast	კონტრასტი
 	Control:	მართვა:
-	Convert document's colors to the working space	დოკუმენტის ფერების სამუშაო სივრცეში გარდაქმნა
 	Convert to sRGB	sRGB-ად გარდაქმნა
 	Copies	ასლები
 	Copper	სპილენძი
@@ -1030,7 +1029,6 @@
 	Done	მზადაა
 	Dots	წერტილები
 	Drag a rectangle around the object	ობიექტის გარშემო მართკუთხედი გაავლეთ
-	Drag on the image to add a constraint; Shift for horizontal/vertical; right-click to delete.	შეზღუდვის დასამატებლად გამოსახულებაზე გაავლეთ; Shift — ჰორიზონტალური/ვერტიკალური; წასაშლელად — მარჯვენა დაწკაპუნება.
 	Drag to move the active shape's path or the Work Path	გადაათრიეთ აქტიური ფიგურის ტრაექტორიის ან სამუშაო ტრაექტორიის გადასაადგილებლად
 	Click: select anchor · Drag: move anchor, handle or segment · {shift}-click: add · {alt}-click: whole subpath	დაწკაპუნება: საყრდენი წერტილის მონიშვნა · გადათრევა: საყრდენი წერტილის, სახელურის ან სეგმენტის გადაადგილება · {shift}-დაწკაპუნება: დამატება · {alt}-დაწკაპუნება: მთელი ქვეტრაექტორია
 	Draw with the Pen tool (P) or make a work path from a selection.	დახაზეთ კალმით (P) ან შექმენით სამუშაო ტრაექტორია მონიშნულიდან.
@@ -1498,7 +1496,6 @@
 	Use Default	ნაგულისხმევის გამოყენება
 	Use Legacy	ძველი ვერსიის გამოყენება
 	Use Measurement Scale	საზომი მასშტაბის გამოყენება
-	Use the embedded profile (instead of the working space)	ჩაშენებული პროფილის გამოყენება (სამუშაო სივრცის ნაცვლად)
 	Variables bind a layer's visibility, text or pixels to a named data slot.	ცვლადები შრის ხილვადობას, ტექსტს ან პიქსელებს აკავშირებს მონაცემთა დასახელებულ ველთან.
 	Vertical scale	ვერტიკალური მასშტაბი
 	Vibrance	სიხალასე
@@ -4188,7 +4185,6 @@ liquify	Rate	სიჩქარე
 	Click the image to add a pin; drag a pin to move it, or its ring to change its blur. Delete removes the selected pin.	სამაგრის დასამატებლად დაწკაპეთ გამოსახულებაზე; სამაგრის გადასაადგილებლად გადაათრიეთ ის, გაბუნდოვნების შესაცვლელად კი — მისი რგოლი. Delete წაშლის მონიშნულ სამაგრს.
 	The document “{name}” does not have an embedded {mode} profile.	დოკუმენტს „{name}“ არ აქვს ჩაშენებული {mode} პროფილი.
 	The document “{name}” has an embedded color profile that does not match the current {mode} working space.	დოკუმენტს „{name}“ აქვს ჩაშენებული ფერის პროფილი, რომელიც მიმდინარე {mode} სამუშაო სივრცეს არ შეესაბამება.
-	Embedded: {embedded}	ჩაშენებული: {embedded}
 	Working: {working}	სამუშაო: {working}
 	Custom background color	ფონის მორგებული ფერი
 	Redrawing	გადახატვა
@@ -4329,3 +4325,120 @@ layerLabel	Magenta	მეწამული
 	Use	გამოყენება
 	In Front	წინ
 	Behind	უკან
+	Overprint	ზედდაბეჭდვა
+	Current Brush Load	ფუნჯზე აღებული საღებავი
+	Load Brush	ფუნჯზე საღებავის აღება
+	Clean Brush	ფუნჯის გაწმენდა
+	Load the brush after each stroke	ყოველი შტრიხის შემდეგ ფუნჯზე საღებავის აღება
+	Clean the brush after each stroke	ყოველი შტრიხის შემდეგ ფუნჯის გაწმენდა
+	Animation Options	ანიმაციის პარამეტრები
+	Entire Document	მთელი დოკუმენტი
+	Filter Options	ფილტრის პარამეტრები
+	Layer Bounds	შრის საზღვრები
+	Layers Panel Options	შრეების პანელის პარამეტრები
+	New Artboard…	ახალი სამუშაო დაფა…
+	New Group…	ახალი ჯგუფი…
+	Prevent Auto-Nesting	ავტომატური ჩადგმის აკრძალვა
+	Show Layers	შრეების ჩვენება
+	Thumbnail Contents	ესკიზის შიგთავსი
+	Thumbnail Size	ესკიზის ზომა
+	Use Default Masks on Fill Layers	შევსების შრეებზე ნაგულისხმევი ნიღბების გამოყენება
+	Expand New Effects	ახალი ეფექტების გაშლა
+	Add “copy” to Copied Layers and Groups	დაკოპირებულ შრეებსა და ჯგუფებზე „copy“-ის დამატება
+	Preview on canvas when reordering layers	შრეების გადალაგებისას ტილოზე წინასწარი ნახვა
+	Show layer mask badges	შრის ნიღბის ნიშნების ჩვენება
+	Blending Options ({filter})	შერევის პარამეტრები ({filter})
+	Hide the layer's effects and Smart Filters  ({key}-click: all layers)	შრის ეფექტებისა და ჭკვიანი ფილტრების დამალვა  ({key}+დაწკაპუნება: ყველა შრე)
+	Show the layer's effects and Smart Filters  ({key}-click: all layers)	შრის ეფექტებისა და ჭკვიანი ფილტრების ჩვენება  ({key}+დაწკაპუნება: ყველა შრე)
+	Wait for the current job to finish.	დაელოდეთ მიმდინარე დავალების დასრულებას.
+	The document or Smart Filter changed. Reopen its dialog.	დოკუმენტი ან ჭკვიანი ფილტრი შეიცვალა. ხელახლა გახსენით მისი დიალოგი.
+	Opacity must be between 0% and 100%.	გაუმჭვირვალობა უნდა იყოს 0%-სა და 100%-ს შორის.
+	Dissolve is approximated: it blends without Photoshop's dither.	„გაფანტვა“ მიახლოებითია: შერევა Photoshop-ის დიზერინგის გარეშე ხდება.
+	New Snapshot…	ახალი სნეპშოტი…
+	History Options…	ისტორიის პარამეტრები…
+	Paints from the History panel's source state	ხატავს ისტორიის პანელის წყარო მდგომარეობიდან
+	Sets the source for the history brush	ადგენს ისტორიის ფუნჯის წყაროს
+	Bicubic Automatic	ბიკუბური, ავტომატური
+	Bicubic Smoother	ბიკუბური, უფრო გლუვი
+	Bicubic Sharper	ბიკუბური, უფრო მკვეთრი
+	50% Threshold	50%-იანი ზღვარი
+	Pattern Dither	პატერნული დიზერინგი
+	Diffusion Dither	დიფუზიური დიზერინგი
+	Halftone Screen	ნახევარტონური რასტრი
+	Custom Pattern	მორგებული პატერნი
+	Frequency:	სიხშირე:
+	Lines/Inch	ხაზი/დუიმი
+	Lines/Centimeter	ხაზი/სანტიმეტრი
+	Ellipse	ელიფსი
+	DDS Options	DDS-ის პარამეტრები
+	Generate Mipmaps	მიპმაპების გენერაცია
+	There is no color table to save.	შესანახი ფერთა ცხრილი არ არის.
+@plural	Saved {n} color to {file}|Saved {n} colors to {file}	{file}-ში შეინახა ფერი: {n}
+	GPU adapter	GPU ადაპტერი
+
+# Strings added upstream (sync 2026-10-22)
+	Mask Options…	ნიღბის პარამეტრები…
+	Layer Mask Display Options…	შრის ნიღბის ჩვენების პარამეტრები…
+	Create warped text	დეფორმირებული ტექსტის შექმნა
+	Override Tilt X	X-დახრის უგულებელყოფა
+	Override Tilt Y	Y-დახრის უგულებელყოფა
+	Rename Path…	ტრაექტორიის სახელის შეცვლა…
+	LUT folder	LUT-ების საქაღალდე
+	Retry GPU tries the graphics processor again now.	„GPU-ის ხელახლა ცდა“ გრაფიკული პროცესორის გამოყენებას ახლავე ხელახლა სცდის.
+	GPU acceleration resumed.	GPU-აჩქარება აღდგა.
+	Drag on the image to add a constraint; Shift for horizontal/vertical; right-click a constraint to change or delete it.	შეზღუდვის დასამატებლად გამოსახულებაზე გაავლეთ; Shift — ჰორიზონტალური/ვერტიკალური; შეზღუდვის შესაცვლელად ან წასაშლელად — მასზე მარჯვენა დაწკაპუნება.
+	JPEG Options	JPEG-ის პარამეტრები
+	Image Options	გამოსახულების პარამეტრები
+	Format Options	ფორმატის პარამეტრები
+	Baseline ("Standard")	საბაზისო („სტანდარტული“)
+	Baseline Optimized	საბაზისო ოპტიმიზებული
+	Copyright Notice	საავტორო უფლების შენიშვნა
+	Document Title	დოკუმენტის სათაური
+	The active layer has no pixels here — turn on Sample All Layers or select a layer with pixels	აქტიურ შრეს აქ პიქსელები არ აქვს — ჩართეთ „ყველა შრიდან ნიმუშის აღება“ ან აირჩიეთ შრე, რომელსაც პიქსელები აქვს
+	Load Contours…	კონტურების ჩატვირთვა…
+	Replace Contours…	კონტურების ჩანაცვლება…
+	Save Contours…	კონტურების შენახვა…
+	Delete Contour	კონტურის წაშლა
+	Loaded contours from {file}	{file}-დან ჩაიტვირთა კონტურები
+	Saved contours to {file}	{file}-ში შეინახა კონტურები
+	New Action…	ახალი მოქმედება…
+	Start Recording	ჩაწერის დაწყება
+	Stop Recording	ჩაწერის შეჩერება
+	Highlight Mode	ღია ტონების რეჟიმი
+	Highlight Color	ღია ტონების ფერი
+	Highlight Opacity	ღია ტონების გაუმჭვირვალობა
+	Shadow Mode	ჩრდილის რეჟიმი
+	Shadow Color	ჩრდილის ფერი
+	Shadow Opacity	ჩრდილის გაუმჭვირვალობა
+	Do not append "copy" to filename when saving a copy	ასლის შენახვისას ფაილის სახელს „copy“ არ დაემატოს
+	Graphics memory: {size}	გრაფიკული მეხსიერება: {size}
+	{path}: the path is not valid Unicode; save under another name.	{path}: გზა არ არის სწორი Unicode; შეინახეთ სხვა სახელით.
+	Demosaic	დემოზაიკა
+	How the camera's colour filter mosaic is filled in. It is applied when the file opens; the preview shows the method it was opened with.	როგორ ივსება კამერის ფერადი ფილტრის მოზაიკა. გამოიყენება ფაილის გახსნისას; წინასწარი ნახვა აჩვენებს მეთოდს, რომლითაც ფაილი გაიხსნა.
+	AHD (adaptive homogeneity)	AHD (ადაპტური ერთგვაროვნება)
+	Malvar–He–Cutler	Malvar–He–Cutler
+	Hirakawa–Parks: the cleanest edges and the least colour fringing, the slowest.	Hirakawa–Parks: ყველაზე სუფთა კიდეები და ყველაზე ნაკლები ფერადი შარავანდი, ყველაზე ნელი.
+	Gradient-corrected interpolation: sharp and fast, with some colour fringing on fine detail.	გრადიენტით კორექტირებული ინტერპოლაცია: მკვეთრი და სწრაფი, წვრილ დეტალებზე მცირე ფერადი შარავანდით.
+	The fastest and the softest, with colour fringing on fine detail.	ყველაზე სწრაფი და ყველაზე რბილი, წვრილ დეტალებზე ფერადი შარავანდით.
+	“{name}” already exists. Replace it?	„{name}“ უკვე არსებობს. ჩავანაცვლოთ?
+	The name in the save dialog was “{name}”.	შენახვის დიალოგში სახელი იყო „{name}“.
+	Move Up	აწევა
+	Move Down	ჩამოწევა
+	Previous Brush	წინა ფუნჯი
+	Next Brush	შემდეგი ფუნჯი
+	First Brush	პირველი ფუნჯი
+	Last Brush	ბოლო ფუნჯი
+	Preview size	გადახედვის ზომა
+	Confirm or cancel the open action step dialog first	ჯერ დაადასტურეთ ან გააუქმეთ მოქმედების ნაბიჯის გახსნილი დიალოგი
+	Pro Medium Gray	Pro საშუალო ნაცრისფერი
+	Solarized	Solarized
+	Breeze	Breeze
+	Pro Light Gray	Pro ღია ნაცრისფერი
+	Pro Light	Pro ღია
+	Resize Windows to Fit	ფანჯრების ზომის მორგება
+	EXR	EXR
+	Automatic paragraph direction	აბზაცის ავტომატური მიმართულება
+	Left-to-right paragraph direction	აბზაცის მიმართულება მარცხნიდან მარჯვნივ
+	Right-to-left paragraph direction	აბზაცის მიმართულება მარჯვნიდან მარცხნივ
+	Not rendered: this adjustment ({key}) is kept as imported.	არ არის დარენდერებული: ეს კორექცია ({key}) შენარჩუნებულია იმპორტირებული სახით.
+	Print preview image	ამობეჭდვამდე ნახვის გამოსახულება
