@@ -528,31 +528,33 @@ mod tests {
         }
     }
 
-    /// Tracing an open subpath's fill would close it, or drop a straight one entirely: the merge
+    /// Tracing an open subpath's fill would close it, or drop a straight one or a lone
+    /// anchor (a dot under a round or square cap) entirely: the merge
     /// is refused and the path, its stroked layer and the history stay as they were.
     #[test]
     fn merge_refuses_open_subpaths() {
-        let mut s = session();
-        let line = json!({"closed": false, "knots": [[10, 10], [60, 60]]});
-        let mut mixed = square();
-        mixed["subpaths"].as_array_mut().unwrap().push(line);
-        s.execute("path.set", json!({"path": mixed})).unwrap();
-        let id = s.execute("shape.create", json!({"kind": "rect", "rect": [10, 10, 50, 50]})).unwrap()["layer"].as_u64().unwrap();
-        s.execute("shape.edit", json!({"layer": id, "path": mixed})).unwrap();
-        let state = |s: &Session| {
-            let d = s.active().unwrap();
-            let photocraft_doc::LayerContent::Shape(sh) = &d.doc.layer(LayerId(id)).unwrap().content else { panic!("shape") };
-            (d.doc.work_path.clone(), sh.path.clone(), d.history.entries().len())
-        };
-        let before = state(&s);
-        for (cmd, p) in [
-            ("path.mergeShapeComponents", json!({})),
-            ("path.mergeShapeComponents", json!({"name": "layer", "layer": id})),
-            ("layer.combineShapes.mergeShapeComponents", json!({"layer": id})),
-        ] {
-            let e = s.execute(cmd, p.clone()).unwrap_err().to_string();
-            assert!(e.contains("open subpaths"), "{cmd} {p}: {e}");
-            assert!(state(&s) == before, "{cmd} {p}: nothing changed");
+        for open in [json!({"closed": false, "knots": [[10, 10], [60, 60]]}), json!({"closed": false, "knots": [[70, 70]]})] {
+            let mut s = session();
+            let mut mixed = square();
+            mixed["subpaths"].as_array_mut().unwrap().push(open);
+            s.execute("path.set", json!({"path": mixed})).unwrap();
+            let id = s.execute("shape.create", json!({"kind": "rect", "rect": [10, 10, 50, 50]})).unwrap()["layer"].as_u64().unwrap();
+            s.execute("shape.edit", json!({"layer": id, "path": mixed})).unwrap();
+            let state = |s: &Session| {
+                let d = s.active().unwrap();
+                let photocraft_doc::LayerContent::Shape(sh) = &d.doc.layer(LayerId(id)).unwrap().content else { panic!("shape") };
+                (d.doc.work_path.clone(), sh.path.clone(), d.history.entries().len())
+            };
+            let before = state(&s);
+            for (cmd, p) in [
+                ("path.mergeShapeComponents", json!({})),
+                ("path.mergeShapeComponents", json!({"name": "layer", "layer": id})),
+                ("layer.combineShapes.mergeShapeComponents", json!({"layer": id})),
+            ] {
+                let e = s.execute(cmd, p.clone()).unwrap_err().to_string();
+                assert!(e.contains("open subpaths"), "{cmd} {p}: {e}");
+                assert!(state(&s) == before, "{cmd} {p}: nothing changed");
+            }
         }
     }
 

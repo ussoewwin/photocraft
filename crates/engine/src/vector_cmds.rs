@@ -1594,9 +1594,10 @@ fn bake_components(sh: &mut ShapeLayer, tol: f64) -> Result<()> {
 /// `path` with its path operations baked into plain combined outlines, traced from the exact
 /// coverage within `tol` px (Merge Shape Components). An empty area gives an empty path; an
 /// inverted path (a vector mask's) stays inverted around the merged area. An open subpath is
-/// refused: tracing its fill would close it, or drop a straight one, losing the stroked geometry.
+/// refused: tracing its fill would close it, or drop a straight one or a lone anchor (a dot under
+/// a round or square cap), losing the stroked geometry.
 pub(crate) fn bake_path(path: &Path, tol: f64) -> Result<Path> {
-    if path.subpaths.iter().any(|sp| !sp.closed && sp.knots.len() > 1) {
+    if path.subpaths.iter().any(|sp| !sp.closed && !sp.knots.is_empty()) {
         return Err(EngineError::Other("Merge Shape Components needs closed paths: close or delete the open subpaths first".into()));
     }
     // Trace at 4× resolution so the fitted outline follows the anti-aliased edge closely.
