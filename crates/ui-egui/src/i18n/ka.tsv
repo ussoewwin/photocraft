@@ -421,7 +421,7 @@
 	Layer Edges	შრის კიდეები
 	Isolate Layers	შრეების იზოლირება
 	Layer Content Options…	შრის შიგთავსის პარამეტრები…
-	Fill Content	შიგთავსის შევსება
+	Fill Content	შევსების შიგთავსი
 	Deselect Layers	შრეების მონიშვნის მოხსნა
 	Find Layers	შრეების ძებნა
 	Layer Comps	შრეების კომპოზიციები
@@ -464,8 +464,8 @@
 	Convert to Point Text	წერტილოვან ტექსტად გარდაქმნა
 	Convert to Paragraph Text	აბზაცის ტექსტად გარდაქმნა
 	Default Features	ნაგულისხმევი შესაძლებლობები
-	East Asian Features	აღმოსავლეთ აზიური შესაძლებლობები
-	Middle Eastern Features	ახლო აღმოსავლური შესაძლებლობები
+	East Asian Features	აღმოსავლეთაზიური შესაძლებლობები
+	Middle Eastern Features	ახლოაღმოსავლური შესაძლებლობები
 	Middle Eastern & South Asian Composer	აწყობა ახლო აღმოსავლეთისა და სამხრეთ აზიის დამწერლობებისთვის
 	Update All Text Layers	ყველა ტექსტური შრის განახლება
 	Replace All Missing Fonts	ყველა ნაკლული შრიფტის ჩანაცვლება
@@ -531,7 +531,7 @@
 	Pinch…	შეკუმშვა…
 	Polar Coordinates…	პოლარული კოორდინატები…
 	Ripple…	ტალღოვნება…
-	Shear…	ძვრა…
+	Shear…	დახრა…
 	Spherize…	სფერიზება…
 	Twirl…	დაგრეხა…
 	Wave…	ტალღა…
@@ -1019,7 +1019,7 @@
 	Discord	Discord
 	Dismiss	დახურვა
 	Display P3	Display P3
-	Display Text	საჩვენებელი ტექსტი
+	Display Text	ტექსტის ჩვენება
 	Dither	დიზერინგი
 	Divide…	გაყოფა…
 	Document	დოკუმენტი
@@ -1157,7 +1157,7 @@
 	Last Document State	დოკუმენტის ბოლო მდგომარეობა
 	Layout	განლაგება
 	Leading	სტრიქონთა დაშორება
-	Leading (set to the font size × auto-leading when Auto)	სტრიქონთა დაშორება (Auto-ზე უდრის შრიფტის ზომა × ავტომატური დაშორება)
+	Leading (set to the font size × auto-leading when Auto)	სტრიქონთა დაშორება (ავტომატურ რეჟიმში უდრის შრიფტის ზომას × ავტომატური დაშორება)
 	Leave as is (don't color manage)	დატოვება როგორც არის (ფერების მართვის გარეშე)
 	Left align text	ტექსტის მარცხნივ სწორება
 	Length:	სიგრძე:
@@ -1335,12 +1335,12 @@
 	Registration Marks	შეთავსების ნიშნები
 	Regular	ჩვეულებრივი
 	Relative	ფარდობითი
-	Relative Colorimetric	შეფარდებით კოლორიმეტრული
+	Relative Colorimetric	ფარდობითი კოლორიმეტრიული
 	Remove	მოშორება
 	Remove All Pins	ყველა სამაგრის მოშორება
 	Remove Background	ფონის მოშორება
 	Remove Planes	სიბრტყეების მოშორება
-	Remove Tool	ხელსაწყოს მოშორება
+	Remove Tool	მოშორების ხელსაწყო
 	Remove stop	გადასვლის წერტილის წაშლა
 	Remove variable	ცვლადის მოშორება
 	Rename	სახელის შეცვლა
@@ -1796,7 +1796,7 @@
 	Apply auto tone	ავტოტონის გამოყენება
 	Ask	კითხვა
 	Ask before saving layered tiff	შრეებიანი TIFF-ის შენახვამდე კითხვა
-	Auto collapse icon panels	ხატულების პანელების ავტომატური აკეცვა
+	Auto collapse icon panels	ხატულების პანელების ავტომატური ჩაკეცვა
 	Auto show hidden panels	დამალული პანელების ავტომატური ჩვენება
 	Auto show home screen	საწყისი ეკრანის ავტომატური ჩვენება
 	Autosave	ავტოშენახვა
@@ -1910,7 +1910,7 @@
 	Recent fonts	ბოლოდროინდელი შრიფტები
 	Recover on launch	გაშვებისას აღდგენა
 	Remember workspace changes	სამუშაო სივრცის ცვლილებების დამახსოვრება
-	Resize image during place	ჩასმისას გამოსახულების ზომის შეცვლა
+	Resize image during place	განთავსებისას გამოსახულების ზომის შეცვლა
 	Rotate view with trackpad	ხედის შემობრუნება სენსორული პანელით
 	Same folder	იგივე საქაღალდე
 	Save in background	ფონურ რეჟიმში შენახვა
@@ -2254,7 +2254,7 @@
 	Baseline Shift	საბაზისო ხაზის წანაცვლება
 	Mac LCD	Mac LCD
 	Mac Sharp	Mac მკვეთრი
-	Mac Crisp	Mac ხასხასა
+	Mac Crisp	Mac მკაფიო
 	Mac Strong	Mac ძლიერი
 	Mac Smooth	Mac გლუვი
 	Superscript	ზედა ინდექსი
@@ -2537,7 +2537,7 @@
 	Airbrush: keeps painting while the pointer rests.	აეროგრაფი: ხატვა გრძელდება, სანამ მაჩვენებელი ერთ ადგილზე დგას.
 	Click the first point or press ↵ to close · Esc cancels	დაწკაპეთ პირველ წერტილზე ან დააჭირეთ ↵-ს დასახურად · Esc — გაუქმება
 	Click to add a point · drag off or ⌘/Ctrl-click or Delete to remove	დაწკაპეთ წერტილის დასამატებლად · მოსაშორებლად გადაათრიეთ გარეთ, ⌘/Ctrl+დაწკაპუნება ან Delete
-	Click to apply, ⌥-click to clear overrides, double-click for Style Options	დაწკაპეთ გამოსაყენებლად, ⌥+დაწკაპუნება — ცვლილებების გასუფთავება, ორმაგი დაწკაპუნება — სტილის პარამეტრები
+	Click to apply, ⌥-click to clear overrides, double-click for Style Options	დაწკაპეთ გამოსაყენებლად, ⌥+დაწკაპუნება — გადაფარვების მოხსნა, ორმაგი დაწკაპუნება — სტილის პარამეტრები
 	Click to zoom in  ·  ⌥-click to zoom out	დაწკაპეთ გასადიდებლად  ·  ⌥+დაწკაპუნება — დასაპატარავებლად
 	Click: corner · Drag: smooth · Click first point: close · ↩ finish · Esc cancel	დაწკაპუნება: კუთხე · გადათრევა: გლუვი · პირველ წერტილზე დაწკაპუნება: დახურვა · ↩ დასრულება · Esc გაუქმება
 	Commit Perspective Warp (↩)	პერსპექტიული დეფორმაციის დადასტურება (↩)
@@ -2919,7 +2919,7 @@ fontWeight	Italic	დახრილი
 	Remove pair	წყვილის წაშლა
 	Dash offset	ტირის წანაცვლება
 	Open paths use centered strokes	ღია ტრაექტორიების კონტური ცენტრირებულია
-	Use finite lengths and a positive pattern total	გამოიყენეთ სასრული სიგრძეები და დადებითი ჯამური ნიმუში
+	Use finite lengths and a positive pattern total	გამოიყენეთ სასრული სიგრძეები და ნიმუშის დადებითი ჯამური სიგრძე
 	No subject found — try Object Selection or the Lasso	ობიექტი ვერ მოიძებნა — სცადეთ ობიექტის მონიშვნა ან ლასო
 	Quick Selection found nothing there	სწრაფმა მონიშვნამ იქ ვერაფერი იპოვა
 	Object Selection found nothing there — try a tighter rectangle	ობიექტის მონიშვნამ იქ ვერაფერი იპოვა — სცადეთ უფრო ვიწრო მართკუთხედი
@@ -3014,7 +3014,7 @@ cameraData	Lens	ობიექტივი
 # Select and Mask Refine Edge Brush (#2972)
 	Refine Edge Brush (R)	კიდის დაზუსტების ფუნჯი (R)
 	Expand Detection Area	აღმოჩენის არის გაფართოება
-	Restore Original Edge	ორიგინალი კიდის აღდგენა
+	Restore Original Edge	საწყისი კიდის აღდგენა
 	Paint over hair or fur on the image; Alt paints the other mode	გამოსახულებაზე თმა ან ბეწვი გადაღებეთ; Alt მეორე რეჟიმით ხატავს
 	Clear Brush Strokes	ფუნჯის მონასმების გასუფთავება
 	Show rulers	სახაზავების ჩვენება
@@ -3639,7 +3639,7 @@ layerLabel	No Color	ფერის გარეშე
 	Defringe	კიდის შარავანდის მოცილება
 	Diffuse	დიფუზია
 	Diffuse Glow	გაბნეული ნათება
-	Displace	ჩანაცვლება რუკით
+	Displace	წანაცვლება
 	Do you want to save you made to “{name}” before quitting?	გსურთ „{name}“-ში შეტანილი ცვლილებების შენახვა გასვლამდე?
 	Dust & Scratches	მტვერი და ნაკაწრები
 	Export Contents	შიგთავსის ექსპორტი
@@ -3700,7 +3700,7 @@ layerLabel	No Color	ფერის გარეშე
 	Pinch	მოჭყლეტა
 	Place Embedded	ჩაშენებულის განთავსება
 	Place Linked	დაკავშირებულის განთავსება
-	Place Scale Marker	მასშტაბის ნიშნულის განთავსება
+	Place Scale Marker	მასშტაბის მარკერის განთავსება
 	Plastic Wrap	პლასტიკური შეფუთვა
 	Pointillize	პუანტილიზმი
 	Polar Coordinates	პოლარული კოორდინატები
@@ -3731,7 +3731,7 @@ layerLabel	No Color	ფერის გარეშე
 	Set Measurement Scale	გაზომვის მასშტაბის დაყენება
 	Shadows/Highlights	ჩრდილები/ღია ტონები
 	Shape Blur	ფიგურით გაბუნდოვნება
-	Shear	ცვლა
+	Shear	დახრა
 	Smart Blur	ჭკვიანი გაბუნდოვნება
 	Smart Sharpen	ჭკვიანი გამკვეთრება
 	Smudge Stick	გამღაბნელი ჩხირი
@@ -3853,7 +3853,7 @@ curves	Smooth	გაგლუვება
 @plural	{n} sample point removed|{n} sample points removed	მოშორებულია სინჯის წერტილი: {n}
 @plural	{n} slice|{n} slices	ნაჭერი: {n}
 @plural	{n} step|{n} steps	ნაბიჯი: {n}
-@plural	{warning} (+{n} more brush preset warning)|{warning} (+{n} more brush preset warnings)	{warning} (ფუნჯის პრესეტის კიდევ ერთი გაფრთხილება: +{n})
+@plural	{warning} (+{n} more brush preset warning)|{warning} (+{n} more brush preset warnings)	{warning} (ფუნჯის პრესეტის დამატებითი გაფრთხილება: +{n})
 @plural	{what} with {n} warning|{what} with {n} warnings	{what}, გაფრთხილება: {n}
 	Duplicate Channel	არხის დუბლირება
 	Delete Channel	არხის წაშლა
@@ -4093,7 +4093,7 @@ shape	Appearance	იერსახე
 	Add to Dictionary	ლექსიკონში დამატება
 	All shortcuts reset to Photoshop defaults.	ყველა მალსახმობი დაბრუნდა Photoshop-ის ნაგულისხმევზე.
 	Allow Continue	გაგრძელების დაშვება
-	Attempt to Automatically Align Source Images	წყარო გამოსახულებების ავტომატური სწორების მცდელობა
+	Attempt to Automatically Align Source Images	წყაროს გამოსახულებების ავტომატური სწორების მცდელობა
 	Auto Add/Delete	ავტომატური დამატება/წაშლა
 
 # Native Windows printing qualification
@@ -4158,7 +4158,7 @@ shape	Appearance	იერსახე
 	Solidity:	სიმკვრივე:
 	Sort By Name	სახელის მიხედვით დალაგება
 	Source Channel	წყაროს არხი
-	Source Files	წყარო ფაილები
+	Source Files	წყაროს ფაილები
 	Source Invert	წყაროს ინვერსია
 	Source1 Channel	წყარო 1-ის არხი
 	Source1 Invert	წყარო 1-ის ინვერსია
@@ -4248,8 +4248,8 @@ layerLabel	Magenta	მეწამული
 	Drag the pin to move the band, or its ring to change its blur. Drag the solid lines to widen the sharp band, the dashed lines to set the transition, and the dots to turn it.	გადაათრიეთ სამაგრი ზოლის გადასაადგილებლად, ან მისი რგოლი — გაბუნდოვნების შესაცვლელად. გადაათრიეთ უწყვეტი ხაზები მკვეთრი ზოლის გასაფართოებლად, წყვეტილი ხაზები — გარდამავალი არის დასაყენებლად, წერტილები კი — შესაბრუნებლად.
 	Drag the handles on the outline to resize and turn it; the ring sets the blur angle.	გადაათრიეთ კონტურის სახელურები ზომის შესაცვლელად და შესაბრუნებლად; რგოლი გაბუნდოვნების კუთხეს აყენებს.
 	Add Shortcut	მალსახმობის დამატება
-	Clip thumbnails to layer bounds	მინიატიურების შრის საზღვრებით მოჭრა
-	Clip Thumbnails to Layer Bounds	მინიატიურების შრის საზღვრებით მოჭრა
+	Clip thumbnails to layer bounds	მინიატურების შრის საზღვრებით მოჭრა
+	Clip Thumbnails to Layer Bounds	მინიატურების შრის საზღვრებით მოჭრა
 	Import Brushes… (.abr or image)	ფუნჯების იმპორტი… (.abr ან გამოსახულება)
 	Import Brush from Image…	ფუნჯის იმპორტი გამოსახულებიდან…
 	Bundle Arrow-Key Nudges	ისრებით წანაცვლებების გაერთიანება
