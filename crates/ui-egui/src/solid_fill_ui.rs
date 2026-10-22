@@ -97,16 +97,20 @@ pub(crate) fn confirm(app: &mut PhotocraftApp, f: &Map<String, Value>) -> Result
         return Err("the target document is no longer active".into());
     }
     let layer = LayerId(params.get("layer").and_then(Value::as_u64).ok_or("missing Solid Color layer")?);
-    if !st.doc.layer(layer).is_some_and(|l| matches!(l.content, LayerContent::Fill(Fill::Solid(_)))) {
+    let Some(LayerContent::Fill(Fill::Solid(original))) = st.doc.layer(layer).map(|l| &l.content) else {
         return Err("the target Solid Color Fill layer no longer exists".into());
-    }
-    if f.get("color") == f.get("__orig") {
+    };
+    // Different inks can share a display colour (CMYK 0/0/0/100 and 50/50/50/100 are both black):
+    // only a colour whose inks are unchanged too is no edit (#8568).
+    let inks = color_picker_ui::picked_cmyk(f);
+    let same_inks = inks.is_none_or(|k| original.mode != photocraft_color::ColorMode::Cmyk || original.c == k);
+    if f.get("color") == f.get("__orig") && same_inks {
         return Ok(json!({"layer": layer.0, "unchanged": true}));
     }
     let color = f.get("color").cloned().ok_or("missing color")?;
     let object = params.as_object_mut().ok_or("invalid Solid Color target")?;
     object.insert("color".into(), color);
-    if let Some(inks) = color_picker_ui::picked_cmyk(f) {
+    if let Some(inks) = inks {
         object.insert("cmyk".into(), json!(inks));
     }
     app.run(cmds::SET, params)

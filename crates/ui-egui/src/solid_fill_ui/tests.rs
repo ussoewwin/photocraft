@@ -308,4 +308,18 @@ fn cmyk_typed_into_the_picker_is_the_fills_colour_in_a_cmyk_document() {
     let id = open(&mut app).unwrap();
     let shown = color_picker_ui::current(&app.ui.dialogs.iter().find(|d| d.id == id).unwrap().fields);
     assert_eq!(shown.cmyk, edit);
+
+    // Other inks with the same display colour are still an edit.
+    let near = [0.5, 0.5, 0.499, 1.0];
+    let id = open(&mut app).unwrap();
+    let mut f = app.ui.dialogs.iter().find(|d| d.id == id).unwrap().fields.clone();
+    typed(&mut f, near);
+    confirm(&mut app, &f).unwrap();
+    let rich = [0.5, 0.5, 0.5, 1.0];
+    let id = open(&mut app).unwrap();
+    let mut f = app.ui.dialogs.iter().find(|d| d.id == id).unwrap().fields.clone();
+    typed(&mut f, rich);
+    assert_eq!(f.get("color"), f.get("__orig"), "both inks show as the same colour");
+    confirm(&mut app, &f).unwrap();
+    assert_eq!(fill(&app).c, rich);
 }
