@@ -259,6 +259,8 @@ impl LiquifyDialog {
 
     /// Starts a stroke; `alt` draws with the selected tool's opposite (see [`alt_tool`]).
     fn begin(&mut self, p: [f64; 3], now: f64, alt: bool) {
+        // A stroke still open has already changed the field; record it so undo can replay it (#8055).
+        self.end();
         self.redo.clear();
         let tool = if alt { alt_tool(self.opts.tool) } else { self.opts.tool };
         let mut s = self.template(tool);
@@ -670,6 +672,13 @@ fn alt_tool(t: LiquifyTool) -> LiquifyTool {
     }
 }
 
+/// Where the brush outline is drawn: under the pointer, except during an Alt-drag of the brush
+/// size (`resize`), when it stays at the drag's anchor and only grows or shrinks, as the brush
+/// tools' Alt-drag does outside Liquify (#7884).
+fn brush_circle_at(resize: Option<(Pos2, f32, f32)>, hover: Option<Pos2>) -> Option<Pos2> {
+    resize.map(|(anchor, ..)| anchor).or(hover)
+}
+
 /// Alt+right-drag, and Control+Alt-drag, change the Liquify brush instead of painting (#4702).
 fn brush_resize_gesture(mods: egui::Modifiers, secondary: bool) -> bool {
     mods.alt && (secondary || mods.ctrl)
@@ -737,7 +746,18 @@ pub fn history_keys(app: &mut PhotocraftApp, ctx: &egui::Context) {
 
 pub fn keys(app: &mut PhotocraftApp, ctx: &egui::Context) {
     history_keys(app, ctx);
+    // ⌘+ / ⌘− / ⌘0 / ⌘1 (or their overrides) zoom the preview, not the canvas behind it (#7210).
+    let nav = if app.distort.liquify.is_some() { crate::shortcuts::nav_shortcut(app, ctx) } else { None };
     let Some(d) = app.distort.liquify.as_mut() else { return };
+    if let Some(id) = nav {
+        d.zoom = match id {
+            "view.zoomIn" => crate::zoom_levels::step_in_range(d.zoom, 1, ZOOM_MIN, ZOOM_MAX),
+            "view.zoomOut" => crate::zoom_levels::step_in_range(d.zoom, -1, ZOOM_MIN, ZOOM_MAX),
+            // Fit on Screen: the preview fits and centres the image on its next frame.
+            "view.fitOnScreen" => 0.0,
+            _ => 1.0,
+        };
+    }
     // Ctrl+H (Hide Extras) toggles the red freeze-mask overlay; the mask itself stays active.
     if ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::H)) {
         d.opts.show_mask = !d.opts.show_mask;
@@ -890,6 +910,7 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
     let mut action: Option<&str> = None;
     let mut events: Vec<ToolEvent> = Vec::new();
     let mut mods = egui::Modifiers::NONE;
+    let pinch_zooms = app.session.prefs().enhanced_controls.zoom_with_trackpad_pinch;
     egui::Area::new(egui::Id::new("liquify-dialog")).order(egui::Order::Foreground).fixed_pos(screen.min).show(ctx, |ui| {
         let Some(d) = app.distort.liquify.as_mut() else { return };
         d.upload(ctx);
@@ -1017,19 +1038,29 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
         painter.rect_filled(area, 0.0, t.canvas);
         let (cw, ch) = (d.canvas.width() as f32, d.canvas.height() as f32);
         if d.zoom <= 0.0 {
-            d.zoom = ((area.width() - 40.0) / cw).min((area.height() - 40.0) / ch).clamp(0.01, 4.0);
+            d.zoom = ((area.width() - 40.0) / cw).min((area.height() - 40.0) / ch).clamp(ZOOM_MIN, 4.0);
             d.center = [f64::from(d.canvas.x0) + f64::from(cw) / 2.0, f64::from(d.canvas.y0) + f64::from(ch) / 2.0];
         }
         let resp = ui.interact(area, egui::Id::new("liquify-preview"), Sense::click_and_drag());
-        // Wheel zooms about the pointer.
-        if resp.hovered() {
-            let scroll = ui.input(|i| i.smooth_scroll_delta.y);
-            if scroll != 0.0
-                && let Some(hp) = resp.hover_pos()
-            {
+        // The wheel zooms about the pointer, ×1.1 a notch, and so does a trackpad pinch (unless
+        // Preferences › Enhanced Controls › Zoom with Trackpad Pinch is off); a sideways scroll
+        // pans (#7210). Read every frame, as `wheel_nav` asks, so its modifier state follows.
+        let wheel = crate::wheel_nav::read(ctx, true, pinch_zooms, egui::Id::new("liquify-preview-wheel"), resp.hovered());
+        if let Some(hp) = resp.hover_pos() {
+            let zoom = match wheel {
+                Some(crate::wheel_nav::Wheel::Zoom(f)) => Some((d.zoom * f).clamp(ZOOM_MIN, ZOOM_MAX)),
+                Some(crate::wheel_nav::Wheel::SnapZoom(n)) => {
+                    Some((0..n.unsigned_abs()).fold(d.zoom, |z, _| crate::zoom_levels::step_in_range(z, n.signum(), ZOOM_MIN, ZOOM_MAX)))
+                }
+                Some(crate::wheel_nav::Wheel::Pan(v)) => {
+                    d.center = [d.center[0] - f64::from(v.x / d.zoom), d.center[1] - f64::from(v.y / d.zoom)];
+                    None
+                }
+                None => None,
+            };
+            if let Some(z) = zoom {
                 let before = to_doc(d, area, hp);
-                // Liquify's own preview zoom, not the canvas (`zoom_levels` doesn't apply).
-                d.zoom = (d.zoom * (scroll / 200.0).exp()).clamp(0.01, 32.0);
+                d.zoom = z;
                 let after = to_doc(d, area, hp);
                 d.center = [d.center[0] + before[0] - after[0], d.center[1] + before[1] - after[1]];
             }
@@ -1090,8 +1121,9 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
             let line: Vec<Pos2> = pts.iter().map(|p| to_screen(d, area, *p)).collect();
             clip.add(egui::Shape::line(line, Stroke::new(1.0, color)));
         }
-        // Brush outline (the lasso has none).
-        if let Some(hp) = resp.hover_pos() {
+        // Brush outline (the lasso has none). While Alt-dragging its size it stays where the drag
+        // started, so only its size changes (#7884).
+        if let Some(hp) = brush_circle_at(d.brush_resize, resp.hover_pos()) {
             if d.opts.tool != LiquifyTool::LassoMask {
                 let r = d.opts.size * 0.5 * d.zoom;
                 clip.circle_stroke(hp, r, Stroke::new(1.5, Color32::BLACK));
@@ -1103,10 +1135,14 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
         // Mouse → strokes (Space or middle button pans). Alt+right-drag resizes the brush (#4702).
         let (pan, secondary, mods_now) =
             ui.input(|i| (i.key_down(egui::Key::Space) || i.pointer.middle_down(), i.pointer.button_down(egui::PointerButton::Secondary), i.modifiers));
-        let resize = d.brush_resize.is_some() || (resp.drag_started() && brush_resize_gesture(mods_now, secondary));
+        // From the press, not once the drag is recognised a few points later: that first frame
+        // would otherwise start a stroke.
+        let resize = d.brush_resize.is_some() || (resp.is_pointer_button_down_on() && brush_resize_gesture(mods_now, secondary));
         if resize {
+            // Anchored where the button went down, not where the drag was recognised a few
+            // points later, so the outline doesn't jump when the gesture starts.
             if d.brush_resize.is_none()
-                && let Some(p) = resp.interact_pointer_pos()
+                && let Some(p) = ui.input(|i| i.pointer.press_origin()).or_else(|| resp.interact_pointer_pos())
             {
                 d.brush_resize = Some((p, d.opts.size, d.opts.density));
             }
@@ -1132,7 +1168,8 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
                     events.push(ToolEvent::Move { x: q[0], y: q[1], pressure: pr });
                     ctx.request_repaint();
                 }
-            } else if resp.drag_started() || (resp.is_pointer_button_down_on() && d.cur.is_none()) {
+            } else if (resp.drag_started() || resp.is_pointer_button_down_on()) && d.cur.is_none() {
+                // The stroke already began at the press; egui's later drag start must not restart it (#8055).
                 events.push(ToolEvent::Down { x: q[0], y: q[1], pressure: pr });
             } else if resp.dragged() || resp.is_pointer_button_down_on() {
                 let moved = d.cur.as_ref().is_some_and(|(_, l)| l[0] != q[0] || l[1] != q[1]);
@@ -1162,6 +1199,11 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
         _ => {}
     }
 }
+
+/// The preview's zoom range (1 = the dialog's 100 %). Liquify keeps its own zoom, apart from the
+/// canvas behind it.
+const ZOOM_MIN: f32 = 0.01;
+const ZOOM_MAX: f32 = 32.0;
 
 fn to_screen(d: &LiquifyDialog, area: ERect, p: [f64; 2]) -> Pos2 {
     area.center() + vec2(((p[0] - d.center[0]) as f32) * d.zoom, ((p[1] - d.center[1]) as f32) * d.zoom)
@@ -1226,6 +1268,15 @@ fn draw_mesh(d: &LiquifyDialog, painter: &egui::Painter, area: ERect) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_brush_outline_follows_the_pointer_except_while_resizing() {
+        let (hover, anchor) = (pos2(30.0, 40.0), pos2(10.0, 20.0));
+        assert_eq!(brush_circle_at(None, Some(hover)), Some(hover));
+        assert_eq!(brush_circle_at(Some((anchor, 40.0, 50.0)), Some(hover)), Some(anchor));
+        assert_eq!(brush_circle_at(Some((anchor, 40.0, 50.0)), None), Some(anchor));
+        assert_eq!(brush_circle_at(None, None), None);
+    }
 
     #[test]
     fn alt_right_drag_resizes_the_liquify_brush_and_does_not_paint() {
@@ -1603,6 +1654,47 @@ mod tests {
         assert_eq!(d.redo.len(), REDO_STACK_LIMIT);
     }
 
+    /// #7884: Alt+right-dragging the brush size in the Liquify dialog keeps the brush where the
+    /// drag started (its outline and the point it would work at) and only changes its size, as the
+    /// brush tools' Alt-drag does outside Liquify.
+    #[test]
+    fn alt_drag_resize_keeps_the_brush_where_it_started() {
+        let ctx = egui::Context::default();
+        PhotocraftApp::setup_context(&ctx, Default::default());
+        let mut app = app_with_layer();
+        open(&mut app, &ctx).unwrap();
+        let screen = ERect::from_min_size(pos2(0.0, 0.0), vec2(1400.0, 900.0));
+        let frame = |app: &mut PhotocraftApp, events: Vec<egui::Event>, mods: egui::Modifiers| {
+            let events = std::iter::once(egui::Event::ModifiersChanged(mods)).chain(events).collect();
+            let raw = egui::RawInput { screen_rect: Some(screen), events, ..Default::default() };
+            ctx.run_ui(raw, |ui| show(app, ui.ctx())).textures_delta.clear();
+        };
+        let alt = egui::Modifiers::ALT;
+        let none = egui::Modifiers::NONE;
+        frame(&mut app, vec![], none);
+        // A point over the image in the dialog's canvas (120 × 80): the first one on a grid.
+        let p = (1..22)
+            .flat_map(|j| (1..34).map(move |i| pos2(40.0 * i as f32, 40.0 * j as f32)))
+            .find(|&q| {
+                frame(&mut app, vec![egui::Event::PointerMoved(q)], none);
+                let h = app.distort.liquify.as_ref().and_then(|d| d.hover);
+                h.is_some_and(|h| (10.0..60.0).contains(&h[0]) && (20.0..60.0).contains(&h[1]))
+            })
+            .expect("the dialog shows the image");
+        frame(&mut app, vec![egui::Event::PointerMoved(p)], none);
+        let d = app.distort.liquify.as_ref().unwrap();
+        let (start, size0) = (d.hover.expect("the pointer is over the canvas"), d.opts.size);
+        let button = |pressed| egui::Event::PointerButton { pos: p, button: egui::PointerButton::Secondary, pressed, modifiers: alt };
+        frame(&mut app, vec![button(true)], alt);
+        for k in 1..=6 {
+            frame(&mut app, vec![egui::Event::PointerMoved(p + vec2(10.0 * k as f32, 0.0))], alt);
+        }
+        let d = app.distort.liquify.as_ref().unwrap();
+        assert!(d.opts.size > size0, "the drag resized the brush: {} -> {}", size0, d.opts.size);
+        assert_eq!(d.hover, Some(start), "the brush stayed where the drag started");
+        assert!(d.strokes.is_empty(), "and nothing was painted");
+    }
+
     #[test]
     fn shortcut_handler_undoes_liquify_even_when_egui_owns_keyboard_focus() {
         let ctx = egui::Context::default();
@@ -1640,6 +1732,160 @@ mod tests {
             crate::shortcuts::handle(&mut app, ui.ctx());
         });
         assert_eq!(app.distort.liquify.as_ref().unwrap().strokes.len(), 1, "Cmd+Shift+Z redoes the last stroke");
+    }
+
+    fn key(key: egui::Key) -> egui::Event {
+        egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::COMMAND }
+    }
+
+    /// A frame of the open dialog in a 1000 × 700 window with `events`; returns the preview's
+    /// centre (between the tool strip and the options panel, under the title strip).
+    fn frame(app: &mut PhotocraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Pos2 {
+        let screen = ERect::from_min_size(Pos2::ZERO, vec2(1000.0, 700.0));
+        let raw = egui::RawInput { screen_rect: Some(screen), events, ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| show(app, ui.ctx()));
+        out.textures_delta.clear();
+        pos2((LEFT_W + screen.width() - RIGHT_W) / 2.0, (30.0 + screen.height()) / 2.0)
+    }
+
+    /// #7210: ⌘+ / ⌘− step Liquify's preview along the zoom ladder, ⌘0 fits it and ⌘1 is the
+    /// dialog's 100 %, through the canvas's own shortcuts; the canvas behind keeps its zoom.
+    #[test]
+    fn zoom_shortcuts_zoom_the_preview_not_the_canvas() {
+        let ctx = egui::Context::default();
+        PhotocraftApp::setup_context(&ctx, crate::theme::ThemeKind::ALL[0]);
+        let mut app = app_with_layer();
+        open(&mut app, &ctx).unwrap();
+        frame(&mut app, &ctx, Vec::new());
+        let fitted = app.distort.liquify.as_ref().unwrap().zoom;
+        assert!(fitted > 0.0, "the preview fits on its first frame");
+        let canvas_zoom = app.ui.views.first().map(|v| v.zoom);
+        let mut press = |k: egui::Key| {
+            let raw = egui::RawInput { events: vec![key(k)], ..Default::default() };
+            let _ = ctx.run_ui(raw, |ui| crate::shortcuts::handle(&mut app, ui.ctx()));
+            app.distort.liquify.as_ref().unwrap().zoom
+        };
+        assert_eq!(press(egui::Key::Num1), 1.0);
+        assert_eq!(press(egui::Key::Equals), 2.0, "next step up the ladder");
+        assert_eq!(press(egui::Key::Plus), 3.0, "⌘+ typed as Plus too");
+        assert_eq!(press(egui::Key::Minus), 2.0);
+        assert_eq!(press(egui::Key::Num0), 0.0, "fit on the next frame");
+        frame(&mut app, &ctx, Vec::new());
+        assert_eq!(app.distort.liquify.as_ref().unwrap().zoom, fitted);
+        assert_eq!(app.ui.views.first().map(|v| v.zoom), canvas_zoom, "the canvas behind keeps its zoom");
+    }
+
+    /// #7210: a trackpad pinch over the preview zooms it about the pointer (macOS sends no wheel
+    /// for it), unless Preferences › Enhanced Controls › Zoom with Trackpad Pinch is off; a wheel
+    /// notch is one ×1.1 step.
+    #[test]
+    fn pinch_and_wheel_zoom_the_preview_about_the_pointer() {
+        let ctx = egui::Context::default();
+        PhotocraftApp::setup_context(&ctx, crate::theme::ThemeKind::ALL[0]);
+        let mut app = app_with_layer();
+        open(&mut app, &ctx).unwrap();
+        let center = frame(&mut app, &ctx, Vec::new());
+        let at = center + vec2(60.0, -40.0);
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
+        let screen = ERect::from_min_size(Pos2::ZERO, vec2(1000.0, 700.0));
+        let area = ERect::from_min_max(pos2(LEFT_W, 30.0), pos2(screen.width() - RIGHT_W, screen.height()));
+        let (z0, under) = {
+            let d = app.distort.liquify.as_ref().unwrap();
+            (d.zoom, to_doc(d, area, at))
+        };
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at), egui::Event::Zoom(2.0)]);
+        let d = app.distort.liquify.as_ref().unwrap();
+        assert!((d.zoom - z0 * 2.0).abs() < 1e-4, "{} → {}", z0, d.zoom);
+        let still = to_doc(d, area, at);
+        assert!((still[0] - under[0]).abs() < 1e-3 && (still[1] - under[1]).abs() < 1e-3, "the point under the pointer stays: {under:?} → {still:?}");
+
+        let notch = ctx.options(|o| o.input_options.line_scroll_speed);
+        let wheel = egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Line,
+            delta: vec2(0.0, 1.0),
+            modifiers: egui::Modifiers::NONE,
+            phase: egui::TouchPhase::Move,
+        };
+        let z1 = app.distort.liquify.as_ref().unwrap().zoom;
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at), wheel]);
+        let z2 = app.distort.liquify.as_ref().unwrap().zoom;
+        assert!(notch > 0.0 && (z2 / z1 - crate::wheel_nav::NOTCH).abs() < 1e-3, "one notch is ×1.1: {z1} → {z2}");
+
+        app.session.prefs.edit(|p| p.enhanced_controls.zoom_with_trackpad_pinch = false);
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at), egui::Event::Zoom(2.0)]);
+        assert_eq!(app.distort.liquify.as_ref().unwrap().zoom, z2, "a pinch does nothing with the preference off");
+    }
+
+    /// The proxy rendered from the recorded strokes, i.e. what undo/replay rebuilds.
+    fn replayed_out(d: &LiquifyDialog) -> Vec<[u8; 4]> {
+        let field = LiquifyField::from_strokes(d.canvas, d.cell, &d.strokes);
+        let mut out = vec![[0u8; 4]; d.proxy.w * d.proxy.h];
+        d.proxy.render(&field, [0, 0, d.proxy.w, d.proxy.h], &mut out);
+        out
+    }
+
+    /// #8055: a second pointer-down while a stroke is open must not drop the dabs already applied.
+    #[test]
+    fn second_down_without_up_keeps_the_open_strokes_dabs_recorded() {
+        let ctx = egui::Context::default();
+        let mut app = app_with_layer();
+        open(&mut app, &ctx).unwrap();
+        control(&mut app, &json!({"tool": "forwardWarp", "size": 30})).unwrap();
+        for ev in [
+            ToolEvent::Down { x: 40.0, y: 40.0, pressure: 1.0 },
+            ToolEvent::Move { x: 46.0, y: 41.0, pressure: 1.0 },
+            ToolEvent::Down { x: 46.0, y: 41.0, pressure: 1.0 },
+            ToolEvent::Move { x: 55.0, y: 42.0, pressure: 1.0 },
+            ToolEvent::Up { x: 55.0, y: 42.0 },
+        ] {
+            pointer(&mut app, ev, egui::Modifiers::NONE);
+        }
+        let d = app.distort.liquify.as_ref().unwrap();
+        assert!(d.out == replayed_out(d), "the live field must match the field rebuilt from the recorded strokes");
+    }
+
+    /// #8055: short strokes drawn with the mouse (moves inside egui's drag threshold first) are
+    /// recorded whole, as one stroke each, so undo removes only the last one.
+    #[test]
+    fn short_mouse_strokes_are_recorded_whole_and_undo_removes_only_the_last() {
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut app = app_with_layer();
+        open(&mut app, &ctx).unwrap();
+        control(&mut app, &json!({"tool": "forwardWarp", "size": 30})).unwrap();
+        let screen = ERect::from_min_size(pos2(0.0, 0.0), vec2(1280.0, 800.0));
+        let frame = |app: &mut PhotocraftApp, events: Vec<egui::Event>| {
+            let raw = egui::RawInput { screen_rect: Some(screen), events, ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| show(app, ui.ctx()));
+            out.textures_delta.clear();
+        };
+        frame(&mut app, vec![]);
+        frame(&mut app, vec![]);
+        let mut before_last = Vec::new();
+        let strokes = 6;
+        for i in 0..strokes {
+            let start = pos2(560.0 + i as f32 * 25.0, 380.0 + (i % 2) as f32 * 20.0);
+            before_last = app.distort.liquify.as_ref().unwrap().out.clone();
+            frame(&mut app, vec![egui::Event::PointerMoved(start)]);
+            let press = egui::Event::PointerButton { pos: start, button: egui::PointerButton::Primary, pressed: true, modifiers: egui::Modifiers::NONE };
+            frame(&mut app, vec![press]);
+            let mut p = start;
+            for _ in 0..8 {
+                p += vec2(1.5, 1.0);
+                frame(&mut app, vec![egui::Event::PointerMoved(p)]);
+            }
+            let release = egui::Event::PointerButton { pos: p, button: egui::PointerButton::Primary, pressed: false, modifiers: egui::Modifiers::NONE };
+            frame(&mut app, vec![release]);
+            frame(&mut app, vec![]);
+            let d = app.distort.liquify.as_ref().unwrap();
+            assert_eq!(d.strokes.len(), i + 1, "one recorded stroke per mouse stroke");
+            assert!(d.out == replayed_out(d), "stroke {i}: the live field must match the recorded strokes");
+        }
+        control(&mut app, &json!({"undo": true})).unwrap();
+        let d = app.distort.liquify.as_ref().unwrap();
+        assert_eq!(d.strokes.len(), strokes - 1);
+        let differ = d.out.iter().zip(&before_last).filter(|(a, b)| a != b).count();
+        assert_eq!(differ, 0, "undo restores the pixels from before the last stroke");
     }
 
     #[test]
