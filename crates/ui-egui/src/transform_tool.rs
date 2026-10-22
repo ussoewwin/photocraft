@@ -1381,7 +1381,7 @@ pub(crate) fn multi_display_doc(app: &mut PhotocraftApp, idx: usize) -> Option<(
     }
     let t = app.ui.transform.as_ref()?.clone();
     let st = app.session.documents().get(idx)?;
-    let (doc_id, revision, source) = (st.doc.id, st.revision, st.doc.clone());
+    let (doc_id, revision) = (st.doc.id, st.revision);
     let (document, ids, old_revision, shown_quad, committing) = {
         let m = app.multi_transform.as_ref()?;
         (m.document, m.layers.clone(), m.revision, m.shown_quad, m.committing)
@@ -1406,6 +1406,9 @@ pub(crate) fn multi_display_doc(app: &mut PhotocraftApp, idx: usize) -> Option<(
     }
     let fresh = old_revision == revision && shown_quad == Some(t.quad);
     if !fresh {
+        let st = app.session.documents().get(idx)?;
+        let source =
+            photocraft_engine::float_cmds::displayed(st, crate::canvas::selection_drag_delta(app).unwrap_or((0, 0))).unwrap_or_else(|| st.doc.as_ref().clone());
         let shown = match photocraft_engine::transform_cmds::preview_layers(&source, &ids, t.rect, t.quad, &t.interpolation) {
             Ok(doc) => Some(Arc::new(doc)),
             Err(e) => {

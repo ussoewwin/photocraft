@@ -1357,12 +1357,14 @@ pub(crate) fn display_doc(app: &mut PhotocraftApp, idx: usize) -> (std::sync::Ar
     if let Some(shown) = crate::gradient_ui::display_doc(app, idx) {
         return shown;
     }
-    // Move tool drag: the moving layers at the pointer.
-    if let Some(shown) = crate::move_ui::display_doc(app, idx) {
+    // Move › Show Transform Controls on several selected layers: one shared live transform.
+    // It comes before the Move preview so a floating selection can remain part of that shared
+    // transform instead of short-circuiting to its untransformed floating preview.
+    if let Some(shown) = crate::transform_tool::multi_display_doc(app, idx) {
         return shown;
     }
-    // Move › Show Transform Controls on several selected layers: one shared live transform.
-    if let Some(shown) = crate::transform_tool::multi_display_doc(app, idx) {
+    // Move tool drag: the moving layers at the pointer.
+    if let Some(shown) = crate::move_ui::display_doc(app, idx) {
         return shown;
     }
     // Patch Tool drag: the selection healed from where the pointer is.
@@ -9441,6 +9443,24 @@ mod transform_controls_tests {
         for (actual, expected) in shown.into_iter().zip([lt[0], lt[1], rb[0], rb[1]]) {
             assert!((actual - expected).abs() < 1e-3, "the transform starts on the displayed shared frame: {shown:?}");
         }
+
+        // The shared preview must start from the displayed floating document too. Otherwise the
+        // Move preview wins first, or the transformed clone is built from the cut-out document,
+        // and the floating pixels disappear while the shared box is moved.
+        let st = app.session.active().unwrap();
+        let floating = photocraft_engine::float_cmds::floating(st).unwrap();
+        let piece = floating.parts.outline().unwrap().content_bounds();
+        let at = [(piece.x0 + piece.x1) / 2 + floating.offset.0, (piece.y0 + piece.y1) / 2 + floating.offset.1];
+        let displayed = photocraft_engine::float_cmds::displayed(st, (0, 0)).unwrap();
+        assert!(photocraft_compose::render(&displayed, displayed.bounds()).get(at[0], at[1])[3] > 0.5, "the floating piece is visible before transform");
+
+        for p in &mut app.ui.transform.as_mut().unwrap().quad {
+            p[0] += 60.0;
+        }
+        let (preview, _) = display_doc(&mut app, 0);
+        let rendered = photocraft_compose::render(&preview, preview.bounds());
+        assert!(rendered.get(at[0] + 60, at[1])[3] > 0.5, "the floating piece follows the shared transform preview");
+        assert!(rendered.get(at[0], at[1])[3] < 0.5, "the floating piece no longer stays at its untransformed preview position");
     }
 
     #[test]
