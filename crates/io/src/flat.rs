@@ -221,6 +221,8 @@ pub fn tga_alpha_channel_to_transparency(doc: &mut Document) {
 pub fn import_tiff_page(name: &str, bytes: &[u8], page: Option<usize>) -> Result<ImportResult, IoError> {
     let bands = codecs::TiffBands::open(bytes, page, &codecs::Limits::banded())?;
     if bands.meta.photoshop_layers.as_deref().is_some_and(|l| !l.is_empty()) {
+        // Its copy of the layer data is not kept through the whole-image decode.
+        drop(bands);
         return import_layered_tiff(name, bytes, page);
     }
     tiff_to_document(name, bands.upright())
@@ -235,8 +237,8 @@ fn import_layered_tiff(name: &str, bytes: &[u8], page: Option<usize>) -> Result<
         None => (codecs::decode_with(bytes, &keep)?, codecs::tiff_orientation(bytes)),
         Some(p) => (codecs::decode_tiff_page(bytes, p, &keep)?, codecs::tiff_page_orientation(bytes, p)),
     };
-    let layers = img.meta.photoshop_layers.clone().unwrap_or_default();
-    let mut r = crate::tiff_layers::import_layered(name, &img, &layers)?;
+    let layers = img.meta.photoshop_layers.as_deref().unwrap_or_default();
+    let mut r = crate::tiff_layers::import_layered(name, &img, layers)?;
     if orientation != 1 {
         r.warnings.push("the TIFF's orientation tag was ignored so the layers stay aligned with the image".to_string());
     }
