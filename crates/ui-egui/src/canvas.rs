@@ -5374,7 +5374,8 @@ fn transform_controls_bounds(app: &PhotocraftApp) -> Option<photocraft_geom::Rec
         .into_iter()
         .map(|l| {
             if several && floating == Some(l.id) {
-                floating_piece.unwrap_or_else(|| photocraft_engine::transform_cmds::whole_layer_bounds(&st.doc, l)).translate(dx, dy)
+                let remaining = photocraft_engine::transform_cmds::whole_layer_bounds(&st.doc, l);
+                floating_piece.map_or(remaining, |piece| remaining.union(&piece.translate(dx, dy)))
             } else if several {
                 photocraft_engine::transform_cmds::whole_layer_bounds(&st.doc, l)
             } else {
@@ -9428,6 +9429,10 @@ mod transform_controls_tests {
         let mut app = floating_square();
         app.session.execute("select.drop", json!({})).unwrap();
         let a = app.session.active().unwrap().active_layer.unwrap();
+        // Leave some pixels on the floating layer outside the later marquee. A shared frame must
+        // enclose both these stationary pixels and the translated floating piece.
+        app.session.execute("select.rect", json!({"x": 5, "y": 10, "width": 10, "height": 10})).unwrap();
+        app.session.execute("edit.fill", json!({"color": "#ff0000"})).unwrap();
         app.session.execute("layer.new.layer", json!({})).unwrap();
         app.session.execute("select.rect", json!({"x": 150, "y": 150, "width": 20, "height": 20})).unwrap();
         app.session.execute("edit.fill", json!({"color": "#0000ff"})).unwrap();
@@ -9442,7 +9447,11 @@ mod transform_controls_tests {
             ViewXform { rect: Rect::from_min_size(Pos2::ZERO, vec2(200.0, 200.0)), zoom: 1.0, center: [100.0, 100.0], flip: false, rotation: 0.0, aspect: 1.0 };
         let r = transform_controls_rect(&app, &xf).unwrap();
         let (lt, rb) = (xf.to_doc(r.left_top()), xf.to_doc(r.right_bottom()));
-        assert_eq!([lt[0], lt[1], rb[0], rb[1]], [55.0, 45.0, 170.0, 170.0], "only the floating piece moves; the other selected layer stays put");
+        assert_eq!(
+            [lt[0], lt[1], rb[0], rb[1]],
+            [5.0, 10.0, 170.0, 170.0],
+            "the frame encloses the remaining pixels, translated floating piece, and other selected layer"
+        );
 
         let ctx = egui::Context::default();
         assert!(begin_transform_controls_at(&mut app, &ctx, &xf, r.right_bottom()));
