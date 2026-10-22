@@ -828,15 +828,33 @@ fn prepare(f: &File<'_>, dir: &Ifd, limits: &Limits, whole: bool) -> Result<Prep
     // Decompression-bomb guard: no compression method expands data by more than a few thousand
     // times (Deflate at most ~1032:1, LZW ~2730:1, PackBits 128:1), so a file far too small for
     // its declared size is refused before the image is allocated. Uncompressed data may be up
-    // to three quarters missing (that decodes with a `Truncated` warning).
+    // to three quarters missing (that decodes with a `Truncated` warning). Only the bytes the
+    // strip or tile tables point at inside the file count (and never more than the file), so
+    // padding the file while pointing the chunks past its end does not raise the bound: the
+    // banded decoder has no whole-image `max_alloc` to fall back on.
     let stored = u64::from(w).saturating_mul(u64::from(h)).saturating_mul(spp).saturating_mul(bits).div_ceil(8);
     let ratio: u64 = match f.tag_uint(dir, ifd::TAG_COMPRESSION).unwrap_or(1) {
         1 => 4,
         32773 => 130,
         _ => 4096,
     };
-    if stored > (f.b.len() as u64).saturating_mul(ratio).saturating_add(1 << 20) {
-        return Err(err(format!("a {} byte file cannot hold a {w}x{h} image", f.b.len())));
+    let len = f.b.len() as u64;
+    let (offsets, sizes) = (
+        dir.get(offsets_tag).ok_or_else(|| err("missing strip or tile offsets"))?,
+        dir.get(counts_tag).ok_or_else(|| err("missing strip or tile byte counts"))?,
+    );
+    let mut held = 0u64;
+    for i in 0..expected {
+        if held >= len {
+            break;
+        }
+        if let (Some(at), Some(n)) = (f.uint(offsets, i), f.uint(sizes, i)) {
+            held = held.saturating_add(n.min(len.saturating_sub(at)));
+        }
+    }
+    let held = held.min(len);
+    if stored > held.saturating_mul(ratio).saturating_add(1 << 20) {
+        return Err(err(format!("the strips or tiles in this file hold {held} bytes, too few for a {w}x{h} image")));
     }
 
     let (wu, hu) = (w as usize, h as usize);

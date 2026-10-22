@@ -251,3 +251,24 @@ fn a_hostile_header_is_refused_before_allocating() {
     patch_value(&mut wide, true, true, 0, 256, 0, 300_001);
     assert!(matches!(TiffBands::open(&wide.bytes, None, &Limits::banded()), Err(CodecError::LimitExceeded(_))));
 }
+
+#[test]
+fn padding_does_not_let_missing_chunks_past_the_bomb_guard() {
+    // 20000² RGB declared as Deflate (1.2 GB of samples), every strip past the end of the file,
+    // and 400 KB of padding: the file is large enough for that size at Deflate's ratio, but its
+    // strips hold nothing. Refused before anything is allocated, by both decoders (#8536 review).
+    let (w, h) = (20_000, 20_000);
+    let mut dir = Dir { entries: base(w, h, 8, 3, 2), chunks: vec![vec![0]; 20], tiled: false }.tag(278, LONG, &[1000]);
+    dir.entries.retain(|e| e.0 != 259);
+    let dir = dir.tag(259, SHORT, &[8]).bytes(65_000, UNDEFINED, &vec![0; 400_000]);
+    let mut built = build(true, false, &[dir], &[0]);
+    let past = built.bytes.len() as u64 + 4096;
+    for i in 0..20 {
+        patch_value(&mut built, true, false, 0, 273, i, past);
+    }
+    match TiffBands::open(&built.bytes, None, &Limits::banded()) {
+        Err(CodecError::Malformed { message, .. }) => assert!(message.contains("hold 0 bytes"), "{message}"),
+        other => panic!("{:?}", other.map(|t| t.dimensions())),
+    }
+    assert!(matches!(decode(&built.bytes), Err(CodecError::Malformed { .. })));
+}
