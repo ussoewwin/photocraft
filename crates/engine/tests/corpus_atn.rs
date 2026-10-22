@@ -1,6 +1,6 @@
 //! Corpus test (feature `corpus`; run with `cargo xtask test-corpus`): every `.atn` set under
 //! `corpus/atn/` loads through `actions.load`, exports through `actions.save`, and the export
-//! loads back to the same actions. Steps without a PhotoCraft equivalent are counted against a
+//! loads back to the same actions (allowing the specified compound-property event expansion). Steps without a PhotoCraft equivalent are counted against a
 //! ceiling, so a mapping regression (or a new unmapped event in the corpus) shows up here.
 #![cfg(feature = "corpus")]
 
@@ -30,6 +30,82 @@ fn collect(dir: &Path, out: &mut Vec<PathBuf>) {
 const FLOOR_FILES: usize = 16;
 const CEILING_UNSUPPORTED: usize = 540;
 
+/// A compound layer-property command deliberately becomes one Photoshop event per property
+/// (#8304). Compare that documented sequence exactly, including its target and every flag;
+/// all other commands and action metadata retain their original equality check.
+fn exported_action(action: &photocraft_engine::actions_cmds::Action) -> photocraft_engine::actions_cmds::Action {
+    let mut out = action.clone();
+    out.steps.clear();
+    out.disabled.clear();
+    out.dialogs.clear();
+    for (index, (id, params)) in action.steps.iter().enumerate() {
+        let mut steps = vec![(id.clone(), params.clone())];
+        if id == "layer.setProps"
+            && let Some(object) = params.as_object()
+        {
+            let fields = ["opacity", "fill", "blend", "visible", "name"];
+            let properties: Vec<_> = fields.into_iter().filter(|key| object.contains_key(*key)).collect();
+            if properties.len() > 1 && object.keys().all(|key| key == "layer" || fields.contains(&key.as_str())) {
+                steps = properties
+                    .into_iter()
+                    .map(|key| {
+                        let mut property = json!({key: object.get(key).unwrap()});
+                        if let Some(target) = object.get("layer") {
+                            property["layer"] = target.clone();
+                        }
+                        (id.clone(), property)
+                    })
+                    .collect();
+            }
+        }
+        for step in steps {
+            let next = out.steps.len();
+            if action.disabled.contains(&index) {
+                out.disabled.insert(next);
+            }
+            if action.dialogs.contains(&index) {
+                out.dialogs.insert(next);
+            }
+            out.steps.push(step);
+        }
+    }
+    out
+}
+
+#[test]
+fn compound_roundtrip_expectation_keeps_properties_targets_flags_and_action_metadata() {
+    use photocraft_engine::actions_cmds::Action;
+    let mut source = Action::new(
+        "Properties",
+        vec![
+            ("layer.setProps".into(), json!({"layer": "Before", "name": "After", "opacity": 0.5, "blend": "Normal"})),
+            ("select.inverse".into(), json!({})),
+        ],
+    );
+    source.set = Some("Set".into());
+    source.color = "blue".into();
+    source.disabled.insert(0);
+    source.dialogs.insert(0);
+    source.dialogs.insert(1);
+    let mut expected = source.clone();
+    expected.steps = vec![
+        ("layer.setProps".into(), json!({"layer": "Before", "opacity": 0.5})),
+        ("layer.setProps".into(), json!({"layer": "Before", "blend": "Normal"})),
+        ("layer.setProps".into(), json!({"layer": "Before", "name": "After"})),
+        ("select.inverse".into(), json!({})),
+    ];
+    expected.disabled = [0, 1, 2].into_iter().collect();
+    expected.dialogs = [0, 1, 2, 3].into_iter().collect();
+    assert_eq!(exported_action(&source), expected);
+    assert_eq!(exported_action(&expected), expected, "single-property steps stay unchanged");
+    let mut lost_property = expected.clone();
+    lost_property.steps.remove(1);
+    assert_ne!(exported_action(&source), lost_property, "losing blend must still fail comparison");
+    let mut lost_flag = expected.clone();
+    lost_flag.disabled.remove(&1);
+    assert_ne!(exported_action(&source), lost_flag, "losing an expanded flag must still fail comparison");
+}
+
 #[test]
 fn atn_corpus_loads_saves_and_reloads() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/atn");
@@ -57,7 +133,7 @@ fn atn_corpus_loads_saves_and_reloads() {
         steps += n_steps;
         unsupported += n_unsupported;
         println!("{name}: {} actions, {n_steps} steps, {n_unsupported} kept Photoshop steps {events:?}", loaded["actions"].as_array().map_or(0, Vec::len));
-        let first = s.actions.list.clone();
+        let first: Vec<_> = s.actions.list.iter().map(exported_action).collect();
         let saved = match s.execute("actions.save", json!({"set": loaded["set"]})) {
             Ok(v) => v,
             Err(e) => {
