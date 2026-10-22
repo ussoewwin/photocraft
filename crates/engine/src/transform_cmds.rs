@@ -789,7 +789,9 @@ fn transform(s: &mut Session, p: &Value) -> Result<Value> {
     let p = &with_panel_target(s, p);
     let st = s.active().ok_or(EngineError::NoDocument)?;
     let many = layers_param(&st.doc, p)?;
-    if many.is_some() && (p.get("layer").is_some() || !matches!(crate::channel_cmds::target_of(p), crate::channel_cmds::Target::Pixels)) {
+    if many.is_some()
+        && (!matches!(p.get("layer"), None | Some(Value::Null)) || !matches!(crate::channel_cmds::target_of(p), crate::channel_cmds::Target::Pixels))
+    {
         return Err(bad("`layers` moves layers: pass it without `layer` or a mask or channel `target`"));
     }
     let explicit = crate::commands::explicit_layer(s, p)?;

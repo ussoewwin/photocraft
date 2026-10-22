@@ -187,6 +187,16 @@ fn transform_again_on_a_copy_copies_and_moves_the_active_layer_only() {
 }
 
 #[test]
+fn a_null_layer_beside_layers_counts_as_absent() {
+    let (mut s, paint, text) = two_layers();
+    let t0 = bounds(&s, text);
+    let r = s.execute("edit.transform", json!({"layers": [paint.0], "layer": null, "matrix": [1, 0, 0, 1, 5, 0]})).unwrap();
+    assert_eq!(r["layers"], json!([paint.0]));
+    assert_eq!(bounds(&s, paint), Rect::new(15, 10, 55, 30));
+    assert_eq!(bounds(&s, text), t0);
+}
+
+#[test]
 fn bad_layers_params_are_errors_not_panics() {
     let (mut s, paint, _) = two_layers();
     let before = s.active().unwrap().doc.clone();

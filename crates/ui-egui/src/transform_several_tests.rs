@@ -128,6 +128,20 @@ fn warp_is_greyed_and_distort_too_while_type_is_among_them() {
 }
 
 #[test]
+fn the_warp_button_keeps_the_box_when_the_active_layer_is_type() {
+    let (mut app, paint, text) = app();
+    app.run("layer.select", json!({"layer": paint.0})).unwrap();
+    app.run("layer.select", json!({"layer": text.0, "mode": "add"})).unwrap();
+    assert_eq!(app.session.active().unwrap().active_layer, Some(text));
+    free_transform(&mut app);
+    let before = app.ui.transform.as_ref().map(|t| (t.rect, t.quad));
+    crate::transform_tool::enter_warp(&mut app, &egui::Context::default());
+    let t = app.ui.transform.as_ref().unwrap();
+    assert!(t.warp.is_none(), "no warp on several layers");
+    assert_eq!(Some((t.rect, t.quad)), before);
+}
+
+#[test]
 fn a_locked_layer_among_them_refuses_before_the_box_opens() {
     let (mut app, paint, text) = app();
     app.run("layer.setProps", json!({"layer": text.0, "locks": {"position": true}})).unwrap();
