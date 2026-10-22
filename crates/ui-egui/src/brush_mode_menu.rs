@@ -18,6 +18,30 @@ pub(crate) fn is_gesture(tool: Tool, mods: egui::Modifiers) -> bool {
     tool == Tool::Brush && mods.shift && !mods.alt && !mods.ctrl && !mods.command && !mods.mac_cmd
 }
 
+/// The modifiers that decide a right-button gesture: the ones held when the button went down.
+/// egui reports `secondary_clicked` on release, so letting go of Shift a moment before the button
+/// must not turn Shift+right-click into a plain right-click (an erase dab, with the Erase
+/// preference). The control path decides on the press too.
+pub(crate) fn gesture_mods(ctx: &Context, mods: egui::Modifiers) -> egui::Modifiers {
+    let key = menu_id().with("press-mods");
+    let (pressed, down, released) = ctx.input(|i| {
+        (i.pointer.button_pressed(egui::PointerButton::Secondary), i.pointer.secondary_down(), i.pointer.button_released(egui::PointerButton::Secondary))
+    });
+    if pressed {
+        ctx.data_mut(|d| d.insert_temp(key, mods));
+        return mods;
+    }
+    if !down && !released {
+        ctx.data_mut(|d| d.remove::<egui::Modifiers>(key));
+        return mods;
+    }
+    let held = ctx.data(|d| d.get_temp::<egui::Modifiers>(key));
+    if released {
+        ctx.data_mut(|d| d.remove::<egui::Modifiers>(key));
+    }
+    held.unwrap_or(mods)
+}
+
 pub(crate) fn menu_id() -> Id {
     Id::new("canvas-brush-mode-menu")
 }
