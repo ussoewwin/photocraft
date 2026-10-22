@@ -77,10 +77,7 @@ fn compound_roundtrip_expectation_keeps_properties_targets_flags_and_action_meta
     use photocraft_engine::actions_cmds::Action;
     let mut source = Action::new(
         "Properties",
-        vec![
-            ("layer.setProps".into(), json!({"layer": "Before", "name": "After", "opacity": 0.5, "blend": "Normal"})),
-            ("select.inverse".into(), json!({})),
-        ],
+        vec![("layer.setProps".into(), json!({"layer": "Before", "name": "After", "opacity": 0.5, "blend": "Normal"})), ("select.inverse".into(), json!({}))],
     );
     source.set = Some("Set".into());
     source.color = "blue".into();
