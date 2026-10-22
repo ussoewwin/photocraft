@@ -4248,8 +4248,8 @@ layerLabel	Magenta	მეწამული
 	Drag the pin to move the band, or its ring to change its blur. Drag the solid lines to widen the sharp band, the dashed lines to set the transition, and the dots to turn it.	გადაათრიეთ სამაგრი ზოლის გადასაადგილებლად, ან მისი რგოლი — გაბუნდოვნების შესაცვლელად. გადაათრიეთ უწყვეტი ხაზები მკვეთრი ზოლის გასაფართოებლად, წყვეტილი ხაზები — გარდამავალი არის დასაყენებლად, წერტილები კი — შესაბრუნებლად.
 	Drag the handles on the outline to resize and turn it; the ring sets the blur angle.	გადაათრიეთ კონტურის სახელურები ზომის შესაცვლელად და შესაბრუნებლად; რგოლი გაბუნდოვნების კუთხეს აყენებს.
 	Add Shortcut	მალსახმობის დამატება
-	Clip thumbnails to layer bounds	მინიატურების შრის საზღვრებით მოჭრა
-	Clip Thumbnails to Layer Bounds	მინიატურების შრის საზღვრებით მოჭრა
+	Clip thumbnails to layer bounds	ესკიზების შრის საზღვრებით მოჭრა
+	Clip Thumbnails to Layer Bounds	ესკიზების შრის საზღვრებით მოჭრა
 	Import Brushes… (.abr or image)	ფუნჯების იმპორტი… (.abr ან გამოსახულება)
 	Import Brush from Image…	ფუნჯის იმპორტი გამოსახულებიდან…
 	Bundle Arrow-Key Nudges	ისრებით წანაცვლებების გაერთიანება
