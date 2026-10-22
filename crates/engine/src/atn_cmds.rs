@@ -1659,6 +1659,11 @@ fn set_to(id: &str, p: &Value) -> Option<Descriptor> {
             desc("null").with("null", target_ref("contentLayer")).with("T   ", D::Descriptor(pattern_desc(p)?))
         }
         "layer.setAdjustment" => {
+            // The event edits the current adjustment layer: a step that names its layer or
+            // document would play back on whichever one is active instead (#8532).
+            if p.get("layer").is_some() || p.get("document").is_some() {
+                return None;
+            }
             // The adjustment kind isn't in the params: Photoshop needs it, so only steps that
             // name one (`kind`) export.
             let a = adjustment_by_suffix(jstr(p, "kind")?)?;
