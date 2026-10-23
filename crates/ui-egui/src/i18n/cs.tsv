@@ -4127,3 +4127,17 @@ cameraRaw	Dehaze	Odstranění oparu
 
 # Print preview image (#8236)
 	Print preview image	Print preview image
+	Color Aware	Podle barev
+	Decontaminate Colors	Dekontaminovat barvy
+	Edge Detection	Detekce okraje
+	Global Refinements	Globální upřesnění
+	High Quality Preview	Náhled ve vysoké kvalitě
+	Object Aware	Podle objektů
+	Real-Time Refinement	Upřesnění v reálném čase
+	Refine Edge Brush Tool	Nástroj štětec pro upřesnění okraje
+	Refine Hair	Upřesnit vlasy
+	Refine Mode	Režim upřesnění
+	Remember Settings	Zapamatovat nastavení
+	View Mode	Režim zobrazení
+	Object Aware needs a segmentation model, which isn't available yet	Režim Podle objektů vyžaduje segmentační model, který zatím není k dispozici
+	Refine Hair needs hair detection, which isn't available yet	Upřesnit vlasy vyžaduje detekci vlasů, která zatím není k dispozici
