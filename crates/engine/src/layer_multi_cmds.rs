@@ -1031,14 +1031,20 @@ const SHAPE_BOUNDS_MAX_PX: u64 = 64 << 20;
 
 /// The pixels a shape layer draws, wherever they fall. Its cache is rendered clipped to the
 /// canvas, so a shape partly off the canvas measured from it looked smaller and Align moved it
-/// by the wrong amount, a little more on each click (#8660). The shape is rendered again over its
-/// path and stroke bounds, unclipped, and measured from that.
+/// by the wrong amount, a little more on each click (#8660). The shape is rendered again over
+/// everything it can draw (its path, stroke and feather), unclipped, and measured from that. A fill
+/// that shows everywhere (an inverted path, or below 100 % density) has no extent of its own and
+/// keeps the canvas-clipped measure (`None`).
 fn shape_pixel_bounds(sh: &photocraft_doc::ShapeLayer) -> Option<Rect> {
-    let hard = photocraft_compose::hard_shape_bounds(sh)?.inflate(1);
-    if u64::from(hard.width()) * u64::from(hard.height()) > SHAPE_BOUNDS_MAX_PX {
-        return Some(hard);
+    let unbounded_fill = sh.fill.is_some() && (sh.path.inverted || (sh.density.is_finite() && sh.density < 1.0));
+    if unbounded_fill {
+        return None;
     }
-    let r = photocraft_vector::render_shape(sh, PixelFormat::GRAYA8, hard).content_bounds();
+    let reach = photocraft_compose::shape_bounds(sh)?.inflate(1);
+    if u64::from(reach.width()) * u64::from(reach.height()) > SHAPE_BOUNDS_MAX_PX {
+        return photocraft_compose::hard_shape_bounds(sh);
+    }
+    let r = photocraft_vector::render_shape(sh, PixelFormat::GRAYA8, reach).content_bounds();
     (!r.is_empty()).then_some(r)
 }
 
@@ -2400,6 +2406,29 @@ mod tests {
         s.execute("layer.align.horizontalCenters", json!({})).unwrap();
         assert_eq!(bounds(&s, shape), Rect::new(-20, 10, 20, 30));
         assert_eq!(bounds(&s, pixels), Rect::new(-15, 40, 15, 50));
+        // A feathered shape is measured by its soft edge too, which reaches past the path.
+        let soft =
+            LayerId(s.execute("shape.create", json!({"kind": "rect", "rect": [-20, 50, 40, 20], "fill": "#00ff00"})).unwrap()["layer"].as_u64().unwrap());
+        s.edit("feather", |doc, _| {
+            if let Some(LayerContent::Shape(sh)) = doc.layer_mut(soft).map(|l| &mut l.content) {
+                sh.feather = 4.0;
+            }
+            Ok(())
+        })
+        .unwrap();
+        let b = bounds(&s, soft);
+        assert!(b.x0 < -20 && b.x1 > 20 && b.y0 < 50 && b.y1 > 70, "{b:?}");
+        // A fill that shows everywhere keeps the canvas-clipped measure.
+        s.edit("invert", |doc, _| {
+            if let Some(LayerContent::Shape(sh)) = doc.layer_mut(soft).map(|l| &mut l.content) {
+                sh.feather = 0.0;
+                sh.path.inverted = true;
+            }
+            Ok(())
+        })
+        .unwrap();
+        let LayerContent::Shape(sh) = &doc(&s).layer(soft).unwrap().content else { panic!("shape") };
+        assert_eq!(shape_pixel_bounds(sh), None);
     }
 
     #[test]
