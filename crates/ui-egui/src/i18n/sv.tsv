@@ -4274,3 +4274,156 @@ shape	Appearance	Utseende
 	DDS Options	DDS-alternativ
 	Generate Mipmaps	Generera mipmaps
 	GPU adapter	GPU-adapter
+	Mask Options…	Maskalternativ…
+	Layer Mask Display Options…	Visningsalternativ för lagermask…
+	Overprint	Övertryck
+	Drag on the image to add a constraint; Shift for horizontal/vertical; right-click a constraint to change or delete it.	Dra i bilden för att lägga till en begränsning; Shift för horisontell/vertikal; högerklicka på en begränsning för att ändra eller radera den.
+	Override Tilt X	Åsidosätt lutning X
+	Override Tilt Y	Åsidosätt lutning Y
+	Create warped text	Skapa förvrängd text
+	LUT folder	LUT-mapp
+	Retry GPU tries the graphics processor again now.	”Försök med GPU igen” provar grafikprocessorn på nytt nu.
+	GPU acceleration resumed.	GPU-accelerationen har återupptagits.
+	JPEG Options	JPEG-alternativ
+	Image Options	Bildalternativ
+	Format Options	Formatalternativ
+	Baseline ("Standard")	Baseline ("Standard")
+	Baseline Optimized	Baseline optimerad
+	Animation Options	Animeringsalternativ
+	Entire Document	Hela dokumentet
+	Filter Options	Filteralternativ
+	Layer Bounds	Lagrets gränser
+	Layers Panel Options	Alternativ för panelen Lager
+	New Artboard…	Ny rityta…
+	New Group…	Ny grupp…
+	Prevent Auto-Nesting	Förhindra automatisk kapsling
+	Show Layers	Visa lager
+	Thumbnail Contents	Miniatyrinnehåll
+	Thumbnail Size	Miniatyrstorlek
+	Use Default Masks on Fill Layers	Använd standardmasker på fyllningslager
+	Expand New Effects	Expandera nya effekter
+	Add “copy” to Copied Layers and Groups	Lägg till ”kopia” i kopierade lager och grupper
+	Preview on canvas when reordering layers	Förhandsgranska på arbetsytan när lager ordnas om
+	Show layer mask badges	Visa märken för lagermasker
+	Blending Options ({filter})	Blandningsalternativ ({filter})
+	Hide the layer's effects and Smart Filters  ({key}-click: all layers)	Dölj lagrets effekter och smarta filter  ({key}-klick: alla lager)
+	Show the layer's effects and Smart Filters  ({key}-click: all layers)	Visa lagrets effekter och smarta filter  ({key}-klick: alla lager)
+	Wait for the current job to finish.	Vänta tills det aktuella jobbet är klart.
+	The document or Smart Filter changed. Reopen its dialog.	Dokumentet eller det smarta filtret har ändrats. Öppna dialogrutan igen.
+	Opacity must be between 0% and 100%.	Opaciteten måste vara mellan 0 % och 100 %.
+	Dissolve is approximated: it blends without Photoshop's dither.	Övertoning är en approximation: den blandar utan Photoshops dithering.
+	New Snapshot…	Ny ögonblicksbild…
+	History Options…	Historikalternativ…
+	Rename Path…	Byt namn på bana…
+	Copyright Notice	Upphovsrättsmeddelande
+	Document Title	Dokumenttitel
+	The active layer has no pixels here — turn on Sample All Layers or select a layer with pixels	Det aktiva lagret har inga pixlar här – aktivera Sampla alla lager eller markera ett lager med pixlar
+	Load Contours…	Läs in konturkurvor…
+	Replace Contours…	Ersätt konturkurvor…
+	Save Contours…	Spara konturkurvor…
+	Delete Contour	Radera konturkurva
+	Loaded contours from {file}	Konturkurvor inlästa från {file}
+	Saved contours to {file}	Konturkurvor sparade i {file}
+	New Action…	Ny åtgärd…
+	Start Recording	Starta inspelning
+	Stop Recording	Stoppa inspelning
+	Paints from the History panel's source state	Målar från källtillståndet i panelen Historik
+	Sets the source for the history brush	Anger källan för historikpenseln
+	Highlight Mode	Högdagerläge
+	Highlight Color	Högdagerfärg
+	Highlight Opacity	Högdageropacitet
+	Shadow Mode	Skuggläge
+	Shadow Color	Skuggfärg
+	Shadow Opacity	Skuggopacitet
+	Do not append "copy" to filename when saving a copy	Lägg inte till ”kopia” i filnamnet när en kopia sparas
+	Previous Brush	Föregående pensel
+	Next Brush	Nästa pensel
+	First Brush	Första penseln
+	Last Brush	Sista penseln
+	Preview size	Förhandsgranskningsstorlek
+	Bicubic Automatic	Bikubisk automatisk
+	Bicubic Smoother	Bikubisk mjukare
+	Bicubic Sharper	Bikubisk skarpare
+	50% Threshold	50 % tröskel
+	Pattern Dither	Mönsterdithering
+	Diffusion Dither	Diffusionsdithering
+	Halftone Screen	Halvtonsraster
+	Custom Pattern	Anpassat mönster
+	Frequency:	Frekvens:
+	Lines/Inch	Linjer/tum
+	Lines/Centimeter	Linjer/centimeter
+	Ellipse	Ellips
+	Graphics memory: {size}	Grafikminne: {size}
+	{path}: the path is not valid Unicode; save under another name.	{path}: sökvägen är inte giltig Unicode; spara under ett annat namn.
+	Demosaic	Demosaicering
+	How the camera's colour filter mosaic is filled in. It is applied when the file opens; the preview shows the method it was opened with.	Hur kamerans färgfiltermosaik fylls i. Det tillämpas när filen öppnas; förhandsgranskningen visar metoden som filen öppnades med.
+	AHD (adaptive homogeneity)	AHD (adaptiv homogenitet)
+	Malvar–He–Cutler	Malvar–He–Cutler
+	Hirakawa–Parks: the cleanest edges and the least colour fringing, the slowest.	Hirakawa–Parks: renast kanter och minst färgfransning, men långsammast.
+	Gradient-corrected interpolation: sharp and fast, with some colour fringing on fine detail.	Gradientkorrigerad interpolering: skarp och snabb, med viss färgfransning i fina detaljer.
+	The fastest and the softest, with colour fringing on fine detail.	Snabbast och mjukast, med färgfransning i fina detaljer.
+	“{name}” already exists. Replace it?	”{name}” finns redan. Vill du ersätta den?
+	The name in the save dialog was “{name}”.	Namnet i dialogrutan Spara var ”{name}”.
+	Move Up	Flytta upp
+	Move Down	Flytta ned
+	There is no color table to save.	Det finns ingen färgtabell att spara.
+@plural	Saved {n} color to {file}|Saved {n} colors to {file}	Sparade {n} färg i {file}|Sparade {n} färger i {file}
+	Confirm or cancel the open action step dialog first	Bekräfta eller avbryt först den öppna dialogrutan för åtgärdssteget
+	Pro Medium Gray	Pro mellangrå
+	Solarized	Solarized
+	Breeze	Breeze
+	Pro Light Gray	Pro ljusgrå
+	Pro Light	Pro ljus
+	Resize Windows to Fit	Anpassa fönstrens storlek
+	EXR	EXR
+	Automatic paragraph direction	Automatisk styckeriktning
+	Left-to-right paragraph direction	Styckeriktning vänster till höger
+	Right-to-left paragraph direction	Styckeriktning höger till vänster
+	Not rendered: this adjustment ({key}) is kept as imported.	Renderas inte: den här justeringen ({key}) behålls som importerad.
+	Print preview image	Förhandsgranskningsbild för utskrift
+	Cooling Filter (80)	Kylande filter (80)
+	Cooling Filter (82)	Kylande filter (82)
+	Cooling Filter (LBB)	Kylande filter (LBB)
+	Delete Hidden Layers	Radera dolda lager
+	Flow:	Flöde:
+	Reset Essentials	Återställ Grundläggande
+	Rounded Rectangle Tool	Verktyg för rundad rektangel
+	Status Bar	Statusfält
+	Tile Horizontally	Sida vid sida horisontellt
+	Tile Vertically	Sida vid sida vertikalt
+	Warming Filter (LBA)	Värmande filter (LBA)
+@plural	{n} document|{n} documents	{n} dokument|{n} dokument
+@plural	{n} pixel|{n} pixels	{n} pixel|{n} pixlar
+cameraRaw	Before (Y)	Före (Y)
+cameraRaw	Camera Raw ({name})	Camera Raw ({name})
+cameraRaw	Camera Raw Filter ({layer})	Camera Raw-filter ({layer})
+cameraRaw	Camera Raw isn't open	Camera Raw är inte öppet
+cameraRaw	Cancel	Avbryt
+cameraRaw	Cancelled opening {name}	Öppningen av {name} avbröts
+cameraRaw	Cancelled {label}	{label} avbröts
+cameraRaw	Color Priority	Färgprioritet
+cameraRaw	Developing {name}	Framkallar {name}
+cameraRaw	Full-resolution preview unavailable	Förhandsgranskning i full upplösning är inte tillgänglig
+cameraRaw	Grain	Korn
+cameraRaw	Highlight Clipping Warning (O)	Varning för klippning i högdagrar (O)
+cameraRaw	Highlight Priority	Högdagerprioritet
+cameraRaw	Load settings from a Camera Raw .xmp file	Läs in inställningar från en Camera Raw .xmp-fil
+cameraRaw	Load Settings…	Läs in inställningar…
+cameraRaw	Loaded Camera Raw settings from {file}	Läste in Camera Raw-inställningar från {file}
+cameraRaw	Noise Reduction	Brusreducering
+cameraRaw	OK	OK
+cameraRaw	Open	Öppna
+cameraRaw	Opened {name}	Öppnade {name}
+cameraRaw	Paint Overlay	Målningsöverlägg
+cameraRaw	Save Settings…	Spara inställningar…
+cameraRaw	Save these settings as a Camera Raw .xmp file	Spara de här inställningarna som en .xmp-fil för Camera Raw
+cameraRaw	Shadow Clipping Warning (U)	Varning för klippning i skuggor (U)
+cameraRaw	Sharpening	Skärpning
+cameraRaw	Show Lab Color Readouts	Visa Lab-färgvärden
+cameraRaw	Show Red at 3 o'clock	Visa rött vid klockan 3
+cameraRaw	Show Selected Region	Visa markerad region
+cameraRaw	Show Skin Tone Indicator	Visa hudtonsindikator
+cameraRaw	Show Vectorscope	Visa vektorskop
+cameraRaw	Tone Histogram	Tonhistogram
+cameraRaw	Vignetting	Vinjettering
+cameraRaw	White Balance: As Shot	Vitbalans: som tagen
