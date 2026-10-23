@@ -8,3 +8,909 @@
 # stay as they are; the trailing "..." of dialog commands is kept.
 #
 # AI-assisted; independent native proofreading remains follow-up work.
+	+ Add variable	+ Legg til variabel
+	0 turns this threshold off; SVG groups nested deeper than 100 levels are always rasterized.	0 omganger slår denne terskelen av; SVG-grupper som er nøstet dypere enn 100 nivåer rasteriseres alltid.
+	10 fps	10 fps
+	100%	100 %
+	101 by 101 Average	101 x 101 gjennomsnitt
+	11 by 11 Average	11 x 11 gjennomsnitt
+	12 Columns	12 kolonner
+	125%	125 %
+	15 fps	15 fps
+	150%	150 %
+	16 Bits/Channel	16 bits/kanal
+	16 bit	16 bit
+	175%	175 %
+	180°	180°
+	2-up Horizontal	2 opp horisontalt
+	2-up Vertical	2 opp vertikalt
+	200%	200 %
+	24 bits/pixel	24 bits/piksel
+	24 fps	24 fps
+	25 fps	25 fps
+	250%	250 %
+	3 by 3 Average	3 x 3 gjennomsnitt
+	3 x 3	3 x 3
+	3-up Horizontal	3 opp horisontalt
+	3-up Stacked	3 opp stablet
+	3-up Vertical	3 opp vertikalt
+	30 fps	30 fps
+	30 frames @ 30 fps	30 bilder @ 30 fps
+	300%	300 %
+	31 by 31 Average	31 x 31 gjennomsnitt
+	32 Bits/Channel	32 bits/kanal
+	32 bit (float)	32 bit (flyttall)
+	32 bits/pixel	32 bits/piksel
+	32-bit Preview Options	Forhåndsvisningsvalg for 32-bit
+	32-bit Preview Options…	Forhåndsvisningsvalg for 32-bit…
+	3D	3D
+	3D LUT File	3D LUT-fil
+	3D…	3D…
+	4 x 4	4 x 4
+	4-up	4 opp
+	5 Columns, 3 Rows	5 kolonner, 3 rader
+	5 by 5 Average	5 x 5 gjennomsnitt
+	5 x 5	5 x 5
+	50% Gray	50 % grå
+	50% Threshold	50 % terskel
+	51 by 51 Average	51 x 51 gjennomsnitt
+	6-up	6 opp
+	75%	75 %
+	8 Bits/Channel	8 bits/kanal
+	8 Columns	8 kolonner
+	8 bit	8 bit
+	80%	80 %
+	85%	85 %
+	90%	90 %
+	90° Clockwise	90° med klokken
+	90° Counter Clockwise	90° mot klokken
+	95%	95 %
+	A brush preset with this name already exists	Det finnes allerede et penselvalg med dette navnet
+	A:	A:
+	ACES	ACES
+	AI Integrations…	AI-integrasjoner…
+	About	Om
+	About PhotoCraft	Om PhotoCraft
+	About {app}	Om {app}
+	Absolute	Absolutt
+	Absolute Colorimetric	Absolutt kolorimetrisk
+	Accented Edges	Aksentuerte kanter
+	Accept and Go to Conflict	Godta og gå til konflikt
+	Accurate	Nøyaktig
+	Action	Handling
+	Action playback failed: {error}	Avspilling av handling mislyktes: {error}
+	Action playback stopped	Avspilling av handling stoppet
+	Actions	Handlinger
+	Activate Panel	Aktiver panel
+	Active	Aktiv
+	Actual Color	Faktisk farge
+	Actual Pixels	Faktiske piksler
+	Adaptive	Adaptiv
+	Adaptive Wide Angle	Adaptiv vidvinkel
+	Adaptive Wide Angle isn't open	Adaptiv vidvinkel er ikke åpen
+	Adaptive Wide Angle…	Adaptiv vidvinkel…
+	Add	Legg til
+	Add Anchor Point Tool	Verktøy for å legge til ankepunkt
+	Add Layer Above to Selection	Legg laget over til utvalget
+	Add Layer Below to Selection	Legg laget under til utvalget
+	Add Layer Mask	Legg til lagmaske
+	Add Mask	Legg til maske
+	Add Mask to Selection	Legg maske til utvalget
+	Add New Artboard	Legg til nytt montasjebrett
+	Add Noise	Legg til støy
+	Add Noise…	Legg til støy…
+	Add Open Files	Legg til åpne filer
+	Add Pins	Legg til nåler
+	Add Shortcut	Legg til hurtigtast
+	Add Stop	Legg til stopp
+	Add Vector Mask	Legg til vektormaske
+	Add a layer style	Legg til en lagstil
+	Add a mask  (from the selection; {key} inverts)	Legg til en maske  (fra utvalget; {key} inverterer)
+	Add a mask  (from the selection; ⌥ inverts)	Legg til en maske  (fra utvalget; ⌥ inverterer)
+	Add an adjustment	Legg til en justering
+	Add beauty precomp from the AOVs	Legg til beauty-forhåndskomponering fra AOV-ene
+	Add disk	Legg til disk
+	Add pair	Legg til par
+	Add space after paragraph	Legg til mellomrom etter avsnitt
+	Add space before paragraph	Legg til mellomrom før avsnitt
+	Add to	Legg til i
+	Add to Dictionary	Legg til i ordlisten
+	Add to Sample	Legg til i utvalg
+	Add to Swatches	Legg til i fargeprøver
+	Add to favorites	Legg til i favoritter
+	Add to selection  ({key})	Legg til i utvalget  ({key})
+	Add to selection  (⇧)	Legg til i utvalget  (⇧)
+	Add vector mask	Legg til vektormaske
+	Add “copy” to Copied Layers and Groups	Legg til «kopi» i kopierte lag og grupper
+	Added swatch {name}	La til fargeprøve {name}
+	Additional plugins folder	Mappe for flere programtillegg
+	Adds grain to the soft edges of the brush tip.	Legger til korn i de myke kantene på penselspissen.
+	Adds the current gradient to the Gradients panel	Legger gjeldende gradient til i gradientpanelet
+	Adjust Interval For Loops	Juster intervall for løkker
+	Adjust for Zoom	Juster for zoom
+	Adjustment	Justering
+	Adjustment Layer	Justeringslag
+	Adjustment Layers	Justeringslag
+	Adjustment Preview	Forhåndsvisning av justering
+	Adjustment Properties	Egenskaper for justering
+	Adjustment layers have nothing to transform	Justeringslag har ingenting å transformere
+	Adjustment visible	Justering synlig
+	Adjustments	Justeringer
+	Adobe	Adobe
+	Adobe Every-line Composer	Adobe setter for hver linje
+	Adobe PDF Presets…	Adobe PDF-forhåndsvalg…
+	Adobe RGB (1998)	Adobe RGB (1998)
+	Adobe RGB (1998) compatible	Kompatibel med Adobe RGB (1998)
+	Adobe Single-line Composer	Adobe setter for én linje
+	Adobe rgb	Adobe RGB
+	Adobe-rgb-compat	Adobe-rgb-kompatibel
+	Advanced	Avansert
+	Advanced Blending	Avansert blanding
+	Advanced Controls	Avanserte kontroller
+	Adwaita	Adwaita
+	Again	Igjen
+	Align	Juster
+	All	Alle
+	All Layers	Alle lag
+	Analysis	Analyse
+	Anamorphic 2:1 (2)	Anamorf 2:1 (2)
+	Anti-Alias	Kantutjevning
+	Apply	Bruk
+	Apply Data Set…	Bruk datasett…
+	Apply Image…	Bruk bilde…
+	Arbitrary…	Vilkårlig…
+	Arrange	Ordne
+	Artboard Guides	Montasjebrett-hjelpelinjer
+	Artboard from Group…	Montasjebrett fra gruppe…
+	Artboard from Layers…	Montasjebrett fra lag…
+	Artboards to Files…	Montasjebrett til filer…
+	Artboards to PDF…	Montasjebrett til PDF…
+	Artboard…	Montasjebrett…
+	Ask On Missing	Spør når noe mangler
+	Ask On Paste	Spør ved innliming
+	Ask When Pasting	Spør ved innliming
+	Aspect Ratio	Formatforhold
+	Assign Profile	Tilordne profil
+	Assign Profile…	Tilordne profil…
+	Assign working space	Tilordne arbeidsområde
+	At	Ved
+	Attempt to Automatically Align Source Images	Forsøk å autojustere kildebildene
+	Audio	Lyd
+	Author	Forfatter
+	Author Title	Forfattertittel
+	Author:	Forfatter:
+	Auto	Auto
+	Auto Add/Delete	Auto legg til/slett
+	Auto Adjust Opacity	Juster dekkevne automatisk
+	Auto Center Preview	Sentrer forhåndsvisning automatisk
+	Auto Clean Brush	Rens pensel automatisk
+	Auto Color	Autofarge
+	Auto Contrast	Autokontrast
+	Auto Erase	Autoslett
+	Auto Hide	Autoskjul
+	Auto Hide Notifications	Skjul varsler automatisk
+	Auto Scale	Autoskalering
+	Auto Show Overlay	Vis overlegg automatisk
+	Auto Tone	Autotone
+	Auto collapse icon panels	Skjul ikonpaneler automatisk
+	Auto show hidden panels	Vis skjulte paneler automatisk
+	Auto show home screen	Vis startskjermen automatisk
+	Auto-Align Layers	Autojuster lag
+	Auto-Align Layers…	Autojuster lag…
+	Auto-Blend Layers	Autoblande lag
+	Auto-Blend Layers…	Autoblande lag…
+	Auto-Hide	Autoskjul
+	Auto-Leading	Automatisk linjeavstand
+	Auto-Select:	Autovelg:
+	Auto-leading %	Automatisk linjeavstand %
+	Automate	Automatiser
+	Automatic	Automatisk
+	Automatic (recommended)	Automatisk (anbefalt)
+	Automatic paragraph direction	Automatisk avsnittsretning
+	Automatic uses GPU acceleration when available and falls back to CPU rendering on errors.	Automatisk bruker GPU-akselerasjon når det er tilgjengelig, og faller tilbake til CPU-gjengivelse ved feil.
+	Automatically Create First Snapshot	Opprett første øyeblikksbilde automatisk
+	Automatically Create New Snapshot When Saving	Opprett nytt øyeblikksbilde automatisk ved lagring
+	Automatically level near-horizontal line segments	Rett opp nesten horisontale linjesegmenter automatisk
+	Automatically straighten and level	Rett opp og jevn automatisk
+	Automatically straighten near-vertical line segments	Rett opp nesten vertikale linjesegmenter automatisk
+	Autosave	Autolagring
+	Autosave failed: {error}	Autolagring mislyktes: {error}
+	Autosave minutes	Minutter mellom autolagring
+	Average	Gjennomsnitt
+	Avoid Widows/Orphans	Unngå enkeltlinjer
+	BLANK DOCUMENT PRESETS ({n})	FORHÅNDSVALG FOR TOMT DOKUMENT ({n})
+	Back	Tilbake
+	Backend: {backend} ({type})	Bakende: {backend} ({type})
+	Background	Bakgrunn
+	Background (Default)	Bakgrunn (standard)
+	Background Color	Bakgrunnsfarge
+	Background Contents	Bakgrunnsinnhold
+	Background Eraser	Bakgrunnsviskelær
+	Background Eraser Tool	Bakgrunnsviskelær-verktøy
+	Background From Layer	Bakgrunn fra lag
+	Background Level	Bakgrunnsnivå
+	Background from Layer	Bakgrunn fra lag
+	Balance	Balanse
+	Bamboo	Bamboo
+	Bas Relief	Basrelieff
+	Base Tree Type	Grunnleggende tretype
+	Based On	Basert på
+	Baseline	Grunnlinje
+	Baseline ("Standard")	Grunnlinje ("Standard")
+	Baseline Optimized	Grunnlinje optimalisert
+	Baseline Shift	Grunnlinjeforskyvning
+	Baseline shift	Grunnlinjeforskyvning
+	Basic	Grunnleggende
+	Basic Latin	Grunnleggende latin
+	Batch	Batch
+	Batch…	Batch…
+	Beep when done	Pip når ferdig
+	Before	Før
+	Before (Y)	Før (Y)
+	Begin recording	Start opptak
+	Behind	Bak
+	Bend	Bøy
+	Bend:	Bøy:
+	Berries	Bær
+	Best	Best
+	Bevel	Skråkant
+	Bevel & Emboss	Skråkant og relieff
+	Bevel & Emboss…	Skråkant og relieff…
+	Bicubic	Bikubisk
+	Bicubic (smooth gradients)	Bikubisk (jevne gradienter)
+	Bicubic Automatic	Bikubisk automatisk
+	Bicubic Sharper	Bikubisk skarpere
+	Bicubic Sharper (reduction)	Bikubisk skarpere (forminsking)
+	Bicubic Smoother	Bikubisk jevnere
+	Bicubic Smoother (enlargement)	Bikubisk jevnere (forstørring)
+	Bicubic automatic	Bikubisk automatisk
+	Bicubic sharper	Bikubisk skarpere
+	Bicubic smoother	Bikubisk jevnere
+	Bilinear	Bilineær
+	Binary assets added	Binære ressurser lagt til
+	Binary assets removed	Binære ressurser fjernet
+	Bit depth	Bitdybde
+	Bitmap	Bitmap
+	Bitmap…	Bitmap…
+	Black	Svart
+	Black & White	Svart-hvitt
+	Black & White…	Svart-hvitt…
+	Black Clip	Svart klipp
+	Black Intensity	Svart intensitet
+	Black Matte	Svart kant
+	Black Point Compensation	Kompensasjon for svartpunkt
+	Black, White	Svart, hvit
+	Blacks	Svarte
+	Blade Curvature	Bladkrumning
+	Blast	Eksplosjon
+	Bleach Bypass	Blekeforbikobling
+	Blend	Bland
+	Blend Clipped Layers as Group	Bland klippede lag som gruppe
+	Blend If	Bland hvis
+	Blend If:	Bland hvis:
+	Blend Interior Effects as Group	Bland indre effekter som gruppe
+	Blend Mode	Blandingsmodus
+	Blend RGB Colors Using Gamma 1.0	Bland RGB-farger med gamma 1,0
+	Blend Text Gamma	Bland tekstgamma
+	Blending	Blanding
+	Blending Mode	Blandingsmodus
+	Blending Options	Blandingsvalg
+	Blending Options ({filter})	Blandingsvalg ({filter})
+	Blending Options…	Blandingsvalg…
+	Bloat	Oppblåst
+	Block	Blokk
+	Blocks	Blokker
+	Blue	Blå
+	Blue Yellow	Blå gul
+	Blue, Red, Yellow	Blå, rød, gul
+	Blues	Blåtoner
+	Blur	Uskarp
+	Blur Angle	Uskarpvinkel
+	Blur Gallery	Uskarp-galleri
+	Blur More	Uskarp mer
+	Blur Tool	Uskarp-verktøy
+	Bold	Fet
+	Bold Italic	Fet kursiv
+	Border	Kant
+	Border Thickness	Kanttykkelse
+	Border…	Kant…
+	Both	Begge
+	Both Axes	Begge akser
+	Bottom	Bunn
+	Bottom Edges	Nederste kanter
+	Bottom Left	Nede til venstre
+	Bottom Right	Nede til høyre
+	Bottom:	Bunn:
+	Box Blur	Boksuskarp
+	Box Blur…	Boksuskarp…
+	Bpc	bpc
+	Branches Color	Greinfarge
+	Branches Height	Greinhøyde
+	Branches Thickness	Greintykkelse
+	Breeze	Breeze
+	Breeze Dark	Breeze mørk
+	Breeze Dark Theme	Breeze mørkt tema
+	Breeze Light	Breeze lys
+	Breeze Light Theme	Breeze lyst tema
+	Breeze dark	Breeze mørk
+	Breeze light	Breeze lys
+	Brightness/Contrast…	Lysstyrke/kontrast…
+	Bring Forward	Flytt fremover
+	Bring to Front	Flytt fremst
+	Browse…	Bla gjennom…
+	Brush Preview	Penselforhåndsvisning
+	Brush Settings	Penselinnstillinger
+	Brushes	Pensler
+	CMYK Color	CMYK-farge
+	Calculations…	Beregninger…
+	Camera Raw Filter…	Camera Raw-filter…
+	Canvas Guides	Lerret-hjelpelinjer
+	Canvas Size…	Lerretstørrelse…
+	Cascade	Kaskade
+	Channel Mixer…	Kanalmikser…
+	Channels	Kanaler
+	Character	Tegn
+	Character Panel	Tegnpanel
+	Character Styles	Tegnstiler
+	Character Styles Panel	Tegnstilpanel
+	Check Spelling…	Kontroller staving…
+	Clear	Tøm
+	Clear Canvas Guides	Tøm lerret-hjelpelinjer
+	Clear Guides	Tøm hjelpelinjer
+	Clear Layer Style	Tøm lagstil
+	Clear Selected Artboard Guides	Tøm valgte montasjebrett-hjelpelinjer
+	Clear Slices	Tøm oppdelinger
+	Clear Smart Filters	Tøm smartfiltre
+	Clipboard	Utklippstavle
+	Clone Source	Klon kilde
+	Close	Lukk
+	Close All	Lukk alle
+	Close Others	Lukk andre
+	Clouds	Skyer
+	Color	Farge
+	Color Balance…	Fargebalanse…
+	Color Blindness — Deuteranopia-type	Fargeblindhet — deuteranopi-type
+	Color Blindness — Protanopia-type	Fargeblindhet — protanopi-type
+	Color Decontaminate…	Fjern fargeforurensning…
+	Color Halftone…	Fargehalvtone…
+	Color Lookup Tables…	Fargeoppslagstabeller…
+	Color Lookup…	Fargeoppslag…
+	Color Overlay…	Fargeoverlegg…
+	Color Range…	Fargeområde…
+	Color Settings…	Fargeinnstillinger…
+	Color Table…	Fargetabell…
+	Combine Shapes	Kombiner former
+	Conditional Mode Change…	Betinget modusbytte…
+	Consolidate All to Tabs	Samle alle i faner
+	Contact Sheet II…	Kontaktkopi II…
+	Content-Aware Fill…	Innholdsgjenkjennende fyll…
+	Content-Aware Scale	Innholdsgjenkjennende skalering
+	Contextual Alternates	Kontekstuelle alternativer
+	Contract…	Trekk sammen…
+	Convert for Smart Filters	Konverter for smartfiltre
+	Convert to Embedded	Konverter til innebygd
+	Convert to Layers	Konverter til lag
+	Convert to Linked…	Konverter til lenket…
+	Convert to Paragraph Text	Konverter til avsnittstekst
+	Convert to Point Text	Konverter til punkttekst
+	Convert to Profile…	Konverter til profil…
+	Convert to Shape	Konverter til form
+	Convert to Smart Object	Konverter til smartobjekt
+	Copy	Kopier
+	Copy Layer Style	Kopier lagstil
+	Copy Merged	Kopier sammenslått
+	Count	Tell
+	Count Tool	Telleverktøy
+	Create Clipping Mask	Opprett klippemaske
+	Create Droplet…	Opprett droplet…
+	Create Layer	Opprett lag
+	Create Work Path	Opprett arbeidsbane
+	Crisp	Skarp
+	Crop	Besljær
+	Crop and Straighten Photos	Besljær og rett opp bilder
+	Crystallize…	Krystalliser…
+	Current Path	Gjeldende bane
+	Cursors…	Markører…
+	Curves…	Kurver…
+	Custom Pixel Aspect Ratio…	Egendefinert pikselformatforhold…
+	Custom…	Egendefinert…
+	Cut	Klipp ut
+	D1/DV NTSC (0.91)	D1/DV NTSC (0,91)
+	D1/DV NTSC Widescreen (1.21)	D1/DV NTSC bredformat (1,21)
+	D1/DV PAL (1.09)	D1/DV PAL (1,09)
+	D1/DV PAL Widescreen (1.46)	D1/DV PAL bredformat (1,46)
+	DVCPRO HD 1080/HDV 1080 (1.5)	DVCPRO HD 1080/HDV 1080 (1,5)
+	Data Sets as Files…	Datasett som filer…
+	Data Sets…	Datasett…
+	De-Interlace…	Fjern linjefletting…
+	Default Features	Standardfunksjoner
+	Define Brush Preset…	Definer penselvalg…
+	Define Custom Shape…	Definer egendefinert form…
+	Define Pattern…	Definer mønster…
+	Define…	Definer…
+	Defringe…	Fjern kantfrynser…
+	Delete	Slett
+	Delete All Empty Layers	Slett alle tomme lag
+	Delete Filter Mask	Slett filtermaske
+	Delete Frame	Slett ramme
+	Delete Workspace…	Slett arbeidsområde…
+	Desaturate	Avmette
+	Deselect	Opphev valg
+	Deselect Layers	Opphev lagvalg
+	Despeckle	Fjern flekker
+	Difference Clouds	Differanseskyer
+	Diffuse…	Spred…
+	Disable Filter Mask	Deaktiver filtermaske
+	Disable Smart Filters	Deaktiver smartfiltre
+	Discretionary Ligatures	Valgfrie ligaturer
+	Displace…	Forveng…
+	Distort	Forvreng
+	Distribute	Fordel
+	Document Bounds	Dokumentgrenser
+	Drop Shadow…	Slagskygge…
+	Duotone	Duotone
+	Duplicate Frame	Dupliser ramme
+	Duplicate Layer…	Dupliser lag…
+	Duplicate…	Dupliser…
+	Dust & Scratches…	Støv og riper…
+	East Asian Features	Østasiatiske funksjoner
+	Edit	Rediger
+	Edit Contents	Rediger innhold
+	Edit Pins	Rediger nåler
+	Edit in Quick Mask Mode	Rediger i hurtigmaske-modus
+	Emboss…	Relieff…
+	Enable Layer Mask	Aktiver lagmaske
+	Enable Vector Mask	Aktiver vektormaske
+	Enhanced Controls…	Utvidede kontroller…
+	Entropy	Entropi
+	Equalize	Utjevn
+	Essentials	Grunnleggende
+	Exclude Overlapping Shapes	Utelat overlappende former
+	Exit	Avslutt
+	Expand…	Utvid…
+	Export	Eksporter
+	Export As…	Eksporter som…
+	Export Contents…	Eksporter innhold…
+	Export Preferences…	Eksporter innstillinger…
+	Export/Import Presets…	Eksporter/importer forhåndsvalg…
+	Export…	Eksporter…
+	Exposure…	Eksponering…
+	Extra Large	Ekstra stor
+	Extras	Ekstra
+	Extrude…	Ekstruder…
+	Facet	Fasetter
+	Fade…	Tone ut…
+	Feather…	Myk kant…
+	Fibers…	Fibrer…
+	Field Blur…	Feltuskarp…
+	File	Fil
+	File Handling…	Filbehandling…
+	File Info…	Filinformasjon…
+	Fill Content	Fyll innhold
+	Fill…	Fyll…
+	Filter	Filter
+	Filter Gallery…	Filtergalleri…
+	Find Edges	Finn kanter
+	Find Layers	Finn lag
+	Find and Replace Text…	Søk og erstatt tekst…
+	Fit Artboard on Screen	Tilpass montasjebrett til skjermen
+	Fit Image…	Tilpass bilde…
+	Fit Layer(s) on Screen	Tilpass lag til skjermen
+	Fit on Screen	Tilpass til skjermen
+	Flame…	Flamme…
+	Flatten All Layer Effects	Slå sammen alle Lageffekter
+	Flatten All Masks	Slå sammen alle masker
+	Flatten Image	Slå sammen bilde
+	Flip Canvas Horizontal	Speilvend lerretet horisontalt
+	Flip Canvas Vertical	Speilvend lerretet vertikalt
+	Flip Horizontal	Speilvend horisontalt
+	Flip Vertical	Speilvend vertikalt
+	Float All in Windows	Flyt alle i vinduer
+	Float in Window	Flyt i vindu
+	Focus Area…	Fokusområde…
+	Font Preview Size	Størrelse på skriftforhåndsvisning
+	Fractions	Brøker
+	Fragment	Fragment
+	Frame from Layers	Ramme fra lag
+	Free Transform	Fri transformering
+	From Transparency	Fra gjennomsiktighet
+	Full Screen Mode	Fullskjermmodus
+	Full Screen Mode With Menu Bar	Fullskjermmodus med menylinje
+	Gamut Warning	Fargerepresentasjonsvarsel
+	Gaussian Blur…	Gaussisk uskarp…
+	Generate	Generer
+	Global Light…	Globalt lys…
+	Glyphs	Glyfer
+	Glyphs Panel	Glyfpanel
+	Gradient Map…	Gradienttilordning…
+	Gradient Overlay…	Gradientoverlegg…
+	Gradients	Gradienter
+	Gradient…	Gradient…
+	Graphic and Web	Grafikk og web
+	Grayscale	Gråtoner
+	Grid	Rutenett
+	Group Layers	Grupper lag
+	Group from Layers…	Gruppe fra lag…
+	Group…	Gruppe…
+	Grow	Utvid
+	Guides	Hjelpelinjer
+	Guides, Grid & Slices…	Hjelpelinjer, rutenett og oppdelinger…
+	HDR Toning…	HDR-toning…
+	HDV 1080/DVCPRO HD 720 (1.33)	HDV 1080/DVCPRO HD 720 (1,33)
+	HSB/HSL	HSB/HSL
+	Hidden Layers	Skjulte lag
+	Hide All	Skjul alle
+	Hide All Effects	Skjul alle effekter
+	Hide Layers	Skjul lag
+	Hide Selection	Skjul utvalg
+	High Pass…	Høypass…
+	Histogram	Histogram
+	Histories	Historikker
+	History	Historikk
+	History Log…	Historikklogg…
+	Horizontal	Horisontal
+	Horizontal Centers	Horisontale sentre
+	Horizontally	Horisontalt
+	Hue/Saturation…	Fargetone/metting…
+	Huge	Enorm
+	Image	Bilde
+	Image Assets	Bilderessurser
+	Image Processor…	Bildeprosessor…
+	Image Rotation	Bilderotasjon
+	Image Size…	Bildestørrelse…
+	Import	Importer
+	Indexed Color	Indeksert farge
+	Info	Info
+	Inner Glow…	Indre glød…
+	Inner Shadow…	Indre skygge…
+	Insert Blank Frame	Sett inn tom ramme
+	Interface…	Grensesnitt…
+	Internet Standard RGB	Internett-standard RGB
+	Interpret Footage…	Tolk opptak…
+	Intersect Shape Areas	Skjæring mellom formområder
+	Inverse Selection	Inverter utvalg
+	Invert	Inverter
+	Invert…	Inverter…
+	Iris Blur…	Irisuskarp…
+	Isolate Layers	Isoler lag
+	Keyboard Shortcuts…	Hurtigtaster…
+	Kurtosis	Kurtose
+	Lab Color	Lab-farge
+	Language Options	Språkvalg
+	Large	Stor
+	Last Filter	Siste filter
+	Layer	Lag
+	Layer Comps	Lagkomposisjoner
+	Layer Comps to Files…	Lagkomposisjoner til filer…
+	Layer Content Options…	Valg for laginnhold…
+	Layer Edges	Lagkanter
+	Layer Mask	Lagmaske
+	Layer Style	Lagstil
+	Layer from Background…	Lag fra bakgrunn…
+	Layer via Copy	Lag via kopier
+	Layer via Cut	Lag via klipp ut
+	Layers	Lag
+	Layers to Files…	Lag til filer…
+	Layer…	Lag…
+	Left Edges	Venstre kanter
+	Legacy Macintosh RGB	Eldre Macintosh RGB
+	Lens Blur…	Linse-uskarp…
+	Lens Correction…	Linsekorreksjon…
+	Lens Flare…	Linserefleks…
+	Levels…	Nivåer…
+	Lighting Effects…	Lyseffekter…
+	Link Layer Mask	Koble lagmaske
+	Link Layers	Koble lag
+	Link Vector Mask	Koble vektormaske
+	Liquify…	Liquify…
+	Load Default Type Styles	Last inn standard typestiler
+	Load Files into Stack…	Last filer inn i stabel…
+	Load Selection…	Last inn utvalg…
+	Lock Guides	Lås hjelpelinjer
+	Lock Layers…	Lås lag…
+	Lock Slices	Lås oppdelinger
+	Lock Workspace	Lås arbeidsområde
+	Mask All Objects	Masker alle objekter
+	Match All	Tilpass alle
+	Match Color…	Tilpass farge…
+	Match Location	Tilpass plassering
+	Match Rotation	Tilpass rotasjon
+	Match Zoom	Tilpass zoom
+	Matting	Kantbehandling
+	Maximum	Maksimum
+	Maximum…	Maksimum…
+	Mean	Gjennomsnitt
+	Measurement Log	Målingslogg
+	Median	Median
+	Median…	Median…
+	Medium	Middels
+	Menus…	Menyer…
+	Merge Layers	Slå sammen lag
+	Merge Shape Components	Slå sammen formkomponenter
+	Merge Visible	Slå sammen synlige
+	Merge to HDR Pro…	Slå sammen til HDR Pro…
+	Mesh	Nett
+	Mezzotint…	Mezzotint…
+	Middle Eastern & South Asian Composer	Midtøstlig og sørasiatisk setter
+	Middle Eastern Features	Midtøstlige funksjoner
+	Migrate Presets	Overfør forhåndsvalg
+	Minimum	Minimum
+	Minimum…	Minimum…
+	Mode	Modus
+	Modifier Keys	Modifikatortaster
+	Modify	Endre
+	Monitor RGB	Skjerm-RGB
+	Mosaic…	Mosaikk…
+	Motion	Bevegelse
+	Motion Blur…	Bevegelsesuskarp…
+	Multichannel	Multikanal
+	NTSC Colors	NTSC-farger
+	Navigator	Navigator
+	New	Ny
+	New Adjustment Layer	Nytt justeringslag
+	New Blank Video Layer	Nytt tomt videolag
+	New Fill Layer	Nytt fylllag
+	New Guide Layout…	Ny hjelpelinje-layout…
+	New Guides From Shape	Nye hjelpelinjer fra form
+	New Guide…	Ny hjelpelinje…
+	New Layer Based Slice	Ny lagbasert oppdeling
+	New Smart Object via Copy	Nytt smartobjekt via kopier
+	New Video Layer from File…	Nytt videolag fra fil…
+	New Window for Document	Nytt vindu for dokument
+	New Workspace…	Nytt arbeidsområde…
+	New…	Ny…
+	Noise	Støy
+	None	Ingen
+	Notes	Notater
+	Notes…	Notater…
+	Offset…	Forskyvning…
+	Oil Paint…	Oljemaling…
+	Oldstyle	Gammelstil
+	Open As…	Åpne som…
+	Open EXR Parts…	Åpne EXR-deler…
+	OpenType	OpenType
+	Open…	Åpne…
+	Options	Alternativer
+	Ordinals	Ordenstall
+	Orientation	Retning
+	Ornaments	Ornamenter
+	Other…	Annet…
+	Outer Glow…	Ytre glød…
+	Package…	Pakke…
+	Painting	Maling
+	Panels	Paneler
+	Paragraph	Avsnitt
+	Paragraph Panel	Avsnittspanel
+	Paragraph Styles	Avsnittsstiler
+	Paragraph Styles Panel	Avsnittsstilpanel
+	Paste	Lim inn
+	Paste Into	Lim inn i
+	Paste Layer Style	Lim inn lagstil
+	Paste Lorem Ipsum	Lim inn Lorem Ipsum
+	Paste Outside	Lim inn utenfor
+	Paste Special	Lim inn spesielt
+	Paste in Place	Lim inn på stedet
+	Path Blur…	Baneuskarp…
+	Paths	Baner
+	Paths to Illustrator…	Baner til Illustrator…
+	Pattern Overlay…	Mønsteroverlegg…
+	Pattern Preview	Mønsterforhåndsvisning
+	Patterns	Mønstre
+	Pattern…	Mønster…
+	Performance…	Ytelse…
+	Perspective	Perspektiv
+	Perspective Warp	Perspektivforvregning
+	Photo Filter…	Fotofilter…
+	Photography	Fotografi
+	Photomerge…	Fotomontasje…
+	Picture Frame…	Bilderamme…
+	Pinch…	Klyp…
+	Pixel Art	Pikselkunst
+	Pixel Art Preview	Forhåndsvisning av pikselkunst
+	Pixel Aspect Ratio	Pikselformatforhold
+	Pixel Aspect Ratio Correction	Korreksjon av pikselformatforhold
+	Pixel Grid	Pikselrutenett
+	Pixelate	Pikseler
+	Place Embedded…	Plasser innebygd…
+	Place Linked…	Plasser lenket…
+	Place Scale Marker…	Plasser målestokkmarkør…
+	Plug-ins…	Programtillegg…
+	Pointillize…	Punktillisme…
+	Polar Coordinates…	Polarkoordinater…
+	Posterize…	Posteriser…
+	Preferences	Innstillinger
+	Preset Manager…	Behandler for forhåndsvalg…
+	Presets	Forhåndsvalg
+	Print One Copy	Skriv ut én kopi
+	Print Size	Utskriftsstørrelse
+	Print…	Skriv ut…
+	Proof Colors	Korrekturfarger
+	Proof Setup	Korrekturoppsett
+	Properties	Egenskaper
+	Puppet Warp	Dukke-forvregning
+	Purge	Rens
+	Quick Export as PNG	Hurtigeksport som PNG
+	RGB Color	RGB-farge
+	Radial Blur…	Radialuskarp…
+	Range	Område
+	Rasterize	Rasteriser
+	Rasterize Type Layer	Rasteriser typelag
+	Raw Defaults…	Raw-standarder…
+	Record Measurements	Registrer målinger
+	Redo	Gjør om
+	Reduce Noise…	Reduser støy…
+	Relink to File…	Koble til fil på nytt…
+	Reload Frame	Last ramme på nytt
+	Remove Black Matte	Fjern svart kant
+	Remove Warp Split	Fjern forvregningsdeling
+	Remove White Matte	Fjern hvit kant
+	Rename Layer	Gi laget nytt navn
+	Render	Gjengi
+	Render Video…	Gjengi video…
+	Replace All Missing Fonts	Erstatt alle manglende skrifter
+	Replace Color…	Erstatt farge…
+	Replace Contents…	Erstatt innhold…
+	Replace Footage…	Erstatt opptak…
+	Reselect	Velg på nytt
+	Reset Workspace	Tilbakestill arbeidsområde
+	Resolve Missing Fonts…	Løs manglende skrifter…
+	Restore All Frames	Gjenopprett alle rammer
+	Restore Frame	Gjenopprett ramme
+	Reveal All	Vis alle
+	Reveal Selection	Vis utvalg
+	Reveal in Finder	Vis i Finder
+	Reverse	Reverser
+	Revert	Tilbakestill
+	Right Edges	Høyre kanter
+	Ripple…	Bølge…
+	Rotate	Roter
+	Rotate 180°	Roter 180°
+	Rotate 90° Clockwise	Roter 90° med klokken
+	Rotate 90° Counter Clockwise	Roter 90° mot klokken
+	Ruler Tool	Linjalverktøy
+	Rulers	Linjaler
+	Satin…	Satin…
+	Save	Lagre
+	Save As…	Lagre som…
+	Save Default Type Styles	Lagre standard typestiler
+	Save Selection…	Lagre utvalg…
+	Save a Copy…	Lagre en kopi…
+	Save for Web (Legacy)…	Lagre for web (eldre)…
+	Scale	Skaler
+	Scale Effects…	Skaleringseffekter…
+	Scratch Disks…	Kladddisker…
+	Screen Mode	Skjermmodus
+	Script Events Manager…	Behandler for skripthendelser…
+	Scripts	Skript
+	Search…	Søk…
+	Select	Velg
+	Select Data Points…	Velg datapunkter…
+	Select Linked Layers	Velg koblede lag
+	Select and Mask…	Velg og masker…
+	Selection Edges	Utvalgskanter
+	Selective Color…	Selektiv farge…
+	Send Backward	Send bakover
+	Send to Back	Send bakerst
+	Set Measurement Scale…	Angi målingsmålestokk…
+	Settings…	Innstillinger…
+	Shadows/Highlights…	Skygger/høydelys…
+	Shape	Form
+	Shape Blur…	Formuskarp…
+	Shapes	Former
+	Sharp	Skarp
+	Sharpen	Skjerp
+	Sharpen Edges	Skjerp kanter
+	Sharpen More	Skjerp mer
+	Shear…	Skjær…
+	Show	Vis
+	Show Altered Video	Vis endret video
+	Show Extras Options…	Vis valg for ekstra…
+	Similar	Lignende
+	Skew	Skråstill
+	Skewness	Skjevhet
+	Sky	Himmel
+	Slices	Oppdelinger
+	Small	Liten
+	Smart Blur…	Smartuskarp…
+	Smart Filter	Smartfilter
+	Smart Guides	Smarte hjelpelinjer
+	Smart Object	Smartobjekt
+	Smart Objects	Smartobjekter
+	Smart Sharpen…	Skjerp smart…
+	Smooth	Jevn
+	Smooth…	Jevn…
+	Snap	Fest
+	Snap To	Fest til
+	Solarize	Solariser
+	Solid Color…	Ensfarget…
+	Spherize…	Kuleform…
+	Spin Blur…	Rotasjonsuskarp…
+	Split Warp Crosswise	Del forvregning på tvers
+	Split Warp Horizontally	Del forvregning horisontalt
+	Split Warp Vertically	Del forvregning vertikalt
+	Square	Kvadrat
+	Stack Mode	Stabelmodus
+	Standard Deviation	Standardavvik
+	Standard Ligatures	Standardligaturer
+	Standard Screen Mode	Standard skjermmodus
+	Statistics…	Statistikk…
+	Stroke…	Kontur…
+	Strong	Sterk
+	Styles	Stiler
+	Stylistic Alternates	Stilistiske alternativer
+	Stylize	Stiliser
+	Subject	Motiv
+	Subtract Front Shape	Trekk fra fremre form
+	Summation	Summasjon
+	Surface Blur…	Flateuskarp…
+	Swash	Swash
+	Swatches	Fargeprøver
+	Target Path	Målbanen
+	Threshold…	Terskel…
+	Tile	Flislegg
+	Tile All Horizontally	Flislegg alle horisontalt
+	Tile All Vertically	Flislegg alle vertikalt
+	Tiles…	Fliser…
+	Tilt-Shift…	Tilt-skift…
+	Timeline	Tidslinje
+	Titling Alternates	Tittelalternativer
+	Toggle Last State	Veksle siste tilstand
+	Tool Presets	Verktøyforhåndsvalg
+	Toolbar…	Verktøylinje…
+	Tools	Verktøy
+	Tools…	Verktøy…
+	Top Edges	Øvre kanter
+	Trace Contour…	Spor kontur…
+	Transform	Transformer
+	Transform Selection	Transformer utvalg
+	Transparency & Gamut…	Gjennomsiktighet og fargerepresentasjon…
+	Trap…	Felle…
+	Tree…	Tre…
+	Trim…	Trim…
+	Twirl…	Virvel…
+	Type	Type
+	Type…	Type…
+	Undo	Angre
+	Ungroup Layers	Opphev gruppering av lag
+	Unite Shapes	Slå sammen former
+	Units & Rulers…	Enheter og linjaler…
+	Unsharp Mask…	Uskarp maske…
+	Update All Modified Content	Oppdater alt endret innhold
+	Update All Text Layers	Oppdater alle tekstlag
+	Update Modified Content	Oppdater endret innhold
+	Vanishing Point…	Fluktpunkts…
+	Variable Data Sets…	Variable datasett…
+	Variables	Variabler
+	Variance	Varians
+	Vector Mask	Vektormaske
+	Vertical	Vertikal
+	Vertical Centers	Vertikale sentre
+	Vertically	Vertikalt
+	Vibrance…	Livfullhet…
+	Video	Video
+	Video Cache	Videobuffer
+	Video Frames to Layers…	Videorammer til lag…
+	Video Layers	Videolag
+	View	Vis
+	WIA Support…	WIA-støtte…
+	Warp	Forvreng
+	Warp Text…	Forvreng tekst…
+	Wave…	Bølge…
+	Window	Vindu
+	Windows	Vinduer
+	Windows LCD	Windows LCD
+	Wind…	Vind…
+	Working Black Plate	Arbeidsplate svart
+	Working CMY Plate	Arbeidsplate CMY
+	Working CMYK	Arbeids-CMYK
+	Working Cyan Plate	Arbeidsplate cyan
+	Working Magenta Plate	Arbeidsplate magenta
+	Working Yellow Plate	Arbeidsplate gul
+	Workspace	Arbeidsområde
+	Workspace…	Arbeidsområde…
+	ZigZag…	SikkSakk…
+	Zoom In	Zoom inn
+	Zoom Out	Zoom ut
+	auto	auto
+	blue	blå
+	{added}, {removed} subtracted	{added}, {removed} trukket fra
