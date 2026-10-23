@@ -31,6 +31,33 @@ pub(crate) fn gaussian_kernel(sigma: f32) -> Vec<f32> {
     k.into_iter().map(|v| v / s).collect()
 }
 
+/// Gaussian Blur's kernel for `radius` (its standard deviation). Sampling the curve at whole
+/// pixels leaves a small radius almost no blur: at 0.3 the neighbour weight is about 0.004, a
+/// tenth of the spread asked for (#8544). Below 1 the sampling width is instead chosen so the
+/// kernel has exactly the variance `radius²`; from 1 up the sampled kernel is within about 0.4%
+/// of it (its 3σ truncation), so larger radii are unchanged and the blur grows smoothly from 0.05.
+pub(crate) fn gaussian_blur_kernel(radius: f32) -> Vec<f32> {
+    if !(0.05..1.0).contains(&radius) {
+        return gaussian_kernel(radius);
+    }
+    let variance = |k: &[f32]| {
+        let r = (k.len() / 2) as f32;
+        k.iter().enumerate().map(|(i, w)| w * (i as f32 - r).powi(2)).sum::<f32>()
+    };
+    let target = radius * radius;
+    // The sampled kernel's variance only falls short of sigma², so the width lies above `radius`.
+    let (mut lo, mut hi) = (radius, radius + 1.0);
+    for _ in 0..40 {
+        let mid = 0.5 * (lo + hi);
+        if variance(&gaussian_kernel(mid)) < target {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    gaussian_kernel(0.5 * (lo + hi))
+}
+
 /// Separable convolution of `src` (premultiplied internally) for `out`.
 /// `src` must cover `out` grown by the kernel radii.
 pub(crate) fn conv_sep(src: &Image, out: Rect, kx: &[f32], ky: &[f32], alpha: bool) -> Vec<f32> {
@@ -111,7 +138,7 @@ pub(crate) fn gaussian(src: &Image, out: Rect, ctx: &Ctx, radius: f32) -> Vec<f3
     match box_widths(&FilterParams::GaussianBlur { radius }) {
         Some(boxes) => box_passes(src, out, ctx.alpha, &boxes),
         None => {
-            let k = gaussian_kernel(radius);
+            let k = gaussian_blur_kernel(radius);
             conv_sep(src, out, &k, &k, ctx.alpha)
         }
     }
@@ -788,6 +815,44 @@ mod tests {
     use super::*;
     use photocraft_color::{ColorMode, PixelFormat, SampleType};
     use photocraft_raster::Surface;
+
+    /// #8544: Gaussian Blur spreads a hard edge for every radius from 0.1, growing smoothly
+    /// with the radius (no dead zone up to 0.3, then a jump); from 1 up the kernel is unchanged.
+    #[test]
+    fn small_gaussian_radii_blur_smoothly() {
+        let spread = |k: &[f32]| {
+            let r = (k.len() / 2) as f32;
+            k.iter().enumerate().map(|(i, w)| w * (i as f32 - r).powi(2)).sum::<f32>()
+        };
+        let mut last = 0.0f32;
+        for step in 1..=20 {
+            let radius = step as f32 * 0.05;
+            let k = gaussian_blur_kernel(radius);
+            assert!((k.iter().sum::<f32>() - 1.0).abs() < 1e-5, "normalised at {radius}");
+            if radius < 1.0 {
+                assert!((spread(&k) - radius * radius).abs() < 1e-4, "variance at {radius}: {}", spread(&k));
+            }
+            // A hard 0 → 1 edge: the first pixel past it takes the kernel's tail beyond the centre.
+            let c = k.len() / 2;
+            let edge: f32 = k[c + 1..].iter().sum();
+            assert!(edge > last, "radius {radius}: edge {edge} after {last}");
+            if radius > 0.1 {
+                assert!(edge - last < 0.05, "radius {radius}: jump {} from {last}", edge - last);
+            }
+            last = edge;
+        }
+        assert!(gaussian_blur_kernel(0.1).len() >= 3, "0.1 blurs");
+        // No step where the variance-matched range hands over to plain sampling.
+        let edge = |r: f32| {
+            let k = gaussian_blur_kernel(r);
+            k[k.len() / 2 + 1..].iter().sum::<f32>()
+        };
+        assert!((edge(0.999) - edge(1.0)).abs() < 0.005, "{} vs {}", edge(0.999), edge(1.0));
+        for radius in [1.0, 1.5, 3.0, 4.0] {
+            assert_eq!(gaussian_blur_kernel(radius), gaussian_kernel(radius), "{radius}");
+        }
+        assert_eq!(gaussian_blur_kernel(0.0), vec![1.0]);
+    }
 
     #[test]
     fn radial_blur_samples_large_arcs_beyond_64_intervals() {
