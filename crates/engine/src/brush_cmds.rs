@@ -298,6 +298,8 @@ fn stroke_with(s: &mut Session, cmd: &str, p: &Value, label: &str, brush: BrushS
             let mut brush = brush;
             erase_locked(&mut brush, lock, bg);
             if auto_erase {
+                // A stroke in the table's colour starts on what the foreground painted as.
+                let fg = table.as_ref().map_or(fg, |t| crate::mode_cmds::table_color(t, fg));
                 apply_auto_erase(&mut brush, surf, pts.first(), fg, bg);
             }
             let unpainted = table.as_ref().map(|_| surf.clone());
@@ -521,9 +523,11 @@ impl LiveStroke {
         let base = (st.doc.id, st.revision);
         let mut doc = (*st.doc).clone();
         let sel = doc.selection.clone();
+        let table = crate::mode_cmds::paint_color_table(&doc, p);
         let (surf, lock) = crate::channel_cmds::target_surface(&mut doc, layer, p)?;
         erase_locked(&mut brush, lock, s.tools.background);
         if pencil && flag(p, "autoErase", false) {
+            let fg = table.as_ref().map_or(fg, |t| crate::mode_cmds::table_color(t, fg));
             apply_auto_erase(&mut brush, surf, pts.first(), fg, s.tools.background);
         }
         let renderer = StrokeRenderer::new(&brush, Some(surf.format()), zoom);

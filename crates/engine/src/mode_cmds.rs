@@ -398,6 +398,16 @@ pub(crate) fn paint_color_table(doc: &Document, p: &Value) -> Option<ColorTable>
     doc.color_table.clone().filter(|_| pixels && doc.mode == ColorMode::Indexed)
 }
 
+/// The colour `c` paints as in a document with `table` (see [`keep_in_color_table`]).
+pub(crate) fn table_color(table: &ColorTable, c: [f32; 4]) -> [f32; 4] {
+    let mut px = [c];
+    if !table.colors.is_empty() {
+        quantize::quantize(&mut px, 1, &table.colors, Dither::None, 0.0, table.transparent.map(usize::from));
+    }
+    let [c] = px;
+    c
+}
+
 /// Map the pixels of `r` that the stroke changed (they differ from `pre`) to their nearest
 /// colour-table entry, as the Indexed Color conversion does with no dither, so painting never
 /// leaves the table (#8669). One tile at a time: a long stroke's bounds can span the canvas.

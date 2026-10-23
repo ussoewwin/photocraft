@@ -775,3 +775,16 @@ fn indexed_brush_stroke_leaves_pixels_it_did_not_paint() {
     assert_eq!(surf.rgba(13, 2), [1.0, 0.0, 0.0, 1.0]);
     assert_eq!(surf.rgba(8, 8), [0.0, 0.0, 0.0, 1.0]);
 }
+
+#[test]
+fn pencil_auto_erase_knows_the_indexed_foreground() {
+    let mut s = black_white_indexed(false);
+    let pencil = json!({"points": [[8, 8]], "size": 3, "color": "#ff0000", "autoErase": true});
+    s.execute("paint.pencil", pencil.clone()).unwrap();
+    assert_eq!(doc(&s).layers[0].surface().unwrap().rgba(8, 8), [0.0, 0.0, 0.0, 1.0]);
+    // Red painted as black, so a stroke starting there auto-erases to the (white) background.
+    let preview = crate::brush_cmds::LiveStroke::begin_with(&s, "paint.pencil", &pencil).unwrap();
+    assert_eq!(preview.doc.layers[0].surface().unwrap().rgba(8, 8), [1.0, 1.0, 1.0, 1.0]);
+    s.execute("paint.pencil", pencil).unwrap();
+    assert_eq!(doc(&s).layers[0].surface().unwrap().rgba(8, 8), [1.0, 1.0, 1.0, 1.0]);
+}
