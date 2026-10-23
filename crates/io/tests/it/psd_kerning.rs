@@ -205,8 +205,11 @@ fn add_type_layer(objects: &[(&str, &str)], kept: &[(&str, i32)], at: usize) -> 
     for (text, index) in kept {
         let mut t = layer(text, &[(text.len(), Kerning::Metrics, 0.0)]);
         photocraft_text::TextEngine::new().render_layer(&mut t, doc.resolution_dpi, doc.pixel_format());
-        let raw = photocraft_text::psd::build_tysh(&t, doc.resolution_dpi, None);
-        t.psd_raw = Some(std::sync::Arc::new(photocraft_text::psd::set_text_index(&raw, *index).unwrap()));
+        let raw = photocraft_text::psd::set_text_index(&photocraft_text::psd::build_tysh(&t, doc.resolution_dpi, None), *index).unwrap();
+        // As opening the file does: a kept layer's style holds what its `Txt2` object says (#8415:
+        // a layer whose style disagrees with its object is saved as a style edit).
+        photocraft_text::psd::apply_txt2(&mut t, &raw, &photocraft_text::psd::parse_txt2(&photoshop_txt2(objects)).unwrap());
+        t.psd_raw = Some(std::sync::Arc::new(raw));
         doc.layers.push(Layer::new(*text, LayerContent::Text(t)));
     }
     doc.metadata.psd_global_blocks = vec![(*b"8BIM", *b"Txt2", std::sync::Arc::new(photoshop_txt2(objects)))];
