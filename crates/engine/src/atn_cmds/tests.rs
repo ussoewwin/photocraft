@@ -391,6 +391,7 @@ fn settings_at_the_value_the_event_plays_still_export() {
         ("filter.other.minimum", json!({"radius": 4, "preserve": "squareness"})),
         ("filter.other.maximum", json!({"radius": 4})),
         ("layer.setAdjustment", json!({"kind": "exposure", "exposure": -0.75, "offset": 0.035, "gamma": 1.37})),
+        ("layer.setAdjustment", json!({"kind": "exposure", "layer": null, "exposure": -0.75})),
         // `preserve` reaches the filter through a comparison with the exact string "roundness",
         // so these play as squareness -- replay's own value -- and lose nothing by export (#7759
         // review).
