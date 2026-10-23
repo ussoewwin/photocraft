@@ -44,18 +44,27 @@ pub(crate) fn gaussian_blur_kernel(radius: f32) -> Vec<f32> {
         let r = (k.len() / 2) as f32;
         k.iter().enumerate().map(|(i, w)| w * (i as f32 - r).powi(2)).sum::<f32>()
     };
+    // Sampled at `width` with a fixed half-width: its variance then rises steadily with `width`,
+    // so the search can't settle on the step where `gaussian_kernel` gains taps. ceil(3·radius)
+    // is also the half-width `gaussian_kernel` uses from radius 1, so the hand-over is smooth.
+    let half = (radius * 3.0).ceil().max(1.0) as i32;
+    let sampled = |width: f32| {
+        let k: Vec<f32> = (-half..=half).map(|i| (-(i * i) as f32 / (2.0 * width * width)).exp()).collect();
+        let s: f32 = k.iter().sum();
+        k.into_iter().map(|v| v / s).collect::<Vec<f32>>()
+    };
     let target = radius * radius;
     // The sampled kernel's variance only falls short of sigma², so the width lies above `radius`.
     let (mut lo, mut hi) = (radius, radius + 1.0);
     for _ in 0..40 {
         let mid = 0.5 * (lo + hi);
-        if variance(&gaussian_kernel(mid)) < target {
+        if variance(&sampled(mid)) < target {
             lo = mid;
         } else {
             hi = mid;
         }
     }
-    gaussian_kernel(0.5 * (lo + hi))
+    sampled(0.5 * (lo + hi))
 }
 
 /// Separable convolution of `src` (premultiplied internally) for `out`.
@@ -871,6 +880,11 @@ mod tests {
             k[k.len() / 2 + 1..].iter().sum::<f32>()
         };
         assert!((edge(0.999) - edge(1.0)).abs() < 0.005, "{} vs {}", edge(0.999), edge(1.0));
+        // Exact variance right up to the hand-over, past where `gaussian_kernel` changes width.
+        for radius in [0.98f32, 0.995, 0.998, 0.9995] {
+            let k = gaussian_blur_kernel(radius);
+            assert!((spread(&k) - radius * radius).abs() < 2e-5, "variance at {radius}: {}", spread(&k));
+        }
         for radius in [1.0, 1.5, 3.0, 4.0] {
             assert_eq!(gaussian_blur_kernel(radius), gaussian_kernel(radius), "{radius}");
         }
