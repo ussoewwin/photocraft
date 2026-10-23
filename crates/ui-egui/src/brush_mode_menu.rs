@@ -117,6 +117,10 @@ pub(crate) fn show(app: &mut PhotocraftApp, ctx: &Context) {
     let Some([x, y]) = app.ui.brush_mode_menu else { return };
     if app.ui.tool != Tool::Brush || ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
         app.ui.brush_mode_menu = None;
+        // Escape also consumes the release of a right-button gesture still in flight.
+        if app.ui.tool == Tool::Brush && ctx.input(|i| i.pointer.secondary_down()) {
+            ctx.data_mut(|d| d.insert_temp(menu_id().with("dismiss-pointer"), true));
+        }
         return;
     }
     let choices = choices();

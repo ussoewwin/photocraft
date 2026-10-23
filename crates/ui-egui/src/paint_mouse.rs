@@ -444,6 +444,41 @@ mod tests {
     }
 
     #[test]
+    fn escape_dismissal_consumes_a_held_secondary_release() {
+        for release_shift in [false, true] {
+            let mut h = harness(Some("erase"));
+            let journal = h.state().session.journal.len();
+            let history = h.state().session.active().unwrap().history.past_len();
+            let p = h.state().last_canvas_rect.center();
+            h.event(egui::Event::ModifiersChanged(Modifiers::SHIFT));
+            h.event(egui::Event::PointerMoved(p));
+            h.event(egui::Event::PointerButton { pos: p, button: PointerButton::Secondary, pressed: true, modifiers: Modifiers::SHIFT });
+            h.run_steps(1);
+            // A quick second press can arrive in the frame that opens the menu for the first
+            // click's release, leaving the secondary button held while the picker is visible.
+            h.event(egui::Event::PointerButton { pos: p, button: PointerButton::Secondary, pressed: false, modifiers: Modifiers::SHIFT });
+            h.event(egui::Event::PointerButton { pos: p, button: PointerButton::Secondary, pressed: true, modifiers: Modifiers::SHIFT });
+            h.run_steps(1);
+            assert!(h.state().ui.brush_mode_menu.is_some());
+            assert!(h.ctx.input(|i| i.pointer.secondary_down()));
+            h.key_press(egui::Key::Escape);
+            h.run_steps(1);
+            assert!(h.state().ui.brush_mode_menu.is_none());
+            let mods = if release_shift { Modifiers::NONE } else { Modifiers::SHIFT };
+            h.event(egui::Event::ModifiersChanged(mods));
+            h.run_steps(1);
+            h.event(egui::Event::PointerButton { pos: p, button: PointerButton::Secondary, pressed: false, modifiers: mods });
+            h.run_steps(2);
+            assert!(h.state().ui.brush_mode_menu.is_none(), "Escape must consume the pending release");
+            assert!(h.state().ui.brush_picker.is_none() && h.state().drag.is_none() && !h.state().secondary_erase);
+            assert_eq!(h.state().session.journal.len(), journal);
+            assert_eq!(h.state().session.active().unwrap().history.past_len(), history);
+            mode_right_click(&mut h, Modifiers::SHIFT);
+            assert!(h.state().ui.brush_mode_menu.is_some(), "the next gesture must still work");
+        }
+    }
+
+    #[test]
     fn shift_released_before_the_right_button_still_opens_the_mode_picker() {
         // egui reports `secondary_clicked` on release. With Erase on, a click that lost Shift a
         // frame early must open the menu, not erase a dab.
