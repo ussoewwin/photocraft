@@ -95,22 +95,40 @@ pub(crate) struct ClonePreviewCache {
 /// the largest the overlay draws, at hardness 0 reaches about 1.73 × its radius (`tip_reach`).
 const CLONE_PREVIEW_MAX_PIXELS: u64 = 1800 * 1800;
 
-/// The largest side of the overlay: `retouch_cmds::clone_preview_periodic` samples at most 1024 px
-/// a side, and the source area it reads has a 2 px apron around the overlay's (`source_rect`).
-const CLONE_PREVIEW_MAX_SIDE: i32 = 1020;
+/// The largest side `retouch_cmds::clone_preview_periodic` samples, for the overlay's area and for
+/// the source area it reads (`Mapping::source_rect`: the overlay's, mapped, with a 2 px apron).
+const CLONE_PREVIEW_MAX_SIDE: u32 = 1024;
 
 /// The coverage of one dab of `brush` at `at`, as the brush engine paints it with opacity and flow
 /// at full: its tip, angle, roundness and hardness (a soft tip reaches past its radius). The area
-/// it covers and its `width × height` coverage values in 0..1. A very large soft tip is cropped to
-/// the source budget around `at`, losing only the faint end of its tail.
-fn clone_dab_coverage(brush: &photocraft_paint::BrushSettings, at: [f64; 2]) -> Option<(DRect, Vec<f32>)> {
+/// it covers and its `width × height` coverage values in 0..1. A very large soft tip, or a source
+/// the Clone Source panel scales down (which reads a larger area than it covers), is cropped
+/// around `at` to the sampling budget, keeping the middle of the dab.
+fn clone_dab_coverage(
+    brush: &photocraft_paint::BrushSettings,
+    at: [f64; 2],
+    map: &photocraft_engine::presets::clone_source::Mapping,
+) -> Option<(DRect, Vec<f32>)> {
     let brush = photocraft_paint::BrushSettings { opacity: 1.0, flow: 1.0, erase: false, ..brush.clone() };
     let stroke = photocraft_paint::Stroke { brush, points: vec![photocraft_paint::StrokePoint::new(at[0], at[1], 1.0)] };
     let (rect, cov) = photocraft_paint::retouch::stroke_coverage_within(&stroke, CLONE_PREVIEW_MAX_PIXELS)?;
-    let half = CLONE_PREVIEW_MAX_SIDE / 2;
+    let fits = |r: DRect| r.width() <= CLONE_PREVIEW_MAX_SIDE && r.height() <= CLONE_PREVIEW_MAX_SIDE;
     let (cx, cy) = (at[0].floor() as i32, at[1].floor() as i32);
-    let window = rect.intersect(&DRect::new(cx.saturating_sub(half), cy.saturating_sub(half), cx.saturating_add(half), cy.saturating_add(half)));
-    if window.is_empty() {
+    let around = |half: i32| rect.intersect(&DRect::new(cx.saturating_sub(half), cy.saturating_sub(half), cx.saturating_add(half), cy.saturating_add(half)));
+    // The source area scales with the overlay's: shrink by what overflows, a few times for the
+    // apron's rounding.
+    let mut half = i32::try_from((CLONE_PREVIEW_MAX_SIDE - 4) / 2).unwrap_or(510);
+    let mut window = around(half);
+    for _ in 0..8 {
+        let src = map.source_rect(window);
+        if fits(window) && fits(src) {
+            break;
+        }
+        let over = f64::from(src.width().max(src.height())) / f64::from(CLONE_PREVIEW_MAX_SIDE - 4);
+        half = ((f64::from(half) / over.max(1.0)).floor() as i32).saturating_sub(2).max(1);
+        window = around(half);
+    }
+    if window.is_empty() || !fits(window) || !fits(map.source_rect(window)) {
         return None;
     }
     if window == rect {
@@ -169,7 +187,7 @@ fn draw_clone_preview(app: &mut PhotocraftApp, painter: &egui::Painter, xf: &Vie
         // soft and a shaped tip keeps its outline. Unclipped: the brush's whole square.
         let (rect, coverage) = match brush {
             Some(b) => {
-                let Some((rect, coverage)) = clone_dab_coverage(b, at) else { return };
+                let Some((rect, coverage)) = clone_dab_coverage(b, at, &map) else { return };
                 (rect, Some(coverage))
             }
             None => (
@@ -7949,6 +7967,22 @@ mod tests {
         big.session.tools.brush.hardness = 0.0;
         let mut output = clone_overlay_frame(&ctx, &mut big, &xf);
         assert_eq!(clone_overlay_alpha(&big, &mut output)(32, 32), 255, "a 1000 px soft brush previews too");
+    }
+
+    /// A scaled Clone Source reads a larger source area than the overlay covers: a large brush's
+    /// overlay shrinks around the pointer until that area fits the sampling budget, rather than
+    /// vanishing.
+    #[test]
+    fn clone_overlay_of_a_scaled_source_stays_within_the_sampling_budget() {
+        let ctx = egui::Context::default();
+        let xf = clone_overlay_view(100.0, 1.0);
+        for (size, scale) in [(600.0, 200), (1000.0, 300), (1000.0, 50)] {
+            let mut app = clone_overlay_app(size);
+            app.run("cloneSource.set", json!({"width": scale, "height": scale})).unwrap();
+            let mut output = clone_overlay_frame(&ctx, &mut app, &xf);
+            assert!(output.shapes.iter().any(|s| matches!(s.shape, egui::Shape::Mesh(_))), "{size} px at {scale} %: the overlay shows");
+            assert_eq!(clone_overlay_alpha(&app, &mut output)(32, 32), 255, "{size} px at {scale} %: the source under the pointer");
+        }
     }
 
     /// The Healing Brush shares the Clone Stamp's source and overlay (Photoshop's Clone Source
