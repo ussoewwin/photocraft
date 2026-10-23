@@ -32,11 +32,19 @@ fn every_compositor_pipeline_builds() {
     };
     for desc in [fxc, every] {
         let instance = wgpu::Instance::new(desc);
+        // The Windows runners always have an adapter (WARP over DX12), so a missing one there means
+        // the check this test exists for silently did not run. Elsewhere it is a plain skip.
         let Ok(adapter) = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default())) else {
+            #[cfg(not(windows))]
             continue;
+            #[cfg(windows)]
+            panic!("no adapter on Windows: the DX12/FXC pipeline check did not run");
         };
         let Ok((device, _queue)) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())) else {
+            #[cfg(not(windows))]
             continue;
+            #[cfg(windows)]
+            panic!("no device on Windows: the DX12/FXC pipeline check did not run");
         };
         let info = adapter.get_info();
         let format = photocraft_gpu::Compositor::preferred_acc_format(&adapter);
