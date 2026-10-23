@@ -506,14 +506,21 @@ impl SelectMaskWorkspace {
         list.iter().map(|e| e.get("points").and_then(Value::as_array).map_or(0, Vec::len)).sum()
     }
 
+    /// An item the engine's limits refuse: say why, and drop what was drawn for it.
+    fn reject(&mut self, why: String) {
+        self.error = Some(why);
+        self.trail = None;
+        self.stale();
+    }
+
     /// Adds a tool edit (undoable), within the engine's limits.
     fn add_edit(&mut self, e: Value) {
         if self.edits.len() >= MAX_EDITS {
-            self.error = Some(format!("at most {MAX_EDITS} edits: undo some, or reset"));
+            self.reject(format!("at most {MAX_EDITS} edits: undo some, or reset"));
             return;
         }
         if Self::points_in(&self.edits) + Self::points_in(std::slice::from_ref(&e)) > MAX_EDIT_POINTS {
-            self.error = Some(format!("at most {MAX_EDIT_POINTS} points in all edits: undo some, or reset"));
+            self.reject(format!("at most {MAX_EDIT_POINTS} points in all edits: undo some, or reset"));
             return;
         }
         self.error = None;
@@ -525,11 +532,11 @@ impl SelectMaskWorkspace {
     /// Adds a Refine Edge Brush stroke (undoable), within the engine's limits.
     fn add_stroke(&mut self, s: Value) {
         if self.strokes.len() >= MAX_STROKES {
-            self.error = Some(format!("at most {MAX_STROKES} Refine Edge Brush strokes: undo some, or reset"));
+            self.reject(format!("at most {MAX_STROKES} Refine Edge Brush strokes: undo some, or reset"));
             return;
         }
         if Self::points_in(&self.strokes) + Self::points_in(std::slice::from_ref(&s)) > MAX_STROKE_POINTS {
-            self.error = Some(format!("at most {MAX_STROKE_POINTS} points in all Refine Edge Brush strokes: undo some, or reset"));
+            self.reject(format!("at most {MAX_STROKE_POINTS} points in all Refine Edge Brush strokes: undo some, or reset"));
             return;
         }
         self.error = None;
@@ -699,6 +706,10 @@ fn reset(w: &mut SelectMaskWorkspace) {
 
 /// Opens the workspace on the selection (or the active layer's mask).
 pub fn open(app: &mut PhotocraftApp) -> Result<(), String> {
+    // Opening again would drop the open workspace's work: edit it with `ui`, or cancel it.
+    if app.distort.select_mask.is_some() {
+        return Err("Select and Mask is already open".into());
+    }
     if let Some(Err(why)) = photocraft_engine::commands::find(CMD).map(|c| (c.enabled)(&app.session)) {
         return Err(format!("Select and Mask needs a selection or a layer mask ({why})"));
     }

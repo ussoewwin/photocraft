@@ -296,6 +296,41 @@ fn real_time_refinement_previews_the_stroke_being_drawn() {
     }
 }
 
+/// A stroke refused at the engine's limits leaves nothing drawn: no trail, and a preview without it.
+#[test]
+fn a_refused_stroke_leaves_no_trail_or_preview() {
+    for tool in ["quick", "refineEdge"] {
+        let mut app = app_with_selection();
+        open(&mut app).unwrap();
+        ui(&mut app, json!({"tool": tool}));
+        let w = ws_mut(&mut app);
+        if tool == "quick" {
+            w.edits = vec![json!({"tool": "invert"}); MAX_EDITS];
+        } else {
+            w.strokes = vec![json!({"points": []}); MAX_STROKES];
+        }
+        crate::distort_ui::pointer(&mut app, ToolEvent::Down { x: 120.0, y: 50.0, pressure: 1.0 }, Modifiers::NONE);
+        crate::distort_ui::pointer(&mut app, ToolEvent::Move { x: 130.0, y: 50.0, pressure: 1.0 }, Modifiers::NONE);
+        let want = ws(&app).preview.want;
+        crate::distort_ui::pointer(&mut app, ToolEvent::Up { x: 130.0, y: 50.0 }, Modifiers::NONE);
+        let w = ws(&app);
+        assert!(w.error.as_deref().is_some_and(|e| e.starts_with("at most")), "{tool}: {:?}", w.error);
+        assert!(w.trail.is_none(), "{tool}: the refused stroke is not drawn");
+        assert!(w.preview.want > want, "{tool}: a new preview drops the refused stroke");
+    }
+}
+
+/// Opening again while the workspace is open keeps its work and says why.
+#[test]
+fn opening_again_keeps_the_open_workspace() {
+    let mut app = app_with_selection();
+    open(&mut app).unwrap();
+    ui(&mut app, json!({"stroke": {"points": [[120.0, 50.0], [130.0, 50.0]]}}));
+    let e = crate::menus::invoke(&mut app, &egui::Context::default(), "select.selectAndMask", json!({}));
+    assert!(e.is_err_and(|e| e.contains("already open")));
+    assert_eq!(ws(&app).edits.len(), 1, "the edit survives");
+}
+
 /// The preview keeps the selection after the edits it applied and starts the next from there:
 /// after undo it starts over.
 #[test]
