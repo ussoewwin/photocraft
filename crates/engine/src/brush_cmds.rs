@@ -300,6 +300,7 @@ fn stroke_with(s: &mut Session, cmd: &str, p: &Value, label: &str, brush: BrushS
             if auto_erase {
                 apply_auto_erase(&mut brush, surf, pts.first(), fg, bg);
             }
+            let unpainted = table.as_ref().map(|_| surf.clone());
             let damage = if let Some(axis) = &symmetry {
                 let reflected = axis.reflected_passes(&pts);
                 let copies: Vec<_> = reflected
@@ -324,8 +325,8 @@ fn stroke_with(s: &mut Session, cmd: &str, p: &Value, label: &str, brush: BrushS
             } else {
                 render_stroke(surf, &brush, &pts, sel.as_ref(), lock, zoom)
             };
-            if let Some(table) = &table {
-                crate::mode_cmds::keep_in_color_table(table, surf, damage);
+            if let (Some(table), Some(pre)) = (&table, &unpainted) {
+                crate::mode_cmds::keep_in_color_table(table, pre, surf, damage);
             }
             Ok(damage)
         })
@@ -637,7 +638,7 @@ impl LiveStroke {
         // The preview shows the pixels the commit keeps (see `stroke_with`).
         if let Some(table) = crate::mode_cmds::paint_color_table(&self.doc, &self.params) {
             let (surf, _) = crate::channel_cmds::target_surface(std::sync::Arc::make_mut(&mut self.doc), self.layer, &self.params)?;
-            crate::mode_cmds::keep_in_color_table(&table, surf, dmg);
+            crate::mode_cmds::keep_in_color_table(&table, &self.pre, surf, dmg);
         }
         Ok(dmg)
     }

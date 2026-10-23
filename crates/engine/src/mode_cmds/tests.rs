@@ -757,3 +757,21 @@ fn live_brush_preview_matches_indexed_commit() {
         assert_eq!(live.rgba(x, y), committed.rgba(x, y), "preview/commit at ({x},{y})");
     }
 }
+
+#[test]
+fn indexed_brush_stroke_leaves_pixels_it_did_not_paint() {
+    let mut s = black_white_indexed(false);
+    // An off-table pixel inside the stroke's bounds but away from its dabs (Paint Bucket can
+    // still leave one) is not the stroke's to remap.
+    s.edit("setup", |doc, active| {
+        let surf = doc.layer_mut(active.unwrap()).unwrap().surface_mut().unwrap();
+        let px = photocraft_raster::from_rgba(&surf.format(), [1.0, 0.0, 0.0, 1.0]);
+        surf.write_region(Rect::new(13, 2, 14, 3), &px);
+        Ok(())
+    })
+    .unwrap();
+    s.execute("paint.stroke", json!({"points": [[2, 2], [14, 14]], "size": 2, "hardness": 1.0, "color": "#ff0000", "smoothing": 0.0})).unwrap();
+    let surf = doc(&s).layers[0].surface().unwrap();
+    assert_eq!(surf.rgba(13, 2), [1.0, 0.0, 0.0, 1.0]);
+    assert_eq!(surf.rgba(8, 8), [0.0, 0.0, 0.0, 1.0]);
+}
