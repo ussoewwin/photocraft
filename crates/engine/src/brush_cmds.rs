@@ -293,6 +293,7 @@ fn stroke_with(s: &mut Session, cmd: &str, p: &Value, label: &str, brush: BrushS
                 return Ok(l.bounds);
             }
             let sel = doc.selection.clone();
+            let table = crate::mode_cmds::paint_color_table(doc, p);
             let (surf, lock) = crate::channel_cmds::target_surface(doc, id, p)?;
             let mut brush = brush;
             erase_locked(&mut brush, lock, bg);
@@ -323,6 +324,9 @@ fn stroke_with(s: &mut Session, cmd: &str, p: &Value, label: &str, brush: BrushS
             } else {
                 render_stroke(surf, &brush, &pts, sel.as_ref(), lock, zoom)
             };
+            if let Some(table) = &table {
+                crate::mode_cmds::keep_in_color_table(table, surf, damage);
+            }
             Ok(damage)
         })
     })?;
@@ -583,7 +587,7 @@ impl LiveStroke {
         check_coords(pts, &self.cmd)?;
         self.points.extend_from_slice(pts);
         let cmyk = self.cmyk.clone();
-        photocraft_color::convert::with_cmyk_space(cmyk.as_ref(), || {
+        let dmg = photocraft_color::convert::with_cmyk_space(cmyk.as_ref(), || -> Result<Rect> {
             self.renderer.push(pts);
             if let Some(symmetry) = &self.symmetry {
                 for ((mirror, distinct), reflected) in self.mirrors.iter_mut().zip(&mut self.mirror_distinct).zip(symmetry.reflected_passes(pts)) {
@@ -629,7 +633,13 @@ impl LiveStroke {
                 dmg = dmg.union(&self.tail);
             }
             Ok(dmg)
-        })
+        })?;
+        // The preview shows the pixels the commit keeps (see `stroke_with`).
+        if let Some(table) = crate::mode_cmds::paint_color_table(&self.doc, &self.params) {
+            let (surf, _) = crate::channel_cmds::target_surface(std::sync::Arc::make_mut(&mut self.doc), self.layer, &self.params)?;
+            crate::mode_cmds::keep_in_color_table(&table, surf, dmg);
+        }
+        Ok(dmg)
     }
 }
 

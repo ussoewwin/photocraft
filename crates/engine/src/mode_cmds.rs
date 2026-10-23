@@ -12,7 +12,7 @@ use photocraft_algo::transform::{Homography, Interp};
 use photocraft_color::{ColorMode, PixelFormat, SampleType};
 use photocraft_doc::adjust::CurvePoint;
 use photocraft_doc::{ColorTable, Document, Duotone, DuotoneInk, Layer, LayerContent, LayerId, Size};
-use photocraft_geom::Affine;
+use photocraft_geom::{Affine, Rect};
 use photocraft_raster::Surface;
 use serde_json::{Value, json};
 
@@ -389,6 +389,32 @@ fn color_table(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     })?;
     Ok(out)
+}
+
+/// The colour table painting on `p`'s target must stay inside: an Indexed Color document's,
+/// when the target is layer pixels (masks and channels are gray, not indexed).
+pub(crate) fn paint_color_table(doc: &Document, p: &Value) -> Option<ColorTable> {
+    let pixels = crate::channel_cmds::target_of(p) == crate::channel_cmds::Target::Pixels;
+    doc.color_table.clone().filter(|_| pixels && doc.mode == ColorMode::Indexed)
+}
+
+/// Map the pixels of `r` to their nearest colour-table entry, as the Indexed Color conversion
+/// does with no dither, so painting never leaves the table (#8669).
+pub(crate) fn keep_in_color_table(table: &ColorTable, surf: &mut Surface, r: Rect) {
+    let r = r.intersect(&surf.tile_bounds());
+    if r.is_empty() || table.colors.is_empty() {
+        return;
+    }
+    let fmt = surf.format();
+    let mut data = surf.read_region(r);
+    let mut px: Vec<[f32; 4]> = data.chunks_exact(fmt.channels()).map(|q| photocraft_raster::to_rgba(&fmt, q)).collect();
+    quantize::quantize(&mut px, r.width() as usize, &table.colors, Dither::None, 0.0, table.transparent.map(usize::from));
+    let mut enc = [0.0f32; 8];
+    for (q, c) in data.chunks_exact_mut(fmt.channels()).zip(px) {
+        photocraft_raster::from_rgba_into(&fmt, c, &mut enc);
+        q.iter_mut().zip(enc).for_each(|(d, v)| *d = v);
+    }
+    surf.write_region(r, &data);
 }
 
 // ---------- Bitmap ----------

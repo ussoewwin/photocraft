@@ -696,3 +696,64 @@ fn color_table_rejects_an_invalid_transparent_index_without_editing() {
     s.execute("image.mode.colorTable", json!({"transparent": 0})).unwrap();
     assert_eq!(doc(&s).color_table.as_ref().unwrap().transparent, Some(0));
 }
+
+/// A white 16×16 document in Indexed Color with the two-entry black/white table (#8669's repro).
+fn black_white_indexed(transparency: bool) -> Session {
+    let mut s = Session::new();
+    let background = if transparency { "transparent" } else { "white" };
+    s.execute("file.new", json!({"width": 16, "height": 16, "background": background})).unwrap();
+    paint(&mut s, |x, _| {
+        if x < 2 {
+            [0.0; 4]
+        } else if x < 4 {
+            [0.0, 0.0, 0.0, 1.0]
+        } else {
+            [1.0; 4]
+        }
+    });
+    s.execute("image.mode.indexedColor", json!({"palette": "exact", "forced": "none", "transparency": transparency, "dither": "none"})).unwrap();
+    s
+}
+
+#[test]
+fn brush_stroke_stays_in_indexed_color_table() {
+    let mut s = black_white_indexed(false);
+    assert_eq!(doc(&s).color_table.as_ref().unwrap().colors, vec![[0, 0, 0], [255, 255, 255]]);
+    s.execute("paint.stroke", json!({"points": [[8, 8, 1]], "size": 8, "color": "#ff0000", "opacity": 1, "flow": 1})).unwrap();
+    // Red's nearest entry is black.
+    assert_eq!(doc(&s).layers[0].surface().unwrap().rgba(8, 8), [0.0, 0.0, 0.0, 1.0]);
+    // Soft edges and partial opacity blend, and the blends map back onto the table too.
+    s.execute("paint.stroke", json!({"points": [[4, 12], [14, 12]], "size": 6, "hardness": 0.0, "color": "#808080", "opacity": 0.5})).unwrap();
+    let table = doc(&s).color_table.clone().unwrap();
+    assert!(colours(doc(&s)).iter().all(|c| table.colors.contains(c)), "off-table pixels: {:?}", colours(doc(&s)));
+    assert_eq!(doc(&s).mode, ColorMode::Indexed);
+}
+
+#[test]
+fn brush_stroke_keeps_indexed_transparency_binary() {
+    let mut s = black_white_indexed(true);
+    let table = doc(&s).color_table.clone().unwrap();
+    assert!(table.transparent.is_some());
+    s.execute("paint.stroke", json!({"points": [[0, 8], [15, 8]], "size": 8, "hardness": 0.0, "color": "#ff0000", "opacity": 0.7})).unwrap();
+    let d = doc(&s);
+    let surf = d.layers[0].surface().unwrap();
+    for (x, y) in (0..16).flat_map(|y| (0..16).map(move |x| (x, y))) {
+        let a = surf.rgba(x, y)[3];
+        assert!(a == 0.0 || a == 1.0, "alpha {a} at ({x},{y})");
+    }
+    assert!(colours(d).iter().all(|c| table.colors.contains(c)), "off-table pixels: {:?}", colours(d));
+}
+
+#[test]
+fn live_brush_preview_matches_indexed_commit() {
+    let mut s = black_white_indexed(false);
+    let params = json!({"points": [[4, 8], [12, 8]], "size": 7, "hardness": 0.0, "color": "#ff0000", "opacity": 0.6, "smoothing": 0.0, "seed": 1});
+    let preview = crate::brush_cmds::LiveStroke::begin(&s, &params).unwrap();
+    let table = doc(&s).color_table.clone().unwrap();
+    assert!(colours(&preview.doc).iter().all(|c| table.colors.contains(c)), "preview off the table: {:?}", colours(&preview.doc));
+    s.execute("paint.stroke", params).unwrap();
+    let (live, committed) = (preview.doc.layers[0].surface().unwrap(), doc(&s).layers[0].surface().unwrap());
+    for (x, y) in (0..16).flat_map(|y| (0..16).map(move |x| (x, y))) {
+        assert_eq!(live.rgba(x, y), committed.rgba(x, y), "preview/commit at ({x},{y})");
+    }
+}
