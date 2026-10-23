@@ -100,6 +100,7 @@ mod tests {
             (vec!["tr-TR", "en-US"], "tr"),
             (vec!["sr-Latn-RS", "en-US"], "sr"),
             (vec!["fi-FI", "sr_RS@latin", "ru-RU"], "sr"),
+            (vec!["hi-IN", "en-US"], "hi"),
             (vec!["sv-SE", "en-US"], "sv"),
             (vec!["fi-FI", "sv_FI.UTF-8", "en-US"], "sv"),
             (vec![], "en"),
