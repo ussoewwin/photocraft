@@ -44,10 +44,11 @@ pub(crate) fn gaussian_blur_kernel(radius: f32) -> Vec<f32> {
         let r = (k.len() / 2) as f32;
         k.iter().enumerate().map(|(i, w)| w * (i as f32 - r).powi(2)).sum::<f32>()
     };
-    // Sampled at `width` with a fixed half-width: its variance then rises steadily with `width`,
-    // so the search can't settle on the step where `gaussian_kernel` gains taps. ceil(3·radius)
-    // is also the half-width `gaussian_kernel` uses from radius 1, so the hand-over is smooth.
-    let half = (radius * 3.0).ceil().max(1.0) as i32;
+    // Sampled at `width` with one fixed half-width for every radius below 1: its variance then
+    // rises steadily with `width` (the search can't settle on a step where taps are added), and
+    // the blur grows without the dips a width chosen per radius made at 1/3 and 2/3. Three is the
+    // half-width `gaussian_kernel` uses at radius 1, so the hand-over is smooth too.
+    let half = 3;
     let sampled = |width: f32| {
         let k: Vec<f32> = (-half..=half).map(|i| (-(i * i) as f32 / (2.0 * width * width)).exp()).collect();
         let s: f32 = k.iter().sum();
@@ -880,6 +881,10 @@ mod tests {
             k[k.len() / 2 + 1..].iter().sum::<f32>()
         };
         assert!((edge(0.999) - edge(1.0)).abs() < 0.005, "{} vs {}", edge(0.999), edge(1.0));
+        // No dip where a per-radius width used to add taps (1/3 and 2/3).
+        for pair in [(0.33f32, 0.34f32), (0.66, 0.67)] {
+            assert!(edge(pair.1) > edge(pair.0), "edge falls from {} to {}", pair.0, pair.1);
+        }
         // Exact variance right up to the hand-over, past where `gaussian_kernel` changes width.
         for radius in [0.98f32, 0.995, 0.998, 0.9995] {
             let k = gaussian_blur_kernel(radius);
