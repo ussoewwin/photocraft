@@ -159,8 +159,13 @@ fn open_root(path: Option<&Path>, authority: &str) -> Result<Option<RootCapabili
     if path.as_os_str().is_empty() {
         return Err(AutomationError::BadRequest(format!("automation {authority} root is empty")));
     }
-    let configured_path =
-        std::path::absolute(path).map_err(|e| AutomationError::Io(format!("cannot resolve automation {authority} root `{}`: {e}", path.display())))?;
+    // Windows absolute() removes parent components. Keep an absolute launch spelling intact:
+    // only that trusted prefix is exempt from request traversal checks, never its suffix.
+    let configured_path = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::path::absolute(path).map_err(|e| AutomationError::Io(format!("cannot resolve automation {authority} root `{}`: {e}", path.display())))?
+    };
     // Resolve trusted configuration once, before opening that exact directory as a capability.
     let absolute =
         std::fs::canonicalize(path).map_err(|e| AutomationError::Io(format!("cannot resolve automation {authority} root `{}`: {e}", path.display())))?;
@@ -175,7 +180,7 @@ fn open_root(path: Option<&Path>, authority: &str) -> Result<Option<RootCapabili
 fn request_path(raw: &str, root: Option<&RootCapability>) -> Result<PathBuf, AutomationError> {
     let path = Path::new(raw);
     let Some(root) = root.filter(|_| path.is_absolute()) else { return relative_path(raw) };
-    // Prefer the trusted launch spelling: on Unix it can itself contain `..`. Only that
+    // Prefer the trusted launch spelling: it can itself contain `..`. Only that
     // exact granted prefix is exempt; traversal in the remaining request still fails below.
     let request = path_beneath_root(path, &root.configured_path)
         .or_else(|| path_beneath_root(path, &root.path))
@@ -1117,8 +1122,11 @@ mod tests {
         let resolved = std::fs::canonicalize(&inside).unwrap();
         workspace.write(&resolved.join("new.bin").to_string_lossy(), b"new").unwrap();
         assert_eq!(workspace.read(&resolved.join("new.bin").to_string_lossy()).unwrap(), b"new");
-        #[cfg(unix)]
         workspace.write(&configured.join("launch-spelling.bin").to_string_lossy(), b"trusted prefix").unwrap();
+        assert_eq!(workspace.read(&configured.join("launch-spelling.bin").to_string_lossy()).unwrap(), b"trusted prefix");
+        assert_eq!(workspace.read(&resolved.join("launch-spelling.bin").to_string_lossy()).unwrap(), b"trusted prefix");
+        assert!(workspace.write(&configured.join("..").join("outside/escaped.bin").to_string_lossy(), b"no").is_err());
+        assert!(!outside.join("escaped.bin").exists());
         assert!(workspace.write(&outside.join("blocked.bin").to_string_lossy(), b"no").is_err());
         assert!(!outside.join("blocked.bin").exists());
     }
