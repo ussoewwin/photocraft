@@ -83,6 +83,37 @@ fn subtract_front_shape_cuts_a_hole_in_the_selected_shape_layer() {
     assert_ne!(shape_path(&app).0, id);
 }
 
+/// A locked shape layer refuses the new component: the path drawn stays as the Pen's draft, and
+/// the document and History are as they were, so unlocking and committing again cuts the hole.
+#[test]
+fn a_locked_shape_layer_keeps_the_drawn_path() {
+    for lock in ["all", "pixels"] {
+        let mut app = app();
+        app.ui.tool_options.vector_mode = "shape".into();
+        square(&mut app, 20.0, 20.0, 100.0);
+        let (id, body) = shape_path(&app);
+        app.run("layer.lockLayers", json!({lock: true})).unwrap();
+        let steps = app.session.active().unwrap().history.past_len();
+        app.ui.tool_options.pen_path_op = "subtract".into();
+        square(&mut app, 50.0, 50.0, 40.0);
+        let draft = app.ui.pen.clone().unwrap_or_else(|| panic!("{lock}: the draft is kept"));
+        // The four corners and the close's stand-in on the first: still a closed path.
+        assert!(draft.knots.len() == 5 && super::closing(&draft), "{lock}: {:?}", draft.knots);
+        assert!(app.ui.status_error, "{lock}: {}", app.ui.status);
+        assert_eq!(shape_path(&app), (id, body.clone()), "{lock}: the shape is unchanged");
+        assert_eq!(app.session.active().unwrap().history.past_len(), steps, "{lock}: no History step");
+        // Undo takes back the lock, not the drawn path.
+        app.session.undo();
+        assert!(app.ui.pen.is_some(), "{lock}");
+        assert!(super::pen_commit(&mut app, false), "{lock}: {}", app.ui.status); // ↩
+        assert!(app.ui.pen.is_none(), "{lock}");
+        let (same, path) = shape_path(&app);
+        assert_eq!(same, id, "{lock}");
+        assert_eq!(path.subpaths.iter().map(|s| (s.op, s.closed)).collect::<Vec<_>>(), [(PathOp::Combine, true), (PathOp::Subtract, true)], "{lock}");
+        assert_eq!(covered(&path, 70, 70), 0.0, "{lock}: the hole");
+    }
+}
+
 /// With no shape layer selected, an operation other than New Layer still starts a shape layer
 /// (Photoshop: there is nothing to combine with), and the next path joins it.
 #[test]

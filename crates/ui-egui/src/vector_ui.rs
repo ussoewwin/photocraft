@@ -519,32 +519,41 @@ pub fn cancel_stale(app: &mut PhotocraftApp) -> bool {
     true
 }
 
-/// Finish the pen path: a work path (Path mode) or a new shape layer (Shape mode).
-pub fn pen_commit(app: &mut PhotocraftApp, closed: bool) {
+/// Finish the pen path: a work path (Path mode) or a new shape layer (Shape mode). A commit the
+/// document refuses (a locked shape layer to add to…) keeps the draft, so nothing drawn is lost
+/// and it can be committed again; `false` then.
+pub fn pen_commit(app: &mut PhotocraftApp, closed: bool) -> bool {
     // The control channel is drained after `sync_views`, so a document switch in this frame has
     // not been seen yet: never commit the path into the document it was not drawn on.
     if !cancel_stale(app) {
-        return;
+        return false;
     }
-    let Some(mut pen) = app.ui.pen.take() else { return };
-    app.ui.pen_doc = None;
+    let Some(draft) = app.ui.pen.take() else { return true };
+    let doc = app.ui.pen_doc.take();
+    let mut pen = draft.clone();
+    if pen.curvature {
+        curvature_refresh(&mut pen, closed);
+    }
+    if !commit_path(app, &pen, closed) {
+        app.ui.pen = Some(draft);
+        app.ui.pen_doc = doc;
+        return false;
+    }
     if app.ui.direct_selection.target == Some(crate::direct_select::PathRef::Pen) {
         // Its anchors are no longer the Pen's: the committed path is another path.
         app.ui.direct_selection = Default::default();
     }
-    if pen.curvature {
-        curvature_refresh(&mut pen, closed);
-    }
-    commit_path(app, &pen, closed);
+    true
 }
 
 /// Commit a finished Pen, Freeform Pen or Curvature Pen path, as one History step: in Shape mode a
 /// new shape layer, or with a Path Operation other than New Layer a subpath of the selected shape
 /// layer; in Path mode a subpath of the targeted vector mask, else of the selected path or a new
-/// work path. An added subpath takes the options bar's Path Operation (#1397).
-fn commit_path(app: &mut PhotocraftApp, pen: &PenPath, closed: bool) {
+/// work path. An added subpath takes the options bar's Path Operation (#1397). `false` when the
+/// document refused it, with the reason in the status bar.
+fn commit_path(app: &mut PhotocraftApp, pen: &PenPath, closed: bool) -> bool {
     if pen.knots.len() < 2 {
-        return;
+        return true;
     }
     let path = pen_to_json(pen, closed);
     let op = pen_path_op(&app.ui.tool_options);
@@ -597,7 +606,9 @@ fn commit_path(app: &mut PhotocraftApp, pen: &PenPath, closed: bool) {
     if let Err(e) = r {
         app.ui.status = e;
         app.ui.status_error = true;
+        return false;
     }
+    true
 }
 
 /// Does `doc` have the path the Paths panel calls `name`: "work", or a saved path's name?
@@ -855,8 +866,9 @@ pub fn curvature_down(app: &mut PhotocraftApp, x: f64, y: f64) {
     if !cancel_stale(app) {
         return;
     }
-    if app.ui.pen.as_ref().is_some_and(|p| !p.curvature) {
-        pen_commit(app, false);
+    // A Pen draft whose commit is refused stays as it is: no Curvature anchor is added to it.
+    if app.ui.pen.as_ref().is_some_and(|p| !p.curvature) && !pen_commit(app, false) {
+        return;
     }
     let hit = curvature_hit(app, x, y);
     if hit == Some(0) && app.ui.pen.as_ref().is_some_and(|p| p.knots.len() >= 3) {
@@ -964,7 +976,9 @@ pub fn path_to_selection(app: &mut PhotocraftApp, params: Value) -> Result<Value
     if app.ui.pen.as_ref().is_some_and(|p| p.knots.len() >= 2) {
         // The finished path becomes the work path, or a shape layer's path or a vector mask.
         let on_layer = app.ui.tool_options.vector_mode == "shape" || targeted_vector_mask(app).is_some();
-        pen_commit(app, false);
+        if !pen_commit(app, false) {
+            return Err(app.ui.status.clone());
+        }
         app.ui.selected_path = Some(if on_layer { "layer" } else { "work" }.into());
     }
     let name = active_path_name(app)
@@ -3059,7 +3073,9 @@ mod tests {
                 "pen" => pen_down(&mut app, 150.0, 150.0, false),
                 "curvature" => curvature_down(&mut app, 150.0, 150.0),
                 "undo" => assert!(!pen_undo_last_point(&mut app)),
-                "commit" => pen_commit(&mut app, true),
+                "commit" => {
+                    pen_commit(&mut app, true);
+                }
                 _ => {
                     assert!(app.run("file.close", json!({})).is_err());
                 }
@@ -3164,7 +3180,9 @@ mod tests {
                     "pen" => pen_down(&mut app, 150.0, 150.0, false),
                     "curvature" => curvature_down(&mut app, 150.0, 150.0),
                     "undo" => assert!(!pen_undo_last_point(&mut app)),
-                    "commit" => pen_commit(&mut app, true),
+                    "commit" => {
+                        pen_commit(&mut app, true);
+                    }
                     _ => app.sync_views(),
                 }
                 let source = app.session.documents().iter().find(|d| d.doc.id == owner).unwrap();
