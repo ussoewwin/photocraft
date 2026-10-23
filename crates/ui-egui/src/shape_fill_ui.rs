@@ -145,8 +145,8 @@ fn target(app: &PhotocraftApp, f: &Map<String, Value>, idx: usize) -> Result<Opt
     Ok(Some(layer))
 }
 
-/// OK: one `shape.edit` with the new paint (an unchanged solid colour keeps the stored one as it
-/// is), and the next shape's colour when the picker came from the options bar.
+/// OK: one `shape.edit` with the new paint, then the next shape's colour when the picker came from
+/// the options bar. A refused edit (a locked layer, a job running on the document) changes neither.
 pub(crate) fn confirm(app: &mut PhotocraftApp, f: &Map<String, Value>) -> Result<Value, String> {
     let idx = app.session.active_index().ok_or("no document open")?;
     let layer = target(app, f, idx)?;
@@ -162,10 +162,21 @@ pub(crate) fn confirm(app: &mut PhotocraftApp, f: &Map<String, Value>) -> Result
     {
         return Err("shape layer is locked".into());
     }
-    if f.get("__params").and_then(|p| p.get("tool")).and_then(Value::as_bool) == Some(true) {
+    let tool = f.get("__params").and_then(|p| p.get("tool")).and_then(Value::as_bool) == Some(true);
+    let result = match layer {
+        None => json!({"color": rgba}),
+        Some(layer) => edit_paint(app, f, layer, which, rgba)?,
+    };
+    // Only once the shape took the colour (or there is none): a refused edit changes nothing.
+    if tool {
         crate::vector_ui::set_tool_paint(app, which == Paint::Stroke, crate::paint_picker::PaintChange::Color(rgba))?;
     }
-    let Some(layer) = layer else { return Ok(json!({"color": rgba})) };
+    Ok(result)
+}
+
+/// The `shape.edit` that gives `layer`'s paint `which` the colour `rgba`; an unchanged solid
+/// colour keeps the stored one as it is.
+fn edit_paint(app: &mut PhotocraftApp, f: &Map<String, Value>, layer: LayerId, which: Paint, rgba: [f32; 4]) -> Result<Value, String> {
     let solid = f.get("__shapePaintSolid").and_then(Value::as_bool).unwrap_or(true);
     if solid && f.get("color") == f.get("__orig") {
         return Ok(json!({"layer": layer.0, "unchanged": true}));

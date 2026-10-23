@@ -156,3 +156,47 @@ fn locked_shape_refuses_the_options_bar_picker_without_changing_the_next_shapes_
         assert_eq!(fill(&app, id), Some(Fill::Solid(Color::rgb(0.2, 0.4, 0.6))));
     }
 }
+
+/// A shape edit refused for another reason (here a job holding the document) leaves the next
+/// shape's colour and stroke as they were: the edit runs first, the tool defaults only after it.
+#[test]
+fn a_refused_shape_edit_leaves_the_next_shapes_colour_alone() {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    for which in [Paint::Fill, Paint::Stroke] {
+        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", json!({"width": 64, "height": 48})).unwrap();
+        let id = LayerId(app.run("shape.create", json!({"rect": [8, 8, 40, 30], "fill": "#336699"})).unwrap()["layer"].as_u64().unwrap());
+        let (tools, options) = (app.session.tools.clone(), app.ui.tool_options.clone());
+        let dialog = open_paint(&mut app, which, Some(id), true, [0.0, 0.0, 0.0, 1.0]).unwrap();
+        app.ui.dialog_mut(dialog).unwrap().fields.insert("color".into(), json!("#ff8800"));
+        let f = app.ui.dialog_mut(dialog).unwrap().fields.clone();
+        let gate = Arc::new(AtomicBool::new(false));
+        let open = gate.clone();
+        let started = app
+            .session
+            .start_job(
+                "test.hold",
+                json!({}),
+                "Hold",
+                true,
+                move |ctx| {
+                    while !open.load(Ordering::Relaxed) {
+                        ctx.check()?;
+                        std::thread::sleep(std::time::Duration::from_millis(1));
+                    }
+                    Ok(())
+                },
+                |_, ()| Ok(json!({})),
+            )
+            .unwrap();
+        let photocraft_engine::jobs::Started::Job(job) = started else { panic!("the job ran inline") };
+        assert!(confirm(&mut app, &f).unwrap_err().contains("still running"), "{which:?}");
+        assert_eq!(app.session.tools.foreground, tools.foreground, "{which:?}: the next shape's colours are unchanged");
+        assert_eq!(app.session.tools.background, tools.background);
+        assert_eq!(app.ui.tool_options, options, "{which:?}: the stroke stays off");
+        gate.store(true, Ordering::Relaxed);
+        app.session.cancel_job(job);
+        app.session.join_cancelled_jobs();
+    }
+}
