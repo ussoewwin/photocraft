@@ -163,3 +163,30 @@ fn a_saved_path_read_from_a_psd_is_editable() {
     assert!((a.x - 130.0).abs() < 1e-3 && (a.y - 135.0).abs() < 1e-3, "the anchor moved to (130, 135): {a:?}");
     assert_eq!(steps(&app), n + 1);
 }
+
+/// Anchors selected on one saved path are dropped once the Paths panel picks another: the arrow
+/// keys must not nudge a path that is no longer the target path.
+#[test]
+fn arrows_leave_a_saved_path_the_paths_panel_no_longer_selects() {
+    let mut app = app(Tool::DirectSelection);
+    with_saved_path(&mut app);
+    app.run("path.set", json!({"name": "Path 2", "path": square(10.0, 10.0, 20.0)})).unwrap();
+    drag(&mut app, [30.0, 30.0], [50.0, 50.0], Modifiers::NONE);
+    assert_eq!((app.ui.direct_selection.target, app.ui.direct_selection.anchors.clone()), (Some(PathRef::Saved(0)), vec![[0, 0]]));
+    // One → press through the canvas arrow keys, as egui delivers it.
+    let arrow = |app: &mut PhotocraftApp| {
+        let ctx = egui::Context::default();
+        ctx.input_mut(|i| {
+            i.events.push(egui::Event::Key { key: egui::Key::ArrowRight, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE })
+        });
+        crate::direct_select::arrow_keys(app, &ctx)
+    };
+    assert!(arrow(&mut app), "the selected path's anchor is nudged");
+    assert_eq!(saved(&app).subpaths[0].knots[0].anchor, Point::new(41.0, 40.0));
+    app.ui.selected_path = Some("Path 2".into());
+    let (one, two) = (saved(&app), app.session.active().unwrap().doc.paths[1].path.clone());
+    assert!(!arrow(&mut app), "no key is used for a path that is not the target");
+    assert_eq!(saved(&app), one, "Path 1 stays");
+    assert_eq!(app.session.active().unwrap().doc.paths[1].path, two, "Path 2 stays");
+    assert_eq!(app.ui.direct_selection.target, None, "the stale anchor selection is dropped");
+}

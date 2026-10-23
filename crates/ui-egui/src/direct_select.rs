@@ -512,7 +512,14 @@ pub fn arrow_keys(app: &mut PhotocraftApp, ctx: &egui::Context) -> bool {
     let Some(target) = ds.target.filter(|_| app.ui.tool == Tool::DirectSelection && !ds.anchors.is_empty() && ds.drag.is_none()) else {
         return false;
     };
-    let anchors = ds.anchors.clone();
+    // The anchors belong to a path the canvas no longer offers (another saved path picked in the
+    // Paths panel, the path deleted): drop them rather than nudge that path, or another one that
+    // took its index.
+    if !candidates(app).iter().any(|(r, _)| *r == target) {
+        app.ui.direct_selection = DirectSelection::default();
+        return false;
+    }
+    let anchors = app.ui.direct_selection.anchors.clone();
     use egui::Key;
     let keys = [(Key::ArrowLeft, -1.0, 0.0), (Key::ArrowRight, 1.0, 0.0), (Key::ArrowUp, 0.0, -1.0), (Key::ArrowDown, 0.0, 1.0)];
     for (key, ux, uy) in keys {
