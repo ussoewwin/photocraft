@@ -1019,8 +1019,26 @@ pub(crate) fn note_insert(s: &mut Session, before: &Document) {
 pub fn layer_bounds(l: &Layer) -> Option<Rect> {
     let r = match &l.content {
         LayerContent::Group(g) => g.children.iter().filter_map(layer_bounds).fold(Rect::EMPTY, |a, b| a.union(&b)),
+        LayerContent::Shape(sh) => shape_pixel_bounds(sh).unwrap_or_else(|| l.surface().map(|s| s.content_bounds()).unwrap_or(Rect::EMPTY)),
         _ => l.surface().map(|s| s.content_bounds()).unwrap_or(Rect::EMPTY),
     };
+    (!r.is_empty()).then_some(r)
+}
+
+/// Largest area [`shape_pixel_bounds`] renders to find a shape's extent; beyond it the path and
+/// stroke bounds stand in.
+const SHAPE_BOUNDS_MAX_PX: u64 = 64 << 20;
+
+/// The pixels a shape layer draws, wherever they fall. Its cache is rendered clipped to the
+/// canvas, so a shape partly off the canvas measured from it looked smaller and Align moved it
+/// by the wrong amount, a little more on each click (#8660). The shape is rendered again over its
+/// path and stroke bounds, unclipped, and measured from that.
+fn shape_pixel_bounds(sh: &photocraft_doc::ShapeLayer) -> Option<Rect> {
+    let hard = photocraft_compose::hard_shape_bounds(sh)?.inflate(1);
+    if u64::from(hard.width()) * u64::from(hard.height()) > SHAPE_BOUNDS_MAX_PX {
+        return Some(hard);
+    }
+    let r = photocraft_vector::render_shape(sh, PixelFormat::GRAYA8, hard).content_bounds();
     (!r.is_empty()).then_some(r)
 }
 
@@ -2361,6 +2379,27 @@ mod tests {
                 assert_eq!(bounds(&s, a), Rect::new(10, 5, 20, 15));
             }
         }
+    }
+
+    /// #8660: a shape partly off the canvas aligns by everything it draws, not the part on the
+    /// canvas, so one click aligns the layers and a second moves nothing.
+    #[test]
+    fn align_uses_a_shape_layers_full_extent_off_the_canvas() {
+        let mut s = session(8);
+        let shape =
+            LayerId(s.execute("shape.create", json!({"kind": "rect", "rect": [-20, 10, 40, 20], "fill": "#ff0000"})).unwrap()["layer"].as_u64().unwrap());
+        assert_eq!(bounds(&s, shape), Rect::new(-20, 10, 20, 30), "the shape's own extent, not the canvas-clipped render");
+        let pixels = rect_layer(&mut s, Rect::new(30, 40, 60, 50));
+        select_all(&mut s, &[shape, pixels]);
+        s.execute("layer.align.leftEdges", json!({})).unwrap();
+        assert_eq!(bounds(&s, pixels), Rect::new(-20, 40, 10, 50));
+        assert_eq!(bounds(&s, shape), Rect::new(-20, 10, 20, 30));
+        s.execute("layer.align.leftEdges", json!({})).unwrap();
+        assert_eq!(bounds(&s, pixels), Rect::new(-20, 40, 10, 50), "a second click moves nothing");
+        // Centred: the union is -20..20 wide on the shape's side and 30 px for the pixel layer.
+        s.execute("layer.align.horizontalCenters", json!({})).unwrap();
+        assert_eq!(bounds(&s, shape), Rect::new(-20, 10, 20, 30));
+        assert_eq!(bounds(&s, pixels), Rect::new(-15, 40, 15, 50));
     }
 
     #[test]
