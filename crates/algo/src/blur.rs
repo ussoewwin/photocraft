@@ -816,6 +816,29 @@ mod tests {
     use photocraft_color::{ColorMode, PixelFormat, SampleType};
     use photocraft_raster::Surface;
 
+    /// #8544, rendered: Gaussian Blur at 0.1–0.3 px through the filter itself (the direct-kernel
+    /// path) visibly softens a hard edge, more with each step, as the kernel predicts.
+    #[test]
+    fn small_gaussian_radii_soften_a_rendered_edge() {
+        let canvas = Rect::new(0, 0, 20, 4);
+        let mut s = Surface::new(PixelFormat::RGBA8);
+        s.fill_rect(canvas, &[0.0, 0.0, 0.0, 1.0]);
+        s.fill_rect(Rect::new(10, 0, 20, 4), &[1.0, 1.0, 1.0, 1.0]);
+        let mut last = 0.0f32;
+        for radius in [0.1f32, 0.2, 0.3] {
+            let p = FilterParams::GaussianBlur { radius };
+            assert!(box_widths(&p).is_none(), "the direct-kernel path");
+            let out = crate::apply(&s, &p, canvas, canvas, None);
+            // The last black pixel takes the white side's share of the kernel.
+            let got = out.pixel(9, 1)[0];
+            let k = gaussian_blur_kernel(radius);
+            let want: f32 = k[k.len() / 2 + 1..].iter().sum();
+            assert!((got - want).abs() <= 1.0 / 255.0, "radius {radius}: {got} vs {want}");
+            assert!(got >= 1.0 / 255.0 && got > last, "radius {radius}: {got} after {last}");
+            last = got;
+        }
+    }
+
     /// #8544: Gaussian Blur spreads a hard edge for every radius from 0.1, growing smoothly
     /// with the radius (no dead zone up to 0.3, then a jump); from 1 up the kernel is unchanged.
     #[test]
