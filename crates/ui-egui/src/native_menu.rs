@@ -636,27 +636,38 @@ pub fn photocraft_layout(items: &[MenuItem], lang: Lang, language: &str) -> Layo
     layout
 }
 
-/// [`photocraft_layout`] for the running app. A key equivalent comes back as a key press
-/// ([`NativeMenu::raw_input`]), so a ⌘, the user gave a command with no menu item (Fill with
-/// Foreground's key, say) runs that command: no menu item may show ⌘, then.
+/// Build native menus against effective dispatch ownership, including alternate shortcuts
+/// and commands without menu items. AppKit must not consume a saved creative shortcut.
 pub fn app_layout(app: &PhotocraftApp, items: &[MenuItem], lang: Lang, language: &str) -> Layout {
-    fn clear(nodes: &mut [Node]) {
-        for n in nodes {
-            match n {
-                Node::Item(it) if it.shortcut.as_deref() == Some("Cmd+,") => it.shortcut = None,
-                Node::Submenu { children, .. } => clear(children),
+    fn clear(nodes: &mut [Node], key: &str, owner: &str, lang: Lang) {
+        let parsed = crate::shortcuts::parse(key);
+        for node in nodes {
+            match node {
+                Node::Item(it) if it.id != owner && it.shortcut.as_deref().and_then(crate::shortcuts::parse) == parsed => it.shortcut = None,
+                Node::Standard(Standard::Minimize) if key == "Cmd+M" => {
+                    let mut item = Item::new(MINIMIZE, tr(lang, "Minimize"));
+                    item.role = Some(ItemRole::Minimize);
+                    *node = Node::Item(item);
+                }
+                Node::Submenu { children, .. } => clear(children, key, owner, lang),
                 _ => {}
             }
         }
     }
     let mut layout = photocraft_layout(items, lang, language);
-    let comma = crate::shortcuts::parse("Cmd+,");
-    let owner = crate::shortcut_dispatch::bindings(app).into_iter().find(|(_, sc)| Some(*sc) == comma).map(|(id, _)| id);
-    if let Some(command) = owner.filter(|id| layout.bar.find(id).is_none()) {
-        for m in &mut layout.bar.menus {
-            clear(&mut m.children);
+    let bindings = crate::shortcut_dispatch::bindings(app);
+    for (key, system) in [("Cmd+,", "Settings"), ("Cmd+H", "Hide"), ("Cmd+M", "Minimize"), ("Ctrl+Cmd+H", "Hide"), ("Ctrl+Cmd+M", "Minimize")] {
+        let parsed = crate::shortcuts::parse(key);
+        let owner = bindings.iter().find(|(_, sc)| Some(*sc) == parsed).map(|(id, _)| id);
+        if let Some(command) = owner {
+            let displayed = layout.bar.find(command).and_then(|it| it.shortcut.as_deref()).and_then(crate::shortcuts::parse);
+            if displayed != parsed {
+                for menu in &mut layout.bar.menus {
+                    clear(&mut menu.children, key, command, lang);
+                }
+                layout.clashes.push(Clash { shortcut: key, system, command: command.clone(), resolution: "System menu yields to saved command" });
+            }
         }
-        layout.clashes.push(Clash { shortcut: "Cmd+,", system: "Settings", command, resolution: "Settings has no shortcut" });
     }
     layout
 }
@@ -931,6 +942,37 @@ mod tests {
             let l = app_layout(&plain, &crate::menus::menu_items(&plain), Lang::EN, "auto");
             assert_eq!(l.bar.find("edit.preferences.general").unwrap().shortcut.as_deref(), Some("Cmd+,"));
         }
+    }
+
+    #[test]
+    fn saved_hide_and_minimize_keys_without_menu_items_reach_dispatch() {
+        for key in ["Cmd+H", "Cmd+M"] {
+            let mut a = app(true);
+            a.session.prefs.edit(|p| p.shortcuts.insert("edit.fillForeground".into(), key.into()));
+            let items = crate::menus::menu_items(&a);
+            assert!(!items.iter().any(|it| it.id == "edit.fillForeground"));
+            let parsed = crate::shortcuts::parse(key);
+            assert_eq!(
+                crate::shortcut_dispatch::bindings(&a).iter().find(|(_, sc)| Some(*sc) == parsed).map(|(id, _)| id.as_str()),
+                Some("edit.fillForeground")
+            );
+            let layout = app_layout(&a, &items, Lang::EN, "auto");
+            assert!(layout.bar.items().iter().all(|it| it.shortcut.as_deref().and_then(crate::shortcuts::parse) != parsed));
+            assert!(!layout.bar.menu(MenuRole::Window).unwrap().children.contains(&Node::Standard(Standard::Minimize)) || key != "Cmd+M");
+        }
+    }
+
+    #[test]
+    fn a_saved_alternate_on_a_visible_command_removes_settings_comma() {
+        let mut a = app(true);
+        a.session.prefs.edit(|p| p.alternate_shortcuts.insert("view.extras".into(), vec!["Cmd+,".into()]));
+        let items = crate::menus::menu_items(&a);
+        assert!(items.iter().any(|it| it.id == "view.extras"));
+        let comma = crate::shortcuts::parse("Cmd+,");
+        assert_eq!(crate::shortcut_dispatch::bindings(&a).iter().find(|(_, sc)| Some(*sc) == comma).map(|(id, _)| id.as_str()), Some("view.extras"));
+        let layout = app_layout(&a, &items, Lang::EN, "auto");
+        assert!(layout.bar.items().iter().all(|it| it.shortcut.as_deref().and_then(crate::shortcuts::parse) != comma));
+        assert_eq!(a.session.prefs.get().alternate_shortcuts["view.extras"], ["Cmd+,"]);
     }
 
     /// The same for an item that moves to the app menu ahead of Settings (About).
