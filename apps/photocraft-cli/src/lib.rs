@@ -365,6 +365,8 @@ fn command_list(a: &Args) -> Result<Vec<(String, Value)>, String> {
     Ok(cmds)
 }
 
+/// `run`: open a file (or make a new one), run each `--cmd` in order, print each result as a
+/// JSON line and save to `--out`. Deselect with nothing selected is skipped (#8802).
 fn run_cmds(a: &Args, out: &mut dyn Write, err: &mut dyn Write) -> R {
     let opts = export_opts(a)?;
     let mut h = Headless::trusted_local();
@@ -539,6 +541,8 @@ fn strip_shell_steps(action: &mut Action) {
     (action.steps, action.disabled, action.dialogs) = (steps, disabled, dialogs);
 }
 
+/// `batch`: play the steps of an actions file on every image in `--in` and save to `--out`.
+/// Deselect with nothing selected is skipped, as in playback (#8802).
 fn batch(a: &Args, out: &mut dyn Write, err: &mut dyn Write) -> R {
     let actions_path = a.get("--actions").ok_or("batch needs --actions <file>")?;
     let in_dir = PathBuf::from(a.get("--in").ok_or("batch needs --in <dir>")?);
@@ -889,6 +893,7 @@ mod batch_action_set_tests {
 mod deselect_noop_tests {
     use super::*;
 
+    /// Run the CLI with `args`: (exit code, stdout, stderr).
     fn invoke(args: &[&str]) -> (i32, String, String) {
         let (mut output, mut errors) = (Vec::new(), Vec::new());
         let args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
