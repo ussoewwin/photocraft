@@ -1661,8 +1661,8 @@ fn set_to(id: &str, p: &Value) -> Option<Descriptor> {
         "layer.setAdjustment" => {
             // The event edits the current adjustment layer: a step that names its layer or
             // document would play back on whichever one is active instead (#8532). A null
-            // `layer` is the target layer, as in `layer_ref`.
-            if p.get("layer").is_some_and(|l| !l.is_null()) || p.get("document").is_some() {
+            // `layer` or `document` is the target one, as the command reads it.
+            if ["layer", "document"].iter().any(|k| p.get(*k).is_some_and(|v| !v.is_null())) {
                 return None;
             }
             // The adjustment kind isn't in the params: Photoshop needs it, so only steps that

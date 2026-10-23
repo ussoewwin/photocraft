@@ -366,6 +366,7 @@ fn a_setting_the_event_cannot_hold_is_refused() {
         ("filter.other.minimum", json!({"radius": 4, "preserve": "roundness"})),
         ("filter.other.maximum", json!({"radius": 4, "preserve": "roundness"})),
         ("layer.setAdjustment", json!({"kind": "exposure", "layer": "Target_existing", "exposure": -0.75, "offset": 0.035, "gamma": 1.37})),
+        ("layer.setAdjustment", json!({"kind": "exposure", "document": 2, "exposure": -0.75})),
     ] {
         let mut s = Session::new();
         s.actions.list.push(Action::new("A", vec![(id.into(), params)]));
@@ -392,6 +393,7 @@ fn settings_at_the_value_the_event_plays_still_export() {
         ("filter.other.maximum", json!({"radius": 4})),
         ("layer.setAdjustment", json!({"kind": "exposure", "exposure": -0.75, "offset": 0.035, "gamma": 1.37})),
         ("layer.setAdjustment", json!({"kind": "exposure", "layer": null, "exposure": -0.75})),
+        ("layer.setAdjustment", json!({"kind": "exposure", "document": null, "exposure": -0.75})),
         // `preserve` reaches the filter through a comparison with the exact string "roundness",
         // so these play as squareness -- replay's own value -- and lose nothing by export (#7759
         // review).
