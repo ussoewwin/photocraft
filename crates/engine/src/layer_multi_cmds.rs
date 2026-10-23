@@ -1051,9 +1051,11 @@ fn shape_pixel_bounds(sh: &photocraft_doc::ShapeLayer, canvas: Option<Rect>) -> 
     if u64::from(reach.width()) * u64::from(reach.height()) > SHAPE_BOUNDS_MAX_PX {
         return photocraft_compose::hard_shape_bounds(sh);
     }
-    // Gradients lay out in the document's frame (as the cached render does); only the clip widens.
+    // Gradients lay out in the document's frame (as the cached render does); the feather and the
+    // clip cover the shape's whole reach, beyond the canvas too.
     let frame = canvas.unwrap_or(reach);
-    let r = photocraft_vector::CompiledShape::new(sh, photocraft_vector::DEFAULT_TOLERANCE, frame).render(PixelFormat::GRAYA8, reach).content_bounds();
+    let shape = photocraft_vector::CompiledShape::with_frames(sh, photocraft_vector::DEFAULT_TOLERANCE, reach, frame);
+    let r = shape.render(PixelFormat::GRAYA8, reach).content_bounds();
     (!r.is_empty()).then_some(r)
 }
 
@@ -2427,6 +2429,9 @@ mod tests {
         .unwrap();
         let b = bounds(&s, soft);
         assert!(b.x0 < -20 && b.x1 > 20 && b.y0 < 50 && b.y1 > 70, "{b:?}");
+        // Measured as Align does, in the document's frame: the feather off the canvas still counts.
+        let in_doc = layer_bounds_in(doc(&s).layer(soft).unwrap(), Some(doc(&s).bounds())).unwrap();
+        assert_eq!(in_doc, b);
         // A fill that shows everywhere keeps the canvas-clipped measure.
         s.edit("invert", |doc, _| {
             if let Some(LayerContent::Shape(sh)) = doc.layer_mut(soft).map(|l| &mut l.content) {
