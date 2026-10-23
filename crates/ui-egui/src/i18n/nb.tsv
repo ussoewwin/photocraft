@@ -341,44 +341,283 @@
 	Brush Preview	Penselforhåndsvisning
 	Brush Settings	Penselinnstillinger
 	Brushes	Pensler
+	Build-up	Oppbygging
+	Bulge	Utbuling
+	Bundle Arrow-Key Nudges	Slå sammen piltastnudging
+	Burlap	Jutevev
+	Burn	Svi
+	Burn Tool	Svi-verktøy
+	Butt / Flat	Butt / flat
+	Button Mode	Knappmodus
+	Button Mode On	Knappmodus på
+	Byline	Byline
+	Byline Title	Bylinetittel
+	CIE RGB	CIE RGB
 	CMYK Color	CMYK-farge
+	CMYK:	CMYK:
+	Cache Level:	Buffer­nivå:
+	Cache levels	Buffernivåer
+	Cache tile size	Flisstørrelse for buffer
+	Calculations	Beregninger
 	Calculations…	Beregninger…
+	Camera Calibration	Kamerakalibrering
+	Camera Data	Kameradata
+	Camera Make	Kameramerke
+	Camera Model	Kameramodell
+	Camera Raw	Camera Raw
+	Camera Raw ({name})	Camera Raw ({name})
+	Camera Raw Defaults	Camera Raw-standarder
+	Camera Raw Filter	Camera Raw-filter
+	Camera Raw Filter ({layer})	Camera Raw-filter ({layer})
 	Camera Raw Filter…	Camera Raw-filter…
+	Camera Raw isn't open	Camera Raw er ikke åpen
+	Camera Raw…	Camera Raw…
+	Cancel	Avbryt
+	Cancel (Esc)	Avbryt (Esc)
+	Cancel any current edits (Esc)	Avbryt gjeldende redigeringer (Esc)
+	Cancel current crop operation  (Esc)	Avbryt gjeldende beskjæring  (Esc)
+	Cancel opening	Avbryt åpning
+	Cancel transform	Avbryt transformering
+	Cancel transform (Esc)	Avbryt transformering (Esc)
+	Cancel warp (Esc)	Avbryt forvregning (Esc)
+	Cancelled opening {name}	Avbrøt åpning av {name}
+	Cancelled {label}	Avbrøt {label}
+	Candle Light	Levende lys
+	Canvas	Lerret
 	Canvas Guides	Lerret-hjelpelinjer
+	Canvas Size	Lerretstørrelse
 	Canvas Size…	Lerretstørrelse…
+	Canvas border	Lerretkant
+	Canvas color	Lerretfarge
+	Canvas custom color	Egendefinert lerretfarge
+	Canvas extension color:	Farge for lerretutvidelse:
+	Canvas rotation	Lerretrotasjon
+	Caps	Store bokstaver
+	Caption	Bildetekst
+	Caption Credits	Bildetekstkreditering
+	Capture	Opptak
+	Capture Brush Size in Preset	Ta med penselstørrelse i forhåndsvalg
+	Capture Comp	Ta opp komposisjon
+	Capture the visibility, position and style of every layer with + below, then switch between versions.	Ta opp synlighet, plassering og stil for hvert lag med + nedenfor, og bytt deretter mellom versjoner.
 	Cascade	Kaskade
+	Case Sensitive	Skill mellom store og små bokstaver
+	Catch-up on Stroke End	Ta igjen ved strøkslutt
+	Category	Kategori
+	Ccw	Mot klokken
+	Cell Size	Cellestørrelse
+	Center	Sentrum
+	Center Columns	Sentrer kolonner
+	Center Crop Marks	Sentrer beskjæringsmerker
+	Center X	Sentrum X
+	Center Y	Sentrum Y
+	Center text	Sentrer tekst
+	Centimeters	Centimeter
+	Centre the gradient (offset 0, 0)	Sentrer gradienten (forskyvning 0, 0)
+	Chalk & Charcoal	Kritt og trekull
+	Chalk Area	Krittområde
+	Change	Endre
+	Change All	Endre alle
+	Change Find	Endre søk
+	Change Panel Group	Endre panelgruppe
+	Change Panel Layout	Endre panellayout
+	Change Screen Mode  (F)	Endre skjermmodus  (F)
+	Change To:	Endre til:
+	Changes Saved	Endringer lagret
+	Changes have not been saved.	Endringene er ikke lagret.
+	Changes undone.	Endringer angret.
+	Change…	Endre…
+	Channel	Kanal
+	Channel Color	Kanalfarge
+	Channel Mixer	Kanalmikser
 	Channel Mixer…	Kanalmikser…
+	Channel1	Kanal 1
+	Channel2	Kanal 2
+	Channel3	Kanal 3
+	Channel4	Kanal 4
+	Channel:	Kanal:
 	Channels	Kanaler
+	Channels:	Kanaler:
 	Character	Tegn
 	Character Panel	Tegnpanel
 	Character Styles	Tegnstiler
 	Character Styles Panel	Tegnstilpanel
+	Charcoal	Trekull
+	Charcoal Area	Trekullområde
+	Charcoal Thickness	Trekulltykkelse
+	Check All Layers	Merk alle lag
+	Check Spelling	Kontroller staving
 	Check Spelling…	Kontroller staving…
+	Check for Updates	Se etter oppdateringer
+	Checkerboard	Sjakkbrett
+	Chisel Hard	Meisel hard
+	Chisel Soft	Meisel myk
+	Choke	Klem
+	Choose Folder	Velg mappe
+	Choose Stack Mode:	Velg stabelmodus:
+	Choose a format that keeps it, such as Photoshop (PSD), or save a copy.	Velg et format som beholder det, for eksempel Photoshop (PSD), eller lagre en kopi.
+	Choose a gradient file (.grd).	Velg en gradientfil (.grd).
+	Choose a new shortcut for this command, or leave it without one.	Velg en ny hurtigtast for denne kommandoen, eller la den være uten.
+	Choose…	Velg…
+	Chrome	Chrome
+	Circle	Sirkel
+	Circularity	Sirkelform
+	City	By
+	Clarity	Klarhet
+	Classic	Klassisk
+	Classic Theme	Klassisk tema
+	Clean Brush	Rens pensel
+	Clean the brush after each stroke	Rens penselen etter hvert strøk
+	Cleanliness	Renhet
 	Clear	Tøm
+	Clear All	Tøm alle
+	Clear Amount	Tømmemengde
+	Clear Brush Controls	Tøm penselkontroller
+	Clear Brush Strokes	Tøm penselstrøk
 	Clear Canvas Guides	Tøm lerret-hjelpelinjer
+	Clear Existing Guides	Tøm eksisterende hjelpelinjer
 	Clear Guides	Tøm hjelpelinjer
+	Clear History	Tøm historikk
 	Clear Layer Style	Tøm lagstil
+	Clear Override	Tøm overstyring
+	Clear Recent Files	Tøm nylige filer
+	Clear Samples	Tøm målepunkter
 	Clear Selected Artboard Guides	Tøm valgte montasjebrett-hjelpelinjer
+	Clear Selected Guides	Tøm valgte hjelpelinjer
+	Clear Selection	Tøm utvalg
 	Clear Slices	Tøm oppdelinger
 	Clear Smart Filters	Tøm smartfiltre
+	Click a red pupil to neutralize it	Klikk på en rød pupill for å nøytralisere den
+	Click a segment to add an anchor point · {alt}-click an anchor to delete it	Klikk på et segment for å legge til et ankepunkt · {alt}-klikk på et anker for å slette det
+	Click an anchor point to delete it · {alt}-click a segment to add one	Klikk på et ankepunkt for å slette det · {alt}-klikk på et segment for å legge til ett
+	Click sets foreground · right-click sets background	Klikk angir forgrunn · høyreklikk angir bakgrunn
+	Click the first point or press {key} to close · Esc cancels	Klikk første punkt eller trykk {key} for å lukke · Esc avbryter
+	Click the first point or press {key} to close · {del} removes a point · Esc cancels	Klikk første punkt eller trykk {key} for å lukke · {del} fjerner et punkt · Esc avbryter
+	Click the first point or press ↵ to close · Esc cancels	Klikk første punkt eller trykk ↵ for å lukke · Esc avbryter
+	Click the image to add a pin; drag a pin to move it, or its ring to change its blur. Delete removes the selected pin.	Klikk på bildet for å legge til en nål; dra en nål for å flytte den, eller ringen for å endre uskarpheten. Delete fjerner den valgte nålen.
+	Click to add a point · drag off or {key}-click or Delete to remove	Klikk for å legge til et punkt · dra bort eller {key}-klikk eller Delete for å fjerne
+	Click to add a point · drag off or ⌘/Ctrl-click or Delete to remove	Klikk for å legge til et punkt · dra bort eller ⌘/Ctrl-klikk eller Delete for å fjerne
+	Click to add a point, right-click to remove	Klikk for å legge til et punkt, høyreklikk for å fjerne
+	Click to add text	Klikk for å legge til tekst
+	Click to apply, {key}-click to clear overrides, double-click for Style Options	Klikk for å bruke, {key}-klikk for å tømme overstyringer, dobbeltklikk for stilvalg
+	Click to apply, ⌥-click to clear overrides, double-click for Style Options	Klikk for å bruke, ⌥-klikk for å tømme overstyringer, dobbeltklikk for stilvalg
+	Click to edit the gradient	Klikk for å redigere gradienten
+	Click to fill similar colours	Klikk for å fylle like farger
+	Click to pick · Esc to cancel	Klikk for å velge · Esc for å avbryte
+	Click to place · Alt-click or drag off-canvas to remove	Klikk for å plassere · Alt-klikk eller dra utenfor lerretet for å fjerne
+	Click to restore the current colour	Klikk for å gjenopprette gjeldende farge
+	Click to sample the foreground colour  ·  {key}-click for background	Klikk for å måle forgrunnsfargen  ·  {key}-klikk for bakgrunn
+	Click to zoom in  ·  {key}-click to zoom out  ·  drag right/left to zoom in/out	Klikk for å zoome inn  ·  {key}-klikk for å zoome ut  ·  dra høyre/venstre for å zoome inn/ut
+	Click to zoom in  ·  ⌥-click to zoom out	Klikk for å zoome inn  ·  ⌥-klikk for å zoome ut
+	Click with the Note tool to add a note.	Klikk med notatverktøyet for å legge til et notat.
+	Click, then move along an edge · click to fasten a point · {alt}-click for a straight segment · double-click to close	Klikk, og beveg langs en kant · klikk for å feste et punkt · {alt}-klikk for et rett segment · dobbeltklikk for å lukke
+	Click: corner · Drag: smooth · Click first point: close · {key} finish · Esc cancel	Klikk: hjørne · Dra: jevn · Klikk første punkt: lukk · {key} fullfør · Esc avbryt
+	Click: corner · Drag: smooth · Click first point: close · ↩ finish · Esc cancel	Klikk: hjørne · Dra: jevn · Klikk første punkt: lukk · ↩ fullfør · Esc avbryt
+	Click: corner · Drag: smooth · {alt}-drag: break handle · Click or drag first point: close · {key} finish · Esc cancel	Klikk: hjørne · Dra: jevn · {alt}-dra: bryt håndtak · Klikk eller dra første punkt: lukk · {key} fullfør · Esc avbryt
+	Click: select anchor · Drag: move anchor, handle or segment · {shift}-click: add · {alt}-click: whole subpath	Klikk: velg anker · Dra: flytt anker, håndtak eller segment · {shift}-klikk: legg til · {alt}-klikk: hele underbanen
+	Click: smooth point · Double-click: corner · Drag a point: move · Click first point: close · {key} finish	Klikk: jevnt punkt · Dobbeltklikk: hjørne · Dra et punkt: flytt · Klikk første punkt: lukk · {key} fullfør
+	Clip Thumbnails to Layer Bounds	Klipp miniatyrbilder til laggrensene
+	Clip thumbnails to layer bounds	Klipp miniatyrbilder til laggrensene
+	Clip to layer below	Klipp til laget under
 	Clipboard	Utklippstavle
+	Clipped	Klippet
+	Clipping Mask	Klippemaske
+	Clipping Path	Klippebane
+	Clipping Path…	Klippebane…
+	Clone	Klon
 	Clone Source	Klon kilde
+	Clone Stamp	Klonestempel
+	Clone Stamp Tool	Klonestempel-verktøy
+	Clone source set at {x}, {y}	Klon kilde angitt ved {x}, {y}
+	Clone source {n} ({key}-click with Clone Stamp to set)	Klon kilde {n} ({key}-klikk med klonestempel for å angi)
 	Close	Lukk
 	Close All	Lukk alle
 	Close Others	Lukk andre
+	Close Panel	Lukk panel
+	Close Style Options	Lukk stilvalg
+	Close Tab Group	Lukk fanegruppe
+	Close Window	Lukk vindu
 	Clouds	Skyer
+	Clumped	Klumpet
+	Cmd	Cmd
+	Cmyk	CMYK
+	Coarse Dots	Grove prikker
+	Coated CMYK	Belagt CMYK
+	Coated-cmyk	Belagt CMYK
+	Coerce to sRGB	Tving til sRGB
+	Collapse	Slå sammen
+	Collapse All Groups	Slå sammen alle grupper
+	Collapse Panel Group	Slå sammen panelgruppe
+	Collapse group  ({key}-click: all groups)	Slå sammen gruppe  ({key}-klikk: alle grupper)
+	Collapse group  (⌥-click: all groups)	Slå sammen gruppe  (⌥-klikk: alle grupper)
 	Color	Farge
+	Color & Swatches	Farge og fargeprøver
+	Color Adaptation	Fargetilpasning
+	Color Balance	Fargebalanse
 	Color Balance…	Fargebalanse…
 	Color Blindness — Deuteranopia-type	Fargeblindhet — deuteranopi-type
 	Color Blindness — Protanopia-type	Fargeblindhet — protanopi-type
+	Color Burn	Fargebrent
+	Color Burn (Paint.NET)	Fargebrent (Paint.NET)
+	Color Decontaminate	Fjern fargeforurensning
 	Color Decontaminate…	Fjern fargeforurensning…
+	Color Detail	Fargedetalj
+	Color Dodge	Farge utvisket
+	Color Dodge (Paint.NET)	Farge utvisket (Paint.NET)
+	Color Dynamics	Fargedynamikk
+	Color Grading	Fargegradering
+	Color Halftone	Fargehalvtone
 	Color Halftone…	Fargehalvtone…
+	Color Indicates Masked Areas	Farge angir maskerte områder
+	Color Indicates Selected Areas	Farge angir valgte områder
+	Color Indicates:	Farge angir:
+	Color Lookup	Fargeoppslag
+	Color Lookup Tables	Fargeoppslagstabeller
 	Color Lookup Tables…	Fargeoppslagstabeller…
 	Color Lookup…	Fargeoppslag…
+	Color Management	Fargestyring
+	Color Management Policies	Retningslinjer for fargestyring
+	Color Mixer	Fargemikser
+	Color Mode	Fargemodus
+	Color Noise Reduction	Fargestøyreduksjon
+	Color Overlay	Fargeoverlegg
 	Color Overlay…	Fargeoverlegg…
+	Color Picker	Fargevelger
+	Color Picker (Background Color)	Fargevelger (bakgrunnsfarge)
+	Color Picker (Crop Shield Color)	Fargevelger (beskjæringsslørfarge)
+	Color Picker (Custom Canvas Color)	Fargevelger (egendefinert lerretfarge)
+	Color Picker (Fill Color)	Fargevelger (fyllfarge)
+	Color Picker (Foreground Color)	Fargevelger (forgrunnsfarge)
+	Color Picker (Layer Style Color)	Fargevelger (lagstilfarge)
+	Color Picker (Solid Color)	Fargevelger (ensfarget)
+	Color Picker (Stroke Color)	Fargevelger (konturfarge)
+	Color Picker (Text Color)	Fargevelger (tekstfarge)
+	Color Picker ({name})	Fargevelger ({name})
+	Color Priority	Fargeprioritet
+	Color Profile	Fargeprofil
+	Color Range	Fargeområde
+	Color Range preview	Forhåndsvisning av fargeområde
 	Color Range…	Fargeområde…
+	Color Replacement	Fargeerstatning
+	Color Replacement Tool	Fargeerstatningsverktøy
+	Color Sampler Tool	Fargemålingsverktøy
+	Color Settings	Fargeinnstillinger
 	Color Settings…	Fargeinnstillinger…
+	Color Swatches	Fargeprøver
+	Color Table	Fargetabell
 	Color Table…	Fargetabell…
+	Color indicates	Farge angir
+	Color management: {error}	Fargestyring: {error}
+	Color picker	Fargevelger
+	Color space	Fargerom
+	Color to Alpha…	Farge til alfa…
+	Color:	Farge:
+	ColorMatch RGB	ColorMatch RGB
+	ColorSync	ColorSync
+	Colored Pencil	Fargeblyant
+	Colorize	Fargesett
+	Colors	Farger
+	Color…	Farge…
+	Columns	Kolonner
 	Combine Shapes	Kombiner former
 	Conditional Mode Change…	Betinget modusbytte…
 	Consolidate All to Tabs	Samle alle i faner
@@ -914,3 +1153,94 @@
 	auto	auto
 	blue	blå
 	{added}, {removed} subtracted	{added}, {removed} trukket fra
+	✓ Color Indicates Masked Areas	✓ Farge angir maskerte områder
+	✓ Color Indicates Selected Areas	✓ Farge angir valgte områder
+cameraData	Date Taken	Tatt
+cameraData	Exposure	Eksponering
+cameraData	F-Stop	Blenderåpning
+cameraData	Focal Length	Brennvidde
+cameraData	Focal Length (35 mm)	Brennvidde (35 mm)
+cameraData	ISO Speed	ISO-hastighet
+cameraData	Lens	Objektiv
+cameraData	Make	Merke
+cameraData	Model	Modell
+cameraRaw	Amount	Mengde
+cameraRaw	Aqua	Akva
+cameraRaw	Balance	Balanse
+cameraRaw	Before (Y)	Før (Y)
+cameraRaw	Blacks	Svarte
+cameraRaw	Blending	Blanding
+cameraRaw	Blue	Blå
+cameraRaw	Camera Raw ({name})	Camera Raw ({name})
+cameraRaw	Camera Raw Filter ({layer})	Camera Raw-filter ({layer})
+cameraRaw	Camera Raw isn't open	Camera Raw er ikke åpen
+cameraRaw	Cancel	Avbryt
+cameraRaw	Cancelled opening {name}	Avbrøt åpning av {name}
+cameraRaw	Cancelled {label}	Avbrøt {label}
+cameraRaw	Clarity	Klarhet
+cameraRaw	Color	Farge
+cameraRaw	Color Detail	Fargedetalj
+cameraRaw	Color Grading	Fargegradering
+cameraRaw	Color Mixer	Fargemikser
+cameraRaw	Color Priority	Fargeprioritet
+cameraRaw	Contrast	Kontrast
+cameraRaw	Curve	Kurve
+cameraRaw	Darks	Mørke
+cameraRaw	Dehaze	Fjern dis
+cameraRaw	Detail	Detalj
+cameraRaw	Developing {name}	Fremkaller {name}
+cameraRaw	Effects	Effekter
+cameraRaw	Exposure	Eksponering
+cameraRaw	Feather	Myk kant
+cameraRaw	Full-resolution preview unavailable	Forhåndsvisning i full oppløsning er utilgjengelig
+cameraRaw	Global	Global
+cameraRaw	Grain	Korn
+cameraRaw	Green	Grønn
+cameraRaw	Highlight Clipping Warning (O)	Varsel om klipping av høylys (O)
+cameraRaw	Highlight Priority	Høylysprioritet
+cameraRaw	Highlights	Høylys
+cameraRaw	Hue	Fargetone
+cameraRaw	Light	Lys
+cameraRaw	Lights	Lyse partier
+cameraRaw	Load Settings…	Last inn innstillinger…
+cameraRaw	Load settings from a Camera Raw .xmp file	Last inn innstillinger fra en Camera Raw .xmp-fil
+cameraRaw	Loaded Camera Raw settings from {file}	Lastet Camera Raw-innstillinger fra {file}
+cameraRaw	Luminance	Luminans
+cameraRaw	Luminance Detail	Luminansdetalj
+cameraRaw	Magenta	Magenta
+cameraRaw	Masking	Maskering
+cameraRaw	Midpoint	Midtpunkt
+cameraRaw	Midtones	Mellomtoner
+cameraRaw	Noise Reduction	Støyreduksjon
+cameraRaw	OK	OK
+cameraRaw	Open	Åpne
+cameraRaw	Opened {name}	Åpnet {name}
+cameraRaw	Orange	Oransje
+cameraRaw	Paint Overlay	Mal overlegg
+cameraRaw	Purple	Lilla
+cameraRaw	Radius	Radius
+cameraRaw	Red	Rød
+cameraRaw	Roughness	Ruhet
+cameraRaw	Roundness	Rundhet
+cameraRaw	Saturation	Metting
+cameraRaw	Save Settings…	Lagre innstillinger…
+cameraRaw	Save these settings as a Camera Raw .xmp file	Lagre disse innstillingene som en Camera Raw .xmp-fil
+cameraRaw	Shadow Clipping Warning (U)	Varsel om klipping av skygger (U)
+cameraRaw	Shadows	Skygger
+cameraRaw	Sharpening	Skjerping
+cameraRaw	Show Lab Color Readouts	Vis Lab-fargeavlesninger
+cameraRaw	Show Red at 3 o'clock	Vis rød kl. 3
+cameraRaw	Show Selected Region	Vis valgt område
+cameraRaw	Show Skin Tone Indicator	Vis indikator for hudtone
+cameraRaw	Show Vectorscope	Vis vektorskop
+cameraRaw	Size	Størrelse
+cameraRaw	Temperature	Temperatur
+cameraRaw	Texture	Tekstur
+cameraRaw	Tint	Fargetone
+cameraRaw	Tone Histogram	Tonehistogram
+cameraRaw	Vibrance	Livfullhet
+cameraRaw	Vignetting	Vinjettering
+cameraRaw	White Balance: As Shot	Hvitbalanse: som tatt
+cameraRaw	Whites	Hvite
+cameraRaw	Yellow	Gul
+colorRange	Invert	Inverter
