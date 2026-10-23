@@ -19,37 +19,36 @@ fn every_compositor_pipeline_builds() {
     // `InstanceFlags::DEBUG` (the debug-build default) makes wgpu pass `D3DCOMPILE_DEBUG |
     // D3DCOMPILE_SKIP_OPTIMIZATION`, and FXC then accepts what it rejects in a release build, so
     // the flags are cleared here: a release build is what ships.
-    let mut fxc = wgpu::InstanceDescriptor {
-        backends: wgpu::Backends::DX12,
-        flags: wgpu::InstanceFlags::empty(),
-        ..wgpu::InstanceDescriptor::new_without_display_handle()
+    let describe = |backends: wgpu::Backends, compiler: wgpu::Dx12Compiler| {
+        let mut desc = wgpu::InstanceDescriptor { backends, flags: wgpu::InstanceFlags::empty(), ..wgpu::InstanceDescriptor::new_without_display_handle() };
+        desc.backend_options.dx12.shader_compiler = compiler;
+        desc
     };
-    fxc.backend_options.dx12.shader_compiler = wgpu::Dx12Compiler::Fxc;
-    let every = wgpu::InstanceDescriptor {
-        backends: wgpu::Backends::all(),
-        flags: wgpu::InstanceFlags::empty(),
-        ..wgpu::InstanceDescriptor::new_without_display_handle()
-    };
-    for desc in [fxc, every] {
-        let instance = wgpu::Instance::new(desc);
-        // The Windows runners always have an adapter (WARP over DX12), so a missing one there means
-        // the check this test exists for silently did not run. Elsewhere it is a plain skip.
-        let Ok(adapter) = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default())) else {
-            #[cfg(not(windows))]
-            continue;
-            #[cfg(windows)]
-            panic!("no adapter on Windows: the DX12/FXC pipeline check did not run");
-        };
-        let Ok((device, _queue)) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())) else {
-            #[cfg(not(windows))]
-            continue;
-            #[cfg(windows)]
-            panic!("no device on Windows: the DX12/FXC pipeline check did not run");
-        };
-        let info = adapter.get_info();
-        let format = photocraft_gpu::Compositor::preferred_acc_format(&adapter);
-        if let Err(e) = photocraft_gpu::Compositor::try_new_with_format(&device, format) {
-            panic!("{:?} adapter {} (driver {}): {e}", info.backend, info.name, info.driver_info);
+    // One instance per backend: `Backends::all()` only enables the others on one instance, and
+    // `request_adapter` then returns the single default adapter, so the other backends' own
+    // translation went untested. One adapter per backend keeps a second, unrelated adapter of the
+    // same backend (a dual-GPU laptop's integrated GPU) out of the run.
+    for (backends, compiler) in [(wgpu::Backends::DX12, wgpu::Dx12Compiler::Fxc), (wgpu::Backends::all(), wgpu::Dx12Compiler::Auto)] {
+        for backend in backends.iter() {
+            let instance = wgpu::Instance::new(describe(backend, compiler.clone()));
+            // The Windows runners always have a WARP adapter on DX12, so a missing one there means
+            // the check this test exists for silently did not run. Any other backend is a plain
+            // skip: `Backends::all()` also names backends this platform does not provide.
+            let Ok(adapter) = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default())) else {
+                #[cfg(windows)]
+                assert!(backend != wgpu::Backends::DX12, "no adapter on Windows: the DX12/FXC pipeline check did not run");
+                continue;
+            };
+            let Ok((device, _queue)) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())) else {
+                #[cfg(windows)]
+                assert!(backend != wgpu::Backends::DX12, "no device on Windows: the DX12/FXC pipeline check did not run");
+                continue;
+            };
+            let info = adapter.get_info();
+            let format = photocraft_gpu::Compositor::preferred_acc_format(&adapter);
+            if let Err(e) = photocraft_gpu::Compositor::try_new_with_format(&device, format) {
+                panic!("{:?} adapter {} (driver {}): {e}", info.backend, info.name, info.driver_info);
+            }
         }
     }
 }
