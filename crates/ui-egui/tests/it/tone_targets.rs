@@ -284,6 +284,9 @@ fn action_dialog(mode: ColorMode, target: Value, panel: ChannelTarget, kind: &st
     // grayscale target. Those records must not leak back into the dialog after normalization.
     let mut recorded = photocraft_engine::adjust_params::to_params(&photocraft_engine::adjust_params::default_for(kind, mode).unwrap());
     recorded["target"] = target;
+    for key in ["red", "green", "blue"] {
+        recorded[key] = if kind == "levels" { json!({"gamma": 4}) } else { json!([[0, 255], [255, 255]]) };
+    }
     app.run(&format!("image.adjustments.{kind}"), recorded).unwrap();
     app.run("actions.stop", json!({})).unwrap();
     app.run("actions.dialog", json!({"action": "Tone step", "step": 0, "enabled": true})).unwrap();
@@ -302,6 +305,10 @@ fn action_dialog_uses_recorded_alpha_instead_of_current_red_channel() {
             let mut h = action_dialog(mode, json!({"channel": 0}), ChannelTarget::Color(0), kind);
             assert_eq!(names(&h), ["Saved sky"]);
             assert_eq!(params(&h)["target"], json!({"channel": 0}));
+            let neutral = photocraft_engine::adjust_params::to_params(&photocraft_engine::adjust_params::default_for(kind, ColorMode::Grayscale).unwrap());
+            for key in ["red", "green", "blue"] {
+                assert_eq!(params(&h)[key], neutral[key], "hidden {key} starts neutral");
+            }
             for key in ["cyan", "black", "lightness", "a", "b"] {
                 assert!(params(&h).get(key).is_none());
             }
@@ -371,6 +378,9 @@ fn explicit_channel_action_uses_channel_preview_even_with_composite_selected() {
 fn explicit_pixels_action_bypasses_current_alpha_target() {
     let mut h = action_dialog(ColorMode::Rgb, json!("pixels"), ChannelTarget::Alpha(0), "curves");
     assert_eq!(names(&h), ["RGB"]);
+    for key in ["red", "green", "blue"] {
+        assert_eq!(params(&h)[key], json!([[0, 255], [255, 255]]), "pixel targets retain their recorded {key} curve");
+    }
     h.get_by_label("Set White Point").click();
     h.run_steps(2);
     assert!(adjust_dialog::sample_at(h.state_mut(), 8.0, 8.0));
@@ -430,4 +440,58 @@ fn missing_explicit_channel_cannot_preview_as_a_colour_layer() {
     assert!(dialogs::confirm(h.state_mut(), id).is_err());
     assert_eq!(h.state().session.active().unwrap().doc.channels, original.channels);
     assert_eq!(h.state().session.active().unwrap().doc.layers, original.layers);
+}
+
+/// A recorded `gray` alias must seed editable composite controls, rather than override them invisibly.
+#[test]
+fn scalar_action_gray_alias_seeds_the_visible_controls() {
+    for kind in ["levels", "curves"] {
+        let mut app = fixture(ColorMode::Lab, SampleType::U8, ChannelTarget::Color(0));
+        let gray = if kind == "levels" { json!({"gamma":2}) } else { json!([[0, 255], [255, 0]]) };
+        let mut action = photocraft_engine::actions_cmds::Action::new(
+            "Gray alias",
+            vec![(format!("image.adjustments.{kind}"), json!({"target":{"channel":0},"gray":gray}))],
+        );
+        action.dialogs.insert(0);
+        app.session.actions.list.push(action);
+        let mut h = harness(app);
+        h.state_mut().run("actions.play", json!({"action":"Gray alias"})).unwrap();
+        h.run_steps(4);
+        assert_eq!(names(&h), ["Saved sky"]);
+        let id = h.state().ui.dialogs.last().unwrap().id;
+        if kind == "levels" {
+            assert_eq!(params(&h)["gamma"].as_f64(), Some(2.0), "the visible gamma agrees with the recorded gray gamma");
+            edit_gamma(&mut h, "1.0");
+        } else {
+            assert_eq!(params(&h)["points"], json!([[0.0, 255.0], [255.0, 0.0]]), "the visible curve is the recorded gray curve");
+            h.state_mut().ui.dialog_mut(id).unwrap().fields.insert("points".into(), json!([[0, 0], [255, 255]]));
+        }
+        assert!(params(&h).get("gray").is_none(), "a hidden alias must not override subsequent control edits");
+        let before = h.state().session.active().unwrap().doc.clone();
+        dialogs::confirm(h.state_mut(), id).unwrap();
+        assert!((value(h.state(), ChannelTarget::Alpha(0)) - 0.25).abs() < 0.005, "editing the visible controls back to neutral is effective");
+        assert_eq!(h.state().session.active().unwrap().doc.layers[0].content, before.layers[0].content);
+    }
+}
+
+/// Malformed aliases remain command errors; neutral dialog defaults must not conceal them.
+#[test]
+fn invalid_scalar_action_gray_alias_cannot_commit() {
+    for (kind, gray) in [("levels", json!({"gamma":"invalid"})), ("curves", json!("invalid")), ("curves", json!([[0, 0]]))] {
+        let mut app = fixture(ColorMode::Lab, SampleType::U8, ChannelTarget::Color(0));
+        let command = format!("image.adjustments.{kind}");
+        let mut action = photocraft_engine::actions_cmds::Action::new("Invalid alias", vec![(command.clone(), json!({"target":{"channel":0},"gray":gray}))]);
+        action.dialogs.insert(0);
+        app.session.actions.list.push(action);
+        let mut h = harness(app);
+        h.state_mut().run("actions.play", json!({"action":"Invalid alias"})).unwrap();
+        h.run_steps(4);
+        let original = h.state().session.active().unwrap().doc.clone();
+        let layer = h.state().session.active().unwrap().active_layer;
+        assert!(filter_dialog::preview_document(&original, layer, &command, &params(&h), 1).is_none());
+        let id = h.state().ui.dialogs.last().unwrap().id;
+        assert!(dialogs::confirm(h.state_mut(), id).is_err());
+        assert!(std::sync::Arc::ptr_eq(&original, &h.state().session.active().unwrap().doc));
+        assert!(h.state().ui.dialogs.is_empty());
+    }
 }

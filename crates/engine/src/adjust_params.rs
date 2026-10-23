@@ -69,14 +69,14 @@ pub fn default_for(kind: &str, mode: ColorMode) -> Result<Adjustment> {
     from_params(kind, &json!({}), None, mode)
 }
 
-/// Tone params for a gray plane target: the document-space channel records are dropped, because
-/// those keys select the Lab or CMYK tone space and a plane only holds levels (#5335).
+/// Tone params for a gray plane target: drop RGB, CMYK and Lab component records so only the
+/// composite (or `gray` alias) can affect the plane. Hidden colour curves must stay neutral (#5335).
 pub fn gray_tone_params(p: &Value) -> Value {
     match p {
         Value::Object(m) => {
             let mut o = Map::new();
             for (k, v) in m {
-                if !matches!(k.as_str(), "cyan" | "magenta" | "yellow" | "black" | "lightness" | "a" | "b") {
+                if !matches!(k.as_str(), "red" | "green" | "blue" | "cyan" | "magenta" | "yellow" | "black" | "lightness" | "a" | "b") {
                     o.insert(k.clone(), v.clone());
                 }
             }

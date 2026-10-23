@@ -309,17 +309,33 @@ fn open_fields(app: &mut PhotocraftApp, command: &str, mut fields: Map<String, V
     let spec = photocraft_engine::commands::find(command)?;
     let mode = curve_mode(app, kind, &fields);
     let defaults = photocraft_engine::adjust_params::default_for(kind, mode).ok()?;
-    let supplied = if matches!(kind, "levels" | "curves") && isolated(app, &fields).is_some_and(|c| c.gray.is_some()) {
+    let gray_target = matches!(kind, "levels" | "curves") && isolated(app, &fields).is_some_and(|c| c.gray.is_some());
+    let mut supplied = if gray_target {
         photocraft_engine::adjust_params::gray_tone_params(&Value::Object(std::mem::take(&mut fields))).as_object().cloned().unwrap_or_default()
     } else {
         std::mem::take(&mut fields)
     };
+    // Resolve a recorded gray alias before adding defaults: Levels' alias would otherwise
+    // override visible control edits, while Curves' default points would hide the alias entirely.
+    if gray_target
+        && supplied.contains_key("gray")
+        && let Ok(adjustment) = photocraft_engine::adjust_params::from_params(kind, &Value::Object(supplied.clone()), None, mode)
+        && let Value::Object(canonical) = photocraft_engine::adjust_params::to_params(&adjustment)
+    {
+        supplied.remove("gray");
+        supplied.extend(canonical);
+    }
     fields.insert("__command".into(), json!(command));
     fields.insert("__label".into(), json!(spec.label));
     fields.insert("__adjust".into(), json!(kind));
     fields.insert("__filter".into(), json!(true));
     fields.insert("__preview".into(), json!(true));
-    if let Value::Object(p) = photocraft_engine::adjust_params::to_params(&defaults) {
+    if let Value::Object(mut p) = photocraft_engine::adjust_params::to_params(&defaults) {
+        // An invalid gray alias must reach engine validation: seeded identity points would
+        // otherwise override it. Valid aliases were already canonicalized above.
+        if gray_target && kind == "curves" && supplied.get("gray").is_some_and(|v| !v.is_null()) && supplied.get("points").is_none_or(Value::is_null) {
+            p.remove("points");
+        }
         fields.extend(p);
     }
     fields.extend(supplied);

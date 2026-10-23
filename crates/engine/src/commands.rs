@@ -1447,7 +1447,7 @@ fn build() -> Vec<CommandSpec> {
                     Some(adj) => adj,
                     None => {
                         // A gray plane target keeps the neutral tone space even over params
-                        // carrying Lab or CMYK records (#5335).
+                        // carrying RGB, Lab or CMYK records (#5335).
                         let tone = if is_mask_target(p) || crate::channel_cmds::is_channel_target(p) {
                             if matches!(kind.as_str(), "levels" | "curves") { crate::adjust_params::gray_tone_params(p) } else { p.clone() }
                         } else {

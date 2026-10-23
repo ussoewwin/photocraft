@@ -228,3 +228,83 @@ fn bad_scalar_picker_params_fail_without_changing_pixels() {
         assert!(s.execute(&format!("image.adjustments.{kind}"), json!({"target":{"channel":999},"eyedropper":{"point":"white","at":[8,8]}})).is_err());
     }
 }
+
+/// Hidden RGB settings must never affect a gray plane, including pencil curves and sampled edits.
+#[test]
+fn gray_tone_records_do_not_leak_from_rgb_channels() {
+    for mode in [ColorMode::Rgb, ColorMode::Grayscale, ColorMode::Lab, ColorMode::Cmyk] {
+        for depth in [SampleType::U8, SampleType::U16, SampleType::F32] {
+            for (target, panel) in
+                [(json!("mask"), ChannelTarget::LayerMask), (json!({"channel":0}), ChannelTarget::Alpha(0)), (json!("quickMask"), ChannelTarget::Composite)]
+            {
+                for style in ["levels", "points", "pencil"] {
+                    for sampled in [false, true] {
+                        for explicit in [false, true] {
+                            let mut clean = session(mode, depth);
+                            clean.active_mut().unwrap().channel_view.target = panel;
+                            clean
+                                .edit("Vary gray samples", |doc, _| {
+                                    let patch = Rect::from_xywh(4, 4, 1, 1);
+                                    doc.layers[0].mask.as_mut().unwrap().surface.fill_rect(patch, &[0.125]);
+                                    doc.channels[0].surface.fill_rect(patch, &[0.125]);
+                                    doc.quick_mask.as_mut().unwrap().surface.fill_rect(patch, &[0.125]);
+                                    Ok(())
+                                })
+                                .unwrap();
+                            let before = clean.active().unwrap().doc.clone();
+                            let layer = clean.active().unwrap().active_layer.unwrap();
+                            let mut dirty = Session::new();
+                            dirty.add_document((*before).clone(), None);
+                            dirty.select_layer(layer).unwrap();
+                            dirty.active_mut().unwrap().channel_view.target = panel;
+                            let kind = if style == "levels" { "levels" } else { "curves" };
+                            let mut params = if kind == "levels" { json!({"gamma":2}) } else { json!({"points":[[0,255],[255,0]],"pencil":style == "pencil"}) };
+                            if explicit {
+                                params["target"] = target.clone();
+                            }
+                            if sampled {
+                                params["eyedropper"] = json!({"point":"white","at":[8,8]});
+                            }
+                            let mut contaminated = params.clone();
+                            for key in ["red", "green", "blue"] {
+                                contaminated[key] = if kind == "levels" {
+                                    json!({"gamma":4})
+                                } else if style == "pencil" {
+                                    json!(vec![255; 256])
+                                } else {
+                                    json!([[0, 255], [255, 255]])
+                                };
+                            }
+                            let command = format!("image.adjustments.{kind}");
+                            clean.execute(&command, params).unwrap();
+                            dirty.execute(&command, contaminated).unwrap();
+                            let expected = &clean.active().unwrap().doc;
+                            let actual = &dirty.active().unwrap().doc;
+                            assert!(plane(expected, &target) != plane(&before, &target), "the scalar adjustment really edits the plane");
+                            assert_eq!(
+                                plane(actual, &target).sample_channel(4, 4, 0),
+                                plane(expected, &target).sample_channel(4, 4, 0),
+                                "{mode:?} {depth:?} {target} {style} sampled={sampled} explicit={explicit}"
+                            );
+                            assert!(
+                                plane(actual, &target) == plane(expected, &target),
+                                "{mode:?} {depth:?} {target} {style} sampled={sampled} explicit={explicit}"
+                            );
+                            assert_eq!(actual.layers[0].content, before.layers[0].content);
+                            if target != json!("mask") {
+                                assert_eq!(actual.layers[0].mask, before.layers[0].mask);
+                            }
+                            if target != json!("quickMask") {
+                                assert_eq!(actual.quick_mask, before.quick_mask);
+                            }
+                            if target != json!({"channel":0}) {
+                                assert_eq!(actual.channels, before.channels);
+                            }
+                            assert_eq!(actual.channels[0].spot, before.channels[0].spot);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
