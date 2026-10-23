@@ -153,6 +153,15 @@ pub(crate) fn confirm(app: &mut PhotocraftApp, f: &Map<String, Value>) -> Result
     let color = picked(f).ok_or("not a colour")?;
     let rgba = [color.c[0], color.c[1], color.c[2], color.alpha];
     let which = which(f);
+    // A locked shape refuses the edit: check first, so the next shape's colour isn't changed either.
+    if let Some(layer) = layer
+        && app.session.active().is_some_and(|st| {
+            let locks = st.doc.effective_locks(layer);
+            locks.all || locks.pixels
+        })
+    {
+        return Err("shape layer is locked".into());
+    }
     if f.get("__params").and_then(|p| p.get("tool")).and_then(Value::as_bool) == Some(true) {
         crate::vector_ui::set_tool_paint(app, which == Paint::Stroke, crate::paint_picker::PaintChange::Color(rgba))?;
     }

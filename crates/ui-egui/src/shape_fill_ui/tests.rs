@@ -134,3 +134,25 @@ fn tool_only_picker_sets_the_next_shapes_colour() {
     assert_eq!(color_picker_ui::hex([app.session.tools.foreground[0], app.session.tools.foreground[1], app.session.tools.foreground[2]]), "#ff8800");
     assert_eq!(app.session.active().unwrap().history.past_len(), history);
 }
+
+/// A locked selected shape refuses the options bar's Color Picker before anything changes: the
+/// next shape's colour stays as it was, as does the document.
+#[test]
+fn locked_shape_refuses_the_options_bar_picker_without_changing_the_next_shapes_colour() {
+    for lock in ["all", "pixels"] {
+        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", json!({"width": 64, "height": 48})).unwrap();
+        let id = LayerId(app.run("shape.create", json!({"rect": [8, 8, 40, 30], "fill": "#336699"})).unwrap()["layer"].as_u64().unwrap());
+        app.run("layer.lockLayers", json!({lock: true})).unwrap();
+        let (fg, options) = (app.session.tools.foreground, app.ui.tool_options.clone());
+        let history = app.session.active().unwrap().history.past_len();
+        let dialog = open_paint(&mut app, Paint::Fill, Some(id), true, fg).unwrap();
+        app.ui.dialog_mut(dialog).unwrap().fields.insert("color".into(), json!("#ff8800"));
+        let f = app.ui.dialog_mut(dialog).unwrap().fields.clone();
+        assert_eq!(confirm(&mut app, &f).unwrap_err(), "shape layer is locked", "{lock}");
+        assert_eq!(app.session.tools.foreground, fg, "{lock}: the next shape's colour is unchanged");
+        assert_eq!(app.ui.tool_options, options);
+        assert_eq!(app.session.active().unwrap().history.past_len(), history);
+        assert_eq!(fill(&app, id), Some(Fill::Solid(Color::rgb(0.2, 0.4, 0.6))));
+    }
+}
