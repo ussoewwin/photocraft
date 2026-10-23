@@ -16,6 +16,7 @@ const GRAY_TARGET_MODES: [ColorMode; 4] = [ColorMode::Rgb, ColorMode::Cmyk, Colo
 const DEPTHS: [SampleType; 3] = [SampleType::U8, SampleType::U16, SampleType::F32];
 const TARGETS: [ChannelTarget; 3] = [ChannelTarget::Alpha(0), ChannelTarget::LayerMask, ChannelTarget::Composite];
 
+/// Build a native-depth document with distinct colour pixels, a named alpha, a layer mask and optional Quick Mask.
 fn fixture(mode: ColorMode, depth: SampleType, target: ChannelTarget) -> PhotocraftApp {
     let mut doc = Document::new("Tone targets", Size::new(32, 32), mode, depth);
     let mut pixels = Surface::new(PixelFormat::new(mode, depth, true));
@@ -47,6 +48,7 @@ fn fixture(mode: ColorMode, depth: SampleType, target: ChannelTarget) -> Photocr
     app
 }
 
+/// Read a representative sample from the fixture’s selected scalar plane.
 fn value(app: &PhotocraftApp, target: ChannelTarget) -> f32 {
     let doc = &app.session.active().unwrap().doc;
     match target {
@@ -57,12 +59,14 @@ fn value(app: &PhotocraftApp, target: ChannelTarget) -> f32 {
     }
 }
 
+/// Render real modal controls with accessibility enabled for input-driven assertions.
 fn harness(app: PhotocraftApp) -> Harness<'static, PhotocraftApp> {
     let h = Harness::builder().with_size(egui::vec2(1200.0, 900.0)).build_ui_state(|ui, app| dialogs::show(app, ui.ctx()), app);
     PhotocraftApp::setup_context(&h.ctx, Default::default());
     h
 }
 
+/// Open a neutral tone dialog and settle its layout before interacting with controls.
 fn open(app: PhotocraftApp, kind: &str) -> Harness<'static, PhotocraftApp> {
     let mut h = harness(app);
     adjust_dialog::open(h.state_mut(), &format!("image.adjustments.{kind}")).unwrap();
@@ -70,14 +74,17 @@ fn open(app: PhotocraftApp, kind: &str) -> Harness<'static, PhotocraftApp> {
     h
 }
 
+/// Extract only the public command parameters from the top modal.
 fn params(h: &Harness<'static, PhotocraftApp>) -> Value {
     filter_dialog::params_of(&h.state().ui.dialogs.last().unwrap().fields)
 }
 
+/// Read the visible selected labels of the dialog’s channel dropdowns.
 fn names(h: &Harness<'static, PhotocraftApp>) -> Vec<String> {
     h.query_all_by_role(egui::accesskit::Role::ComboBox).filter_map(|n| n.value()).collect()
 }
 
+/// Type into the actual Levels gamma control and blur it to commit the value.
 fn edit_gamma(h: &mut Harness<'static, PhotocraftApp>, gamma: &str) {
     h.query_all_by_role(egui::accesskit::Role::SpinButton).nth(1).unwrap().click();
     h.run_steps(2);
@@ -89,6 +96,7 @@ fn edit_gamma(h: &mut Harness<'static, PhotocraftApp>, gamma: &str) {
     h.run_steps(2);
 }
 
+/// Real Levels gamma edits affect the named scalar target and agree with preview, commit and undo.
 #[test]
 fn levels_gray_target_controls_change_the_target_in_every_mode_and_depth() {
     for mode in GRAY_TARGET_MODES {
@@ -123,6 +131,7 @@ fn levels_gray_target_controls_change_the_target_in_every_mode_and_depth() {
     }
 }
 
+/// Each RGB/CMYK/Lab component exposes only its own Levels record and preserves other components.
 #[test]
 fn levels_isolates_each_colour_channel_and_edits_its_matching_record() {
     for mode in MODES {
@@ -173,6 +182,7 @@ fn levels_isolates_each_colour_channel_and_edits_its_matching_record() {
     }
 }
 
+/// Spot names stay literal and Layers-panel mask targeting exposes the same named gray controls.
 #[test]
 fn levels_uses_literal_spot_name_and_layers_panel_mask_name() {
     for mode in GRAY_TARGET_MODES {
@@ -202,6 +212,7 @@ fn levels_uses_literal_spot_name_and_layers_panel_mask_name() {
     }
 }
 
+/// Levels Auto derives endpoints from the selected component’s histogram rather than the composite.
 #[test]
 fn levels_auto_uses_the_selected_colour_channels_histogram() {
     let mut app = fixture(ColorMode::Rgb, SampleType::U8, ChannelTarget::Color(1));
@@ -226,6 +237,7 @@ fn levels_auto_uses_the_selected_colour_channels_histogram() {
     }
 }
 
+/// Black/white picker controls sample the gray plane and update the visible neutral curve.
 #[test]
 fn grayscale_picker_controls_sample_the_plane_and_change_the_visible_curve() {
     for kind in ["curves", "levels"] {
@@ -264,6 +276,7 @@ fn grayscale_picker_controls_sample_the_plane_and_change_the_visible_curve() {
     }
 }
 
+/// Replay a recorded tone step with its dialog enabled while a different channel is selected.
 fn action_dialog(mode: ColorMode, target: Value, panel: ChannelTarget, kind: &str) -> Harness<'static, PhotocraftApp> {
     let mut app = fixture(mode, SampleType::U8, panel);
     app.run("actions.record", json!({"name": "Tone step"})).unwrap();
@@ -281,6 +294,7 @@ fn action_dialog(mode: ColorMode, target: Value, panel: ChannelTarget, kind: &st
     h
 }
 
+/// A recorded alpha target overrides a currently selected colour component in controls and commit.
 #[test]
 fn action_dialog_uses_recorded_alpha_instead_of_current_red_channel() {
     for mode in MODES {
@@ -307,6 +321,7 @@ fn action_dialog_uses_recorded_alpha_instead_of_current_red_channel() {
     }
 }
 
+/// Reset, pencil conversion and sampling retain an Action’s explicit mask target.
 #[test]
 fn action_mask_target_survives_reset_pencil_and_picker() {
     for kind in ["curves", "levels"] {
@@ -335,6 +350,7 @@ fn action_mask_target_survives_reset_pencil_and_picker() {
     }
 }
 
+/// Explicit scalar Action parameters use the channel preview path independently of panel state.
 #[test]
 fn explicit_channel_action_uses_channel_preview_even_with_composite_selected() {
     let mut h = action_dialog(ColorMode::Rgb, json!({"channel":0}), ChannelTarget::Color(0), "curves");
@@ -350,6 +366,7 @@ fn explicit_channel_action_uses_channel_preview_even_with_composite_selected() {
     assert_eq!(preview.layers, h.state().session.active().unwrap().doc.layers);
 }
 
+/// An explicit pixels Action keeps colour controls and edits pixels while an alpha is selected.
 #[test]
 fn explicit_pixels_action_bypasses_current_alpha_target() {
     let mut h = action_dialog(ColorMode::Rgb, json!("pixels"), ChannelTarget::Alpha(0), "curves");
@@ -364,6 +381,7 @@ fn explicit_pixels_action_bypasses_current_alpha_target() {
     assert_eq!(h.state().session.active().unwrap().doc.channels, before);
 }
 
+/// Rejected samples and Cancel leave all committed document data and history unchanged.
 #[test]
 fn invalid_grayscale_sample_and_cancel_preserve_the_document() {
     let mut h = open(fixture(ColorMode::Lab, SampleType::F32, ChannelTarget::Alpha(0)), "curves");
@@ -384,6 +402,7 @@ fn invalid_grayscale_sample_and_cancel_preserve_the_document() {
     assert!(std::sync::Arc::ptr_eq(&original, &h.state().session.active().unwrap().doc));
 }
 
+/// Reset discards the armed picker’s saved curve so the next sample uses neutral settings.
 #[test]
 fn resetting_an_armed_picker_does_not_restore_its_old_curve() {
     let mut h = open(fixture(ColorMode::Rgb, SampleType::U8, ChannelTarget::Alpha(0)), "curves");
@@ -399,6 +418,7 @@ fn resetting_an_armed_picker_does_not_restore_its_old_curve() {
     assert_eq!(params(&h)["points"][0][1], 0.0);
 }
 
+/// A deleted explicit channel fails preview and commit instead of falling back to colour pixels.
 #[test]
 fn missing_explicit_channel_cannot_preview_as_a_colour_layer() {
     let mut h = open(fixture(ColorMode::Rgb, SampleType::U8, ChannelTarget::Color(0)), "curves");

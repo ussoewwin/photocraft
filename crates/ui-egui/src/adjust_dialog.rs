@@ -184,7 +184,7 @@ pub fn add_point_at(app: &mut PhotocraftApp, ctx: &egui::Context, x: f64, y: f64
         && let Some(dialog) = app.ui.dialog_mut(id)
         && let Value::Object(v) = values
     {
-        dialog.fields.retain(|k, _| k.starts_with("__"));
+        keep_context(&mut dialog.fields);
         dialog.fields.extend(v);
         if picker(dialog.fields.get(CURVE_PICKER)).is_some() {
             let base = crate::filter_dialog::params_of(&dialog.fields);
@@ -290,10 +290,23 @@ pub fn open(app: &mut PhotocraftApp, command: &str) -> Option<u64> {
 /// Seed an Action's dialog only after resolving its recorded target, so document-space
 /// defaults cannot overwrite the target's neutral grayscale values.
 pub(crate) fn open_with_params(app: &mut PhotocraftApp, command: &str, params: &Value) -> Option<u64> {
+    let params = app.with_mask_target(command, params.clone());
+    open_fields(app, command, params.as_object().cloned().unwrap_or_default())
+}
+
+/// Reopen a captured Smart Filter with document-colour defaults, independent of channel targeting.
+/// Only the caller's validated snapshot may supply the private Smart Filter marker.
+pub(crate) fn open_smart_filter(app: &mut PhotocraftApp, command: &str, params: &Value, target: Value) -> Option<u64> {
+    let mut fields = params.as_object().cloned().unwrap_or_default();
+    fields.retain(|key, _| !key.starts_with("__"));
+    fields.insert("__smartFilter".into(), target);
+    open_fields(app, command, fields)
+}
+
+/// Merge target-aware defaults with supplied parameters while preserving trusted modal metadata.
+fn open_fields(app: &mut PhotocraftApp, command: &str, mut fields: Map<String, Value>) -> Option<u64> {
     let kind = command.strip_prefix(PREFIX).filter(|k| adjust_editors::has_editor(k))?;
     let spec = photocraft_engine::commands::find(command)?;
-    let params = app.with_mask_target(command, params.clone());
-    let mut fields = params.as_object().cloned().unwrap_or_default();
     let mode = curve_mode(app, kind, &fields);
     let defaults = photocraft_engine::adjust_params::default_for(kind, mode).ok()?;
     let supplied = if matches!(kind, "levels" | "curves") && isolated(app, &fields).is_some_and(|c| c.gray.is_some()) {
@@ -313,14 +326,18 @@ pub(crate) fn open_with_params(app: &mut PhotocraftApp, command: &str, params: &
     Some(app.ui.open_dialog(crate::state::DialogKind::Command, fields))
 }
 
-/// The Curves dialog's single-channel target: the Channels panel's, plus the Layers panel's mask
-/// selection — both ways of selecting a mask must give the same dropdown (#5335).
+/// The Levels/Curves dialog's single-channel target from either panel or explicit parameters.
+/// Re-editing a captured Smart Filter always exposes its document-colour controls.
 fn isolated(app: &PhotocraftApp, fields: &Map<String, Value>) -> Option<photocraft_engine::channel_cmds::IsolatedCurveChannel> {
+    if fields.contains_key("__smartFilter") {
+        return None;
+    }
     let mask = app.layer_mask_targeted();
     let params = fields.get("target").map_or(Value::Null, |target| json!({"target": target}));
     app.session.active().and_then(|st| photocraft_engine::channel_cmds::isolated_curve_channel_with_params(st, mask, &params))
 }
 
+/// Retain modal metadata and explicit command addressing when replacing adjustment parameters.
 fn keep_context(fields: &mut Map<String, Value>) {
     fields.retain(|key, _| key.starts_with("__") || matches!(key.as_str(), "target" | "layer" | "document"));
 }
@@ -1157,6 +1174,7 @@ mod tests {
         assert!(names.iter().any(|n| n == "Verde"), "built-in labels follow the language: {names:?}");
     }
 
+    /// Levels translates built-in channel labels while preserving a user-defined identical name verbatim.
     #[test]
     fn levels_channel_popup_keeps_custom_names_verbatim_in_italian() {
         let it = crate::i18n::Lang::from_code("it").expect("it registered");

@@ -6,6 +6,7 @@ use photocraft_geom::{Rect, Size};
 use photocraft_raster::Surface;
 use serde_json::{Value, json};
 
+/// Build native-depth colour pixels and three independent gray targets with contrasting samples.
 fn session(mode: ColorMode, depth: SampleType) -> Session {
     let mut doc = Document::new("Target picker", Size::new(32, 32), mode, depth);
     let mut pixels = Surface::new(PixelFormat::new(mode, depth, true));
@@ -29,6 +30,7 @@ fn session(mode: ColorMode, depth: SampleType) -> Session {
     s
 }
 
+/// Read the explicitly addressed gray plane for before/after pixel comparisons.
 fn plane<'a>(doc: &'a Document, target: &Value) -> &'a Surface {
     match target.as_str() {
         Some("mask") => &doc.layers[0].mask.as_ref().unwrap().surface,
@@ -37,6 +39,7 @@ fn plane<'a>(doc: &'a Document, target: &Value) -> &'a Surface {
     }
 }
 
+/// Black/white pickers edit only their gray target across colour modes and native depths, including undo/redo.
 #[test]
 fn native_gray_pickers_ignore_document_colour_and_preserve_other_data() {
     for mode in [ColorMode::Rgb, ColorMode::Grayscale, ColorMode::Lab, ColorMode::Cmyk] {
@@ -76,6 +79,7 @@ fn native_gray_pickers_ignore_document_colour_and_preserve_other_data() {
     }
 }
 
+/// Picker averaging quantizes in the target format and clips its sample square to the canvas.
 #[test]
 fn gray_picker_averages_the_plane_at_native_depth_and_clips_at_canvas_edges() {
     for depth in [SampleType::U8, SampleType::U16, SampleType::F32] {
@@ -95,6 +99,7 @@ fn gray_picker_averages_the_plane_at_native_depth_and_clips_at_canvas_edges() {
     }
 }
 
+/// Unstored mask values remain sampleable even when the colour layer is fully transparent.
 #[test]
 fn scalar_picker_reads_unstored_mask_defaults_and_ignores_colour_transparency() {
     let mut s = session(ColorMode::Cmyk, SampleType::F32);
@@ -111,6 +116,7 @@ fn scalar_picker_reads_unstored_mask_defaults_and_ignores_colour_transparency() 
     assert!((adjust_params::to_params(&a)["inWhite"].as_f64().unwrap() - 153.0).abs() < 0.01);
 }
 
+/// Moved sparse masks sample stored pixels and defaults at document coordinates, independent of linking.
 #[test]
 fn offset_sparse_masks_sample_document_coordinates_and_unstored_defaults() {
     for mode in [ColorMode::Rgb, ColorMode::Grayscale, ColorMode::Lab, ColorMode::Cmyk] {
@@ -179,6 +185,7 @@ fn offset_sparse_masks_sample_document_coordinates_and_unstored_defaults() {
     }
 }
 
+/// A sampled adjustment is blended through feathered selection coverage exactly once.
 #[test]
 fn scalar_picker_respects_selection_coverage_when_applied() {
     for target in [json!("mask"), json!("quickMask"), json!({"channel":0})] {
@@ -197,6 +204,7 @@ fn scalar_picker_respects_selection_coverage_when_applied() {
     }
 }
 
+/// Malformed and out-of-bounds gray samples fail without modifying pixels or history.
 #[test]
 fn bad_scalar_picker_params_fail_without_changing_pixels() {
     let bad = [

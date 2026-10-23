@@ -513,6 +513,7 @@ fn adjust_mode(s: &Session, p: &Value) -> ColorMode {
 // ---------- the table ----------
 
 #[allow(clippy::too_many_lines)]
+/// Assemble the engine command registry shared by the native UI, CLI and automation.
 fn build() -> Vec<CommandSpec> {
     let mut v = vec![
         // File

@@ -2147,6 +2147,7 @@ mod tests {
         assert_displace_call_finished(&mut app, 1);
     }
 
+    /// Recorded dialogs use sanitized public parameters and retain server-owned command and playback context.
     #[test]
     fn a_step_dialog_takes_only_the_steps_values() {
         for (command, key, value) in
@@ -2154,7 +2155,7 @@ mod tests {
         {
             let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
             app.run("file.new", json!({"width": 16, "height": 16})).unwrap();
-            let mut params = json!({"__command": "select.all", "__label": "Other", "__adjust": "invert", "__resumeAction": 999999, "__insertStop": true});
+            let mut params = json!({"__command": "select.all", "__label": "Other", "__adjust": "invert", "__resumeAction": 999999, "__insertStop": true, "__smartFilter": {"layer": 1}});
             params[key] = json!(value);
             let mut a = Action::new("Step", vec![(command.into(), params)]);
             a.dialogs.insert(0);
@@ -2167,6 +2168,7 @@ mod tests {
             assert_ne!(d.fields["__label"], "Other");
             assert_eq!(d.fields.get("__adjust").and_then(Value::as_str), command.strip_prefix("image.adjustments."));
             assert!(!d.fields.contains_key("__insertStop"));
+            assert!(!d.fields.contains_key("__smartFilter"));
             assert_ne!(d.fields[RESUME], 999999);
             crate::dialogs::confirm(&mut app, id).unwrap();
             assert!(app.ui.dialogs.is_empty());

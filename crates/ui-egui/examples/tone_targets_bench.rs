@@ -9,6 +9,7 @@ use photocraft_geom::{Rect, Size};
 use photocraft_raster::Surface;
 use serde_json::{Value, json};
 
+/// Measure warmed proxy construction, adjustment dispatch and flattening on synthetic 24 MP targets.
 fn main() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = std::env::args().collect();
     let arg = |key: &str| args.iter().position(|v| v == key).and_then(|i| args.get(i + 1));

@@ -21,6 +21,14 @@ The destructive picker now passes the actual Levels/Curves command name to targe
 
 Repeated on Linux: full engine tests **1,906 passed, 0 failed, 19 normally ignored**; all 6 targeted picker tests passed; strict engine all-target Clippy, formatting, layering and wasm passed. The ignored full-registry adversarial test passed separately. The earlier engine/UI result above remains dated to 2026-10-17; the UI was unchanged by this follow-up. No new UI-latency or performance measurement is claimed for this routing-name cleanup.
 
+## CodeRabbit and local review follow-up (2026-10-23)
+
+Ctrl/Cmd-click point insertion now uses the shared context-preservation helper, like Reset and sampling. The existing explicit-target regression already passed before this cleanup: public target parameters were restored from the parameter map. Added documentation for introduced helpers, regressions and the benchmark in response to CodeRabbit's documentation-coverage warning.
+
+A further review found that reopening a whole-image Levels/Curves Smart Filter could inherit the current channel's isolation, or a Layers-panel mask target and grayscale defaults. Reopening now resolves the captured Smart Filter before seeding its colour controls. A new regression covers RGB/Lab/CMYK, both tone dialogs, and five current targets (alpha, Channels-panel mask, individual component, Layers-panel mask and Quick Mask): 30 reopening/preview/commit cases preserving recorded non-neutral curves, masks and saved channels. Action private-field sanitization also checks that a recorded step cannot forge the Smart Filter marker.
+
+Final current-head validation: full engine/UI `cargo test` **6,221 passed, 0 failed, 36 normally ignored**; the ignored full-registry adversarial command test passed separately. Strict engine/UI all-target Clippy, formatting, layering and wasm passed. Offscreen Smart Filter captures are retained with the review logs. The last general quick-perf attempt (2026-10-22) stopped at an upstream `layout_bench` fixture that converts already imported Smart Objects a second time; four earlier suites passed and the layout benchmark's `--direct` path completed. This dialog-setup follow-up does not change the historical CPU benchmark workload below.
+
 ## 24 MP release comparison
 
 Dense synthetic 6000 × 4000 RGB8 raster layer, raster mask, saved alpha channel and Quick Mask, each filled with 25% gray. The central selection is a 3000 × 2000 rectangle at 0.5 coverage. Proxy factor 4 (1500 × 1000). AMD Ryzen 7 9700X, 16 logical CPUs, Ubuntu 26.04.1, Rust 1.99.0, default optimized release profile (thin LTO).

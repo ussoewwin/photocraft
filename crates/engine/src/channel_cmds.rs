@@ -182,13 +182,13 @@ pub fn composite_name(mode: ColorMode) -> &'static str {
     }
 }
 
-/// The Curves dialog's Channel popup lists only this channel when the Channels panel has a
+/// The Levels/Curves Channel popup lists only this channel when the Channels panel has a
 /// single non-composite target (a colour component, layer mask, saved channel or Quick Mask).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct IsolatedCurveChannel {
     /// Channels-panel name, including a custom alpha name or "{layer} Mask".
     pub name: String,
-    /// Curves param key: empty = composite `points`; otherwise `red`/`green`/…
+    /// Tone parameter key: empty = composite; otherwise `red`/`green`/…
     pub key: &'static str,
     /// Index into the tone-space histograms (composite = 0 for RGB/CMYK).
     pub hist: usize,
@@ -202,7 +202,7 @@ pub struct IsolatedCurveChannel {
     pub gray: Option<GraySurface>,
 }
 
-/// A grayscale plane Curves can target: the dialog parses and previews its curves in gray levels
+/// A grayscale plane Levels/Curves can target: the dialog parses and previews gray levels
 /// even in Lab and CMYK documents (#5335).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GraySurface {
