@@ -1017,9 +1017,16 @@ pub(crate) fn note_insert(s: &mut Session, before: &Document) {
 /// Content bounds used by Align/Distribute: the layer's pixels (type and shape layers use their
 /// rendered pixels), or the union of a group's children. Fill and adjustment layers have none.
 pub fn layer_bounds(l: &Layer) -> Option<Rect> {
+    layer_bounds_in(l, None)
+}
+
+/// [`layer_bounds`] in a document of bounds `canvas`: the frame a shape's gradients are laid out
+/// in when they aren't aligned with the layer, so an opacity stop measures as it renders. Without
+/// it the shape's own reach stands in.
+pub fn layer_bounds_in(l: &Layer, canvas: Option<Rect>) -> Option<Rect> {
     let r = match &l.content {
-        LayerContent::Group(g) => g.children.iter().filter_map(layer_bounds).fold(Rect::EMPTY, |a, b| a.union(&b)),
-        LayerContent::Shape(sh) => shape_pixel_bounds(sh).unwrap_or_else(|| l.surface().map(|s| s.content_bounds()).unwrap_or(Rect::EMPTY)),
+        LayerContent::Group(g) => g.children.iter().filter_map(|c| layer_bounds_in(c, canvas)).fold(Rect::EMPTY, |a, b| a.union(&b)),
+        LayerContent::Shape(sh) => shape_pixel_bounds(sh, canvas).unwrap_or_else(|| l.surface().map(|s| s.content_bounds()).unwrap_or(Rect::EMPTY)),
         _ => l.surface().map(|s| s.content_bounds()).unwrap_or(Rect::EMPTY),
     };
     (!r.is_empty()).then_some(r)
@@ -1035,7 +1042,7 @@ const SHAPE_BOUNDS_MAX_PX: u64 = 64 << 20;
 /// everything it can draw (its path, stroke and feather), unclipped, and measured from that. A fill
 /// that shows everywhere (an inverted path, or below 100 % density) has no extent of its own and
 /// keeps the canvas-clipped measure (`None`).
-fn shape_pixel_bounds(sh: &photocraft_doc::ShapeLayer) -> Option<Rect> {
+fn shape_pixel_bounds(sh: &photocraft_doc::ShapeLayer, canvas: Option<Rect>) -> Option<Rect> {
     let unbounded_fill = sh.fill.is_some() && (sh.path.inverted || (sh.density.is_finite() && sh.density < 1.0));
     if unbounded_fill {
         return None;
@@ -1044,7 +1051,9 @@ fn shape_pixel_bounds(sh: &photocraft_doc::ShapeLayer) -> Option<Rect> {
     if u64::from(reach.width()) * u64::from(reach.height()) > SHAPE_BOUNDS_MAX_PX {
         return photocraft_compose::hard_shape_bounds(sh);
     }
-    let r = photocraft_vector::render_shape(sh, PixelFormat::GRAYA8, reach).content_bounds();
+    // Gradients lay out in the document's frame (as the cached render does); only the clip widens.
+    let frame = canvas.unwrap_or(reach);
+    let r = photocraft_vector::CompiledShape::new(sh, photocraft_vector::DEFAULT_TOLERANCE, frame).render(PixelFormat::GRAYA8, reach).content_bounds();
     (!r.is_empty()).then_some(r)
 }
 
@@ -1089,7 +1098,7 @@ impl Edge {
 
 /// Selected top-level layers that have content bounds, bottom-to-top.
 fn bounded_selection(doc: &Document, sel: &[LayerId]) -> Vec<(LayerId, Rect)> {
-    top_level(doc, sel).into_iter().filter_map(|id| Some((id, layer_bounds(doc.layer(id)?)?))).collect()
+    top_level(doc, sel).into_iter().filter_map(|id| Some((id, layer_bounds_in(doc.layer(id)?, Some(doc.bounds()))?))).collect()
 }
 
 fn align(s: &mut Session, p: &Value, kind: &str) -> Result<Value> {
@@ -2428,7 +2437,7 @@ mod tests {
         })
         .unwrap();
         let LayerContent::Shape(sh) = &doc(&s).layer(soft).unwrap().content else { panic!("shape") };
-        assert_eq!(shape_pixel_bounds(sh), None);
+        assert_eq!(shape_pixel_bounds(sh, Some(doc(&s).bounds())), None);
     }
 
     #[test]
