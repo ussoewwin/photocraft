@@ -1026,10 +1026,23 @@ pub fn layer_bounds(l: &Layer) -> Option<Rect> {
 pub fn layer_bounds_in(l: &Layer, canvas: Option<Rect>) -> Option<Rect> {
     let r = match &l.content {
         LayerContent::Group(g) => g.children.iter().filter_map(|c| layer_bounds_in(c, canvas)).fold(Rect::EMPTY, |a, b| a.union(&b)),
-        LayerContent::Shape(sh) => shape_pixel_bounds(sh, canvas).unwrap_or_else(|| l.surface().map(|s| s.content_bounds()).unwrap_or(Rect::EMPTY)),
+        LayerContent::Shape(sh) => shape_pixel_bounds(sh, canvas).unwrap_or_else(|| {
+            let cached = l.surface().map(|s| s.content_bounds()).unwrap_or(Rect::EMPTY);
+            // A fill that shows everywhere covers the canvas, rendered yet or not.
+            match canvas {
+                Some(c) if cached.is_empty() && unbounded_fill(sh) => c,
+                _ => cached,
+            }
+        }),
         _ => l.surface().map(|s| s.content_bounds()).unwrap_or(Rect::EMPTY),
     };
     (!r.is_empty()).then_some(r)
+}
+
+/// Whether the shape's fill shows everywhere (an inverted path, or below 100 % density), so it has
+/// no extent of its own.
+fn unbounded_fill(sh: &photocraft_doc::ShapeLayer) -> bool {
+    sh.fill.is_some() && (sh.path.inverted || (sh.density.is_finite() && sh.density < 1.0))
 }
 
 /// Largest area [`shape_pixel_bounds`] renders to find a shape's extent; beyond it the path and
@@ -1043,8 +1056,7 @@ const SHAPE_BOUNDS_MAX_PX: u64 = 64 << 20;
 /// that shows everywhere (an inverted path, or below 100 % density) has no extent of its own and
 /// keeps the canvas-clipped measure (`None`).
 fn shape_pixel_bounds(sh: &photocraft_doc::ShapeLayer, canvas: Option<Rect>) -> Option<Rect> {
-    let unbounded_fill = sh.fill.is_some() && (sh.path.inverted || (sh.density.is_finite() && sh.density < 1.0));
-    if unbounded_fill {
+    if unbounded_fill(sh) {
         return None;
     }
     let reach = photocraft_compose::shape_bounds(sh)?.inflate(1);
@@ -2443,6 +2455,12 @@ mod tests {
         .unwrap();
         let LayerContent::Shape(sh) = &doc(&s).layer(soft).unwrap().content else { panic!("shape") };
         assert_eq!(shape_pixel_bounds(sh, Some(doc(&s).bounds())), None);
+        // Without a cached render yet, such a fill still measures as the canvas, not as empty.
+        let mut uncached = doc(&s).layer(soft).unwrap().clone();
+        if let LayerContent::Shape(sh) = &mut uncached.content {
+            sh.cache = None;
+        }
+        assert_eq!(layer_bounds_in(&uncached, Some(doc(&s).bounds())), Some(doc(&s).bounds()));
     }
 
     #[test]
