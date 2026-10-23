@@ -4191,7 +4191,7 @@ pub(crate) fn color_field(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
         }
         let (kx, ky) = if brightness { (hsva.h, 1.0 - hsva.s) } else { (hsva.s, 1.0 - hsva.v) };
         let knob = pos2(field.left() + kx * field.width(), field.top() + ky * field.height());
-        // At the extremes the knob sits on the edge: clip it to the field, like Photoshop (#8968).
+        // At the extremes the knob sits on the edge: clip it to the field (#8968).
         let painter = ui.painter().with_clip_rect(field);
         painter.circle_stroke(knob, 5.0, Stroke::new(1.5, Color32::WHITE));
         painter.circle_stroke(knob, 6.5, Stroke::new(1.0, Color32::from_black_alpha(160)));
