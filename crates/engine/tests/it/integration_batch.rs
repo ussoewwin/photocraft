@@ -25,8 +25,6 @@ fn define_pattern_accepts_a_canvas_wider_than_the_old_4000_px_cap() {
     assert!(s.execute("edit.definePattern", json!({"name": "TooWide"})).is_err());
 }
 
-
-
 #[test]
 fn gaussian_blur_accepts_radii_below_one_without_failing() {
     for radius in [0.1, 0.3, 0.7, 1.0] {
