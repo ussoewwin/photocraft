@@ -1,7 +1,8 @@
 //! Preset files opened like documents (File › Open, drag-and-drop, the Brushes panel's
 //! Import Brushes…, the Preset Manager's Load…): Photoshop brushes (`.abr`) go to the brush
 //! library through `brush.presets.importAbr`, gradients (`.grd`) to the Gradients panel through
-//! `gradient.presets.importGrd`, swatches (`.aco`, `.act`, `.ase`) to the Swatches panel through
+//! `gradient.presets.importGrd`, layer styles (`.asl`) to the Styles panel through
+//! `style.presets.importAsl`, swatches (`.aco`, `.act`, `.ase`) to the Swatches panel through
 //! `swatches.import`, patterns (`.pat`) to the Patterns panel through `pattern.import`, keyboard
 //! shortcut sets (`.kys`) to Edit › Keyboard Shortcuts through
 //! [`crate::kys_import`], instead of opening as documents. Import Brushes… also takes an image
@@ -15,7 +16,7 @@ use crate::PhotocraftApp;
 /// the Swatches panel through [`crate::swatches_ui::import_bytes`]).
 /// `.psp` is Photoshop's live `Keyboard Shortcuts.psp` (the same XML as a `.kys`); other `.psp`
 /// settings files are refused with a clear message.
-pub const PRESET_EXTS: &[&str] = &["abr", "grd", "pat", "aco", "act", "ase", "kys", "psp", "csh"];
+pub const PRESET_EXTS: &[&str] = &["abr", "grd", "asl", "pat", "aco", "act", "ase", "kys", "psp", "csh"];
 
 fn ext(name: &str) -> String {
     std::path::Path::new(name).extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default()
@@ -105,6 +106,7 @@ pub fn open(app: &mut PhotocraftApp, name: &str, bytes: &[u8]) -> Option<Result<
     let (cmd, what) = match ext(name).as_str() {
         "abr" => ("brush.presets.importAbr", "brushes"),
         "grd" => ("gradient.presets.importGrd", "gradients"),
+        "asl" => ("style.presets.importAsl", "styles"),
         "pat" => ("pattern.import", "patterns"),
         "csh" => ("shape.presets.importCsh", "shapes"),
         "aco" | "act" | "ase" => return Some(crate::swatches_ui::import_bytes(app, name, bytes, false).map(|_| ())),
@@ -130,6 +132,7 @@ pub fn open(app: &mut PhotocraftApp, name: &str, bytes: &[u8]) -> Option<Result<
         app.ui.status_error = false;
         let (one, other) = match what {
             "brushes" => ("Imported {n} brush from {file}", "Imported {n} brushes from {file}"),
+            "styles" => ("Imported {n} style from {file}", "Imported {n} styles from {file}"),
             "patterns" => ("Imported {n} pattern from {file}", "Imported {n} patterns from {file}"),
             "shapes" => ("Imported {n} shape from {file}", "Imported {n} shapes from {file}"),
             _ => ("Imported {n} gradient from {file}", "Imported {n} gradients from {file}"),
@@ -150,6 +153,9 @@ pub fn open(app: &mut PhotocraftApp, name: &str, bytes: &[u8]) -> Option<Result<
         if what == "shapes" {
             app.ui.presets_ui.shapes = true;
         }
+        if what == "styles" {
+            app.ui.presets_ui.styles = true;
+        }
     }))
 }
 
@@ -166,6 +172,7 @@ mod tests {
     fn recognises_preset_files() {
         assert!(is_preset_file("/a/b/Set.ABR"));
         assert!(is_preset_file("sunsets.grd"));
+        assert!(is_preset_file("Comic Styles.ASL"));
         assert!(is_preset_file("Brand.ACO"));
         assert!(is_preset_file("Palette.ACT"));
         assert!(is_preset_file("exchange.ase"));
