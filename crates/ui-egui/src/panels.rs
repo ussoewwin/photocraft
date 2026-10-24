@@ -5251,15 +5251,19 @@ mod color_tests {
         let mut circles = Vec::new();
         for clipped in &h.output().shapes {
             match &clipped.shape {
-                // The saturation/brightness field is the 17 x 17 mesh; the hue strip has 50 vertices.
+                // The saturation/brightness field is the 17 x 17 mesh; the hue strip is a 25 x 25 grid.
                 egui::Shape::Mesh(m) if m.vertices.len() == 17 * 17 => field = Some(m.calc_bounds()),
                 egui::Shape::Circle(c) => circles.push((c.center, c.radius, clipped.clip_rect)),
                 _ => {}
             }
         }
         let field = field.expect("colour field drawn");
-        assert!(circles.len() >= 2, "both rings of the cursor are drawn");
-        for (center, radius, clip) in circles {
+        let expected_center = pos2(field.left(), field.bottom());
+        let rings: Vec<_> =
+            circles.into_iter().filter(|(center, radius, _)| center.distance(expected_center) < 0.01 && (*radius == 5.0 || *radius == 6.5)).collect();
+        assert!(rings.iter().any(|(_, radius, _)| *radius == 5.0), "inner ring sits at the field's bottom-left corner");
+        assert!(rings.iter().any(|(_, radius, _)| *radius == 6.5), "outer ring sits at the field's bottom-left corner");
+        for (center, radius, clip) in rings {
             let visible = egui::Rect::from_center_size(center, vec2(2.0 * radius, 2.0 * radius)).intersect(clip);
             assert!(field.contains_rect(visible), "cursor ring {visible:?} leaves the field {field:?}");
         }
