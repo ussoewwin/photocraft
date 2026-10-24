@@ -4442,3 +4442,46 @@ layerLabel	Magenta	მეწამული
 	Right-to-left paragraph direction	აბზაცის მიმართულება მარჯვნიდან მარცხნივ
 	Not rendered: this adjustment ({key}) is kept as imported.	არ არის დარენდერებული: ეს კორექცია ({key}) შენარჩუნებულია იმპორტირებული სახით.
 	Print preview image	ამობეჭდვამდე ნახვის გამოსახულება
+# Update checks (Help menu and startup)
+	Automatically Check for Updates	განახლებების ავტომატური შემოწმება
+	Check for Updates…	განახლებების შემოწმება…
+	Checking for updates…	მიმდინარეობს განახლებების შემოწმება…
+	Check Again	ხელახლა შემოწმება
+	Could not check for updates.	განახლებების შემოწმება ვერ მოხერხდა.
+	Installed version: {version}	დაინსტალირებული ვერსია: {version}
+	Open Download Page	ჩამოტვირთვის გვერდის გახსნა
+	Open the release page to choose an installer for your system.	გახსენით გამოშვების გვერდი და აირჩიეთ ინსტალერი თქვენი სისტემისთვის.
+	PhotoCraft {version} is available.	ხელმისაწვდომია PhotoCraft {version}.
+	PhotoCraft is up to date.	PhotoCraft განახლებულია.
+	PhotoCraft Updates	PhotoCraft-ის განახლებები
+	Updates have not been checked yet.	განახლებები ჯერ არ შემოწმებულა.
+# Color panel menu: slider modes, ramps and copy
+	RGB Sliders	RGB სლაიდერები
+	HSB Sliders	HSB სლაიდერები
+	CMYK Sliders	CMYK სლაიდერები
+	Lab Sliders	Lab სლაიდერები
+	Web Color Sliders	ვებ-ფერების სლაიდერები
+	Hue Cube	ფერის ტონის კუბი
+	Brightness Cube	სიკაშკაშის კუბი
+	Color Wheel	ფერთა წრე
+	RGB Spectrum	RGB სპექტრი
+	CMYK Spectrum	CMYK სპექტრი
+	Grayscale Ramp	ნაცრისფერი ტონების შკალა
+	Current Colors	მიმდინარე ფერები
+	Make Ramp Web Safe	შკალაში მხოლოდ ვებ-ფერები
+	Copy Color as HTML	ფერის კოპირება HTML-ის სახით
+	Copy Color's Hex Code	ფერის Hex კოდის კოპირება
+# Styles panel: .asl style libraries
+	Import Styles…	სტილების იმპორტი…
+	Export Styles…	სტილების ექსპორტი…
+	Export Selected Styles…	მონიშნული სტილების ექსპორტი…
+	{file} is not a style library (.asl)	{file} არ არის სტილების ბიბლიოთეკა (.asl)
+@plural	Exported {n} style to {file}|Exported {n} styles to {file}	სტილი: {n} ექსპორტირებულია {file}-ში
+@plural	Imported {n} style from {file}|Imported {n} styles from {file}	{file}-დან იმპორტირებულია სტილი: {n}
+# Damaged PSD/PSB prompt
+	Damaged Photoshop document	დაზიანებული Photoshop-ის დოკუმენტი
+	The document “{name}” may be damaged.	დოკუმენტი „{name}“ შესაძლოა დაზიანებული იყოს.
+	Some layers, pixels or masks could not be read. Do you want to continue opening it?	ზოგიერთი შრის, პიქსელის ან ნიღბის წაკითხვა ვერ მოხერხდა. გსურთ, გააგრძელოთ გახსნა?
+	If you continue, saving over the original may permanently discard unreadable data. Save a copy to keep the original.	თუ გააგრძელებთ, ორიგინალზე გადაწერით შენახვამ შეიძლება წაუკითხავი მონაცემები სამუდამოდ დაკარგოს. ორიგინალის შესანარჩუნებლად შეინახეთ ასლი.
+# Select and Mask: the workspace's edits (select.refineEdge)
+	Edits	ცვლილებები
