@@ -186,6 +186,8 @@ fn advance(app: &mut PhotocraftApp, ctx: &egui::Context) {
             show_tab(app, rest.first().copied());
             if let Some(p) = app.discard.as_mut() {
                 p.docs = rest;
+                // Apply to All covered the documents asked about; these are asked about afresh.
+                (p.apply_all, p.auto, p.auto_answered) = (false, None, None);
             }
             return;
         }
@@ -833,6 +835,25 @@ mod tests {
         let prompt = h.state().discard.as_ref().unwrap();
         assert!(prompt.auto.is_none() && !prompt.apply_all);
         assert_eq!(docs_left(&h), Some(2), "both documents are still waiting for an answer");
+    }
+
+    /// Apply to All answers for the documents the prompt opened with, not for ones dirtied since.
+    #[test]
+    fn a_document_dirtied_after_apply_to_all_is_asked_about() {
+        let mut app = app_with_docs(3);
+        make_dirty(&mut app, 0);
+        make_dirty(&mut app, 1);
+        let mut h = prompt_for(app, "file.closeAll", egui::os::OperatingSystem::Windows);
+        let late = doc_id(h.state(), 2);
+        make_dirty(h.state_mut(), 2);
+        if let Some(p) = h.state_mut().discard.as_mut() {
+            (p.apply_all, p.auto) = (true, Some(Answer::Discard));
+        }
+        h.run_steps(8);
+        let prompt = h.state().discard.as_ref().unwrap();
+        assert_eq!(prompt.docs, vec![late], "the two unsaved documents were discarded, the late one is asked about");
+        assert!(prompt.auto.is_none() && !prompt.apply_all);
+        assert_eq!(h.state().session.documents().len(), 1);
     }
 
     #[test]
