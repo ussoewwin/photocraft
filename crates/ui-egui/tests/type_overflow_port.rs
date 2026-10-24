@@ -51,9 +51,7 @@ fn setup(h: &mut Harness) {
     let id = {
         let app = h.state_mut();
         let _ = app.run("file.new", json!({"width": 800, "height": 600, "background": "white"}));
-        let id = app
-            .run("type.create", json!({"text": "ab\ncd\nef\ngh\nij\nkl", "size": 24, "box": [100, 100, 300, 62]}))
-            .expect("create")["layer"]
+        let id = app.run("type.create", json!({"text": "ab\ncd\nef\ngh\nij\nkl", "size": 24, "box": [100, 100, 300, 62]})).expect("create")["layer"]
             .as_u64()
             .expect("layer id");
         app.session.select_layer(photocraft_doc::LayerId(id)).expect("select");
@@ -69,6 +67,7 @@ fn setup(h: &mut Harness) {
         app.ui.views[0].center = [400.0, 300.0];
         app.ui.text_edit = Some(photocraft_ui_egui::state::TextEdit {
             layer: id,
+            document: None,
             caret: 0,
             anchor: 0,
             session: "s".into(),
