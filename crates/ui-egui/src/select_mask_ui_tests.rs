@@ -349,6 +349,36 @@ fn the_preview_reuses_the_edits_it_applied() {
     assert_eq!(ws(&app).preview.cache.as_ref().map(|c| c.edits.len()), Some(1));
 }
 
+/// The selection the edits made on an older document is not reused: a Quick Selection stroke
+/// on a repainted image previews what OK would commit.
+#[test]
+fn the_preview_recomputes_the_edits_after_the_document_changes() {
+    let warm = |app: &mut PhotocraftApp| {
+        app.session
+            .edit("paint", |doc, _| {
+                doc.layers[0].surface_mut().unwrap().fill_rect(Rect::new(0, 0, 160, 100), &[0.85, 0.55, 0.25, 1.0]);
+                Ok(())
+            })
+            .unwrap();
+    };
+    let stroke = json!({"stroke": {"points": [[120.0, 50.0], [130.0, 50.0]]}});
+    let mut app = app_with_selection();
+    open(&mut app).unwrap();
+    ui(&mut app, stroke.clone());
+    let two_tone = selected(&mut app);
+    // The pixels change under the workspace (a control-channel command) before it redraws.
+    warm(&mut app);
+    let after = selected(&mut app);
+    let mut fresh = app_with_selection();
+    warm(&mut fresh);
+    open(&mut fresh).unwrap();
+    ui(&mut fresh, stroke);
+    let expected = selected(&mut fresh);
+    assert_ne!(two_tone, expected, "the repaint changes what the stroke selects");
+    assert_eq!(after, expected);
+    assert_eq!(ws(&app).preview.cache.as_ref().map(|c| c.revision), app.session.active().map(|s| s.revision));
+}
+
 /// Sends `key` with `modifiers` through the workspace's key handling.
 fn press(app: &mut PhotocraftApp, ctx: &egui::Context, key: Key, modifiers: Modifiers) {
     let ev = egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };

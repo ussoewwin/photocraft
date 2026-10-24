@@ -346,6 +346,8 @@ struct Gesture {
 #[derive(Clone)]
 struct BaseCache {
     k: u32,
+    /// The document revision the base was computed from.
+    revision: u64,
     edits: Vec<Value>,
     base: Option<Surface>,
 }
@@ -1105,16 +1107,16 @@ fn compute(job: Job, cancel: Option<&photocraft_engine::jobs::JobCtx>) -> Result
         select_mask_edits::parse(&json!({ "edits": list })).map_err(|e| e.to_string())
     };
     // With no edits yet, the selection Select and Mask starts from is where the first one starts.
-    let mut cache = BaseCache { k, edits: Vec::new(), base: start() };
+    let mut cache = BaseCache { k, revision: job.revision, edits: Vec::new(), base: start() };
     if !job.edits.is_empty() || job.extra.is_some() {
         // The selection after the edits already applied, when they still lead the list.
-        let (from, done) = match job.cache.filter(|c| c.k == k && job.edits.starts_with(&c.edits)) {
+        let (from, done) = match job.cache.filter(|c| c.k == k && c.revision == job.revision && job.edits.starts_with(&c.edits)) {
             Some(c) => (c.base, c.edits.len()),
             None => (start(), 0),
         };
         let rest = scaled(job.edits.get(done..).unwrap_or_default())?;
         let base = select_mask_edits::apply(&doc, layer, from, &rest);
-        cache = BaseCache { k, edits: job.edits.clone(), base: base.clone() };
+        cache = BaseCache { k, revision: job.revision, edits: job.edits.clone(), base: base.clone() };
         let base = match &job.extra {
             Some(e) => select_mask_edits::apply(&doc, layer, base, &scaled(std::slice::from_ref(e))?),
             None => base,
