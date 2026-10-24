@@ -944,6 +944,7 @@ mod tests {
                 | "path.addAnchor"
                 | "path.deleteAnchor"
                 | "path.mergeShapeComponents"
+                | "path.setOperation"
                 | "path.clippingPath.set"
                 | "path.rename"
                 | "path.stroke"
