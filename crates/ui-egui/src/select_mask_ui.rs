@@ -26,7 +26,7 @@
 use std::sync::Arc;
 
 use egui::{Align2, Color32, FontId, Pos2, Rect as ERect, Sense, Stroke, TextureHandle, pos2, vec2};
-use photocraft_doc::{Document, LayerId};
+use photocraft_doc::{DocId, Document, LayerId};
 use photocraft_engine::select_mask_edits::{self, MAX_EDIT_POINTS, MAX_EDITS};
 use photocraft_engine::smartselect_cmds::{MAX_STROKE_POINTS, MAX_STROKES};
 use photocraft_geom::Rect;
@@ -388,8 +388,9 @@ struct Preview {
 }
 
 pub struct SelectMaskWorkspace {
+    /// The document and layer the workspace was opened on: its work applies to them only.
     layer: Option<LayerId>,
-    doc_index: usize,
+    pub(crate) document: DocId,
     canvas: Rect,
     /// The document revision the textures were made from.
     revision: u64,
@@ -713,10 +714,10 @@ pub fn open(app: &mut PhotocraftApp) -> Result<(), String> {
     if let Some(Err(why)) = photocraft_engine::commands::find(CMD).map(|c| (c.enabled)(&app.session)) {
         return Err(format!("Select and Mask needs a selection or a layer mask ({why})"));
     }
-    let doc_index = app.session.active_index().ok_or("no document")?;
     // A targeted layer mask is what is refined (Photoshop opens on it from the mask's thumbnail).
     let target_mask = app.layer_mask_targeted();
     let st = app.session.active().ok_or("no document")?;
+    let document = st.doc.id;
     let layer = st.active_layer.filter(|id| st.doc.layer(*id).is_some());
     let canvas = st.doc.bounds();
     let revision = st.revision;
@@ -732,7 +733,7 @@ pub fn open(app: &mut PhotocraftApp) -> Result<(), String> {
     }
     let mut w = SelectMaskWorkspace {
         layer,
-        doc_index,
+        document,
         canvas,
         revision,
         target_mask,
@@ -769,6 +770,31 @@ pub fn open(app: &mut PhotocraftApp) -> Result<(), String> {
     Ok(())
 }
 
+/// Why the open workspace's work no longer applies: the active document or layer is not the one it
+/// was opened on (another tab, or another layer selected by a shortcut or the control channel).
+/// `select.refineEdge` works on the active document and layer, so its edits must not run there.
+pub(crate) fn stale(app: &PhotocraftApp) -> Option<&'static str> {
+    let w = app.distort.select_mask.as_ref()?;
+    let Some(st) = app.session.active().filter(|st| st.doc.id == w.document) else {
+        return Some("Select and Mask was closed: its document is no longer the active one");
+    };
+    let layer = st.active_layer.filter(|id| st.doc.layer(*id).is_some());
+    (layer != w.layer).then_some("Select and Mask was closed: another layer was selected")
+}
+
+/// Closes a [`stale`] workspace (its work is dropped, the new target untouched): the reason.
+fn drop_stale(app: &mut PhotocraftApp) -> Result<(), String> {
+    match stale(app) {
+        Some(why) => {
+            close(app);
+            app.ui.status = why.into();
+            app.ui.status_error = true;
+            Err(why.into())
+        }
+        None => Ok(()),
+    }
+}
+
 /// The params OK runs `select.refineEdge` with.
 fn commit_params(w: &SelectMaskWorkspace) -> Value {
     let mut p = w.opts.refine_params();
@@ -793,6 +819,7 @@ fn remember(app: &mut PhotocraftApp, opts: &SmOpts) {
 /// OK: runs `select.refineEdge` and closes. A failure leaves the workspace open with the error in
 /// its panel, so nothing painted is lost.
 pub fn commit(app: &mut PhotocraftApp) -> Result<Value, String> {
+    drop_stale(app)?;
     let w = app.distort.select_mask.as_mut().ok_or("Select and Mask is not open")?;
     w.end_gesture();
     w.close_polygon();
@@ -861,6 +888,7 @@ pub fn control(app: &mut PhotocraftApp, ui: &Value) -> Result<Value, String> {
         cancel(app);
         return Ok(json!({"cancelled": true}));
     }
+    drop_stale(app)?;
     {
         let w = app.distort.select_mask.as_mut().ok_or("Select and Mask is not open")?;
         let before = w.opts.clone();
@@ -986,6 +1014,9 @@ struct Job {
 }
 
 fn job(app: &PhotocraftApp) -> Option<Job> {
+    if stale(app).is_some() {
+        return None;
+    }
     let w = app.distort.select_mask.as_ref()?;
     let st = app.session.active()?;
     let k = w.proxy_k();
@@ -1142,6 +1173,7 @@ fn take_result(w: &mut SelectMaskWorkspace, generation: u64, revision: u64, r: R
 
 /// Computes the preview now, on this thread (tests and the control channel).
 fn wait_preview(app: &mut PhotocraftApp) -> Result<(), String> {
+    drop_stale(app)?;
     let j = job(app).ok_or("Select and Mask is not open")?;
     let revision = j.revision;
     let r = compute(j, None);
@@ -1213,6 +1245,9 @@ fn drive_preview(app: &mut PhotocraftApp, _ctx: &egui::Context) {
 
 /// Pointer in document coordinates (from the view or the control channel).
 pub fn pointer(app: &mut PhotocraftApp, ev: ToolEvent, mods: egui::Modifiers) {
+    if drop_stale(app).is_err() {
+        return;
+    }
     let Some(w) = app.distort.select_mask.as_mut() else { return };
     match ev {
         ToolEvent::Down { x, y, .. } if w.tool == SmTool::Zoom => {
@@ -1505,7 +1540,13 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
         w.stale();
     }
     upload(app, ctx);
-    let title = app.distort.select_mask.as_ref().map(|w| crate::canvas::tab_title_at(app, w.doc_index, if w.zoom > 0.0 { w.zoom * 100.0 } else { 100.0 }));
+    let title = app.distort.select_mask.as_ref().map(|w| {
+        crate::canvas::tab_title_at(
+            app,
+            app.session.documents().iter().position(|d| d.doc.id == w.document).unwrap_or(0),
+            if w.zoom > 0.0 { w.zoom * 100.0 } else { 100.0 },
+        )
+    });
     let t = Tokens::get(ctx);
     let screen = ctx.content_rect();
     let mut action: Option<&str> = None;

@@ -577,3 +577,88 @@ fn greyed_controls_explain_themselves() {
         h.run_steps(4);
     }
 }
+
+fn call(app: &mut PhotocraftApp, method: &str, params: Value) -> Value {
+    let (req, _rx) = crate::control::ControlRequest::new(method, params);
+    match crate::control::handle(app, &egui::Context::default(), &req) {
+        crate::control::Outcome::Done(v) => v,
+        _ => panic!("{method}: expected an immediate reply"),
+    }
+}
+
+/// A second document with its own selection, the first one active again.
+fn two_documents() -> PhotocraftApp {
+    let mut app = app_with_selection();
+    app.session.execute("file.new", json!({"width": 160, "height": 100, "depth": 8})).unwrap();
+    app.session.execute("select.rect", json!({"x": 100, "y": 50, "width": 30, "height": 30})).unwrap();
+    assert!(app.session.set_active(0));
+    app.sync_views();
+    app
+}
+
+fn fingerprint(app: &PhotocraftApp, i: usize) -> (u64, Option<f32>, Option<f32>) {
+    let st = &app.session.documents()[i];
+    let sel = st.doc.selection.as_ref();
+    (st.revision, sel.map(|s| s.sample_channel(10, 10, 0)), sel.map(|s| s.sample_channel(120, 50, 0)))
+}
+
+/// The #8896 review: a document switch and OK queued on the control channel, with no frame
+/// between them, must not apply the first document's edits to the second.
+#[test]
+fn ok_after_a_document_switch_changes_neither_document() {
+    let mut app = two_documents();
+    open(&mut app).unwrap();
+    ui(&mut app, json!({"stroke": {"points": [[120.0, 50.0], [130.0, 50.0]]}}));
+    let before = (fingerprint(&app, 0), fingerprint(&app, 1));
+    let switched = call(&mut app, "ui.menu.invoke", json!({"command": "window.document.1"}));
+    assert_eq!(app.session.active_index(), Some(1), "{switched}");
+    let r = call(&mut app, "ui.menu.invoke", json!({"command": "select.selectAndMask", "params": {"ui": {"commit": true}}}));
+    assert!(r.get("error").is_some(), "the stale OK is refused: {r}");
+    assert_eq!((fingerprint(&app, 0), fingerprint(&app, 1)), before, "neither document changed");
+    assert!(app.distort.select_mask.is_none(), "the stale workspace is closed");
+}
+
+/// Every route into the workspace checks its document: control edits, the preview and pointer
+/// events on another document are refused, and none of them edits that document.
+#[test]
+fn control_preview_and_pointer_on_another_document_are_refused() {
+    for route in ["control", "preview", "pointer"] {
+        let mut app = two_documents();
+        open(&mut app).unwrap();
+        let before = fingerprint(&app, 1);
+        assert!(app.session.set_active(1));
+        match route {
+            "control" => assert!(control(&mut app, &json!({"stroke": {"points": [[120.0, 50.0], [130.0, 50.0]]}})).is_err()),
+            "preview" => assert!(control(&mut app, &json!({"waitPreview": true})).is_err()),
+            _ => {
+                let ev = ToolEvent::Down { x: 120.0, y: 50.0, pressure: 1.0 };
+                crate::distort_ui::pointer(&mut app, ev, egui::Modifiers::NONE);
+            }
+        }
+        assert!(app.distort.select_mask.is_none(), "{route}: the stale workspace is closed");
+        assert_eq!(fingerprint(&app, 1), before, "{route}: the other document is untouched");
+    }
+}
+
+/// Selecting another layer in the same document (a shortcut, or the control channel between
+/// requests) must not send a layer-mask OK to that layer.
+#[test]
+fn ok_after_a_layer_switch_leaves_the_new_layer_alone() {
+    let mut app = app_with_selection();
+    let first = app.session.active().unwrap().active_layer.unwrap();
+    let other = app.run("layer.new.layer", json!({"name": "Other"})).unwrap()["layer"].as_u64().map(LayerId).unwrap();
+    app.run("layer.select", json!({"layer": first.0})).unwrap();
+    open(&mut app).unwrap();
+    ui(&mut app, json!({"output": "layerMask"}));
+    let revision = app.session.active().unwrap().revision;
+    call(&mut app, "engine.execute", json!({"command": "layer.select", "params": {"layer": other.0}}));
+    let revision_after_select = app.session.active().unwrap().revision;
+    let r = call(&mut app, "ui.menu.invoke", json!({"command": "select.selectAndMask", "params": {"ui": {"commit": true}}}));
+    assert!(r.get("error").is_some(), "the stale OK is refused: {r}");
+    let st = app.session.active().unwrap();
+    assert!(st.doc.layer(other).unwrap().mask.is_none(), "no mask on the newly selected layer");
+    assert!(st.doc.layer(first).unwrap().mask.is_none(), "nor on the first");
+    assert!(st.doc.selection.is_some(), "the selection stands");
+    assert!(revision_after_select >= revision && st.revision == revision_after_select, "nothing was edited after the switch");
+    assert!(app.distort.select_mask.is_none());
+}
