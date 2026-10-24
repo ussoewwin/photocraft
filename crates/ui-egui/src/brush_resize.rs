@@ -537,7 +537,6 @@ mod tests {
         assert_eq!(drag_in_view(90.0, true, 0.0, 30.0), (100.0, 0.2), "rotated and flipped: screen right grows");
     }
 
-    /// Preferences ▸ Cursors ▸ Brush Preview colour tints the HUD's tip preview (red by default).
     /// The tip's mesh, painted at the origin: (distance from the centre, alpha) per vertex.
     fn tip_mesh(radius: f32, zoom: f32, hardness: f32) -> Vec<(f32, u8)> {
         let ctx = egui::Context::default();
@@ -577,6 +576,7 @@ mod tests {
         }
     }
 
+    /// Preferences ▸ Cursors ▸ Brush Preview colour tints the HUD's tip preview (red by default).
     #[test]
     fn the_tip_preview_uses_the_brush_preview_colour() {
         let mut app = app(Tool::Brush);

@@ -131,6 +131,7 @@ pub fn to_ours(set: &KysSet, sc: &str) -> Option<String> {
     }
     let (mods, key) = match sc.strip_suffix("++") {
         Some(m) => (m, "+"),
+        None if sc == "+" => ("", "+"),
         None => sc.rsplit_once('+').unwrap_or(("", sc)),
     };
     let mods: Vec<&str> = mods
@@ -349,6 +350,20 @@ mod tests {
         assert_eq!(photoshop_key("Cmd++").as_deref(), Some("Cmd++"));
         let e = Entry { id: "tools.zoom".into(), label: "Zoom Tool".into(), tool: true, keys: vec!["+".into()] };
         assert!(write("Mine", &[e]).contains(">+</tool>"));
+    }
+
+    #[test]
+    fn a_bare_plus_command_survives_a_windows_set_with_a_ctrl_row() {
+        let xml = "<photoshop-keyboard-shortcuts>\
+            <command name=\"Copy\"><shortcut>Ctrl+C</shortcut></command>\
+            <command name=\"Zoom In\"><shortcut>+</shortcut></command>\
+            </photoshop-keyboard-shortcuts>";
+        let set = parse(xml).unwrap();
+        assert!(set.windows);
+        assert_eq!(to_ours(&set, "+").as_deref(), Some("+"));
+        let p = plan([c("edit.copy", "Copy", Some("Cmd+C")), c("view.zoomIn", "Zoom In", None)], &set);
+        assert_eq!(p.set.get("view.zoomIn").map(String::as_str), Some("+"));
+        assert!(p.unreadable.is_empty());
     }
 
     #[test]

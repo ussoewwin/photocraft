@@ -168,19 +168,41 @@ fn list(s: &mut Session, _: &Value) -> Result<Value> {
     Ok(Value::Array(out))
 }
 
-/// The visible composite over `r` as a surface in the document's pixel format (with alpha).
-fn composite_surface(doc: &Document, r: Rect) -> Surface {
-    let buf = photocraft_compose::render(doc, r);
+/// Pixels composited at a time by [`composite_surface`]: a band's render and conversion buffers
+/// stay a few tens of MB however large the pattern.
+const BAND_PIXELS: u32 = 1 << 20;
+
+/// The visible composite over `r` as a surface in the document's pixel format (with alpha), and
+/// whether every pixel of it is opaque.
+fn composite_surface(doc: &Document, r: Rect) -> (Surface, bool) {
+    composite_surface_in_bands(doc, r, (BAND_PIXELS / r.width().max(1)).max(1))
+}
+
+/// [`composite_surface`], `band_rows` rows at a time. Rendering and converting one band at a
+/// time, and noting opacity as it goes, keeps an 8000 × 8000 pattern (64 MP, about 1 GB per full
+/// `f32` copy) from holding several full-size copies at once.
+fn composite_surface_in_bands(doc: &Document, r: Rect, band_rows: u32) -> (Surface, bool) {
     let df = doc.pixel_format();
     let fmt = PixelFormat::new(df.mode, df.sample, true);
     let n = fmt.channels();
-    let mut px = vec![0.0f32; buf.px.len() * n];
-    for (o, p) in px.chunks_exact_mut(n).zip(&buf.px) {
-        photocraft_raster::from_rgba_into(&fmt, *p, o);
-    }
+    let (width, height) = (r.width(), r.height());
     let mut s = Surface::new(fmt);
-    s.write_region(Rect::new(0, 0, r.width() as i32, r.height() as i32), &px);
-    s
+    let mut opaque = true;
+    let mut px = Vec::new();
+    let mut top = 0;
+    while top < height {
+        let rows = band_rows.min(height - top);
+        let buf = photocraft_compose::render(doc, Rect::new(r.x0, r.y0 + top as i32, r.x1, r.y0 + (top + rows) as i32));
+        px.clear();
+        px.resize(buf.px.len() * n, 0.0f32);
+        for (o, p) in px.chunks_exact_mut(n).zip(&buf.px) {
+            photocraft_raster::from_rgba_into(&fmt, *p, o);
+            opaque &= o[n - 1] >= 1.0;
+        }
+        s.write_region(Rect::new(0, top as i32, width as i32, (top + rows) as i32), &px);
+        top += rows;
+    }
+    (s, opaque)
 }
 
 /// The name Define Pattern gives a pattern without one: the active document's name without its
@@ -218,11 +240,10 @@ fn define(s: &mut Session, p: &Value) -> Result<Value> {
     if r.width() > MAX_DEFINE_EDGE || r.height() > MAX_DEFINE_EDGE {
         return Err(bad(cmd, "patterns are limited to 8000 × 8000 px"));
     }
-    let mut surf = composite_surface(doc, r);
+    let (mut surf, opaque) = composite_surface(doc, r);
     // Opaque patterns drop their alpha channel (as Photoshop does).
-    let fmt = surf.format();
-    let px = surf.read_region(Rect::new(0, 0, r.width() as i32, r.height() as i32));
-    if px.chunks_exact(fmt.channels()).all(|q| q[fmt.channels() - 1] >= 1.0) {
+    if opaque {
+        let fmt = surf.format();
         surf = surf.convert(PixelFormat::new(fmt.mode, fmt.sample, false));
     }
     let name = match p.get("name").and_then(Value::as_str) {
@@ -532,6 +553,31 @@ mod tests {
         assert!(s.execute("pattern.import", json!({"path": "/nonexistent.pat"})).is_err());
         for bad in [json!({}), json!({"data": "not base64!"}), json!({"data": "aGVsbG8="})] {
             assert!(s.execute("pattern.import", bad.clone()).is_err(), "{bad}");
+        }
+    }
+
+    /// Review of the 8000 px cap: compositing a band of rows at a time gives the pixels and the
+    /// opacity of one pass, at every depth, whatever the band height.
+    #[test]
+    fn banded_compositing_matches_a_single_pass() {
+        for depth in [8u64, 16, 32] {
+            for transparent in [false, true] {
+                let mut s = Session::new();
+                let background = if transparent { "transparent" } else { "white" };
+                s.execute("file.new", json!({"width": 40, "height": 30, "depth": depth, "background": background})).unwrap();
+                s.execute("select.rect", json!({"x": 3, "y": 4, "width": 20, "height": 13})).unwrap();
+                s.execute("edit.fill", json!({"color": "#336699"})).unwrap();
+                let doc = &s.active().unwrap().doc;
+                let area = Rect::new(2, 1, 38, 29);
+                let all = Rect::new(0, 0, 36, 28);
+                let (whole, whole_opaque) = composite_surface_in_bands(doc, area, 28);
+                for band_rows in [1, 5, 27] {
+                    let (banded, opaque) = composite_surface_in_bands(doc, area, band_rows);
+                    assert_eq!(opaque, whole_opaque, "depth {depth}, transparent {transparent}, bands of {band_rows}");
+                    assert_eq!(banded.read_region(all), whole.read_region(all), "depth {depth}, transparent {transparent}, bands of {band_rows}");
+                }
+                assert_eq!(whole_opaque, !transparent);
+            }
         }
     }
 
