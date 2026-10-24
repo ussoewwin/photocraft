@@ -457,9 +457,13 @@ struct KernSlot {
     size: f32,
     rtl: bool,
     blank: bool,
-    /// Hangs at the line's end when the paragraph has hanging punctuation on (every character
-    /// of the cluster is a hangable mark, never a space or a tab).
-    hang: bool,
+    /// Hangs at the line's end when the paragraph has hanging punctuation on, weighted: 1.0
+    /// for the marks that hang fully outside the margin (a period, a comma, a hyphen, a
+    /// quote, an apostrophe), 0.5 for those that hang half (a colon, a semicolon, an
+    /// ellipsis, a dash); 0.0 marks no hang. Photoshop's Roman Hanging Punctuation list,
+    /// from the Help: "quotes, apostrophes, hyphens, periods and commas hang 100%;
+    /// colons, semicolons, ellipses and dashes hang 50%; at both margins".
+    hang_w: f32,
     /// Advance along the line (px, horizontal scale included).
     advance: f32,
     /// What horizontal scale adds to the shaped advance (px; negative below 100%).
@@ -809,90 +813,98 @@ impl Layouter {
                     && let Some(prev) = out.lines.last()
                     && prev.paragraph == pi
                 {
-                    // Start past the row above's trailing breaking space: that space's cluster
-                    // stays on the row, and `prev.x1` excludes trailing whitespace, so starting
-                    // there would put the marks on top of the space cluster and carets could
-                    // not tell them apart.
-                    let merged_line = out.lines.len() - 1;
-                    let mut cx = out.clusters.iter().rev().find(|c| c.line == merged_line).map_or(prev.x1, |c| c.x + c.advance);
-                    let merged_baseline = prev.baseline;
-                    // The kern of a pair comes from the pair's left cluster's style, as the
-                    // line's kern_px does; it moves the following cluster and lands in the left
-                    // cluster's reported advance. The pair with the row above's last cluster
-                    // crosses a row boundary there, so it contributes none and the first
-                    // cluster starts un-kerned.
-                    let mut left: Option<(usize, f32)> = None; // (byte, font size) of the pair's left cluster
-                    // Count the row's clusters so the last one (whose pair would lead into
-                    // nothing) keeps its drawn advance only, like the line's last kern slot.
-                    let total = line
+                    // The author's own break owns the row start: a forced break becomes '\n'
+                    // in `ptext` and stays in the paragraph, so a marks-only row after it is
+                    // deliberate, not a run the line breaker pushed out. Without the guard
+                    // that row would merge into the line above and the break would vanish;
+                    // the breaks of a normal wrapped line are spaces, never this.
+                    if !line
                         .items()
-                        .map(|it| match it {
-                            PositionedLayoutItem::GlyphRun(gr) => gr.run().visual_clusters().count(),
-                            _ => 0,
+                        .find_map(|it| match it {
+                            PositionedLayoutItem::GlyphRun(gr) => gr.run().visual_clusters().next().map(|c| c.text_range().start),
+                            _ => None,
                         })
-                        .sum::<usize>();
-                    let mut n = 0usize;
-                    let mut merged_end = cx;
-                    for item in line.items() {
-                        let PositionedLayoutItem::GlyphRun(gr) = item else {
-                            continue;
-                        };
-                        let run = gr.run();
-                        let si = gr.style().brush.0;
-                        let st = &out.styles[si as usize];
-                        let hs = if st.horizontal_scale > 0.0 { st.horizontal_scale } else { 1.0 };
-                        let synth = run.synthesis();
-                        let face = out.faces.len() as u32;
-                        out.faces.push(GlyphFace {
-                            font: run.font().clone(),
-                            coords: run.normalized_coords().to_vec(),
-                            size_px: run.font_size(),
-                            embolden: synthetic_bold(synth.embolden(), st.weight, run.font_attrs().weight.value()),
-                            skew_deg: synth.skew().unwrap_or(0.0),
-                        });
-                        for c in run.visual_clusters() {
-                            n += 1;
-                            cx += left.take().map_or(0.0, |(byte, size)| {
-                                let st_p = &out.styles[style_at(byte)];
-                                let units = if st_p.kern.is_finite() { st_p.kern } else { 0.0 };
-                                units / 1000.0 * size
+                        .is_some_and(|s| ptext.as_bytes().get(s.wrapping_sub(1)) == Some(&b'\n'))
+                    {
+                        // Start past the row above's trailing breaking space: that space's cluster
+                        // stays on the row, and `prev.x1` excludes trailing whitespace, so starting
+                        // there would put the marks on top of the space cluster and carets could
+                        // not tell them apart.
+                        let merged_line = out.lines.len() - 1;
+                        let mut cx = out.clusters.iter().rev().find(|c| c.line == merged_line).map_or(prev.x1, |c| c.x + c.advance);
+                        let merged_baseline = prev.baseline;
+                        // The kern of a pair comes from the pair's left cluster's style, as the
+                        // line's kern_px does; it moves the following cluster and lands in the left
+                        // cluster's reported advance. The pair with the row above's last cluster
+                        // crosses a row boundary there, so it contributes none and the first
+                        // cluster starts un-kerned.
+                        let mut left: Option<(usize, f32)> = None; // (byte, font size) of the pair's left cluster
+                        // Count the row's clusters so the last one (whose pair would lead into
+                        // nothing) keeps its drawn advance only, like the line's last kern slot.
+                        let total = line
+                            .items()
+                            .map(|it| match it {
+                                PositionedLayoutItem::GlyphRun(gr) => gr.run().visual_clusters().count(),
+                                _ => 0,
+                            })
+                            .sum::<usize>();
+                        let mut n = 0usize;
+                        let mut merged_end = cx;
+                        for item in line.items() {
+                            let PositionedLayoutItem::GlyphRun(gr) = item else {
+                                continue;
+                            };
+                            let run = gr.run();
+                            let si = gr.style().brush.0;
+                            let st = &out.styles[si as usize];
+                            let hs = if st.horizontal_scale > 0.0 { st.horizontal_scale } else { 1.0 };
+                            let synth = run.synthesis();
+                            let face = out.faces.len() as u32;
+                            out.faces.push(GlyphFace {
+                                font: run.font().clone(),
+                                coords: run.normalized_coords().to_vec(),
+                                size_px: run.font_size(),
+                                embolden: synthetic_bold(synth.embolden(), st.weight, run.font_attrs().weight.value()),
+                                skew_deg: synth.skew().unwrap_or(0.0),
                             });
-                            let r = c.text_range();
-                            let st_h = &out.styles[style_at(map(r.start))];
-                            let kern = if st_h.kern.is_finite() { st_h.kern } else { 0.0 } / 1000.0 * run.font_size();
-                            let drawn = c.advance() * hs;
-                            // The glyph pen is local to the cluster: the growth is already in
-                            // the drawn advance, and each cluster starts where the pen is.
-                            let mut gp = 0.0f32;
-                            for g in c.glyphs() {
-                                out.glyphs.push(PlacedGlyph {
-                                    face,
-                                    id: g.id,
-                                    x: cx + gp + g.x,
-                                    y: merged_baseline + g.y,
-                                    style: si,
-                                    orient: GlyphOrient::Horizontal,
+                            for c in run.visual_clusters() {
+                                n += 1;
+                                cx += left.take().map_or(0.0, |(byte, size)| {
+                                    let st_p = &out.styles[style_at(byte)];
+                                    let units = if st_p.kern.is_finite() { st_p.kern } else { 0.0 };
+                                    units / 1000.0 * size
                                 });
-                                gp += g.advance * hs;
+                                let r = c.text_range();
+                                let st_h = &out.styles[style_at(map(r.start))];
+                                let kern = if st_h.kern.is_finite() { st_h.kern } else { 0.0 } / 1000.0 * run.font_size();
+                                let drawn = c.advance() * hs;
+                                // The glyph pen is local to the cluster: the growth is already in
+                                // the drawn advance, and each cluster starts where the pen is.
+                                let mut gp = 0.0f32;
+                                for g in c.glyphs() {
+                                    out.glyphs.push(PlacedGlyph {
+                                        face,
+                                        id: g.id,
+                                        x: cx + gp + g.x,
+                                        y: merged_baseline + g.y,
+                                        style: si,
+                                        orient: GlyphOrient::Horizontal,
+                                    });
+                                    gp += g.advance * hs;
+                                }
+                                let adv = drawn + if n == total { 0.0 } else { kern };
+                                out.clusters.push(ClusterInfo { range: map(r.start)..map(r.end), x: cx, advance: adv, line: merged_line, rtl: false });
+                                cx += drawn;
+                                merged_end = cx;
+                                left = Some((map(r.start), run.font_size()));
                             }
-                            let adv = drawn + if n == total { 0.0 } else { kern };
-                            out.clusters.push(ClusterInfo {
-                                range: map(r.start)..map(r.end),
-                                x: cx,
-                                advance: adv,
-                                line: merged_line,
-                                rtl: false,
-                            });
-                            cx += drawn;
-                            merged_end = cx;
-                            left = Some((map(r.start), run.font_size()));
                         }
+                        if let Some(p) = out.lines.last_mut() {
+                            p.x1 = merged_end;
+                            p.range.end = map(line.text_range().end);
+                        }
+                        continue;
                     }
-                    if let Some(p) = out.lines.last_mut() {
-                        p.x1 = merged_end;
-                        p.range.end = map(line.text_range().end);
-                    }
-                    continue;
                 }
                 let baseline = match (slot, prev_baseline) {
                     (Some(s), _) => s.baseline,
@@ -950,7 +962,7 @@ impl Layouter {
                             size: run.font_size(),
                             rtl: c.is_rtl(),
                             blank: first.is_none() || c.is_space_or_nbsp() || c.text_range().end <= prefix.len(),
-                            hang: hang_cluster(ptext.get(c.text_range().clone()).unwrap_or("")),
+                            hang_w: hang_weight(ptext.get(c.text_range().clone()).unwrap_or("")),
                             upright: vertical && c.first_style().brush.1 != VClass::Rotate as u8,
                             advance: c.advance() * hs,
                             growth: c.advance() * (hs - 1.0),
@@ -1021,14 +1033,17 @@ impl Layouter {
                 let (hang_adv, hang_kern, hang_edge) = if ps.hanging && !vertical {
                     match hang_runs(&slots) {
                         Some((start, tail)) => {
-                            let adv: f32 = slots[start..tail].iter().map(|s| s.advance).sum();
-                            let kern: f32 = (start..tail).map(|j| kern_px.get(j).copied().unwrap_or(0.0)).sum();
+                            // Each run's slot trims its advance weighted by its mark: a
+                            // full-hanging mark leaves the measure completely, a
+                            // half-hanging one leaves half of it in (Photoshop's 50% list).
+                            // Kerning between the run's clusters follows the mark it moves.
+                            let adv: f32 = slots[start..tail].iter().map(|s| s.advance * s.hang_w).sum();
+                            let kern: f32 = (start..tail).map(|j| kern_px.get(j).copied().unwrap_or(0.0) * slots[j].hang_w).sum();
                             // Where the run starts along the line, in layout pixels: the slot
                             // advances before it plus the kerning between them. The box's
                             // content width (`avail`) is in the same space, so the margin test
                             // compares like with like at any horizontal scale.
-                            let edge = slots[..start].iter().map(|s| s.advance).sum::<f32>()
-                                + kern_px[..start].iter().sum::<f32>();
+                            let edge = slots[..start].iter().map(|s| s.advance).sum::<f32>() + kern_px[..start].iter().sum::<f32>();
                             (adv, kern, edge)
                         }
                         None => (0.0, 0.0, 0.0),
@@ -1083,8 +1098,7 @@ impl Layouter {
                     // The shaped advance scales into the box; the trim is already in layout
                     // pixels (the mark row's slot advances carry the scale), so it goes in
                     // after the scaling, not under it.
-                    let slack =
-                        line_avail.unwrap_or(0.0) - (adv * break_scale - trim_adv) - (line_kern - trim_kern);
+                    let slack = line_avail.unwrap_or(0.0) - (adv * break_scale - trim_adv) - (line_kern - trim_kern);
                     // Parley aligned the unscaled line in `avail / break_scale`: scale its
                     // indent and alignment offset back to the box.
                     let scaled_offset = m.offset * (break_scale - 1.0);
@@ -1296,15 +1310,31 @@ fn effective_horizontal_scale(st: &CharStyle) -> f32 {
 }
 
 /// A cluster consisting only of characters that may hang at the line's end with hanging
-/// punctuation on: the closing marks (a period, a comma, a colon, a semicolon, an
-/// exclamation or question mark, an ellipsis) and their fullwidth twins. Photoshop's
-/// checkbox is Roman Hanging Punctuation; its opening-quote rule is a later step.
+/// punctuation on. Photoshop's checkbox is Roman Hanging Punctuation; the left-margin marks
+/// (an opening quote hangs at the left edge; apostrophes and hyphens) are in the list, but
+/// the run here covers a line's trailing marks.
 fn hang_cluster(text: &str) -> bool {
-    !text.is_empty() && text.chars().all(hang_mark)
+    hang_weight(text) > 0.0
 }
 
-fn hang_mark(c: char) -> bool {
-    matches!(c, '.' | ',' | ':' | ';' | '!' | '?' | '…' | '，' | '．' | '：' | '；' | '！' | '？')
+/// A cluster's hang weight: every character must be a hangable mark for it to hang at all,
+/// and the weakest mark governs: 1.0 hangs fully outside the margin, 0.5 hangs half, 0.0
+/// doesn't hang.
+fn hang_weight(text: &str) -> f32 {
+    match text.is_empty() {
+        true => 0.0,
+        false => text.chars().map(hang_mark).fold(1.0, f32::min),
+    }
+}
+
+fn hang_mark(c: char) -> f32 {
+    match c {
+        // Photoshop's Help: quotes, apostrophes, hyphens, periods and commas hang 100%.
+        '.' | ',' | '-' | '\u{2010}' | '－' | '\'' | '"' | '‘' | '’' | '“' | '”' | '«' | '»' | '，' | '．' => 1.0,
+        // Colons, semicolons, ellipses and dashes hang 50%; `!` and `?` aren't in the list.
+        ':' | ';' | '…' | '–' | '—' | '：' | '；' => 0.5,
+        _ => 0.0,
+    }
 }
 
 /// Where the hanging run at the line's tail starts: the first slot after the last non-hang,
@@ -1315,7 +1345,7 @@ fn hang_mark(c: char) -> bool {
 fn hang_runs(slots: &[KernSlot]) -> Option<(usize, usize)> {
     let tail = slots.iter().rposition(|s| !s.blank).map_or(0, |i| i + 1);
     let mut end = tail;
-    while end > 0 && slots[end - 1].hang {
+    while end > 0 && slots[end - 1].hang_w > 0.0 {
         end -= 1;
     }
     (end > 0 && end < tail).then_some((end, tail))

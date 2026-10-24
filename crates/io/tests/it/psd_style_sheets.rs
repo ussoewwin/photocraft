@@ -114,7 +114,11 @@ fn alignment_from_the_paragraph_style_the_run_names() {
 fn hanging_punctuation_comes_from_the_paragraph_sheet() {
     let on = engine(
         "Text",
-        d(vec![("Name", E::String("T".into())), ("DefaultStyleSheet", E::Int(0)), ("Properties", d(vec![("AutoHyphenate", E::Bool(true)), ("Hanging", E::Bool(true)), ("LeadingType", E::Int(0))]))]),
+        d(vec![
+            ("Name", E::String("T".into())),
+            ("DefaultStyleSheet", E::Int(0)),
+            ("Properties", d(vec![("AutoHyphenate", E::Bool(true)), ("Hanging", E::Bool(true)), ("LeadingType", E::Int(0))])),
+        ]),
         d(vec![("StyleSheetData", d(vec![]))]),
         vec![para_sheet("Normal RGB", 0, 0), para_sheet("T", 0, 0)],
         vec![normal_char(48.0)],

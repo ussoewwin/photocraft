@@ -2225,7 +2225,8 @@ mod multi_layer_formatting {
         use egui_kittest::kittest::NodeT;
         let (app, ids) = fixture();
         let mut h = controls(app, true);
-        let hanging = |h: &Harness<'static, PhotocraftApp>, id: &LayerId| text(h.state(), *id).paragraphs[0].style.hanging;        assert_eq!(h.get_by_label("Roman Hanging Punctuation").accesskit_node().toggled(), Some(Toggled::False), "off by default");
+        let hanging = |h: &Harness<'static, PhotocraftApp>, id: &LayerId| text(h.state(), *id).paragraphs[0].style.hanging;
+        assert_eq!(h.get_by_label("Roman Hanging Punctuation").accesskit_node().toggled(), Some(Toggled::False), "off by default");
         h.get_by_label("Roman Hanging Punctuation").click();
         h.run();
         for id in &ids[..2] {
