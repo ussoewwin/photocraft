@@ -379,6 +379,57 @@ fn the_preview_recomputes_the_edits_after_the_document_changes() {
     assert_eq!(ws(&app).preview.cache.as_ref().map(|c| c.revision), app.session.active().map(|s| s.revision));
 }
 
+/// A request with a bad field is refused whole: the valid fields before it change nothing either.
+#[test]
+fn a_refused_request_changes_nothing() {
+    let mut app = app_with_selection();
+    open(&mut app).unwrap();
+    let before = ws(&app).describe();
+    for bad in [
+        json!({"tool": "brush", "mode": "invalid"}),
+        json!({"tool": "brush", "mode": "subtract", "size": 80, "radius": 40, "stroke": {"points": "x"}}),
+        json!({"hardness": 10, "sampleAllLayers": true, "hideView": true, "stroke": {"points": [[1.0]]}}),
+    ] {
+        assert!(control(&mut app, &bad).is_err(), "{bad}");
+        assert_eq!(ws(&app).describe(), before, "{bad}");
+        assert!(!ws(&app).hide_view && !ws(&app).sample_all, "{bad}");
+    }
+}
+
+/// With nothing selected OK refines nothing, so Show Edge shows no Refine Edge Brush stroke.
+#[test]
+fn show_edge_shows_no_stroke_without_a_selection() {
+    let mut app = app_with_selection();
+    open(&mut app).unwrap();
+    ui(&mut app, json!({"clearSelection": true, "showEdge": true}));
+    let empty = selected(&mut app);
+    ui(&mut app, json!({"tool": "refineEdge", "stroke": {"points": [[40.0, 20.0], [40.0, 80.0]]}}));
+    assert_eq!(selected(&mut app), empty);
+    ui(&mut app, json!({"commit": true}));
+    assert_eq!(cov(&app, 40, 50), 0.0, "and OK selects nothing there");
+}
+
+/// A preview of pixels the document no longer has is never shown, even mid-stroke, and the old one
+/// goes when the document changes.
+#[test]
+fn a_preview_of_an_old_revision_is_dropped() {
+    let mut app = app_with_selection();
+    open(&mut app).unwrap();
+    selected(&mut app);
+    assert!(ws(&app).preview.pending.is_some());
+    let j = job(&app).unwrap();
+    let old = j.revision;
+    let late = compute(j, None);
+    app.session.execute("select.all", json!({})).unwrap();
+    follow_revision(&mut app);
+    assert!(ws(&app).preview.pending.is_none() && ws(&app).preview.tex.is_none(), "the old preview is gone");
+    let w = ws_mut(&mut app);
+    w.pressed = true;
+    let generation = w.preview.want;
+    take_result(w, generation, old, late);
+    assert!(w.preview.pending.is_none() && w.preview.cache.is_none() && w.preview.shown != generation);
+}
+
 /// Sends `key` with `modifiers` through the workspace's key handling.
 fn press(app: &mut PhotocraftApp, ctx: &egui::Context, key: Key, modifiers: Modifiers) {
     let ev = egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };

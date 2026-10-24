@@ -894,18 +894,36 @@ pub fn control(app: &mut PhotocraftApp, ui: &Value) -> Result<Value, String> {
     {
         let w = app.distort.select_mask.as_mut().ok_or("Select and Mask is not open")?;
         let before = w.opts.clone();
+        // Everything is read before anything changes, so rejected params change nothing.
         let mut o = w.opts.clone();
         o.apply(ui)?;
-        if let Some(t) = ui.get("tool").and_then(Value::as_str) {
-            let t = SmTool::from_name(t).ok_or(format!("bad tool `{t}` (quick|refineEdge|brush|object|lasso|polygonalLasso|hand|zoom)"))?;
+        let tool = match ui.get("tool").and_then(Value::as_str) {
+            Some(t) => Some(SmTool::from_name(t).ok_or(format!("bad tool `{t}` (quick|refineEdge|brush|object|lasso|polygonalLasso|hand|zoom)"))?),
+            None => None,
+        };
+        let add = match ui.get("mode").and_then(Value::as_str) {
+            None => None,
+            Some("add") => Some(true),
+            Some("subtract") => Some(false),
+            Some(m) => return Err(format!("bad mode `{m}` (add|subtract)")),
+        };
+        let stroke = match ui.get("stroke") {
+            Some(s) => {
+                let pts: Vec<[f64; 2]> =
+                    serde_json::from_value(s.get("points").cloned().unwrap_or(Value::Null)).map_err(|e| format!("bad stroke points: {e}"))?;
+                if pts.iter().any(|p| !p[0].is_finite() || !p[1].is_finite()) {
+                    return Err("bad stroke points: not finite".into());
+                }
+                Some((pts, s.get("alt").and_then(Value::as_bool).unwrap_or(false)))
+            }
+            None => None,
+        };
+        if let Some(t) = tool {
             w.pick(t);
         }
         w.opts = o;
-        match ui.get("mode").and_then(Value::as_str) {
-            None => {}
-            Some("add") => w.add = true,
-            Some("subtract") => w.add = false,
-            Some(m) => return Err(format!("bad mode `{m}` (add|subtract)")),
+        if let Some(add) = add {
+            w.add = add;
         }
         if let Some(n) = ui.get("size").and_then(Value::as_f64) {
             w.set_size(n);
@@ -922,12 +940,7 @@ pub fn control(app: &mut PhotocraftApp, ui: &Value) -> Result<Value, String> {
         if w.opts != before {
             w.stale();
         }
-        if let Some(s) = ui.get("stroke") {
-            let pts: Vec<[f64; 2]> = serde_json::from_value(s.get("points").cloned().unwrap_or(Value::Null)).map_err(|e| format!("bad stroke points: {e}"))?;
-            if pts.iter().any(|p| !p[0].is_finite() || !p[1].is_finite()) {
-                return Err("bad stroke points: not finite".into());
-            }
-            let alt = s.get("alt").and_then(Value::as_bool).unwrap_or(false);
+        if let Some((pts, alt)) = stroke {
             if w.tool == SmTool::PolygonalLasso {
                 w.poly = Some((w.add != alt, pts));
                 w.close_polygon();
@@ -1149,6 +1162,10 @@ fn compute(job: Job, cancel: Option<&photocraft_engine::jobs::JobCtx>) -> Result
 /// still the state wanted (or a stroke is being drawn: Real-Time Refinement shows the latest one
 /// it has), and the selection after the edits and the reduced copy for the next preview.
 fn take_result(w: &mut SelectMaskWorkspace, generation: u64, revision: u64, r: Result<(Shown, BaseCache, Arc<Document>), String>) {
+    // Made from pixels the document no longer has (even mid-stroke).
+    if revision != w.revision {
+        return;
+    }
     let pv = &mut w.preview;
     match r {
         Ok((shown, cache, proxy)) => {
@@ -1176,6 +1193,7 @@ fn take_result(w: &mut SelectMaskWorkspace, generation: u64, revision: u64, r: R
 /// Computes the preview now, on this thread (tests and the control channel).
 fn wait_preview(app: &mut PhotocraftApp) -> Result<(), String> {
     drop_stale(app)?;
+    follow_revision(app);
     let j = job(app).ok_or("Select and Mask is not open")?;
     let revision = j.revision;
     let r = compute(j, None);
@@ -1529,18 +1547,25 @@ fn properties(ui: &mut egui::Ui, w: &mut SelectMaskWorkspace, t: &Tokens) -> Opt
     edit
 }
 
-/// Draws the workspace (a full-window layer over the app).
-pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
-    // The document changed under the workspace: new textures, a new preview.
+/// The document changed under the workspace: new textures, a new preview, and nothing of the old
+/// one shown or reused.
+fn follow_revision(app: &mut PhotocraftApp) {
     let rev = app.session.active().map(|s| s.revision);
     if let Some(w) = app.distort.select_mask.as_mut()
         && Some(w.revision) != rev
     {
         w.revision = rev.unwrap_or(w.revision);
         w.image_tex = None;
+        w.preview.tex = None;
+        w.preview.pending = None;
         w.preview.cache = None;
         w.stale();
     }
+}
+
+/// Draws the workspace (a full-window layer over the app).
+pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
+    follow_revision(app);
     upload(app, ctx);
     let title = app.distort.select_mask.as_ref().map(|w| {
         crate::canvas::tab_title_at(

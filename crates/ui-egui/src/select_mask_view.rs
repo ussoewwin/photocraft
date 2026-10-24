@@ -483,7 +483,10 @@ pub fn preview_proxy(
     let canvas = Rect::new(0, 0, i32::try_from(proxy.size.width).unwrap_or(i32::MAX), i32::try_from(proxy.size.height).unwrap_or(i32::MAX));
     let coverage = if view.show_edge {
         let band = Coverage::edge_band(original.as_ref(), canvas, length(params, "radius", k).round().clamp(1.0, 250.0) as usize);
-        band.with_brush(scaled_strokes(params, k).as_ref().and_then(|s| photocraft_algo::matting::EdgeBrush::new(s, canvas)).as_ref(), canvas)
+        // With nothing selected OK refines nothing (`matting::refine_area`), so the brush shows nothing either.
+        let selects = original.as_ref().is_some_and(|s| !s.content_bounds().intersect(&canvas).is_empty());
+        let brush = if selects { scaled_strokes(params, k).and_then(|s| photocraft_algo::matting::EdgeBrush::new(&s, canvas)) } else { None };
+        band.with_brush(brush.as_ref(), canvas)
     } else if view.show_original {
         Coverage::read(original.as_ref(), canvas)
     } else {
