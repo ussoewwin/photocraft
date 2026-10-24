@@ -403,6 +403,62 @@ fn hanging_marks_do_not_steer_the_alignment() {
     assert!((ron.lines[0].x0 - roff.lines[0].x0 - trim).abs() < 0.05, "the whole line shifts by the trimmed advance: {:?}", ron.lines[0]);
 }
 
+/// A hung centered line keeps its center even with inner kerning: the hung arms add
+/// `kern_align` back, or the kerning runs twice.
+#[test]
+fn hanging_centers_a_kerned_line_exactly() {
+    let mut e = TextEngine::new();
+    let mut boxed = |hanging: bool| {
+        let mut t = point("Hello,…", 24.0);
+        t.shape = TextShape::Box { x: 0.0, y: 0.0, width: 400.0, height: 100.0 };
+        // Manual kerning after every character of the single run (a quarter em each): inner
+        // kerning is what the hung arms must not apply twice.
+        t.runs = vec![TextRun { len: t.text.len(), style: CharStyle { kern: 250.0, ..Default::default() } }];
+        e.layout(&with_para(t, ParagraphStyle { align: TextAlign::Center, hanging, ..Default::default() }), 72.0)
+    };
+    let off = boxed(false);
+    let on = boxed(true);
+    let lo = &off.lines[0];
+    let ln = &on.lines[0];
+    // Without hanging, the kerned centered line centers: `kern_align` compensates parley's
+    // kern-blind offset.
+    assert!(((lo.x0 + lo.x1) * 0.5 - 200.0).abs() < 0.01, "{lo:?}");
+    // With hanging, the drawn extent less the trimmed advance centers exactly. The hung arm
+    // adds `kern_align` back: its `slack` already deducts the kerning, so `base`'s shift
+    // would apply it twice and park the line left of centre.
+    let comma = on.clusters.iter().find(|c| c.range.start == 5).unwrap_or_else(|| panic!("the comma is its own cluster: {:?}", on.clusters));
+    let ell = on.clusters.iter().find(|c| c.range.start == 6).unwrap_or_else(|| panic!("the ellipsis is its own cluster: {:?}", on.clusters));
+    let trim = comma.advance + ell.advance * 0.5;
+    assert!(((ln.x0 + ln.x1 - trim) * 0.5 - 200.0).abs() < 0.05, "kerned hung line centers: {ln:?} trim {trim}");
+}
+
+/// Justify-all's last line spreads to the box edge exactly, even at horizontal scale ≠ 100%:
+/// the slack counts the drawn width once (`extra` already carries the scale growth and the
+/// kerning, so scaling `adv` would count the growth twice). A justify-all last line is
+/// left-aligned in Photoshop, so its trailing mark stays inside for now — its trim belongs to
+/// the left/justified measure gap, not to this PR's focused paths.
+#[test]
+fn justify_all_spreads_to_the_edge_exactly() {
+    let mut e = TextEngine::new();
+    let mut boxed = |hs: f32, hanging: bool| {
+        let mut t = point("ab cd,", 24.0);
+        t.shape = TextShape::Box { x: 0.0, y: 0.0, width: 400.0, height: 60.0 };
+        t.runs = vec![TextRun { len: t.text.len(), style: CharStyle { horizontal_scale: hs, ..Default::default() } }];
+        e.layout(&with_para(t, ParagraphStyle { align: TextAlign::JustifyAll, hanging, ..Default::default() }), 72.0)
+    };
+    let end = |l: &crate::TextLayout| l.clusters.iter().filter(|c| c.line == 0).map(|c| c.x + c.advance).fold(0.0f32, f32::max);
+    let base = boxed(1.0, false);
+    assert_eq!(base.lines.len(), 1, "{base:?}");
+    assert!((end(&base) - 400.0).abs() < 0.5, "spread to the edge: {}", end(&base));
+    // At 150% the old slack scaled `adv` on top of the growth `extra` already carries: the
+    // line then fell short of the edge by the whole grown amount.
+    let scaled = boxed(1.5, false);
+    assert_eq!(scaled.lines.len(), 1, "{scaled:?}");
+    assert!((end(&scaled) - 400.0).abs() < 0.5, "150% still spreads to the edge: {}", end(&scaled));
+    let hung = boxed(1.0, true);
+    assert!((end(&hung) - 400.0).abs() < 0.5, "the mark stays inside for now: {}", end(&hung));
+}
+
 /// Photoshop's Roman Hanging Punctuation list doesn't include `!` and `?`: they stay in the
 /// measure, a comma hangs fully and a colon or semicolon hangs half ("dashes hang 50%").
 #[test]

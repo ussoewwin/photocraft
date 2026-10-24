@@ -1110,14 +1110,17 @@ impl Layouter {
                         match ps.align {
                             TextAlign::JustifyCenter => slack * 0.5 - m.offset,
                             TextAlign::JustifyRight => slack - m.offset,
-                            TextAlign::Center if hung => slack * 0.5 - m.offset,
-                            TextAlign::Right if hung => slack - m.offset,
+                            // The hung arms' `slack` already deducts the line's kerning (each
+                            // mark's trim carries the kern that moved it), so `base`'s
+                            // `kern_align` shift would apply the kerning twice: add it back.
+                            TextAlign::Center if hung => slack * 0.5 + kern_align - m.offset,
+                            TextAlign::Right if hung => slack + kern_align - m.offset,
                             _ => scaled_offset,
                         }
                     } else if hung {
                         match ps.align {
-                            TextAlign::Center => slack * 0.5 - m.offset,
-                            TextAlign::Right => slack - m.offset,
+                            TextAlign::Center => slack * 0.5 + kern_align - m.offset,
+                            TextAlign::Right => slack + kern_align - m.offset,
                             _ => scaled_offset,
                         }
                     } else {
@@ -1251,9 +1254,10 @@ impl Layouter {
                     extra -= squeeze_punctuation(text, &mut out.clusters[c0..], &mut out.glyphs[g0..]);
                 }
                 if justify_all {
-                    // Same unit split as the box `slack` above: the shaped advance scales,
-                    // the trim and the kerning to the trimmed run don't.
-                    let slack = line_avail.unwrap_or(0.0) - (adv * break_scale - trim_adv + extra - trim_kern);
+                    // The drawn width is the shaped advance plus `extra` (which already
+                    // carries the horizontal-scale growth and the kerning), less the trim:
+                    // scaling `adv` here would count the growth twice.
+                    let slack = line_avail.unwrap_or(0.0) - (adv + extra - trim_adv - trim_kern);
                     let n = out.clusters.len() - c0;
                     if n > 1 && slack > 0.0 {
                         let step = slack / (n - 1) as f32;
