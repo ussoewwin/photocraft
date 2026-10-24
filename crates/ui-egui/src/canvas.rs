@@ -4066,8 +4066,9 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
     // Preferences › Tools › Enable Flick Panning: a Hand drag let go while moving glides on.
     let flick_id = egui::Id::new(("pc-flick-pan", idx, primary, ctx.viewport_id()));
     let flick_on = app.session.prefs().tools.enable_flick_panning;
-    // Hand › Scroll All Windows, or Shift held: the other shown views follow this one.
-    let scroll_all = hand_pan && crate::scroll_all_windows::active(app, ctx.input(|i| i.modifiers.shift));
+    // Hand › Scroll All Windows, or Shift held (on the keyboard or in Window › Modifier Keys): the
+    // other shown views follow this one.
+    let scroll_all = hand_pan && crate::scroll_all_windows::active(app, crate::workspace_ui::sticky_mods(app, ctx.input(|i| i.modifiers)).shift);
     let scroll_source = crate::scroll_all_windows::source(app, idx);
     // A glide keeps the drag's choice after Space, Shift or the button is let go.
     let scroll_all_id = flick_id.with("scroll-all");

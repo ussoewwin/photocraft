@@ -149,6 +149,11 @@ mod tests {
     /// Returns the dragged view's center and the stored centers of document 0's main view and of
     /// the window's view.
     fn drag_on_canvas(option: bool, shift: bool, in_window: bool) -> ([f32; 2], [f32; 2], [f32; 2]) {
+        drag_on_canvas_with(option, shift, false, in_window)
+    }
+
+    /// As `drag_on_canvas`, with Shift held in Window › Modifier Keys when `sticky_shift` is set.
+    fn drag_on_canvas_with(option: bool, shift: bool, sticky_shift: bool, in_window: bool) -> ([f32; 2], [f32; 2], [f32; 2]) {
         let ctx = egui::Context::default();
         let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
         app.run("file.new", json!({"width": 2000, "height": 1500})).unwrap();
@@ -158,6 +163,7 @@ mod tests {
         app.session.set_active(0);
         app.ui.tool = Tool::Hand;
         app.ui.tool_options.hand_scroll_all = option;
+        app.ui.shell.sticky_shift = sticky_shift;
         app.ui.views[0] = view(1.0, [1000.0, 750.0], 0.0);
         app.ui.windows.push(DocWindow { id: 5, document: 1, view: view(1.0, [500.0, 375.0], 0.0), open: true, position: None });
         let mut v = if in_window { view(1.0, [500.0, 375.0], 0.0) } else { view(1.0, [1000.0, 750.0], 0.0) };
@@ -199,6 +205,13 @@ mod tests {
         assert!(near(window, moved), "on: it scrolls to the same relative location: {window:?}");
         let (_, _, window) = drag_on_canvas(false, true, false);
         assert!(near(window, moved), "Shift turns it on for the drag: {window:?}");
+    }
+
+    #[test]
+    fn shift_held_in_the_modifier_keys_panel_makes_a_hand_drag_scroll_the_document_windows_too() {
+        let (dragged, _, window) = drag_on_canvas_with(false, false, true, false);
+        assert!(near(dragged, [1060.0, 720.0]), "the dragged view follows the pointer: {dragged:?}");
+        assert!(near(window, [530.0, 360.0]), "sticky Shift turns it on for the drag: {window:?}");
     }
 
     #[test]
