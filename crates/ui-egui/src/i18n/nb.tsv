@@ -12,6 +12,7 @@
 	(No neutral color exists for {mode} mode.)	(Det finnes ingen nøytral farge for {mode}-modus.)
 	(coming soon)	(kommer snart)
 	(none)	(ingen)
+	(print to the printer)	(skriv ut til skriveren)
 	+ Add variable	+ Legg til variabel
 	0 turns this threshold off; SVG groups nested deeper than 100 levels are always rasterized.	0 omganger slår denne terskelen av; SVG-grupper som er nøstet dypere enn 100 nivåer rasteriseres alltid.
 	10 fps	10 fps
@@ -2702,6 +2703,8 @@
 	Overscroll	Overrulling
 	PAL/SECAM	PAL/SECAM
 	PDF Presentation…	PDF-presentasjon…
+	PRESET DETAILS	FORHÅNDSVALGDETALJER
+	PSD	PSD
 	Package	Pakke
 	Package…	Pakke…
 	Page Setup…	Sideoppsett…
@@ -2859,96 +2862,683 @@
 	Point Curve	Punktkurve
 	Point Curve Blue	Punktkurve blå
 	Point Curve Green	Punktkurve grønn
+	Point Curve Red	Punktkurve rød
+	Point Sample	Punktmåling
+	Point size	Punktstørrelse
+	Pointed	Spiss
+	Pointillize	Punktillisme
 	Pointillize…	Punktillisme…
+	Points	Punkter
+	Polar Coordinates	Polarkoordinater
 	Polar Coordinates…	Polarkoordinater…
+	Polar To Rectangular	Polar til rektangulær
+	Policy Cmyk	Retningslinje CMYK
+	Policy Gray	Retningslinje grå
+	Policy Rgb	Retningslinje RGB
+	Polygon Tool	Polygonverktøy
+	Polygonal Lasso Tool	Polygonlasso-verktøy
+	Pond Ripples	Damkrusninger
+	Portrait	Stående
+	Portrait, 4 x 6	Stående, 4 x 6
+	Portrait, 5 x 7	Stående, 5 x 7
+	Position	Posisjon
+	Position and Size	Posisjon og størrelse
+	PostScript (72 points/inch)	PostScript (72 punkter/tomme)
+	Postcard	Postkort
+	Poster	Plakat
+	Poster Edges	Plakatkanter
+	Posterization	Posterisering
+	Posterize	Posteriser
 	Posterize…	Posteriser…
+	Precise	Presis
 	Preferences	Innstillinger
+	Preferences can't be saved	Innstillingene kan ikke lagres
+	Preferences saved	Innstillinger lagret
+	Preferences were reset: {error}	Innstillingene ble tilbakestilt: {error}
+	Preferences…	Innstillinger…
+	Presentation	Presentasjon
+	Preserve	Behold
+	Preserve Details	Behold detaljer
+	Preserve Luminosity	Behold lyshet
+	Preserve Transparency	Behold gjennomsiktighet
+	Preserve details	Behold detaljer
+	Preset	Forhåndsvalg
+	Preset Manager	Behandler for forhåndsvalg
 	Preset Manager…	Behandler for forhåndsvalg…
+	Preset Name	Navn på forhåndsvalg
+	Preset Name:	Navn på forhåndsvalg:
+	Preset Type	Type forhåndsvalg
+	Preset:	Forhåndsvalg:
 	Presets	Forhåndsvalg
+	Presets:	Forhåndsvalg:
+	Press keys	Trykk taster
+	Press keys…	Trykk taster…
+	Pressure	Trykk
+	Pressure curve	Trykkkurve
+	Pressure for Opacity	Trykk for dekkevne
+	Pressure for Size	Trykk for størrelse
+	Prevent Auto-Nesting	Hindre automatisk nøsting
+	Prevent auto-nesting in and out of Artboards and Frames	Hindre automatisk nøsting inn og ut av montasjebrett og rammer
+	Preview	Forhåndsvis
+	Preview Image	Forhåndsvis bilde
+	Preview on canvas when reordering layers	Forhåndsvis på lerretet ved omordning av lag
+	Preview size	Forhåndsvisningsstørrelse
+	Previous	Forrige
+	Previous Brush	Forrige pensel
+	Previous Document	Forrige dokument
+	Previous frame	Forrige ramme
+	Previous note	Forrige notat
+	Prime105	Prime 105
+	Prime35	Prime 35
+	Print	Skriv ut
 	Print One Copy	Skriv ut én kopi
+	Print Resolution:	Utskriftsoppløsning:
+	Print Settings…	Utskriftsinnstillinger…
 	Print Size	Utskriftsstørrelse
+	Print preview image	Forhåndsvisningsbilde for utskrift
+	Print resolution	Utskriftsoppløsning
+	Printed to {path}	Skrev ut til {path}
+	Printer	Skriver
+	Printer Manages Colors	Skriveren styrer farger
+	Printer Setup	Skriveroppsett
+	Printing Marks	Utskriftsmerker
 	Print…	Skriv ut…
+	Pro	Pro
+	Pro (Dark)	Pro (mørk)
+	Pro (Light Gray)	Pro (lys grå)
+	Pro (Light)	Pro (lys)
+	Pro (Medium Gray)	Pro (middels grå)
+	Pro Light	Pro lys
+	Pro Light Gray	Pro lys grå
+	Pro Light Gray Theme	Pro lyst grått tema
+	Pro Light Theme	Pro lyst tema
+	Pro Medium	Pro middels
+	Pro Medium Gray	Pro middels grå
+	Pro Medium Gray Theme	Pro middels grått tema
+	Pro Theme	Pro-tema
+	Pro light	Pro lys
+	Pro light gray	Pro lys grå
+	Pro medium	Pro middels
+	Pro photo	ProPhoto
+	ProPhoto	ProPhoto
+	ProPhoto RGB	ProPhoto RGB
+	Processing…	Behandler…
+	Profile	Profil
+	Profile Mismatches: Ask When Opening	Profilavvik: spør ved åpning
+	Progressive	Progressiv
+	Promote	Forfrem
 	Proof Colors	Korrekturfarger
 	Proof Setup	Korrekturoppsett
+	Proof Setup…	Korrekturoppsett…
 	Properties	Egenskaper
+	Prophoto-compat	ProPhoto-kompatibel
+	Protect Detail	Beskytt detaljer
+	Protect Foreground Color	Beskytt forgrunnsfarge
+	Protect Texture	Beskytt tekstur
+	Protect Tones	Beskytt toner
+	Protect skin tones	Beskytt hudtoner
+	Protect:	Beskytt:
+	Province / State	Provins / delstat
+	Proximity Match	Nærhetstilpasning
+	Public Domain	Offentlig eiendom
+	Pucker	Rynk
+	Pulled String Mode	Trukket tråd-modus
+	Punctuation	Tegnsetting
+	Pupil Size	Pupillstørrelse
 	Puppet Warp	Dukke-forvregning
+	Puppet Warp is not active	Dukke-forvregning er ikke aktiv
 	Purge	Rens
+	Purity	Renhet
+	Purple	Lilla
+	Push Left	Skyv venstre
+	Put this command's shortcuts back as they were	Sett denne kommandoens hurtigtaster tilbake som de var
+	Pyramids	Pyramider
+	Quality	Kvalitet
+	Quick Actions	Hurtighandlinger
+	Quick Export As PNG	Hurtigeksport som PNG
 	Quick Export as PNG	Hurtigeksport som PNG
+	Quick Mask	Hurtigmaske
+	Quick Selection	Hurtigvalg
+	Quick Selection Tool	Hurtigvalg-verktøy
+	Quick Selection found nothing there	Hurtigvalg fant ingenting der
+	Quick Sync	Hurtigsynkronisering
+	Quick export format	Hurtigeksportformat
+	Quick export location	Plassering for hurtigeksport
+	Quit	Avslutt
+	Quit PhotoCraft	Avslutt PhotoCraft
+	Quit {app}	Avslutt {app}
+	R G B	R G B
+	R g b	R G B
+	RGB	RGB
 	RGB Color	RGB-farge
+	RGB:	RGB:
+	Radial	Radial
+	Radial Blur	Radialuskarp
 	Radial Blur…	Radialuskarp…
+	Radial Gradient	Radialgradient
+	Radius	Radius
+	Radius X	Radius X
+	Radius Y	Radius Y
+	Radius:	Radius:
+	Ran script {name}	Kjørte skriptet {name}
+	Random	Tilfeldig
+	Randomize Length	Tilfeldig lengde
+	Randomize Shapes	Tilfeldige former
 	Range	Område
+	Range:	Område:
 	Rasterize	Rasteriser
+	Rasterize Fill Content	Rasteriser fyllinnhold
+	Rasterize Layer	Rasteriser lag
+	Rasterize Layer Style	Rasteriser lagstil
+	Rasterize Layers	Rasteriser lag
+	Rasterize Shape	Rasteriser form
+	Rasterize Smart Object	Rasteriser smartobjekt
+	Rasterize Type	Rasteriser tekst
 	Rasterize Type Layer	Rasteriser typelag
+	Rasterize svg groups deeper than	Rasteriser SVG-grupper dypere enn
+	Rate	Frekvens
+	Ratio	Forhold
+	Raw Data	Raw-data
+	Raw Defaults	Raw-standarder
 	Raw Defaults…	Raw-standarder…
+	Reading	Leser
+	Reading…	Leser…
+	Ready	Klar
+	Real name	Ekte navn
+	Rec2020	Rec. 2020
+	Recent	Nylig
+	Recent Files	Nylige filer
+	Recent Items	Nylige elementer
+	Recent file count	Antall nylige filer
+	Recent files	Nylige filer
+	Recent fonts	Nylige skrifter
+	Recently Used	Nylig brukt
+	Reconstruct	Gjenoppbygg
+	Reconstruct All	Gjenoppbygg alle
 	Record Measurements	Registrer målinger
+	Record ● a sequence of edits, then play ▶ it on any document.	Ta opp ● en sekvens med redigeringer, og spill den deretter av ▶ på et hvilket som helst dokument.
+	Recover on launch	Gjenopprett ved oppstart
+	Recovered {name}	Gjenopprettet {name}
+	Recovery	Gjenoppretting
+	Rectangle	Rektangel
+	Rectangle Tool	Rektangelverktøy
+	Rectangular	Rektangulær
+	Rectangular Marquee Tool	Rektangulært markeringsverktøy
+	Rectangular Selection	Rektangulært utvalg
+	Rectangular To Polar	Rektangulær til polar
+	Red	Rød
+	Red Cyan	Rød cyan
+	Red Eye	Røde øyne
+	Red Eye Tool	Røde øyne-verktøy
+	Redefine style by current selection	Omdefiner stil etter gjeldende utvalg
 	Redo	Gjør om
+	Redrawing	Tegner på nytt
+	Reds	Rødtoner
+	Reduce Color Noise	Reduser fargestøy
+	Reduce Noise	Reduser støy
 	Reduce Noise…	Reduser støy…
+	Reference point location	Plassering av referansepunkt
+	Refine	Forfin
+	Refine Edge	Forfin kant
+	Refine Edge Brush (R)	Pensel for forfin kant (R)
+	Refine Edge…	Forfin kant…
+	Refine Strokes	Forfin strøk
+	Reflect	Reflekter
+	Reflected	Reflektert
+	Reflected Gradient	Reflektert gradient
+	Registration Marks	Påskriftsmerker
+	Regular	Normal
+	Relative	Relativ
+	Relative Colorimetric	Relativ kolorimetrisk
+	Release Clipping Mask	Frigjør klippemaske
+	Relief	Relieff
+	Relight…	Nytt lys…
+	Relink to File	Koble til fil på nytt
 	Relink to File…	Koble til fil på nytt…
 	Reload Frame	Last ramme på nytt
+	Remember this choice for future images	Husk dette valget for fremtidige bilder
+	Remember to turn off the printer's own colour management in Print Settings…	Husk å slå av skriverens egen fargestying i Utskriftsinnstillinger…
+	Remember workspace changes	Husk endringer i arbeidsområdet
+	Remove	Fjern
+	Remove All	Fjern alle
+	Remove All Pins	Fjern alle nåler
+	Remove Background	Fjern bakgrunn
 	Remove Black Matte	Fjern svart kant
+	Remove Jpeg Artifact	Fjern JPEG-artefakter
+	Remove Planes	Fjern plan
+	Remove Tool	Fjern-verktøy
 	Remove Warp Split	Fjern forvregningsdeling
 	Remove White Matte	Fjern hvit kant
+	Remove after each stroke	Fjern etter hvert strøk
+	Remove from Recent	Fjern fra nylige
+	Remove from favorites	Fjern fra favoritter
+	Remove pair	Fjern par
+	Remove stop	Fjern stopp
+	Remove variable	Fjern variabel
+	Remove {name} from Recent	Fjern {name} fra nylige
+	Rename	Gi nytt navn
+	Rename Brush	Gi penselen nytt navn
+	Rename Brush…	Gi penselen nytt navn…
+	Rename Channel…	Gi kanalen nytt navn…
+	Rename Group	Gi gruppen nytt navn
+	Rename Group…	Gi gruppen nytt navn…
 	Rename Layer	Gi laget nytt navn
+	Rename Layer Comp	Gi lagkomposisjonen nytt navn
+	Rename Layer…	Gi laget nytt navn…
+	Rename Path…	Gi banen nytt navn…
+	Rename Tool Preset	Gi verktøyforhåndsvalget nytt navn
+	Rename Tool Preset…	Gi verktøyforhåndsvalget nytt navn…
+	Rename…	Gi nytt navn…
 	Render	Gjengi
+	Render Video	Gjengi video
 	Render Video…	Gjengi video…
+	Rendering Mode	Gjengivelsesmodus
+	Rendering mode	Gjengivelsesmodus
+	Rendering…	Gjengir…
+	Reorder Layer	Omordne lag
+	Repeat	Gjenta
+	Replace	Erstatt
 	Replace All Missing Fonts	Erstatt alle manglende skrifter
+	Replace Color	Erstatt farge
 	Replace Color…	Erstatt farge…
+	Replace Contents	Erstatt innhold
 	Replace Contents…	Erstatt innhold…
+	Replace Contours…	Erstatt konturer…
+	Replace Footage	Erstatt opptak
 	Replace Footage…	Erstatt opptak…
+	Replace Swatches…	Erstatt fargeprøver…
+	Replace it with this document, or cancel and use File › Save As to keep both.	Erstatt den med dette dokumentet, eller avbryt og bruk Fil › Lagre som for å beholde begge.
+	Report a Bug	Rapporter en feil
+	Report an Issue	Rapporter et problem
+	Report an Issue…	Rapporter et problem…
+	Resample	Resample
 	Reselect	Velg på nytt
+	Reset	Tilbakestill
+	Reset Alignment	Tilbakestill justering
+	Reset All	Tilbakestill alle
+	Reset All Locked Settings	Tilbakestill alle låste innstillinger
+	Reset All Tools	Tilbakestill alle verktøy
+	Reset All to Defaults	Tilbakestill alt til standard
+	Reset Essentials	Tilbakestill grunnleggende
+	Reset GPU Backend	Tilbakestill GPU-bakende
+	Reset Preferences	Tilbakestill innstillinger
+	Reset Section	Tilbakestill seksjon
+	Reset Swatches	Tilbakestill fargeprøver
+	Reset Tool	Tilbakestill verktøy
+	Reset Transform	Tilbakestill transformering
+	Reset View	Tilbakestill visning
 	Reset Workspace	Tilbakestill arbeidsområde
+	Reset all tools to their default settings?	Tilbakestille alle verktøy til standardinnstillingene?
+	Reset the brush to the defaults	Tilbakestill penselen til standard
+	Reset to Default	Tilbakestill til standard
+	Reset to defaults	Tilbakestill til standard
+	Resize Windows to Fit	Tilpass vinduer
+	Resize image during place	Endre bildestørrelse ved plassering
+	Resize panel window	Endre størrelse på panelvindu
+	Resize panels	Endre panelstørrelse
+	Resolution	Oppløsning
+	Resolution:	Oppløsning:
+	Resolution: {dpi} pixels/inch	Oppløsning: {dpi} piksler/tomme
+	Resolve Missing Fonts	Løs manglende skrifter
 	Resolve Missing Fonts…	Løs manglende skrifter…
+	Response curve	Responskurve
+	Restart	Start på nytt
+	Restart Required	Omstart kreves
+	Restore	Gjenopprett
+	Restore All	Gjenopprett alle
 	Restore All Frames	Gjenopprett alle rammer
+	Restore Defaults	Gjenopprett standard
 	Restore Frame	Gjenopprett ramme
+	Restore Original Edge	Gjenopprett opprinnelig kant
+	Restore last viewed comp	Gjenopprett sist viste komposisjon
+	Restore original size	Gjenopprett opprinnelig størrelse
+	Restrictive (Web)	Begrenset (web)
+	Result	Resultat
+	Resume	Fortsett
+	Reticulation	Retikulering
+	Retry	Prøv igjen
+	Retry GPU	Prøv GPU igjen
+	Retry GPU requires a restart. Save your work first.	Å prøve GPU igjen krever omstart. Lagre arbeidet ditt først.
+	Retry GPU tries the graphics processor again now.	Prøv GPU igjen prøver grafikkprosessoren på nytt nå.
+	Retry saving presets	Prøv å lagre forhåndsvalgene igjen
 	Reveal All	Vis alle
 	Reveal Selection	Vis utvalg
 	Reveal in Finder	Vis i Finder
 	Reverse	Reverser
+	Reverse the order	Reverser rekkefølgen
 	Revert	Tilbakestill
+	Revert “{name}” to the last saved version? Your changes will be lost.	Tilbakestille «{name}» til sist lagrede versjon? Endringene dine går tapt.
+	Rgb	RGB
+	Ridges	Rygger
+	Right	Høyre
+	Right Diagonal	Høyre diagonal
 	Right Edges	Høyre kanter
+	Right align text	Høyrejuster tekst
+	Right click with painting tools	Høyreklikk med maleverktøy
+	Right-to-left paragraph direction	Høyre-til-venstre avsnittsretning
+	Right:	Høyre:
+	Rigid	Stiv
+	Ring	Ring
+	Ring - Double	Ring – dobbel
+	Ripple	Bølge
+	Ripple Magnitude	Bølgemagnitude
+	Ripple Size	Bølgestørrelse
 	Ripple…	Bølge…
+	Rise	Stigning
+	Rolling Slope - Descending	Rullende skråning – synkende
+	Roman	Antikva
+	Roman Hanging Punctuation	Antikva hengende tegnsetting
+	Rope	Tau
+	Roses	Roser
 	Rotate	Roter
 	Rotate 180°	Roter 180°
 	Rotate 90° Clockwise	Roter 90° med klokken
 	Rotate 90° Counter Clockwise	Roter 90° mot klokken
+	Rotate Auto	Roter automatisk
+	Rotate Fixed	Roter fast
+	Rotate View	Roter visning
+	Rotate View Tool	Roter visning-verktøy
+	Rotate view with trackpad	Roter visning med styreflate
+	Rotate:	Roter:
+	Rotation	Rotasjon
+	Rotation Adaptation	Rotasjonstilpasning
+	Rough Pastels	Grove pasteller
+	Roughness	Ruhet
+	Round	Rund
+	Rounded Rectangle Tool	Avrundet rektangel-verktøy
+	Rounded Steps	Avrundede trinn
+	Roundness	Rundhet
+	Roundness Jitter	Rundhetssjitring
+	Roundness:	Rundhet:
+	Row Order	Radrekkefølge
+	Rows	Rader
+	Rule of Thirds	Tredjedelsregelen
+	Ruler	Linjal
 	Ruler Tool	Linjalverktøy
+	Ruler Units	Linjalenheter
 	Rulers	Linjaler
+	Rulers  (⌘R)	Linjaler  (⌘R)
+	Rulers & Grids	Linjaler og rutenett
+	Same folder	Samme mappe
+	Sample All Layers	Mål alle lag
+	Sample Size	Målestørrelse
+	Sample Size:	Målestørrelse:
+	Sample a pixel anywhere on the screen	Mål en piksel hvor som helst på skjermen
+	Sample:	Måling:
+	Sample: foreground colour	Måling: forgrunnsfarge
+	Sampled Colors	Målte farger
+	Sampler	Måler
+	Sampling Area	Måleområde
+	Sampling Area Options	Valg for måleområde
+	Sampling Area Overlay	Overlegg for måleområde
+	Sampling Brush Tool	Målepensel-verktøy
+	Sampling: Background Swatch	Måling: bakgrunnsfargeprøve
+	Sampling: Continuous	Måling: kontinuerlig
+	Sampling: Once	Måling: én gang
+	Sandstone	Sandstein
+	Sat	Met
+	Satin	Satin
 	Satin…	Satin…
+	Saturate	Mett
+	Saturation	Metting
+	Saturation Jitter	Mettingssjitring
 	Save	Lagre
+	Save Actions…	Lagre handlinger…
+	Save As	Lagre som
+	Save As Preset	Lagre som forhåndsvalg
 	Save As…	Lagre som…
+	Save Changes	Lagre endringer
+	Save Contours…	Lagre konturer…
 	Save Default Type Styles	Lagre standard typestiler
+	Save File	Lagre fil
+	Save HTML and Images	Lagre HTML og bilder
+	Save Image	Lagre bilde
+	Save Path	Lagre bane
+	Save Pixel Aspect Ratio	Lagre pikselformatforhold
+	Save Preset…	Lagre forhåndsvalg…
+	Save Selection	Lagre utvalg
 	Save Selection…	Lagre utvalg…
+	Save Settings…	Lagre innstillinger…
+	Save Set…	Lagre sett…
+	Save a Copy	Lagre en kopi
 	Save a Copy…	Lagre en kopi…
+	Save a list of these shortcuts as a web page	Lagre en liste over disse hurtigtastene som en nettside
+	Save as PDF	Lagre som PDF
+	Save before closing?	Lagre før lukking?
+	Save cancelled	Lagring avbrutt
+	Save failed: {error}	Lagring mislyktes: {error}
+	Save for Web (Legacy)	Lagre for web (eldre)
 	Save for Web (Legacy)…	Lagre for web (eldre)…
+	Save in background	Lagre i bakgrunnen
+	Save selection as channel	Lagre utvalg som kanal
+	Save the changes to this set	Lagre endringene i dette settet
+	Save these settings as a Camera Raw .xmp file	Lagre disse innstillingene som en Camera Raw .xmp-fil
+	Save these shortcuts as a .kys file	Lagre disse hurtigtastene som en .kys-fil
+	Save these shortcuts as a new set	Lagre disse hurtigtastene som et nytt sett
+	Save your work and restart PhotoCraft to retry GPU acceleration. CPU rendering remains active for this session.	Lagre arbeidet og start PhotoCraft på nytt for å prøve GPU-akselerasjon igjen. CPU-gjengivelse er fortsatt aktiv i denne økten.
+	Saved	Lagret
+	Saved Multichannel	Lagret multikanal
+	Saved a copy as {path}	Lagret en kopi som {path}
+	Saved contours to {file}	Lagret konturer til {file}
+	Saved {name}	Lagret {name}
+	Saved {path}; image assets: {n} in {dir}	Lagret {path}; bilderessurser: {n} i {dir}
+	Save…	Lagre…
+	Saving brush presets… Keep this tab open until saving finishes.	Lagrer penselvalg… Hold denne fanen åpen til lagringen er ferdig.
+	Saving {name}	Lagrer {name}
+	Saving {percent}	Lagrer {percent}
+	Saving…	Lagrer…
+	Sawtooth 1	Sagtann 1
 	Scale	Skaler
+	Scale Effects	Skaleringseffekter
 	Scale Effects…	Skaleringseffekter…
+	Scale Factor	Målestokksfaktor
+	Scale Horizontally	Skaler horisontalt
+	Scale Units	Skaleringsenheter
+	Scale Vertically	Skaler vertikalt
+	Scale or rotate the moved area, then press {key}	Skaler eller roter det flyttede området, og trykk deretter {key}
+	Scale to Fit Media	Skaler til mediet
+	Scale:	Målestokk:
+	Scaling	Skalering
+	Scallops	Kamskjell
+	Scatter	Spredning
+	Scattering	Spredning
+	Scope	Omfang
+	Scratch Disks	Kladddisker
 	Scratch Disks…	Kladddisker…
+	Scratch Sizes	Kladdstørrelser
+	Scratch disks	Kladddisker
+	Scratch: {size}	Kladd: {size}
+	Screen	Skjerm
 	Screen Mode	Skjermmodus
+	Screen resolution	Skjermoppløsning
+	Script Events Manager	Behandler for skripthendelser
 	Script Events Manager…	Behandler for skripthendelser…
 	Scripts	Skript
+	Scroll menu down	Rull menyen ned
+	Scroll menu up	Rull menyen opp
+	Scroll to zoom	Rull for å zoome
+	Scrubby Zoom	Skrubbezoom
+	Scrubby slider acceleration	Akselerasjon for skrubbe-glider
+	Seafoam	Havskum
+	Search	Søk
+	Search Brushes	Søk i pensler
+	Search commands	Søk i kommandoer
+	Search commands (⌘K)	Søk i kommandoer (⌘K)
+	Search commands, tools and panels	Søk i kommandoer, verktøy og paneler
+	Search commands, tools and panels…	Søk i kommandoer, verktøy og paneler…
+	Search fonts	Søk i skrifter
+	Search menus	Søk i menyer
+	Search settings…	Søk i innstillinger…
 	Search…	Søk…
+	Second Color Readout	Andre fargeavlesning
+	Seed	Frø
 	Select	Velg
+	Select All	Velg alle
+	Select All Layers	Velg alle lag
+	Select Bottom Layer	Velg nederste lag
+	Select Custom Color…	Velg egendefinert farge…
+	Select Data Points	Velg datapunkter
 	Select Data Points…	Velg datapunkter…
+	Select Folder…	Velg mappe…
+	Select Inverse	Velg invers
+	Select Layer	Velg lag
+	Select Layer Above	Velg laget over
+	Select Layer Below	Velg laget under
 	Select Linked Layers	Velg koblede lag
+	Select Plane	Velg plan
+	Select Similar Colors	Velg like farger
+	Select Subject	Velg motiv
+	Select Top Layer	Velg øverste lag
+	Select a type layer or click into text to insert glyphs	Velg et typelag eller klikk i tekst for å sette inn glyfer
+	Select a type layer to edit its character and paragraph settings.	Velg et typelag for å redigere tegn- og avsnittsinnstillingene.
+	Select an action first	Velg en handling først
+	Select and Mask	Velg og masker
 	Select and Mask…	Velg og masker…
+	Select text to apply a character style	Velg tekst for å bruke en tegnstil
+	Select the crop presets to delete	Velg beskjæringsvalgene som skal slettes
+	Select the crop presets to delete:	Velg beskjæringsvalgene som skal slettes:
+	Select:	Velg:
+	Selected	Valgt
+	Selected Areas	Valgte områder
+	Selected Artboards	Valgte montasjebrett
+	Selected at launch: {backend}	Valgt ved oppstart: {backend}
+	Selection	Utvalg
 	Selection Edges	Utvalgskanter
+	Selection Preview:	Forhåndsvisning av utvalg:
+	Selections	Utvalg
+	Selective	Selektiv
+	Selective Color	Selektiv farge
 	Selective Color…	Selektiv farge…
+	Semi Bold	Halvfet
+	SemiBold	Halvfet
 	Send Backward	Send bakover
+	Send the selected pin backward	Send den valgte nålen bakover
 	Send to Back	Send bakerst
+	Sensitivity	Følsomhet
+	Sent to the printer ({spooler})	Sendt til skriveren ({spooler})
+	Sent to {printer}	Sendt til {printer}
+	Sepia	Sepia
+	Services	Tjenester
+	Sessions only	Bare økten
+	Set Black Point	Angi svartpunkt
+	Set Colors	Angi farger
+	Set GPU Memory in Preferences › Performance to what your graphics card can hold, at most 3/8 of its memory. Automatic follows Memory Usage, within a quarter of this computer's memory and 3/8 of the card's, and doesn't count the document against a card whose memory is known. The status bar shows GPU Memory Full while they don't fit.	Sett GPU-minne i Innstillinger › Ytelse til det grafikkortet ditt kan holde, maksimalt 3/8 av minnet. Automatisk følger Minnebruk, innenfor en fjerdedel av denne datamaskinens minne og 3/8 av kortets, og teller ikke dokumentet mot et kort med kjent minne. Statuslinjen viser GPU-minnet er fullt mens de ikke får plass.
+	Set Measurement Scale	Angi målingsmålestokk
 	Set Measurement Scale…	Angi målingsmålestokk…
+	Set Neutral Gray Point	Angi nøytralt gråpunkt
+	Set New Snapshot as Default	Angi nytt øyeblikksbilde som standard
+	Set Start Timecode…	Angi starttidskode…
+	Set White Point	Angi hvitpunkt
+	Set additional Crop options	Angi flere beskjæringsvalg
+	Set additional smoothing options	Angi flere utjevnvalg
+	Set background color	Angi bakgrunnsfarge
+	Set deleted.	Settet er slettet.
+	Set foreground color	Angi forgrunnsfarge
+	Set horizontal skew	Angi horisontal skråstilling
+	Set painting symmetry options	Angi symmetrivalg for maling
+	Set saved.	Settet er lagret.
+	Set shape fill type	Angi fylltype for form
+	Set shape stroke type	Angi konturtype for form
+	Set the overlay options for the Crop tool	Angi overleggsvalgene for beskjæringsverktøyet
+	Set the text color	Angi tekstfargen
+	Set vertical skew	Angi vertikal skråstilling
+	Set:	Sett:
+	Sets the source for the history brush	Angir kilden for den historiske penselen
+	Settings	Innstillinger
+	Settings:	Innstillinger:
 	Settings…	Innstillinger…
+	Sgray	sRGB-grå
+	Shadow	Skygge
+	Shadow Amount	Skyggemengde
+	Shadow Clipping Warning (U)	Varsel om klipping av skygger (U)
+	Shadow Color	Skyggefarge
+	Shadow Intensity	Skyggeintensitet
+	Shadow Mode	Skyggemodus
+	Shadow Opacity	Skyggedekkevne
+	Shadow Radius	Skyggeradius
+	Shadow Tone	Skyggetone
+	Shadows	Skygger
+	Shadows up to:	Skygger opptil:
+	Shadows/Highlights	Skygger/høylys
 	Shadows/Highlights…	Skygger/høydelys…
+	Shallow	Grunn
 	Shape	Form
+	Shape Blur	Formuskarp
 	Shape Blur…	Formuskarp…
+	Shape Dynamics	Formdynamikk
+	Shape Layer	Formlag
+	Shape:	Form:
 	Shapes	Former
 	Sharp	Skarp
 	Sharpen	Skjerp
+	Sharpen Amount	Skjerpmengde
+	Sharpen Detail	Skjerpdetalj
+	Sharpen Details	Skjerpdetaljer
 	Sharpen Edges	Skjerp kanter
+	Sharpen Masking	Skjerpmaskering
 	Sharpen More	Skjerp mer
+	Sharpen Radius	Skjerpradius
+	Sharpen Tool	Skjerp-verktøy
+	Sharpen for	Skjerp for
+	Sharpening	Skjerping
+	Sharpness	Skarphet
+	Shear	Skjær
 	Shear…	Skjær…
+	Shell Lower	Nedre skall
+	Shell Upper	Øvre skall
+	Shift	Shift
+	Shift Edge	Forskyv kant
+	Shine	Skinn
+	Short Lines	Korte linjer
+	Short Strokes	Korte strøk
+	Shortcut	Hurtigtast
+	Shortcut removed.	Hurtigtasten er fjernet.
+	Shortcuts	Hurtigtaster
 	Show	Vis
+	Show All	Vis alle
+	Show All Menu Items	Vis alle menyelementer
 	Show Altered Video	Vis endret video
+	Show Backdrop	Vis bakgrunn
+	Show Cropped Area	Vis beskjært område
+	Show Edge	Vis kant
+	Show Extras Options	Vis valg for ekstra
 	Show Extras Options…	Vis valg for ekstra…
+	Show Grid	Vis rutenett
+	Show Guides	Vis hjelpelinjer
+	Show Guides  (⌘;)	Vis hjelpelinjer  (⌘;)
+	Show Lab Color Readouts	Vis Lab-fargeavlesninger
+	Show Layers	Vis lag
+	Show Mask	Vis maske
+	Show Mesh	Vis nett
+	Show New Snapshot Dialog by Default	Vis dialogen for nytt øyeblikksbilde som standard
+	Show Original	Vis original
+	Show Overlay	Vis overlegg
+	Show Red at 3 o'clock	Vis rød kl. 3
+	Show Rulers	Vis linjaler
+	Show Sampling Area	Vis måleområde
+	Show Sampling Ring	Vis målering
+	Show Selected Region	Vis valgt område
+	Show Skin Tone Indicator	Vis indikator for hudtone
+	Show bounding box when dragging layer	Vis markeringsramme når du drar et lag
+	Show canvas dots	Vis lerretprikker
+	Show channels in color	Vis kanaler i farge
+	Show crosshair in brush tip	Vis trådkors i penselspissen
+	Show dialog during playback	Vis dialog under avspilling
+	Show extension panels	Vis utvidelsespaneler
+	Show file name in title	Vis filnavn i tittelen
+	Show font names in english	Vis skriftnavn på engelsk
+	Show highlight on rollover	Vis utheving ved overrulling
+	Show home recent files	Vis nylige filer på startskjermen
+	Show in Explorer	Vis i Explorer
+	Show in Folder	Vis i mappe
+	Show layer mask badges	Vis merker for lagmaske
+	Show menu colors	Vis menyfarger
+	Show only crosshair while painting	Vis bare trådkors mens du maler
+	Show or hide the Notes panel	Vis eller skjul notatpanelet
+	Show rulers	Vis linjaler
+	Show/Hide All Panels	Vis/skjul alle paneler
+	Show/Hide Panels	Vis/skjul paneler
+	Show:	Vis:
 	Similar	Lignende
 	Skew	Skråstill
 	Skewness	Skjevhet
@@ -3075,6 +3665,11 @@
 	on	på
 	open source	åpen kildekode
 	orange	oransje
+	previous reading kept; the last re-read failed: {reason}	forrige lesing beholdt; siste ny-lesing mislyktes: {reason}
+	red	rød
+	set in Print Settings…	angitt i Utskriftsinnstillinger…
+	set name	settnavn
+	shortcut	hurtigtast
 	{added}, {removed} subtracted	{added}, {removed} trukket fra
 	{index} of {total}	{index} av {total}
 	{key} to subtract	{key} for å trekke fra
@@ -3093,6 +3688,10 @@
 	{n} of {max} sample points	{n} av {max} målepunkter
 	{path}: the path is not valid Unicode; rename the file and open it again.	{path}: banen er ikke gyldig Unicode; gi filen nytt navn og åpne den igjen.
 	{path}: the path is not valid Unicode; save under another name.	{path}: banen er ikke gyldig Unicode; lagre under et annet navn.
+	{set} (modified)	{set} (endret)
+	{shortcut} assigned.	{shortcut} er tilordnet.
+	{shortcut} is already in use by {commands} and will be removed from it when you click OK.	{shortcut} er allerede i bruk av {commands} og vil bli fjernet fra den når du klikker OK.
+	{shortcut} is reserved by the system and can't be assigned.	{shortcut} er reservert av systemet og kan ikke tilordnes.
 	“{name}” already exists. Replace it?	«{name}» finnes allerede. Erstatte den?
 	…and {n} more	…og {n} flere
 	↑↓ navigate   {key} run   esc close	↑↓ naviger   {key} kjør   esc lukk
@@ -3244,3 +3843,4 @@ layerLabel	Red	Rød
 layers	Fill	Fyll
 layers	Fill:	Fyll:
 navigator	Zoom	Zoom
+shape	Appearance	Utseende
