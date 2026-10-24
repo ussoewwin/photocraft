@@ -52,7 +52,7 @@ Chinese `zh-hant` (2,329 rows), Russian `ru` (4,227 keys; also every dynamic lab
 other catalogs translate, [notes](localization-ru.md)), Ukrainian `uk` (3,375), Czech `cs` (3,522),
 Polish `pl` (3,366), Greek `el` (3,481), Dutch `nl` (3,568), Italian `it` (4,164; also every dynamic label the
 other catalogs translate; reviewed by a native speaker, [notes](localization-it.md)). Georgian `ka` (4,412 rows; every measured key on 2026-10-24;
-Georgian UI fallback font: Noto Sans Georgian, Segoe UI, Sylfaen, DejaVu Sans). Turkish `tr`
+Georgian UI fallback font: Noto Sans Georgian, Segoe UI, Sylfaen, SF Georgian, DejaVu Sans; on the web the first served font for `Geor`). Turkish `tr`
 (3,731 rows) also covers every measured key. Serbian `sr` (4,022 rows, Latin script, Ekavian, added 2026-10-12) covers every
 measured key and the union of the other catalogs' dynamic labels; its one/few/many plurals reuse
 the Russian rule.
