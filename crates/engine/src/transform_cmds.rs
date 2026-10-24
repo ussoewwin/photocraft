@@ -268,12 +268,17 @@ pub fn locked_for_transform(doc: &Document, id: LayerId) -> bool {
 /// the Background, which Show Transform Controls doesn't frame either. With one layer selected (or
 /// only the Background besides it), that layer; the active layer when nothing else is.
 pub fn selection_targets(st: &crate::DocState) -> Vec<LayerId> {
-    let selected = st.selected_layers();
+    targets_of(&st.doc, &st.selected_layers(), st.active_layer)
+}
+
+/// [`selection_targets`] for the layers `selected`, `active` the active one: what an `edit.transform`
+/// without `layer` or `layers` moves, so a recorded step can drop a `layers` list that matches it.
+pub(crate) fn targets_of(doc: &Document, selected: &[LayerId], active: Option<LayerId>) -> Vec<LayerId> {
     if selected.len() < 2 {
-        return st.active_layer.into_iter().collect();
+        return active.into_iter().collect();
     }
-    let ids: Vec<LayerId> = crate::layer_multi_cmds::top_level(&st.doc, &selected).into_iter().filter(|id| !st.doc.is_background(*id)).collect();
-    if ids.is_empty() { st.active_layer.into_iter().collect() } else { ids }
+    let ids: Vec<LayerId> = crate::layer_multi_cmds::top_level(doc, selected).into_iter().filter(|id| !doc.is_background(*id)).collect();
+    if ids.is_empty() { active.into_iter().collect() } else { ids }
 }
 
 /// The `layers` param: the layers one box transforms together (at most 10000, each in the

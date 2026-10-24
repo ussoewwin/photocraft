@@ -241,3 +241,43 @@ fn straighten_layer_rotates_every_selected_layer() {
     assert!(bounds(&s, paint) != p0);
     assert_eq!(text_matrix(&s, text), m0, "an unselected layer stays put");
 }
+
+#[test]
+fn a_recorded_transform_of_the_selected_layers_replays_on_the_selection_in_another_document() {
+    let (mut s, paint, text) = two_layers();
+    s.execute("actions.record", json!({"name": "Move both"})).unwrap();
+    // What the canvas box commits: the ids it opened on, listed (#6501).
+    s.execute("edit.transform", json!({"layers": [paint.0, text.0], "matrix": [1, 0, 0, 1, 30, 40]})).unwrap();
+    s.execute("actions.stop", json!({})).unwrap();
+    let step = s.actions.list[0].steps[0].1.clone();
+    assert!(step.get("layers").is_none(), "the step plays on the selection, not on these ids: {step}");
+    // Another document, its ids shifted by an extra layer under the two that get selected.
+    s.execute("file.new", json!({"width": 200, "height": 200, "background": "white"})).unwrap();
+    let spare = LayerId(s.execute("layer.new.layer", json!({"name": "Spare"})).unwrap()["layer"].as_u64().unwrap());
+    let a = LayerId(s.execute("layer.new.layer", json!({"name": "A"})).unwrap()["layer"].as_u64().unwrap());
+    let b = LayerId(s.execute("layer.new.layer", json!({"name": "B"})).unwrap()["layer"].as_u64().unwrap());
+    assert_ne!((a, b), (paint, text), "the ids differ from the recorded ones");
+    s.edit("paint", |doc, _| {
+        for (id, x) in [(spare, 100), (a, 10), (b, 60)] {
+            doc.layer_mut(id).unwrap().surface_mut().unwrap().fill_rect(Rect::new(x, 10, x + 20, 30), &[0.0, 0.0, 1.0, 1.0]);
+        }
+        Ok(())
+    })
+    .unwrap();
+    s.execute("layer.select", json!({"layer": a.0})).unwrap();
+    s.execute("layer.select", json!({"layer": b.0, "mode": "add"})).unwrap();
+    let (a0, b0, spare0) = (bounds(&s, a), bounds(&s, b), bounds(&s, spare));
+    let r = s.execute("actions.play", json!({"action": 0})).unwrap();
+    assert!(r.get("failed").is_none(), "{r}");
+    assert_eq!((bounds(&s, a), bounds(&s, b)), (a0.translate(30, 40), b0.translate(30, 40)), "the selected layers moved");
+    assert_eq!(bounds(&s, spare), spare0, "the unselected layer stayed");
+}
+
+#[test]
+fn a_recorded_transform_of_other_layers_than_the_selection_keeps_their_ids() {
+    let (mut s, paint, _) = two_layers();
+    s.execute("actions.record", json!({"name": "Paint only"})).unwrap();
+    s.execute("edit.transform", json!({"layers": [paint.0], "matrix": [1, 0, 0, 1, 5, 0]})).unwrap();
+    s.execute("actions.stop", json!({})).unwrap();
+    assert_eq!(s.actions.list[0].steps[0].1["layers"], json!([paint.0]));
+}
