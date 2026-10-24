@@ -495,3 +495,112 @@ fn invalid_scalar_action_gray_alias_cannot_commit() {
         assert!(h.state().ui.dialogs.is_empty());
     }
 }
+
+/// Alt+adjustment recalls settings for the current scalar plane without resurrecting colour records or old addressing.
+#[test]
+fn last_tone_settings_follow_the_current_scalar_target() {
+    for mode in GRAY_TARGET_MODES {
+        for target in TARGETS {
+            for kind in ["levels", "curves"] {
+                let mut app = fixture(mode, SampleType::U8, target);
+                let command = format!("image.adjustments.{kind}");
+                let mut last = if kind == "levels" { json!({"gamma":2.0}) } else { json!({"points":[[0,255],[255,0]]}) };
+                let colour = if kind == "levels" { json!({"gamma":3.0}) } else { json!([[0, 255], [255, 0]]) };
+                for key in ["red", "green", "blue", "cyan", "magenta", "yellow", "black", "lightness", "a", "b"] {
+                    last[key] = colour.clone();
+                }
+                // Preferences from an earlier explicit-target dialog must never restore that address.
+                last["target"] = json!({"channel":999});
+                last["layer"] = json!(999);
+                last["document"] = json!(999);
+                app.session.edit_prefs(|p| {
+                    p.dialogs.insert(command.clone(), last);
+                });
+                let mut h = harness(app);
+                let id = adjust_dialog::open_last(h.state_mut(), &command).unwrap();
+                h.run_steps(4);
+                let fields = params(&h);
+                for key in ["red", "green", "blue"] {
+                    let neutral = if kind == "levels" { fields[key]["gamma"] == 1.0 } else { fields[key] == json!([[0.0, 0.0], [255.0, 255.0]]) };
+                    assert!(neutral, "{mode:?} {target:?} {kind}: hidden {key} must stay neutral: {fields}");
+                }
+                assert!(fields.get("layer").is_none() && fields.get("document").is_none());
+                if target == ChannelTarget::LayerMask {
+                    assert_eq!(fields["target"], "mask", "retain the current mask target");
+                } else {
+                    assert!(fields.get("target").is_none(), "do not restore the old explicit target");
+                }
+                let before = h.state().session.active().unwrap().doc.layers[0].content.clone();
+                dialogs::confirm(h.state_mut(), id).unwrap();
+                assert!(value(h.state(), target) > 0.4, "recalled settings must affect {mode:?} {target:?} {kind}");
+                assert_eq!(h.state().session.active().unwrap().doc.layers[0].content, before);
+                let remembered = &h.state().session.prefs().dialogs[&command];
+                for key in ["target", "layer", "document"] {
+                    assert!(remembered.get(key).is_none(), "last-used settings must not persist {key}");
+                }
+            }
+        }
+    }
+}
+
+/// Last-used colour records remain editable in their own space; incompatible spaces and malformed settings fall back to neutral.
+#[test]
+fn last_tone_settings_preserve_compatible_colour_controls_and_reject_bad_settings() {
+    use photocraft_engine::adjust_params::{default_for, from_params, to_params};
+    for mode in MODES {
+        for kind in ["levels", "curves"] {
+            let command = format!("image.adjustments.{kind}");
+            let key = photocraft_engine::adjust_params::channel_keys(photocraft_engine::adjust_params::default_space(mode))[0];
+            let record = if kind == "levels" { json!({"gamma":2.0}) } else { json!([[0, 255], [255, 0]]) };
+            let mut supplied = json!({});
+            supplied[key] = record;
+            let compatible = to_params(&from_params(kind, &supplied, None, mode).unwrap());
+            let wrong_mode = if mode == ColorMode::Rgb { ColorMode::Lab } else { ColorMode::Rgb };
+            let incompatible = to_params(&default_for(kind, wrong_mode).unwrap());
+            let invalid = if kind == "levels" { json!({"gamma":"invalid"}) } else { json!({"gray":[[0,0]]}) };
+            for (last, expected) in [
+                (compatible.clone(), compatible),
+                (incompatible, to_params(&default_for(kind, mode).unwrap())),
+                (invalid, to_params(&default_for(kind, mode).unwrap())),
+            ] {
+                let mut app = fixture(mode, SampleType::U8, ChannelTarget::Color(0));
+                app.session.edit_prefs(|p| {
+                    p.dialogs.insert(command.clone(), last.clone());
+                });
+                let original = app.session.active().unwrap().doc.clone();
+                let mut h = harness(app);
+                let id = adjust_dialog::open_last(h.state_mut(), &command).unwrap();
+                h.run_steps(4);
+                assert_eq!(params(&h), expected, "{mode:?} {kind}: {last}");
+                dialogs::cancel(h.state_mut(), id).unwrap();
+                assert!(std::sync::Arc::ptr_eq(&original, &h.state().session.active().unwrap().doc));
+                assert_eq!(h.state().session.prefs().dialogs[&command], last, "Cancel preserves remembered settings");
+            }
+        }
+    }
+}
+
+/// Grayscale layer pixels expose one curve too, so recalling an RGB dialog must not introduce hidden channel edits.
+#[test]
+fn last_tone_settings_on_grayscale_pixels_drop_hidden_colour_records() {
+    for kind in ["levels", "curves"] {
+        let mut app = fixture(ColorMode::Grayscale, SampleType::U8, ChannelTarget::Color(0));
+        app.session.active_mut().unwrap().channel_view.target = ChannelTarget::Composite;
+        let command = format!("image.adjustments.{kind}");
+        let last = if kind == "levels" { json!({"gamma":2.0,"red":{"gamma":3.0}}) } else { json!({"points":[[0,255],[255,0]],"red":[[0,255],[255,0]]}) };
+        app.session.edit_prefs(|p| {
+            p.dialogs.insert(command.clone(), last);
+        });
+        let mut h = harness(app);
+        let id = adjust_dialog::open_last(h.state_mut(), &command).unwrap();
+        let fields = params(&h);
+        if kind == "levels" {
+            assert_eq!(fields["red"]["gamma"], 1.0);
+            assert_eq!(fields["gamma"], 2.0);
+        } else {
+            assert_eq!(fields["red"], json!([[0.0, 0.0], [255.0, 255.0]]));
+            assert_eq!(fields["points"], json!([[0.0, 255.0], [255.0, 0.0]]));
+        }
+        dialogs::cancel(h.state_mut(), id).unwrap();
+    }
+}

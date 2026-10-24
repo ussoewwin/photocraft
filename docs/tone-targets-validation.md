@@ -37,6 +37,23 @@ A further local review reproduced a recorded `gray` alias seeding bug: Levels co
 
 Validation of this follow-up: full engine/UI `cargo test` **6,224 passed, 0 failed, 36 normally ignored**; the ignored adversarial command test passed separately. Strict engine/UI all-target Clippy, formatting, layering and wasm passed. A third local review found no further actionable issues in scope. No proxy or pixel-processing algorithm changed; no fresh timing comparison is claimed for parameter filtering and dialog initialization.
 
+## Main integration and review (2026-10-24)
+
+Current main integrated: `1c3db2e5c` (PhotoCraft 0.15.1). The overlap with Alt+adjustment last-used settings exposed additional target/context issues. Recall now keeps the current mask target, drops hidden colour records for scalar planes and grayscale layer pixels, and falls back to neutral for an incompatible tone space. Saved preferences retain settings without document/layer/channel addresses. Compatible colour-channel settings remain intact. The Levels localization test now derives the built-in label from the current translator, as upstream's Curves test does, while preserving literal custom-name assertions.
+
+Three new regression functions first reproduced the problems and then passed after fixes. They cover 44 recall scenarios across RGB/Gray/CMYK/Lab, Levels/Curves, alpha/mask/Quick Mask and grayscale pixels, compatible/incompatible colour settings, malformed preferences, commit/cancel and preservation of other pixels. This PR now introduces 27 regression functions plus expanded Action metadata checks. Three local review/fix passes completed; the latest found no further actionable bugs within the reviewed scope.
+
+Validation on Linux with `PHOTOCRAFT_FULL_SWEEP=1`:
+
+- All engine/UI targets in the workspace sweep passed: **6,420 passed, 0 failed, 38 normally ignored** (engine 2,472; UI 3,948), including doctest builds. The 24 tone-target integration regressions passed separately too.
+- The ignored full-registry adversarial command test passed separately. Strict engine/UI all-target Clippy (`-D warnings`), formatting, layering and wasm passed. `cargo xtask test-corpus --changed` correctly skipped: this PR changes none of the corpus-critical paths relative to the integrated main.
+- Fresh offscreen Action and Alt+shortcut captures were inspected. Recalling a Lab colour dialog's settings on `Saved sky` shows Gamma 2 or the inverted neutral curve, with the expected grayscale preview; the resized Curves controls remain inside the dialog.
+- **The unfiltered workspace run is not fully green on this machine.** Two unchanged GPU tests comparing measured execution time with wall-clock waiting time failed on RTX 3090/Vulkan: `a_refresh_that_submits_several_times_is_one_measurement` and, on a later run, `gpu_time_tracks_execution_not_submission`. The first also failed in three isolated runs; the second passed in the initial run. The exact GPU integration binary passed **89 tests** with only those two timing assertions excluded. GPU code and its lower-layer dependencies match upstream main.
+- The remaining workspace sweep (`cargo test --workspace --exclude photocraft-gpu --no-fail-fast`) completed with **11,353 passed, 1 failed, 91 ignored**. The sole failure is the unchanged IPP test `error_statuses_and_broken_replies_are_errors`: this environment resolves `printer.invalid` and returns HTTP 400, while the test expects an unresolvable host. No printer or GPU code was altered to conceal these failures.
+- `cargo xtask perf --quick` completed five suites (`perf_scenarios`, `bevel_bench`, `camera_raw_bench`, `type_bench`, `bench_filters2`) and failed only in the unchanged `layout_bench` fixture at line 175, which converts already imported Smart Objects a second time. The repository-baseline comparison was skipped because it belongs to a different machine. These results are not a fresh before/after latency comparison; the historical 24 MP measurements below remain explicitly dated.
+
+Logs, failure reproductions, review notes and current captures are retained locally in `plan/merge-main-20261024/` (gitignored). Windows and macOS were not tested locally.
+
 ## 24 MP release comparison
 
 Dense synthetic 6000 × 4000 RGB8 raster layer, raster mask, saved alpha channel and Quick Mask, each filled with 25% gray. The central selection is a 3000 × 2000 rectangle at 0.5 coverage. Proxy factor 4 (1500 × 1000). AMD Ryzen 7 9700X, 16 logical CPUs, Ubuntu 26.04.1, Rust 1.99.0, default optimized release profile (thin LTO).
