@@ -262,28 +262,6 @@ fn equalize(s: &mut Session, p: &Value) -> Result<Value> {
     })
 }
 
-/// Filter › Blur › Average: the selection (or layer) filled with its mean colour.
-fn average(s: &mut Session, p: &Value) -> Result<Value> {
-    map_pixels(s, "Average", p, |_, px, cover| {
-        let (mut sum, mut wsum) = ([0f64; 3], 0f64);
-        for (p, &k) in px.iter().zip(cover) {
-            // Average changes colour, not transparency; hidden RGB contributes too.
-            let w = k as f64;
-            for c in 0..3 {
-                sum[c] += p[c] as f64 * w;
-            }
-            wsum += w;
-        }
-        if wsum <= 0.0 {
-            return;
-        }
-        let avg = sum.map(|v| (v / wsum) as f32);
-        for p in px {
-            p[..3].copy_from_slice(&avg);
-        }
-    })
-}
-
 // ---------- transform presets ----------
 
 /// The presets' params: like Free Transform, they follow the Channels and Layers panel target.
@@ -1023,7 +1001,6 @@ pub fn specs() -> Vec<CommandSpec> {
             has_layer,
             show_only
         ),
-        spec!("filter.blur.average", "Average", &["Filter", "Blur"], None, "{}", has_pixels, average),
     ]
 }
 
@@ -1055,7 +1032,7 @@ mod tests {
                     s.tools.foreground = [0.0, 0.0, 0.0, 1.0];
                     s.tools.background = [1.0, 1.0, 1.0, 1.0];
                     s.execute("edit.fill", json!({"contents": "color", "color": "#808080"})).unwrap();
-                    let p = match target {
+                    let mut p = match target {
                         "quickMask" => {
                             s.execute("select.editInQuickMaskMode", json!({"on": true})).unwrap();
                             json!({"seed": 1})
@@ -1070,6 +1047,10 @@ mod tests {
                             json!({"seed": 1, "target": "mask"})
                         }
                     };
+                    // Average has no seed parameter; only Clouds uses it.
+                    if cmd == "filter.blur.average" {
+                        p.as_object_mut().unwrap().remove("seed");
+                    }
                     // Two levels in the target, so Equalize and Average have something to change.
                     let edit_target = json!({ "target": if target == "alpha" { json!({"channel": 0}) } else { json!(target) } });
                     s.edit("levels", |doc, active| {

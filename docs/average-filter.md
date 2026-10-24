@@ -36,3 +36,39 @@ Run the focused regressions with:
 ```sh
 cargo test -p photocraft-engine --lib average_preserves
 ```
+
+## Smart filters
+
+The PSD importer already recognizes the optionless `Avrg` descriptor (see
+[#6297](https://github.com/storytold/photocraft/pull/6297)). Recognition alone did
+not execute it: the shared renderer returned `None`, leaving the source pixels
+unchanged, and the raster-only command was disabled on Smart Objects.
+
+Average now uses the shared filter command and algorithm. It can be added to a
+Smart Object, toggled, undone and redone, or re-rendered from an imported record.
+The raster path retains its canvas limit, selection weighting and alpha behavior.
+Like other core filters, new invocations validate parameters before editing.
+
+The integration tests create their own red/blue Smart Objects at RGB8/16/32f.
+They check the dispatcher, command enablement, one history step, visibility,
+undo/redo, and re-rendering after clearing both the layer and stage caches:
+
+```sh
+cargo test -p photocraft-engine --test it average_smart
+```
+
+An additional, explicitly ignored test accepts a local Photoshop oracle. To
+reproduce it in Photoshop, create an opaque 16 × 16 RGB8 image with eight red
+columns followed by eight blue columns, convert the layer to a Smart Object,
+apply Average and save a PSD. Photoshop 26.6.1 on Windows produces purple
+`(128,0,128,255)` throughout. Then run, in PowerShell:
+
+```powershell
+$env:PHOTOCRAFT_AVERAGE_PSD = 'C:\path\to\average-smart.psd'
+cargo test -p photocraft-engine --test it average_photoshop_psd_rerenders_from_source -- --ignored --nocapture
+```
+
+This test discards the imported layer cache and the smart-filter stage cache,
+then rebuilds from the embedded source. Merely importing or flattening the PSD
+would reuse Photoshop's saved pixels and would not prove execution. The local
+PSD is not committed and the opt-in test does not raise a corpus floor.
