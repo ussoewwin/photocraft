@@ -224,7 +224,7 @@ pub static LANGUAGES: [LangInfo; 23] = [
     LangInfo { code: "hi", name: "हिन्दी", source: catalog!("hi"), plural: plural_one_other, complete_menus: false, catalog: OnceLock::new() },
     // Norwegian Bokmal. `nb-NO` from browsers and Windows/macOS; `no` and `nn` POSIX locales
     // resolve here too (see `candidates`). Plurals follow the English rule: one (1), other.
-    LangInfo { code: "nb", name: "Norsk", source: catalog!("nb"), plural: plural_one_other, complete_menus: false, catalog: OnceLock::new() },
+    LangInfo { code: "nb", name: "Norsk", source: catalog!("nb"), plural: plural_one_other, complete_menus: true, catalog: OnceLock::new() },
 ];
 
 impl LangInfo {

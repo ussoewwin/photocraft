@@ -3259,6 +3259,7 @@
 	Rulers	Linjaler
 	Rulers  (⌘R)	Linjaler  (⌘R)
 	Rulers & Grids	Linjaler og rutenett
+	SMPTE C	SMPTE C
 	Same folder	Samme mappe
 	Sample All Layers	Mål alle lag
 	Sample Size	Målestørrelse
@@ -3519,6 +3520,8 @@
 	Show Sampling Ring	Vis målering
 	Show Selected Region	Vis valgt område
 	Show Skin Tone Indicator	Vis indikator for hudtone
+	Show Transform Controls	Vis transformeringskontroller
+	Show Vectorscope	Vis vektorskop
 	Show bounding box when dragging layer	Vis markeringsramme når du drar et lag
 	Show canvas dots	Vis lerretprikker
 	Show channels in color	Vis kanaler i farge
@@ -3536,115 +3539,687 @@
 	Show only crosshair while painting	Vis bare trådkors mens du maler
 	Show or hide the Notes panel	Vis eller skjul notatpanelet
 	Show rulers	Vis linjaler
+	Show slice numbers	Vis oppdelingsnumre
+	Show the layer mask as an overlay	Vis lagmasken som overlegg
+	Show the layer's effects  ({key}-click: all layers)	Vis lagets effekter  ({key}-klikk: alle lag)
+	Show the layer's effects  (⌥-click: all layers)	Vis lagets effekter  (⌥-klikk: alle lag)
+	Show the layer's effects and Smart Filters  ({key}-click: all layers)	Vis lagets effekter og smartfiltre  ({key}-klikk: alle lag)
+	Show tooltips	Vis verktøytips
+	Show transformation values	Vis transformeringsverdier
 	Show/Hide All Panels	Vis/skjul alle paneler
 	Show/Hide Panels	Vis/skjul paneler
 	Show:	Vis:
+	Shutter Speed	Lukkerhastighet
+	Sides	Sider
+	Sides:	Sider:
 	Similar	Lignende
+	Simple	Enkel
+	Simulate Paper	Simuler papir
+	Simulate Pressure	Simuler trykk
+	Sine	Sinus
+	Single Column Marquee Tool	Enkeltkolonne-markering
+	Single Row Marquee Tool	Enkeltrad-markering
+	Single Word Justification	Justering av enkeltord
+	Size	Størrelse
+	Size Jitter	Størrelsessjitring
+	Size:	Størrelse:
+	Sketch	Skisse
 	Skew	Skråstill
 	Skewness	Skjevhet
+	Skip	Hopp over
 	Sky	Himmel
+	Slant	Skråstilling
+	Slice Options	Oppdelingsvalg
+	Slice Options…	Oppdelingsvalg…
+	Slice Select Tool	Oppdelingsvalg-verktøy
+	Slice Tool	Oppdelingsverktøy
+	Slice color	Oppdelingsfarge
 	Slices	Oppdelinger
+	Slices From Guides	Oppdelinger fra hjelpelinjer
+	Slices are locked (View › Lock Slices)	Oppdelinger er låst (Vis › Lås oppdelinger)
 	Small	Liten
+	Small Caps	Kapitéler
+	Smart Blur	Smartuskarp
 	Smart Blur…	Smartuskarp…
 	Smart Filter	Smartfilter
+	Smart Filters	Smartfiltre
 	Smart Guides	Smarte hjelpelinjer
 	Smart Object	Smartobjekt
+	Smart Object Layer	Smartobjektlag
 	Smart Objects	Smartobjekter
+	Smart Radius	Smart radius
+	Smart Sharpen	Skjerp smart
 	Smart Sharpen…	Skjerp smart…
+	Smart guide color	Farge for smarte hjelpelinjer
+	Smart quotes	Smarte anførselstegn
 	Smooth	Jevn
+	Smooth the curve values	Jevne ut kurveverdiene
+	Smoothing	Utjevning
+	Smoothness	Jevnhet
 	Smooth…	Jevn…
+	Smudge	Klin
+	Smudge Stick	Klinestift
+	Smudge Tool	Klineverktøy
 	Snap	Fest
 	Snap To	Fest til
+	Snap to Grid	Fest til rutenett
+	Snap to Origin	Fest til origo
+	Snap vector tools and transforms to pixel grid	Fest vektorverktøy og transformeringer til pikselrutenettet
+	Snapshot 1	Øyeblikksbilde 1
+	Snapshots	Øyeblikksbilder
+	Snowflakes	Snøfnugg
+	Soft	Myk
+	Soft Dark Theme	Mykt mørkt tema
+	Soft Light	Mykt lys
+	Soft Light Theme	Mykt lyst tema
+	Soft dark	Myk mørk
+	Soft light	Mykt lys
+	Soften	Mykne
+	Softness	Mykhet
+	Software	Programvare
+	Software adapter	Programvareadapter
 	Solarize	Solariser
+	Solarized	Solarized
+	Solarized Dark	Solarized mørk
+	Solarized Dark Theme	Solarized mørkt tema
+	Solarized dark	Solarized mørk
+	Solid	Heltrukket
+	Solid Color	Ensfarget
 	Solid Color…	Ensfarget…
+	Solid Front Faces	Heltrukne frontflater
+	Solidity:	Fasthet:
+	Some brush presets could not be loaded	Noen penselvalg kunne ikke lastes
+	Sort	Sorter
+	Sort By Name	Sorter etter navn
+	Source	Kilde
+	Source Channel	Kildefargekanal
+	Source Files	Kildefiler
+	Source Invert	Kilde inverter
+	Source Layer	Kildelag
+	Source1 Channel	Kilde 1-kanal
+	Source1 Invert	Kilde 1 inverter
+	Source2 Channel	Kilde 2-kanal
+	Source2 Invert	Kilde 2 inverter
+	Source: not set ({key}-click with Clone Stamp)	Kilde: ikke angitt ({key}-klikk med klonestempel)
+	Source: set	Kilde: angitt
+	Space	Mellomrom
+	Space After	Mellomrom etter
+	Space Before	Mellomrom før
+	Spacing	Avstand
+	Spacing:	Avstand:
+	Sparkle	Funkling
+	Spatter	Stenk
+	Speckle	Flekker
+	Speed	Hastighet
+	Spell check complete.	Stavekontrollen er ferdig.
+	Spherize	Kuleform
 	Spherize…	Kuleform…
+	Spin	Spinn
+	Spin Blur	Rotasjonsuskarp
 	Spin Blur…	Rotasjonsuskarp…
+	Split Channels	Del kanaler
+	Split Toning	Delt toning
 	Split Warp Crosswise	Del forvregning på tvers
 	Split Warp Horizontally	Del forvregning horisontalt
 	Split Warp Vertically	Del forvregning vertikalt
+	Split at Playhead	Del ved avspillingshodet
+	Split:	Del:
+	Sponge	Svamp
+	Sponge Tool	Svampverktøy
+	Spot	Spot
+	Spot Channel	Spotkanal
+	Spot Color	Spotfarge
+	Spot Healing	Spothelbreding
+	Spot Healing Brush	Spothelbredelsespensel
+	Spot Healing Brush Tool	Spothelbredelsespensel-verktøy
+	Spot:	Spot:
+	Spray Radius	Sprayradius
+	Sprayed Strokes	Spraystrøk
+	Spread	Spredning
+	Sprinkles	Dryss
 	Square	Kvadrat
+	Square Size	Kvadratstørrelse
+	Square, 12 x 12	Kvadrat, 12 x 12
+	Square, 5 x 5	Kvadrat, 5 x 5
+	Squareness	Firkanthet
+	Squeeze	Klem
+	Srgb	sRGB
 	Stack Mode	Stabelmodus
+	Stagger	Forskyvning
+	Stained Glass	Farget glass
+	Stamp	Stempel
+	Stamp Down	Stempel ned
+	Stamp Visible	Stempel synlig
+	Standard	Standard
 	Standard Deviation	Standardavvik
 	Standard Ligatures	Standardligaturer
 	Standard Screen Mode	Standard skjermmodus
+	Star	Stjerne
+	Star Ratio:	Stjerneforhold:
+	Star ratio	Stjerneforhold
+	Stars	Stjerner
+	Start Recording	Start opptak
+	Start X	Start X
+	Start Y	Start Y
+	Starting serial	Startserienummer
+	Statistics	Statistikk
 	Statistics…	Statistikk…
+	Status Bar	Statuslinje
+	Status Information	Statusinformasjon
+	Std Dev:	Std.avvik:
+	Step Backward	Trinn bakover
+	Step Forward	Trinn fremover
+	Step {step} ({id}) failed: {error}	Trinn {step} ({id}) mislyktes: {error}
+	Step {step} is waiting for its dialog	Trinn {step} venter på dialogen sin
+	Stippled	Prikket
+	Stop	Stopp
+	Stop For Errors	Stopp ved feil
+	Stop Recording	Stopp opptak
+	Stop playing/recording	Stopp avspilling/opptak
+	Stops	Stopp
+	Straighten	Rett opp
+	Straighten Layer	Rett opp laget
+	Straighten the image by drawing a line on it	Rett opp bildet ved å tegne en linje på det
+	Strength	Styrke
+	Strength:	Styrke:
+	Stretch	Strekk
+	Strikethrough	Gjennomstreking
+	Stroke	Kontur
+	Stroke Catch-up	Konturinnhenting
+	Stroke Color	Konturfarge
+	Stroke Detail	Konturdetalj
+	Stroke Direction	Konturretning
+	Stroke Length	Konturlengde
+	Stroke Options	Konturvalg
+	Stroke Path	Kontur bane
+	Stroke Path…	Kontur bane…
+	Stroke Pressure	Konturtrykk
+	Stroke Size	Konturstørrelse
+	Stroke Width	Konturbredde
+	Stroke color	Konturfarge
+	Stroke path with brush	Strek banen med pensel
+	Stroke:	Kontur:
+	Strokes	Strøk
+	Strokes to remove: {n} (Enter applies, Esc cancels)	Strøk som skal fjernes: {n} (Enter bruker, Esc avbryter)
 	Stroke…	Kontur…
 	Strong	Sterk
+	Structure:	Struktur:
+	Studio	Studio
+	Studio (Dark)	Studio (mørk)
+	Studio (Light)	Studio (lys)
+	Studio Light	Studio lys
+	Studio Light Theme	Studio lyst tema
+	Studio Theme	Studio-tema
+	Studio light	Studio lys
+	Style	Stil
+	Style Options	Stilvalg
+	Style Options…	Stilvalg…
+	Style {name} saved	Stilen {name} er lagret
+	Style: Normal	Stil: Normal
 	Styles	Stiler
 	Stylistic Alternates	Stilistiske alternativer
+	Stylization	Stilisering
 	Stylize	Stiliser
+	Stylus Wheel	Pennhjul
+	Subdivisions	Underdelinger
 	Subject	Motiv
+	Subject Distance	Motivavstand
+	Subscript	Senketekst
+	Subtract	Trekk fra
 	Subtract Front Shape	Trekk fra fremre form
+	Subtract Mask from Selection	Trekk maske fra utvalget
+	Subtract Shapes at Overlap	Trekk fra former ved overlapp
+	Subtract from	Trekk fra
+	Subtract from Sample	Trekk fra måling
+	Subtract from selection  ({key})	Trekk fra utvalget  ({key})
+	Subtract from selection  (⌥)	Trekk fra utvalget  (⌥)
+	Suggestions:	Forslag:
+	Sumi-e	Sumi-e
+	Summarize…	Oppsummer…
 	Summation	Summasjon
+	Superscript	Hevetekst
+	Supplemental Categories	Supplerende kategorier
+	Surface Blur	Flateuskarp
 	Surface Blur…	Flateuskarp…
+	Swap colours (X)	Bytt farger (X)
+	Swaps height and width	Bytter høyde og bredde
 	Swash	Swash
 	Swatches	Fargeprøver
+	Switch Foreground and Background Colors	Bytt forgrunns- og bakgrunnsfarge
+	Switch between free transform and warp modes	Bytt mellom fri transformering og forvregningsmodus
+	Switch theme	Bytt tema
+	Switched to CPU rendering	Byttet til CPU-gjengivelse
+	Symbols	Symboler
+	Symmetry Off	Symmetri av
+	Sync with system	Synkroniser med systemet
+	System	System
+	System Info	Systeminfo
+	System Info…	Systeminfo…
+	System title bar	Systemtittellinje
+	TIFF Options	TIFF-valg
+	Table	Tabell
+	Tablet	Tablet
+	Tabloid	Tabloid
+	Take the shortcut from the other command and select it	Ta hurtigtasten fra den andre kommandoen og velg den
+	Taper	Avsmalning
+	Targa Options	Targa-valg
+	Target	Mål
+	Target Channel 3	Målkanal 3
+	Target Channel 4	Målkanal 4
+	Target Channel 5	Målkanal 5
+	Target Channel 6	Målkanal 6
+	Target Channel 7	Målkanal 7
+	Target Channel 8	Målkanal 8
+	Target Channel 9	Målkanal 9
+	Target Composite Channel	Målkomposittkanal
 	Target Path	Målbanen
+	Target X	Mål X
+	Target Y	Mål Y
+	Target:	Mål:
+	Teal Orange	Blågrønn oransje
+	Technique	Teknikk
+	Technology Previews	Teknologiforhåndsvisninger
+	Technology Previews…	Teknologiforhåndsvisninger…
+	Temperature	Temperatur
+	Temporary	Midlertidig
+	Tetrahedral	Tetraedrisk
+	Text Layer	Tekstlag
+	Text Position:	Tekstplassering:
+	Text Replacement	Teksterstatning
+	Text color	Tekstfarge
+	Text engine	Tekstmotor
+	Text file	Tekstfil
+	Texture	Tekstur
+	Texture Coverage	Teksturdekning
+	Texture Each Tip	Tekstur per spiss
+	Texturizer	Teksturering
+	Thaw Mask	Tin maske
+	The GPU compositor wasn't used: {reason}	GPU-kompositoren ble ikke brukt: {reason}
+	The active layer has no pixels here — turn on Sample All Layers or select a layer with pixels	Det aktive laget har ingen piksler her — slå på Mål alle lag eller velg et lag med piksler
+	The canvas is shown as sRGB. Choose a monitor profile in Edit › Color Settings.	Lerretet vises som sRGB. Velg en skjermprofil i Rediger › Fargeinnstillinger.
+	The canvas on {display} is shown as sRGB. Choose a monitor profile in Edit › Color Settings.	Lerretet på {display} vises som sRGB. Velg en skjermprofil i Rediger › Fargeinnstillinger.
+	The current gradient (pick one in Window › Gradients)	Gjeldende gradient (velg en i Vindu › Gradienter)
+	The document does not have an embedded colour profile. Working space: {working}.	Dokumentet har ingen innebygd fargeprofil. Arbeidsområde: {working}.
+	The document is closed	Dokumentet er lukket
+	The document or Smart Filter changed. Reopen its dialog.	Dokumentet eller smartfilteret er endret. Åpne dialogen på nytt.
+	The document or selected layers changed. Please request deletion again.	Dokumentet eller de valgte lagene er endret. Be om sletting på nytt.
+	The document “{name}” does not have an embedded {mode} profile.	Dokumentet «{name}» har ingen innebygd {mode}-profil.
+	The document “{name}” has an embedded color profile that does not match the current {mode} working space.	Dokumentet «{name}» har en innebygd fargeprofil som ikke samsvarer med gjeldende {mode}-arbeidsområde.
+	The fastest and the softest, with colour fringing on fine detail.	Den raskeste og mykeste, med fargefrynser på fine detaljer.
+	The file could not be opened.	Filen kunne ikke åpnes.
+	The file could not be saved.	Filen kunne ikke lagres.
+	The gradient the Gradient tool paints with	Gradienten som gradientverktøyet maler med
+	The keyboard shortcut set was not imported: {error}	Hurtigtastsettet ble ikke importert: {error}
+	The layer or its mask changed. Drag the mask onto the Trash again.	Laget eller masken er endret. Dra masken til papirkurven igjen.
+	The layers need {needed} of GPU memory and may hold {budget}, so edits that redraw the whole document do it on the CPU. Click to set GPU Memory.	Lagene trenger {needed} GPU-minne og kan holde {budget}, så redigeringer som tegner hele dokumentet på nytt gjør det på CPU. Klikk for å angi GPU-minne.
+	The name in the save dialog was “{name}”.	Navnet i lagredialogen var «{name}».
+	The transform couldn't be applied.	Transformeringen kunne ikke brukes.
+	Theme	Tema
+	There are too many sets: delete one first.	Det er for mange sett: slett ett først.
+	There is no color table to save.	Det er ingen fargetabell å lagre.
+	There is no crop size or ratio to save	Det er ingen beskjæringsstørrelse eller -forhold å lagre
+	These settings aren't available in PhotoCraft yet.	Disse innstillingene er ikke tilgjengelige i PhotoCraft ennå.
+	Thickness	Tykkelse
+	Thin	Tynn
+	This Layer:	Dette laget:
+	This Smart Object must be rasterized before proceeding. Its contents will no longer be editable. Rasterize the Smart Object?	Dette smartobjektet må rasteriseres før du fortsetter. Innholdet kan da ikke lenger redigeres. Rasterisere smartobjektet?
+	This adjustment ({key}) is kept as imported and can't be edited yet.	Denne justeringen ({key}) beholdes som importert og kan ikke redigeres ennå.
+	This document's layers need {needed} but may hold {budget}: whole-document redraws use the CPU	Dette dokumentets lag trenger {needed}, men kan holde {budget}: nytegning av hele dokumentet bruker CPU
+	This document's layers: {needed} of {budget} for layers	Dette dokumentets lag: {needed} av {budget} for lag
+	This fill layer must be rasterized before proceeding. Its fill content will no longer be editable. Rasterize the layer?	Dette fyllaget må rasteriseres før du fortsetter. Fyllinnholdet kan da ikke lenger redigeres. Rasterisere laget?
+	This layer must be rasterized before proceeding.	Dette laget må rasteriseres før du fortsetter.
+	This redraw took {seconds} s on the CPU.	Denne nytegningen tok {seconds} s på CPU.
+	This session: {reason}	Denne økten: {reason}
+	This shape layer must be rasterized before proceeding. It will no longer be editable as a shape. Rasterize the shape?	Dette formlaget må rasteriseres før du fortsetter. Det kan da ikke lenger redigeres som form. Rasterisere formen?
+	This type layer must be rasterized before proceeding. Its text will no longer be editable. Rasterize the type?	Dette typelaget må rasteriseres før du fortsetter. Teksten kan da ikke lenger redigeres. Rasterisere teksten?
+	Threshold	Terskel
+	Threshold Level	Terskelnivå
 	Threshold…	Terskel…
+	Thumbnail Contents	Miniatyrinnhold
+	Thumbnail Size	Miniatyrstørrelse
+	Thumbnail size (smallest: list)	Miniatyrstørrelse (minste: liste)
 	Tile	Flislegg
 	Tile All Horizontally	Flislegg alle horisontalt
 	Tile All Vertically	Flislegg alle vertikalt
+	Tile Horizontally	Flislegg horisontalt
+	Tile Size	Flisstørrelse
+	Tile Vertically	Flislegg vertikalt
+	Tiles	Fliser
 	Tiles…	Fliser…
+	Tilt	Helling
+	Tilt Scale	Helskala
+	Tilt X	Helling X
+	Tilt Y	Helling Y
+	Tilt-Shift	Tilt-skift
 	Tilt-Shift…	Tilt-skift…
+	Time	Tid
+	Timecode	Tidskode
 	Timeline	Tidslinje
+	Timing	Timing
+	Tint	Fargetone
+	Tint Color	Fargetonefarge
+	Tiny	Bitteliten
+	Tiny Lens	Bitteliten linse
+	Title	Tittel
 	Titling Alternates	Tittelalternativer
+	To	Til
+	To Center	Til sentrum
+	To drop files, start PhotoCraft under XWayland: `{command}`	For å slippe filer, start PhotoCraft under XWayland: `{command}`
+	To paste from other apps, start PhotoCraft under XWayland: `{command}`	For å lime inn fra andre programmer, start PhotoCraft under XWayland: `{command}`
 	Toggle Last State	Veksle siste tilstand
+	Toggle Layer Mask Overlay	Veksle overlegg for lagmaske
+	Toggle count group visibility	Veksle synlighet for tellegruppe
+	Toggle reference point	Veksle referansepunkt
+	Toggle text orientation	Veksle tekstretning
+	Toggle the Brush Settings panel	Veksle penselinnstillinger-panelet
+	Toggle the Brush Settings panel  (F5)	Veksle penselinnstillinger-panelet  (F5)
+	Toggle visibility	Veksle synlighet
+	Tolerance	Toleranse
+	Tolerance:	Toleranse:
+	Tone Curve	Tonekurve
+	Tone Histogram	Tonehistogram
+	Tone:	Tone:
+	Tool	Verktøy
+	Tool Options	Verktøyvalg
 	Tool Presets	Verktøyforhåndsvalg
+	Toolbar	Verktøylinje
+	Toolbars	Verktøylinjer
 	Toolbar…	Verktøylinje…
 	Tools	Verktøy
 	Tools…	Verktøy…
+	Top	Topp
 	Top Edges	Øvre kanter
+	Top Left	Øverst til venstre
+	Top Right	Øverst til høyre
+	Top:	Topp:
+	Torn Edges	Rufsete kanter
+	Total Ink	Total blekk
+	Total:	Totalt:
+	Touch gestures	Berøringsbevegelser
+	Trace Contour	Spor kontur
 	Trace Contour…	Spor kontur…
+	Tracking	Sporing
+	Tracking (1/1000 em)	Sporing (1/1000 em)
+	Traditional (72.27 points/inch)	Tradisjonell (72,27 punkter/tomme)
+	Transfer	Overføring
 	Transform	Transformer
+	Transform Again on a Copy	Transformer igjen på en kopi
+	Transform On Drop	Transformer ved slipp
 	Transform Selection	Transformer utvalg
+	Transform Symmetry	Transformersymmetri
+	Transformation	Transformering
+	Transition	Overgang
+	Transmission Reference	Overføringsreferanse
+	Transparency	Gjennomsiktighet
+	Transparency & Gamut	Gjennomsiktighet og fargerepresentasjon
 	Transparency & Gamut…	Gjennomsiktighet og fargerepresentasjon…
+	Transparency Shapes Layer	Gjennomsiktighet former laget
+	Transparency Threshold	Gjennomsiktighetsterskel
+	Transparent	Gjennomsiktig
+	Trap	Felle
 	Trap…	Felle…
+	Tree	Tre
 	Tree…	Tre…
+	Triangle	Trekant
+	Triangle Tool	Trekantverktøy
+	Trilinear	Trilineær
+	Trim	Trim
 	Trim…	Trim…
+	Turbulent	Turbulent
+	Turn the prompt back on with Ask On Mismatch in Edit › Color Settings.	Slå spørsmålet på igjen med Spør ved avvik i Rediger › Fargeinnstillinger.
+	Twirl	Virvel
+	Twirl Clockwise	Virvel med klokken
+	Twirl Counterclockwise	Virvel mot klokken
 	Twirl…	Virvel…
+	Twist	Vri
 	Type	Type
+	Type Layer	Typelag
+	Type Options	Tekstvalg
+	Type Styles	Typestiler
+	Type units	Tekstenheter
+	Type:	Type:
 	Type…	Type…
+	UI font size	Skriftstørrelse for grensesnitt
+	UI scale	Grensesnittsmålestokk
+	URLs	URL-er
+	Ultra Bold	Ultra fet
+	Ultra Light	Ultra lett
+	Unaltered	Uendret
+	Unavailable in this color mode	Utilgjengelig i denne fargemodusen
+	Uncoated CMYK	Ubelagt CMYK
+	Undefined Areas	Udefinerte områder
+	Underline	Understrek
+	Underlying Layer:	Underliggende lag:
+	Underpainting	Underliggende maling
+	Underwater	Under vann
 	Undo	Angre
+	Undo Changes	Angre endringer
+	Ungroup	Opphev gruppering
 	Ungroup Layers	Opphev gruppering av lag
+	Uniform	Ensartet
 	Unite Shapes	Slå sammen former
+	Unite Shapes at Overlap	Slå sammen former ved overlapp
+	Units	Enheter
+	Units & Rulers	Enheter og linjaler
 	Units & Rulers…	Enheter og linjaler…
+	Unix	Unix
+	Unknown	Ukjent
+	Unlink	Fjern kobling
+	Unlink Layer Mask	Fjern kobling av lagmaske
+	Unlink the mask from the layer	Fjern koblingen mellom masken og laget
+	Unlock	Lås opp
+	Unlock: picking a preset replaces these settings	Lås opp: valg av et forhåndsvalg erstatter disse innstillingene
+	Unlocked	Låst opp
+	Unnamed {mode} profile	Navnløs {mode}-profil
+	Unsaved Changes	Ulagrede endringer
+	Unsaved changes	Ulagrede endringer
+	Unsharp Mask	Uskarp maske
 	Unsharp Mask…	Uskarp maske…
+	Unsupported file format	Filformatet støttes ikke
+	Unsupported format	Formatet støttes ikke
+	Untagged {mode}	Umerket {mode}
+	Untitled	Uten navn
+	Untitled-1	Uten navn-1
+	Up	Opp
+	Update	Oppdater
 	Update All Modified Content	Oppdater alt endret innhold
 	Update All Text Layers	Oppdater alle tekstlag
+	Update Layer Comp	Oppdater lagkomposisjon
 	Update Modified Content	Oppdater endret innhold
+	Update layer comp (visibility, position and appearance)	Oppdater lagkomposisjon (synlighet, plassering og utseende)
+	Update the current brush with these settings	Oppdater gjeldende pensel med disse innstillingene
+	Updates	Oppdateringer
+	Upper	Øvre
+	Urgency	Hastegrad
+	Use	Bruk
+	Use Classic Mode	Bruk klassisk modus
+	Use Custom Color	Bruk egendefinert farge
+	Use Default	Bruk standard
+	Use Default Masks on Fill Layers	Bruk standardmasker på fyllag
+	Use File › Open to open an image.	Bruk Fil › Åpne for å åpne et bilde.
+	Use File › Open, or paste a copied image with {paste}.	Bruk Fil › Åpne, eller lim inn et kopiert bilde med {paste}.
+	Use Global Light	Bruk globalt lys
+	Use Legacy	Bruk eldre
+	Use Measurement Scale	Bruk målingsmålestokk
+	Use Previous Layer to Create Clipping Mask	Bruk forrige lag til å lage klippemaske
+	Use Selection In Source	Bruk utvalg i kilde
+	Use Selection In Target	Bruk utvalg i mål
+	Use additional plugins folder	Bruk ekstra mappe for programtillegg
+	Use esc to commit	Bruk esc for å utføre
+	Use finite lengths and a positive pattern total	Bruk endelige lengder og en positiv mønstersum
+	Use gpu	Bruk GPU
+	Use legacy free transform	Bruk eldre fri transformering
+	Use shift key for tool switch	Bruk shift-tasten for verktøybytte
+	Use tablet pressure	Bruk tablettrykk
+	Use tablet pressure to change pen width	Bruk tablettrykk for å endre pennbredde
+	Use the embedded profile ({profile})	Bruk den innebygde profilen ({profile})
+	Use:	Bruk:
+	Username	Brukernavn
+	Uses the foreground and background colors.	Bruker forgrunns- og bakgrunnsfargen.
+	Uses the foreground and background colours.	Bruker forgrunns- og bakgrunnsfargen.
+	Vanishing Point	Fluktpunkt
+	Vanishing Point is not active	Fluktpunkt er ikke aktivt
+	Vanishing Point: click four corners to create a plane	Fluktpunkt: klikk fire hjørner for å lage et plan
 	Vanishing Point…	Fluktpunkts…
+	Variable Data Sets	Variable datasett
 	Variable Data Sets…	Variable datasett…
 	Variables	Variabler
+	Variables bind a layer's visibility, text or pixels to a named data slot.	Variabler binder et lags synlighet, tekst eller piksler til en navngitt dataplass.
 	Variance	Varians
+	Vary round brush hardness on hud	Varier hardheten til rund pensel på HUDS
 	Vector Mask	Vektormaske
+	Vector Mask Hides Effects	Vektormaske skjuler effekter
+	Vector Mask from Current Path	Vektormaske fra gjeldende bane
+	Version	Versjon
+	Version {version}	Versjon {version}
 	Vertical	Vertikal
 	Vertical Centers	Vertikale sentre
+	Vertical Distortion	Vertikal forvrengning
+	Vertical Only	Bare vertikal
+	Vertical Type Mask Tool	Vertikal tekstmaske-verktøy
+	Vertical Type Tool	Vertikalt tekstverktøy
+	Vertical scale	Vertikal skalering
+	Vertical type	Vertikal tekst
 	Vertically	Vertikalt
+	Very High	Svært høy
+	Vibrance	Livfullhet
 	Vibrance…	Livfullhet…
 	Video	Video
 	Video Cache	Videobuffer
+	Video Frames to Layers	Videorammer til lag
 	Video Frames to Layers…	Videorammer til lag…
 	Video Layers	Videolag
 	View	Vis
+	View Options	Visningsvalg
+	View menu	Vis-menyen
+	Vignette Amount	Vinjetteringsmengde
+	Vignette Feather	Vinjettering myk kant
+	Vignette Highlights	Vinjettering høylys
+	Vignette Midpoint	Vinjettering midtpunkt
+	Vignette Roundness	Vinjettering rundhet
+	Vignette Style	Vinjetteringsstil
+	Vignetting	Vinjettering
+	Vine Color	Rankefarge
+	Vine With Flowers	Ranke med blomster
+	Vine With Leaves	Ranke med blader
+	Violent	Voldsom
+	Violet	Fiolett
+	Violet, Orange	Fiolett, oransje
+	Visibility	Synlighet
+	Visible	Synlig
+	Vivid Light	Klart lys
+	Vulkan	Vulkan
+	W	V
+	W x H x Resolution	B x H x oppløsning
+	W:	V:
+	WIA Support	WIA-støtte
 	WIA Support…	WIA-støtte…
+	Wait for the current job to finish.	Vent til gjeldende jobb er ferdig.
+	Wand	Tryllestav
+	Warm	Varm
+	Warming Filter (81)	Oppvarmingsfilter (81)
+	Warming Filter (85)	Oppvarmingsfilter (85)
+	Warming Filter (LBA)	Oppvarmingsfilter (LBA)
+	Warming L B A	Oppvarming L B A
+	Warming81	Oppvarming 81
+	Warming85	Oppvarming 85
+	Warmth	Varme
+	Warning	Advarsel
 	Warp	Forvreng
+	Warp Text	Forvreng tekst
 	Warp Text…	Forvreng tekst…
+	Warp:	Forvregning:
+	Water Paper	Vått papir
+	Watercolor	Akvarell
+	Watercolour look: lighter interior, darker rims.	Akvarellutseende: lysere indre, mørkere kanter.
+	Wave	Bølge
+	Wavelength Max	Maks bølgelengde
+	Wavelength Min	Min bølgelengde
+	Waves	Bølger
 	Wave…	Bølge…
+	Web	Web
+	Web Color	Web-farge
+	Web Large	Web stor
+	Web Minimum	Web minimum
+	Web Most Common	Web vanligst
+	Web Photo Gallery…	Web-fotogalleri…
+	Web Snap	Web-festing
+	WebP (lossless)	WebP (tapsfri)
+	Webp	WebP
+	Weight	Vekt
+	Weight:	Vekt:
+	Wet	Våt
+	Wet Edges	Våte kanter
+	Wetness	Våthet
+	Wetness Jitter	Våthetssjitring
+	White	Hvit
+	White Balance: As Shot	Hvitbalanse: som tatt
+	White Clip	Hvit klipp
+	White Intensity	Hvit intensitet
+	White Is High	Hvit er høyt
+	White Matte	Hvit kant
+	Whites	Hvite
+	Whole Word	Hele ordet
+	Wide Blurry	Bred uskarp
+	Wide Gamut RGB	Wide Gamut RGB
+	Wide Sharp	Bred skarp
+	Width	Bredde
+	Width and Height	Bredde og høyde
+	Width:	Bredde:
+	Wind	Vind
 	Window	Vindu
+	Window renderer: {renderer}	Vindusgjengiver: {renderer}
 	Windows	Vinduer
 	Windows LCD	Windows LCD
 	Wind…	Vind…
+	With GPU Memory set to Automatic, this also limits the GPU layer budget. That budget is capped at one quarter of installed RAM and, when known, three eighths of the graphics card's memory, with a 512 MB minimum. Raising this limit beyond those caps does not increase the GPU budget.	Med GPU-minne satt til Automatisk begrenser dette også GPU-lagbudsjettet. Budsjettet er begrenset til en fjerdedel av installert RAM og, når kjent, tre åttedeler av grafikkortets minne, med minimum 512 MB. Å heve denne grensen utover disse takene øker ikke GPU-budsjettet.
+	Word Spacing	Ordmellomrom
+	Work Path	Arbeidsbane
+	Working	Arbeider
 	Working Black Plate	Arbeidsplate svart
 	Working CMY Plate	Arbeidsplate CMY
 	Working CMYK	Arbeids-CMYK
+	Working Cmyk	Arbeids-CMYK
 	Working Cyan Plate	Arbeidsplate cyan
+	Working Gray	Arbeidsgrå
+	Working Gray Plate	Arbeidsplate grå
 	Working Magenta Plate	Arbeidsplate magenta
+	Working Rgb	Arbeids-RGB
+	Working Space	Arbeidsområde
+	Working Spaces	Arbeidsområder
 	Working Yellow Plate	Arbeidsplate gul
+	Working-cmyk	Arbeids-CMYK
+	Working: {working}	Arbeidsområde: {working}
+	Working…	Arbeider…
 	Workspace	Arbeidsområde
+	Workspaces	Arbeidsområder
 	Workspace…	Arbeidsområde…
+	World ready	Klar for verden
+	Wrap	Bryt
+	X	X
+	X11	X11
+	XOR	XOR
+	Y	Y
+	Yellow	Gul
+	Yellow  ·  Blue	Gul  ·  Blå
+	Yellows	Gultonar
+	Yes	Ja
+	Your keyboard shortcut set {set} is in use here: {n} shortcuts differ from the defaults. Edit › Keyboard Shortcuts shows them; Reset All to Defaults undoes this.	Hurtigtastsettet {set} ditt er i bruk her: {n} hurtigtaster avviker fra standard. Rediger › Hurtigtaster viser dem; Tilbakestill alt til standard angrer dette.
+	ZigZag	SikkSakk
 	ZigZag…	SikkSakk…
+	Zigzag	SikkSakk
+	Zoom	Zoom
 	Zoom In	Zoom inn
+	Zoom In (hold, drag to scrub)	Zoom inn (hold, dra for å skrubbe)
 	Zoom Out	Zoom ut
+	Zoom Out (hold)	Zoom ut (hold)
+	Zoom Tool	Zoom-verktøy
+	Zoom clicked point to center	Zoom klikket punkt til sentrum
+	Zoom in	Zoom inn
+	Zoom out	Zoom ut
+	Zoom resizes windows	Zoom endrer vindusstørrelse
+	Zoom with scroll wheel	Zoom med rullehjul
+	Zoom with trackpad pinch	Zoom med styreflateklyp
 	auto	auto
 	blue	blå
 	brushes	pensler
@@ -3667,9 +4242,16 @@
 	orange	oransje
 	previous reading kept; the last re-read failed: {reason}	forrige lesing beholdt; siste ny-lesing mislyktes: {reason}
 	red	rød
+	sRGB	sRGB
+	sRGB IEC61966-2.1	sRGB IEC61966-2.1
 	set in Print Settings…	angitt i Utskriftsinnstillinger…
 	set name	settnavn
 	shortcut	hurtigtast
+	unknown	ukjent
+	unknown type	ukjent type
+	vector mask	vektormaske
+	violet	fiolett
+	yellow	gul
 	{added}, {removed} subtracted	{added}, {removed} trukket fra
 	{index} of {total}	{index} av {total}
 	{key} to subtract	{key} for å trekke fra
@@ -3692,6 +4274,11 @@
 	{shortcut} assigned.	{shortcut} er tilordnet.
 	{shortcut} is already in use by {commands} and will be removed from it when you click OK.	{shortcut} er allerede i bruk av {commands} og vil bli fjernet fra den når du klikker OK.
 	{shortcut} is reserved by the system and can't be assigned.	{shortcut} er reservert av systemet og kan ikke tilordnes.
+	{size} (was {old})	{size} (var {old})
+	{verb} {mask} {layer}	{verb} {mask} {layer}
+	{w} px x {h} px ({ppi} ppi)	{w} px x {h} px ({ppi} ppi)
+	{w} {unit} x {h} {unit} ({ppi} ppi)	{w} {unit} x {h} {unit} ({ppi} ppi)
+	{zoom}%	{zoom} %
 	“{name}” already exists. Replace it?	«{name}» finnes allerede. Erstatte den?
 	…and {n} more	…og {n} flere
 	↑↓ navigate   {key} run   esc close	↑↓ naviger   {key} kjør   esc lukk
