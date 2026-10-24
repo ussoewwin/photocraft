@@ -4431,3 +4431,4 @@ layers	Fill	Fyll
 layers	Fill:	Fyll:
 navigator	Zoom	Zoom
 shape	Appearance	Utseende
+	The document has an embedded colour profile that does not match the working space.\nEmbedded: {embedded}\nWorking: {working}	Dokumentet har en innebygd fargeprofil som ikke samsvarer med arbeidsområdet.\nInnebygd: {embedded}\nArbeidsområde: {working}
