@@ -139,4 +139,43 @@ mod tests {
         assert!(find(&list, "nope", "water").is_some());
         assert!(find(&list, "nope", "").is_none());
     }
+
+    /// The id is a hash of every sample in row-major order; reading a tall pattern a band of rows
+    /// at a time must give the id one whole read gave, or saved documents would lose their
+    /// pattern links.
+    #[test]
+    fn the_id_of_a_tall_pattern_matches_a_single_read_of_it() {
+        let (w, h) = (7u32, BAND_ROWS * 2 + 37);
+        let mut s = Surface::new(PixelFormat::RGBA8);
+        for y in 0..h as i32 {
+            for x in 0..w as i32 {
+                s.fill_rect(Rect::new(x, y, x + 1, y + 1), &[(x % 5) as f32 / 4.0, (y % 7) as f32 / 6.0, ((x + y) % 3) as f32 / 2.0, 1.0]);
+            }
+        }
+        let name = "tall";
+        let mut h1 = fnv(0xcbf2_9ce4_8422_2325, name.as_bytes());
+        h1 = fnv(h1, &w.to_le_bytes());
+        h1 = fnv(h1, &h.to_le_bytes());
+        for v in s.read_region(Rect::new(0, 0, w as i32, h as i32)) {
+            h1 = fnv(h1, &v.to_bits().to_le_bytes());
+        }
+        let h2 = fnv(h1 ^ 0x9e37_79b9_7f4a_7c15, format!("{:?}", s.format()).as_bytes());
+        let expected =
+            format!("{:08x}-{:04x}-{:04x}-{:04x}-{:012x}", (h1 >> 32) as u32, (h1 >> 16) as u16, h1 as u16, (h2 >> 48) as u16, h2 & 0xffff_ffff_ffff);
+        assert_eq!(Pattern::new(name, s, w, h).id, expected);
+    }
+
+    #[test]
+    fn paintable_follows_the_working_copy_bytes() {
+        let sparse =
+            |format: PixelFormat, width: u32, height: u32| Pattern { id: String::new(), name: String::new(), width, height, surface: Surface::new(format) };
+        let float = PixelFormat::new(photocraft_color::ColorMode::Rgb, SampleType::F32, true);
+        assert!(sparse(PixelFormat::RGBA8, 8000, 8000).is_paintable());
+        assert!(sparse(float, 4096, 4096).is_paintable());
+        assert!(!sparse(float, 4097, 4096).is_paintable());
+        assert!(!sparse(PixelFormat::RGBA8, 9000, 8000).is_paintable());
+        assert!(!sparse(PixelFormat::RGBA8, 0, 8).is_paintable());
+        assert_eq!(sparse(PixelFormat::RGBA8, 10, 10).working_bytes(), 400);
+        assert_eq!(sparse(float, 10, 10).working_bytes(), 1600);
+    }
 }

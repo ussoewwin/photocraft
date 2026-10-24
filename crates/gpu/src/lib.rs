@@ -82,6 +82,9 @@ pub const RESIDENT_BUDGET: u64 = 4 << 30;
 /// GPU memory pattern textures may hold before the least recently painted are dropped (those the
 /// current frame paints with always stay).
 pub const PATTERN_BUDGET: u64 = 256 << 20;
+/// The most a single pattern's RGBA32F texture may take. A pattern over it paints on the CPU, which
+/// holds an 8-bit pattern at 4 bytes a pixel instead of 16 (`Pattern::is_paintable`).
+const MAX_PATTERN_TEXTURE_BYTES: u64 = 256 << 20;
 /// A pattern texture no frame has painted with for this many frames is dropped.
 pub const PATTERN_IDLE_FRAMES: u64 = 240;
 /// Uploads (bytes) [`Compositor::render`] stages before submitting the work recorded so far, so
@@ -211,7 +214,7 @@ struct CachedPattern {
     doc: DocId,
     /// [`Compositor::frame`] when it last painted.
     last_used: u64,
-    /// GPU bytes of the texture (RGBA8, or RGBA32F for a pattern that is not 8-bit).
+    /// GPU bytes of the texture (RGBA32F).
     bytes: u64,
 }
 
@@ -1022,15 +1025,29 @@ impl Compositor {
                     if s.lut.as_ref().is_some_and(|l| l.len() > 4096) {
                         return Err(Unsupported(format!("effect blur on `{}` too wide for the GPU path", f.layer.name)));
                     }
+                    if let Some(pat) = &s.pattern {
+                        self.check_pattern(pat)?;
+                    }
                 }
             }
         }
         for pass in &p.passes {
-            if let Some(pat) = pass.pattern
-                && (pat.width > self.device_max || pat.height > self.device_max)
-            {
-                return Err(Unsupported(format!("pattern `{}` larger than the GPU texture limit", pat.name)));
+            if let Some(pat) = pass.pattern {
+                self.check_pattern(pat)?;
             }
+        }
+        Ok(())
+    }
+
+    /// A pattern's texture must fit the device and the pattern budget. The CPU compositor holds an
+    /// 8-bit pattern at a quarter of the texture's 16 bytes a pixel, so a larger one (up to
+    /// Define Pattern's 8000 × 8000) renders there instead.
+    fn check_pattern(&self, pat: &Pattern) -> Result<(), Unsupported> {
+        if pat.width > self.device_max || pat.height > self.device_max {
+            return Err(Unsupported(format!("pattern `{}` larger than the GPU texture limit", pat.name)));
+        }
+        if u64::from(pat.width) * u64::from(pat.height) * 16 > MAX_PATTERN_TEXTURE_BYTES {
+            return Err(Unsupported(format!("pattern `{}` too large for a GPU texture; the CPU path paints it", pat.name)));
         }
         Ok(())
     }
@@ -1990,7 +2007,7 @@ impl Compositor {
         Some((key, [region.x0, region.y0, region.width() as i32, region.height() as i32]))
     }
 
-    /// Straight RGBA texture of a pattern as it paints in the document's mode (cached by
+    /// Premultiplied RGBA32F texture of a pattern as it paints in the document's mode (cached by
     /// pixel identity and mode).
     fn pattern_view(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, pat: &Pattern) -> wgpu::TextureView {
         let fp = pat.surface.tiles().fold((pat.width as u64) << 32 | pat.height as u64, |acc, (c, t)| {
@@ -2012,39 +2029,17 @@ impl Compositor {
             return cached.texture.view.clone();
         }
         let (w, h) = (pat.width, pat.height);
-        // An 8-bit pattern stays RGBA8 (4 bytes per texel, the shader premultiplies), any other is
-        // RGBA32F; both are written a band of rows at a time, so a large pattern never has a
-        // full-size copy in system memory.
-        let compact = photocraft_compose::pattern::is_compact(pat);
-        let (texture_format, texel_bytes) = if compact { (wgpu::TextureFormat::Rgba8Unorm, 4) } else { (wgpu::TextureFormat::Rgba32Float, 16) };
-        let t = Tex::new(device, "pc_pattern", w, h, texture_format, wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST);
-        let write = |top: u32, rows: u32, bytes: &[u8]| {
-            queue.write_texture(
-                wgpu::TexelCopyTextureInfo {
-                    texture: &t.texture,
-                    mip_level: 0,
-                    origin: wgpu::Origin3d { x: 0, y: top, z: 0 },
-                    aspect: wgpu::TextureAspect::All,
-                },
-                bytes,
-                wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(w * texel_bytes), rows_per_image: Some(rows) },
-                wgpu::Extent3d { width: w, height: rows, depth_or_array_layers: 1 },
-            );
-        };
-        if compact {
-            photocraft_compose::pattern::for_each_rgba8_band(pat, mode, |top, band| write(top, band.len() as u32 / w.max(1), band.as_flattened()));
-        } else {
-            let (mut band, mut bytes) = (Vec::new(), Vec::new());
-            for top in (0..h).step_by(photocraft_doc::pattern::BAND_ROWS as usize) {
-                let bottom = (top + photocraft_doc::pattern::BAND_ROWS).min(h);
-                photocraft_compose::pattern::pattern_rgba_rows(pat, mode, top, bottom, &mut band);
-                bytes.clear();
-                bytes.extend(band.iter().flatten().flat_map(|v| v.to_le_bytes()));
-                write(top, bottom - top, &bytes);
-            }
-        }
+        let px = photocraft_compose::pattern::pattern_rgba(pat, mode);
+        let bytes: Vec<u8> = px.iter().flat_map(|q| [q[0] * q[3], q[1] * q[3], q[2] * q[3], q[3]]).flat_map(f32::to_le_bytes).collect();
+        let t = Tex::new(device, "pc_pattern", w, h, wgpu::TextureFormat::Rgba32Float, wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST);
+        queue.write_texture(
+            wgpu::TexelCopyTextureInfo { texture: &t.texture, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+            &bytes,
+            wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(w * 16), rows_per_image: Some(h) },
+            wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+        );
         let v = t.view.clone();
-        let bytes = u64::from(w.max(1)) * u64::from(h.max(1)) * u64::from(texel_bytes);
+        let bytes = u64::from(w.max(1)) * u64::from(h.max(1)) * 16;
         self.patterns.insert(key, CachedPattern { fingerprint: fp, format, default_bits, texture: t, doc, last_used, bytes });
         v
     }

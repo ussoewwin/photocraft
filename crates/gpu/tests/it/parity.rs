@@ -2565,10 +2565,10 @@ fn closed_documents_release_their_pattern_textures() {
     let a = pattern_fill_doc("first", 4);
     let mut b = pattern_fill_doc("second", 4);
     b.id = photocraft_doc::DocId(a.id.0 + 1);
-    let one = 4 * 4 * 4;
+    let one = 4 * 4 * 16;
     assert_eq!(g.comp.pattern_cache_bytes(), 0);
     render_to_vec(&mut g.comp, &g.device, &g.queue, &a, a.bounds()).expect("render a");
-    assert_eq!(g.comp.pattern_cache_bytes(), one, "one 4 x 4 RGBA8 texture (an 8-bit pattern stays 8-bit)");
+    assert_eq!(g.comp.pattern_cache_bytes(), one, "one 4 x 4 RGBA32F texture");
     render_to_vec(&mut g.comp, &g.device, &g.queue, &b, b.bounds()).expect("render b");
     assert_eq!(g.comp.pattern_cache_bytes(), 2 * one);
     g.comp.forget_doc(a.id);
@@ -2577,6 +2577,27 @@ fn closed_documents_release_their_pattern_textures() {
     g.comp.retain_docs(|_| false);
     assert_eq!(g.comp.pattern_cache_bytes(), 0);
     check(&mut g, &a, "the pattern is uploaded again after being forgotten");
+}
+
+/// A pattern whose RGBA32F texture would pass the per-pattern cap (Define Pattern accepts 8-bit
+/// ones up to 8000 x 8000) is declined by the GPU path and painted by the CPU compositor, which
+/// holds an 8-bit pattern at a quarter of the texture's size.
+#[test]
+fn a_pattern_too_large_for_a_gpu_texture_falls_back_to_the_cpu() {
+    let Some(mut g) = gpu() else { return };
+    let mut d = Document::new("big pattern", Size::new(8, 6), ColorMode::Rgb, SampleType::U8);
+    // 100 MB as RGBA8, 400 MB as an RGBA32F texture.
+    let surface = photocraft_raster::Surface::with_default(PixelFormat::RGBA8, &[1.0, 0.0, 0.0, 1.0]);
+    let pat = Pattern { id: "big".into(), name: "big".into(), width: 5000, height: 5000, surface };
+    assert!(pat.is_paintable());
+    d.layers.push(Layer::new(
+        "pattern",
+        LayerContent::Fill(Fill::Pattern { name: pat.name.clone(), id: pat.id.clone(), scale: 1.0, angle: 0.0, link: true, phase: (0.0, 0.0) }),
+    ));
+    d.patterns.push(pat);
+    assert!(render_to_vec(&mut g.comp, &g.device, &g.queue, &d, d.bounds()).is_err(), "the GPU path declines it");
+    assert_eq!(g.comp.pattern_cache_bytes(), 0, "nothing was uploaded");
+    assert!(photocraft_compose::flatten(&d).px.iter().all(|p| *p == [1.0, 0.0, 0.0, 1.0]), "the CPU compositor paints it");
 }
 
 /// #4971: pattern textures are bounded while their documents stay open, by a byte budget and
@@ -2589,7 +2610,7 @@ fn pattern_textures_are_evicted_over_budget_and_when_idle() {
     b.id = photocraft_doc::DocId(a.id.0 + 1);
     let mut plain = base_doc(8, 6);
     plain.id = photocraft_doc::DocId(a.id.0 + 2);
-    let one = 4 * 4 * 4;
+    let one = 4 * 4 * 16;
     // Room for one pattern and a half: painting the second drops the first.
     g.comp.set_pattern_budget(one + one / 2);
     render_to_vec(&mut g.comp, &g.device, &g.queue, &a, a.bounds()).expect("render a");
