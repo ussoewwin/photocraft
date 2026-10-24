@@ -83,7 +83,7 @@ pub const RESIDENT_BUDGET: u64 = 4 << 30;
 /// current frame paints with always stay).
 pub const PATTERN_BUDGET: u64 = 256 << 20;
 /// The most a single pattern's RGBA32F texture may take. A pattern over it paints on the CPU, which
-/// holds an 8-bit pattern at 4 bytes a pixel instead of 16 (`Pattern::is_paintable`).
+/// holds a large 8-bit pattern at 4 bytes a pixel instead of 16 (`Pattern::working_bytes`).
 const MAX_PATTERN_TEXTURE_BYTES: u64 = 256 << 20;
 /// A pattern texture no frame has painted with for this many frames is dropped.
 pub const PATTERN_IDLE_FRAMES: u64 = 240;
@@ -1039,9 +1039,8 @@ impl Compositor {
         Ok(())
     }
 
-    /// A pattern's texture must fit the device and the pattern budget. The CPU compositor holds an
-    /// 8-bit pattern at a quarter of the texture's 16 bytes a pixel, so a larger one (up to
-    /// Define Pattern's 8000 × 8000) renders there instead.
+    /// A pattern's texture must fit the device and the per-pattern cap; a larger one renders on
+    /// the CPU compositor.
     fn check_pattern(&self, pat: &Pattern) -> Result<(), Unsupported> {
         if pat.width > self.device_max || pat.height > self.device_max {
             return Err(Unsupported(format!("pattern `{}` larger than the GPU texture limit", pat.name)));

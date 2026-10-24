@@ -9,12 +9,12 @@ use photocraft_raster::Surface;
 /// Largest pattern edge a file may declare (the PSD reader's limit; Define Pattern stops at 8000).
 pub const MAX_EDGE: u32 = 30_000;
 
-/// Most pixels a pattern may have to be painted (Define Pattern's 8000 × 8000 fits).
+/// Most pixels a pattern may have to be painted (Define Pattern's 8000 × 8000 fits). Larger
+/// patterns paint nothing.
 pub const MAX_PAINT_PIXELS: u64 = 1 << 26;
 
-/// Most bytes of working copy one pattern may need to be painted, the most the CPU compositor
-/// expands for it (`photocraft-compose` checks the two agree at build time). See
-/// [`Pattern::working_bytes`].
+/// Most bytes of working copy the CPU compositor holds for one pattern (`photocraft-compose`
+/// checks the two agree at build time). See [`Pattern::working_bytes`].
 pub const MAX_WORKING_BYTES: u64 = 256 << 20;
 
 /// Rows of a pattern read at a time where a whole-tile `f32` copy would cost 16 bytes per pixel.
@@ -83,17 +83,41 @@ impl Pattern {
         u64::from(self.width) * u64::from(self.height)
     }
 
-    /// Bytes of working copy a renderer holds to paint this pattern: 4 per pixel for an 8-bit
-    /// pattern (kept as it is), 16 for any other (expanded to `f32` RGBA).
+    /// Bytes of working copy the compositor holds to paint this pattern. One that fits is expanded
+    /// to premultiplied `f32` RGBA (16 per pixel). A pattern too large for that is held at its own
+    /// depth instead, straight RGBA at 4 bytes per pixel for 8 bits and 8 for 16 bits: exactly its
+    /// values, in a quarter or half the memory. A float one has no smaller exact form.
     pub fn working_bytes(&self) -> u64 {
-        let per_pixel = if self.surface.format().sample == SampleType::U8 { 4 } else { 16 };
-        self.pixel_count().saturating_mul(per_pixel)
+        working_bytes_for(self.pixel_count(), self.surface.format().sample)
     }
 
     /// Whether the tile has pixels and is small enough to paint (see [`MAX_PAINT_PIXELS`] and
     /// [`MAX_WORKING_BYTES`]).
     pub fn is_paintable(&self) -> bool {
         !self.is_empty() && self.pixel_count() <= MAX_PAINT_PIXELS && self.working_bytes() <= MAX_WORKING_BYTES
+    }
+}
+
+/// [`Pattern::working_bytes`] of a pattern of `pixels` pixels with `sample` samples.
+pub fn working_bytes_for(pixels: u64, sample: SampleType) -> u64 {
+    let expanded = pixels.saturating_mul(16);
+    if expanded <= MAX_WORKING_BYTES {
+        return expanded;
+    }
+    match sample {
+        SampleType::U8 => pixels.saturating_mul(4),
+        SampleType::U16 => pixels.saturating_mul(8),
+        SampleType::F32 => expanded,
+    }
+}
+
+/// Most pixels a pattern with `sample` samples may have and still paint: [`MAX_PAINT_PIXELS`] for
+/// 8 bits, fewer where the working copy is larger per pixel.
+pub fn max_paint_pixels(sample: SampleType) -> u64 {
+    match sample {
+        SampleType::U8 => MAX_PAINT_PIXELS,
+        SampleType::U16 => MAX_PAINT_PIXELS.min(MAX_WORKING_BYTES / 8),
+        SampleType::F32 => MAX_PAINT_PIXELS.min(MAX_WORKING_BYTES / 16),
     }
 }
 
@@ -166,16 +190,21 @@ mod tests {
     }
 
     #[test]
-    fn paintable_follows_the_working_copy_bytes() {
+    fn working_bytes_keep_a_pattern_exact_in_less_memory() {
         let sparse =
             |format: PixelFormat, width: u32, height: u32| Pattern { id: String::new(), name: String::new(), width, height, surface: Surface::new(format) };
         let float = PixelFormat::new(photocraft_color::ColorMode::Rgb, SampleType::F32, true);
+        // What fits is expanded as before.
+        assert_eq!(sparse(PixelFormat::RGBA8, 10, 10).working_bytes(), 1600);
+        assert_eq!(sparse(float, 4096, 4096).working_bytes(), MAX_WORKING_BYTES);
+        // Past that, a pattern is held at its own depth.
+        assert_eq!(sparse(PixelFormat::RGBA8, 8000, 8000).working_bytes(), 256_000_000);
+        assert_eq!(sparse(PixelFormat::RGBA16, 5000, 5000).working_bytes(), 200_000_000);
         assert!(sparse(PixelFormat::RGBA8, 8000, 8000).is_paintable());
-        assert!(sparse(float, 4096, 4096).is_paintable());
-        assert!(!sparse(float, 4097, 4096).is_paintable());
+        assert!(sparse(PixelFormat::RGBA16, 5792, 5792).is_paintable());
+        assert!(!sparse(PixelFormat::RGBA16, 8000, 8000).is_paintable(), "512 MB at 16 bits");
+        assert!(!sparse(float, 4097, 4096).is_paintable(), "float has no smaller exact form");
         assert!(!sparse(PixelFormat::RGBA8, 9000, 8000).is_paintable());
         assert!(!sparse(PixelFormat::RGBA8, 0, 8).is_paintable());
-        assert_eq!(sparse(PixelFormat::RGBA8, 10, 10).working_bytes(), 400);
-        assert_eq!(sparse(float, 10, 10).working_bytes(), 1600);
     }
 }

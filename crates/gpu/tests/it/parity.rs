@@ -2581,7 +2581,7 @@ fn closed_documents_release_their_pattern_textures() {
 
 /// A pattern whose RGBA32F texture would pass the per-pattern cap (Define Pattern accepts 8-bit
 /// ones up to 8000 x 8000) is declined by the GPU path and painted by the CPU compositor, which
-/// holds an 8-bit pattern at a quarter of the texture's size.
+/// holds a large 8-bit pattern at a quarter of the texture's size.
 #[test]
 fn a_pattern_too_large_for_a_gpu_texture_falls_back_to_the_cpu() {
     let Some(mut g) = gpu() else { return };

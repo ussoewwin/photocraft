@@ -179,9 +179,9 @@ fn composite_surface(doc: &Document, r: Rect) -> (Surface, bool) {
 }
 
 /// [`composite_surface`], `band_rows` rows at a time. Rendering and converting one band at a
-/// time, and noting opacity as it goes, keeps a large pattern (16 MP is 256 MiB per full `f32`
-/// copy) from holding several full-size copies at once. Opacity is judged on the stored samples,
-/// as the surface quantizes them: an alpha of 0.999 in an 8-bit document is stored as opaque.
+/// time, and noting opacity as it goes, keeps an 8000 × 8000 pattern (64 MP, about 1 GB per full
+/// `f32` copy) from holding several full-size copies at once. Opacity is judged on the stored
+/// samples, as the surface quantizes them: an alpha of 0.999 in an 8-bit document is stored as 255.
 fn composite_surface_in_bands(doc: &Document, r: Rect, band_rows: u32) -> (Surface, bool) {
     let df = doc.pixel_format();
     let fmt = PixelFormat::new(df.mode, df.sample, true);
@@ -223,9 +223,9 @@ pub fn default_name(s: &Session) -> String {
     (2..).map(|i| format!("{base} {i}")).find(|n| !taken(n)).unwrap_or(base)
 }
 
-/// Longest edge Define Pattern accepts. Its area is limited too, to what can be painted: above
-/// 8 bits per channel a pattern's working copy is 16 bytes a pixel, and a larger one would define
-/// but paint nothing (`Pattern::is_paintable`).
+/// Longest edge Define Pattern accepts. Its area is limited too, to what the compositor holds
+/// (`Pattern::working_bytes`): 8000 x 8000 at 8 bits, and fewer pixels at 16 bits and float,
+/// where the working copy is larger per pixel. What is accepted always paints.
 const MAX_DEFINE_EDGE: u32 = 8000;
 
 fn define(s: &mut Session, p: &Value) -> Result<Value> {
@@ -246,9 +246,12 @@ fn define(s: &mut Session, p: &Value) -> Result<Value> {
     if r.width() > MAX_DEFINE_EDGE || r.height() > MAX_DEFINE_EDGE {
         return Err(bad(cmd, "patterns are limited to 8000 × 8000 px"));
     }
-    let per_pixel = if doc.pixel_format().sample == photocraft_doc::SampleType::U8 { 4 } else { 16 };
-    if u64::from(r.width()) * u64::from(r.height()) * per_pixel > photocraft_doc::pattern::MAX_WORKING_BYTES {
-        return Err(bad(cmd, "patterns above 8 bits per channel are limited to 16,777,216 px in all (4096 × 4096)"));
+    // A pattern the compositor could not hold would define but paint nothing: 8 bits go to the
+    // edge limit, 16-bit documents to 33,554,432 px in all, float to 16,777,216 (4096 × 4096).
+    let sample = doc.pixel_format().sample;
+    let max_px = photocraft_doc::pattern::max_paint_pixels(sample);
+    if u64::from(r.width()) * u64::from(r.height()) > max_px {
+        return Err(bad(cmd, format!("patterns in a {}-bit document are limited to {max_px} px in all", sample.bytes() * 8)));
     }
     let (mut surf, opaque) = composite_surface(doc, r);
     // Opaque patterns drop their alpha channel (as Photoshop does).
@@ -616,45 +619,49 @@ mod tests {
         }
     }
 
-    /// Review of #8902: Define Pattern accepts only what the compositor paints. Above 8 bits per
-    /// channel (16 bytes a pixel of working copy) an area over 4096 × 4096 is refused rather than
-    /// defined to render transparent; an 8-bit pattern (4 bytes a pixel) goes up to 8000 × 8000,
-    /// and a large one paints.
+    /// Review of #8902: what Define Pattern accepts, the compositor paints. Areas over
+    /// 4096 x 4096, past the compositor's whole-copy cap, define and fill at 8 and 16 bits (held
+    /// at the pattern's own depth); a depth that has no smaller exact form is refused up front
+    /// with its limit, instead of defining a pattern that paints nothing.
     #[test]
-    fn defined_patterns_paint_and_areas_the_compositor_would_skip_are_refused() {
-        for (w, h) in [(4100, 4100), (8000, 2100)] {
-            for depth in [16, 32] {
-                let mut s = Session::new();
-                s.execute("file.new", json!({"width": w, "height": h, "depth": depth})).unwrap();
-                let e = s.execute("edit.definePattern", json!({})).unwrap_err().to_string();
-                assert!(e.contains("16,777,216"), "{w} x {h} at {depth} bits: {e}");
-                assert!(s.patterns.items.iter().all(|p| p.name != "Pattern"), "{w} x {h} at {depth} bits: nothing defined");
-            }
+    fn defined_patterns_over_4096_squared_paint_or_are_refused() {
+        for depth in [8, 16] {
+            let mut s = Session::new();
+            s.execute("file.new", json!({"width": 4100, "height": 4100, "depth": depth})).unwrap();
+            s.execute("edit.fill", json!({"color": "#336699"})).unwrap();
+            s.execute("edit.definePattern", json!({"name": "Big"})).unwrap();
+            assert!(s.patterns.items.iter().any(|p| p.name == "Big" && p.is_paintable()), "depth {depth}");
+            s.execute("file.new", json!({"width": 40, "height": 30, "depth": depth})).unwrap();
+            s.execute("layer.newFillLayer.pattern", json!({"pattern": "Big"})).unwrap();
+            let [r, g, b, a] = pixel(&s, 5, 5);
+            assert!(a == 1.0 && (r - 0.2).abs() < 0.01 && (g - 0.4).abs() < 0.01 && (b - 0.6).abs() < 0.01, "depth {depth}: {:?}", [r, g, b, a]);
         }
         let mut s = Session::new();
-        s.execute("file.new", json!({"width": 4100, "height": 4100, "depth": 8})).unwrap();
-        s.execute("edit.fill", json!({"color": "#336699"})).unwrap();
-        s.execute("edit.definePattern", json!({"name": "Big"})).unwrap();
-        assert!(s.patterns.items.iter().any(|p| p.name == "Big" && p.is_paintable()));
-        s.execute("file.new", json!({"width": 40, "height": 30, "depth": 8})).unwrap();
-        s.execute("layer.newFillLayer.pattern", json!({"pattern": "Big"})).unwrap();
-        let [r, g, b, a] = pixel(&s, 5, 5);
-        assert!(a == 1.0 && (r - 0.2).abs() < 0.01 && (g - 0.4).abs() < 0.01 && (b - 0.6).abs() < 0.01, "{:?}", [r, g, b, a]);
+        s.execute("file.new", json!({"width": 4100, "height": 4100, "depth": 32})).unwrap();
+        let e = s.execute("edit.definePattern", json!({})).unwrap_err().to_string();
+        assert!(e.contains("32-bit") && e.contains("16777216"), "{e}");
+        assert!(s.patterns.items.iter().all(|p| p.name != "Pattern"), "nothing was defined");
+        let mut s = Session::new();
+        s.execute("file.new", json!({"width": 6000, "height": 5600, "depth": 16})).unwrap();
+        let e = s.execute("edit.definePattern", json!({})).unwrap_err().to_string();
+        assert!(e.contains("16-bit") && e.contains("33554432"), "{e}");
     }
 
-    /// An 8-bit pattern of the largest area Define Pattern accepts is paintable: it is held at
-    /// 4 bytes a pixel, 256 MB, as the compositor's cap allows.
+    /// A pattern of the largest area Define Pattern accepts at 8 bits is paintable: held at 4
+    /// bytes a pixel, 256 MB, as the compositor's cap allows, and it renders.
     #[test]
-    fn an_8000_by_8000_pattern_is_defined_and_paintable() {
+    fn an_8000_by_8000_pattern_is_defined_and_paints() {
         let mut s = Session::new();
         s.execute("file.new", json!({"width": 8000, "height": 8000, "depth": 8})).unwrap();
+        s.execute("edit.fill", json!({"color": "#336699"})).unwrap();
         s.execute("edit.definePattern", json!({"name": "Largest"})).unwrap();
         let p = s.patterns.items.iter().find(|p| p.name == "Largest").unwrap();
         assert_eq!((p.width, p.height), (8000, 8000));
-        assert!(p.is_paintable() && p.working_bytes() <= photocraft_doc::pattern::MAX_WORKING_BYTES);
-        let mut s16 = Session::new();
-        s16.execute("file.new", json!({"width": 8000, "height": 8000, "depth": 16})).unwrap();
-        assert!(s16.execute("edit.definePattern", json!({})).is_err(), "above 8 bits it would need 1 GB");
+        assert!(p.is_paintable() && p.working_bytes() == 256_000_000);
+        s.execute("file.new", json!({"width": 40, "height": 30, "depth": 8})).unwrap();
+        s.execute("layer.newFillLayer.pattern", json!({"pattern": "Largest"})).unwrap();
+        let [r, g, b, a] = pixel(&s, 5, 5);
+        assert!(a == 1.0 && (r - 0.2).abs() < 0.01 && (g - 0.4).abs() < 0.01 && (b - 0.6).abs() < 0.01, "{:?}", [r, g, b, a]);
     }
 
     #[test]
