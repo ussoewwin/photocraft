@@ -12,12 +12,16 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 use photocraft_doc::{ColorMode, Pattern, PixelFormat, Rect, SampleType};
 
-pub(crate) const PREPARED_PATTERN_BYTES: usize = 64 << 20;
+/// What one rendering call keeps of its patterns' working copies: room for the largest paintable
+/// one, so a large pattern is converted once per call instead of once per output tile.
+pub(crate) const PREPARED_PATTERN_BYTES: usize = 256 << 20;
 const MAX_PREPARED_PATTERNS: usize = 64;
-/// Absolute cap on a single pattern's RGBA conversion on the uncached path. A pattern this
+/// Absolute cap on a single pattern's working copy on the uncached path. A pattern this
 /// large cannot be cached, so re-expanding it for every output tile would be a DoS; above the
 /// cap it is skipped instead. Independent of the cache budget so small patterns still convert.
 const MAX_UNCACHED_PATTERN_BYTES: usize = 256 << 20;
+// Every paintable pattern must fit that cap, or its fill would render transparent.
+const _: () = assert!(photocraft_doc::pattern::MAX_WORKING_BYTES <= MAX_UNCACHED_PATTERN_BYTES as u64);
 type PreparedSlot = Arc<OnceLock<Option<Arc<Tile>>>>;
 
 struct PreparedState {
@@ -54,10 +58,7 @@ impl<'a> PreparedPatterns<'a> {
         if !p.is_paintable() {
             return None;
         }
-        let bytes = usize::try_from(p.width)
-            .ok()
-            .and_then(|w| usize::try_from(p.height).ok().and_then(|h| w.checked_mul(h)))
-            .and_then(|pixels| pixels.checked_mul(std::mem::size_of::<[f32; 4]>()));
+        let bytes = usize::try_from(p.working_bytes()).ok();
         // The borrowed immutable slice pins these addresses for the complete call.
         let key = std::ptr::from_ref(p) as usize;
         let slot = {
@@ -103,29 +104,81 @@ impl<'a> PreparedPatterns<'a> {
 /// pattern in colour in its picker, filled in grey). Empty for a pattern that isn't
 /// [paintable](Pattern::is_paintable).
 pub fn pattern_rgba(p: &Pattern, mode: ColorMode) -> Vec<[f32; 4]> {
-    let Some(n) = p.is_paintable().then(|| usize::try_from(p.pixel_count()).ok()).flatten() else {
-        return Vec::new();
-    };
-    let mut px = vec![[0.0f32; 4]; n];
-    p.surface.read_rgba_into(p.rect(), &mut px);
-    let paints_in = matches!(mode, ColorMode::Grayscale | ColorMode::Bitmap | ColorMode::Duotone | ColorMode::Cmyk);
-    if paints_in && p.surface.format().mode != mode {
-        let fmt = PixelFormat::new(mode, SampleType::F32, true);
-        let mut v = [0.0f32; 5];
-        for q in &mut px {
-            let n = photocraft_raster::from_rgba_into(&fmt, *q, &mut v);
-            *q = photocraft_raster::to_rgba(&fmt, v.get(..n).unwrap_or_default());
-        }
+    let mut px = Vec::new();
+    if p.is_paintable() {
+        pattern_rgba_rows(p, mode, 0, p.height, &mut px);
     }
     px
 }
 
-/// A pattern converted once to straight-alpha RGBA for sampling.
+/// Rows `top..bottom` of [`pattern_rgba`] (of a paintable pattern), replacing `out`: a large
+/// pattern is read a band at a time instead of as one copy at 16 bytes per pixel.
+pub fn pattern_rgba_rows(p: &Pattern, mode: ColorMode, top: u32, bottom: u32, out: &mut Vec<[f32; 4]>) {
+    let bottom = bottom.min(p.height);
+    let top = top.min(bottom);
+    out.clear();
+    out.resize(p.width as usize * (bottom - top) as usize, [0.0f32; 4]);
+    p.surface.read_rgba_into(Rect::new(0, top as i32, p.width as i32, bottom as i32), out);
+    let paints_in = matches!(mode, ColorMode::Grayscale | ColorMode::Bitmap | ColorMode::Duotone | ColorMode::Cmyk);
+    if paints_in && p.surface.format().mode != mode {
+        let fmt = PixelFormat::new(mode, SampleType::F32, true);
+        let mut v = [0.0f32; 5];
+        for q in out.iter_mut() {
+            let n = photocraft_raster::from_rgba_into(&fmt, *q, &mut v);
+            *q = photocraft_raster::to_rgba(&fmt, v.get(..n).unwrap_or_default());
+        }
+    }
+}
+
+/// Whether a pattern is kept as 8-bit straight RGBA while it paints (4 bytes per pixel instead of
+/// 16): the pattern's samples are 8-bit, so nothing is lost.
+pub fn is_compact(p: &Pattern) -> bool {
+    p.surface.format().sample == SampleType::U8
+}
+
+/// The straight RGBA8 pixels of a [compact](is_compact) paintable pattern as it paints in a
+/// document of colour mode `mode`, a band of rows at a time: `sink(first_row, pixels)`. An 8-bit
+/// RGB pattern comes through exactly; a converted one (a grey or CMYK document) is rounded to the
+/// 8-bit grid it was drawn on.
+pub fn for_each_rgba8_band(p: &Pattern, mode: ColorMode, mut sink: impl FnMut(u32, &[[u8; 4]])) {
+    if !p.is_paintable() || !is_compact(p) {
+        return;
+    }
+    let (mut band, mut bytes) = (Vec::new(), Vec::new());
+    for top in (0..p.height).step_by(photocraft_doc::pattern::BAND_ROWS as usize) {
+        pattern_rgba_rows(p, mode, top, top + photocraft_doc::pattern::BAND_ROWS, &mut band);
+        let q = |v: f32| (v.clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
+        bytes.clear();
+        bytes.extend(band.iter().map(|c| [q(c[0]), q(c[1]), q(c[2]), q(c[3])]));
+        sink(top, &bytes);
+    }
+}
+
+/// `u8 / 255` as `f32`, for every `u8`: the value an 8-bit sample reads as.
+const UNIT8: [f32; 256] = {
+    let mut table = [0.0f32; 256];
+    let mut i = 0;
+    while i < 256 {
+        table[i] = i as f32 / 255.0;
+        i += 1;
+    }
+    table
+};
+
+/// A pattern's pixels as the sampler holds them.
+enum Texels {
+    /// Premultiplied RGBA, 16 bytes per pixel.
+    Premultiplied(Vec<[f32; 4]>),
+    /// Straight RGBA8, 4 bytes per pixel, premultiplied as each tap reads it (see [`UNIT8`]):
+    /// the same values as `Premultiplied` holds for an 8-bit pattern.
+    Rgba8(Vec<[u8; 4]>),
+}
+
+/// A pattern converted once for sampling.
 pub struct Tile {
     w: usize,
     h: usize,
-    /// Premultiplied RGBA.
-    px: Vec<[f32; 4]>,
+    texels: Texels,
 }
 
 impl Tile {
@@ -140,20 +193,35 @@ impl Tile {
             return None;
         }
         let (w, h) = (p.width as usize, p.height as usize);
-        let mut px = pattern_rgba(p, mode);
-        for q in &mut px {
-            for c in 0..3 {
-                q[c] *= q[3];
+        let texels = if is_compact(p) {
+            let mut px = Vec::with_capacity(w * h);
+            for_each_rgba8_band(p, mode, |_, band| px.extend_from_slice(band));
+            Texels::Rgba8(px)
+        } else {
+            let mut px = pattern_rgba(p, mode);
+            for q in &mut px {
+                for c in 0..3 {
+                    q[c] *= q[3];
+                }
             }
-        }
-        Some(Tile { w, h, px })
+            Texels::Premultiplied(px)
+        };
+        Some(Tile { w, h, texels })
     }
 
     #[inline]
     fn at(&self, x: i64, y: i64) -> [f32; 4] {
         let xi = x.rem_euclid(self.w as i64) as usize;
         let yi = y.rem_euclid(self.h as i64) as usize;
-        self.px[yi * self.w + xi]
+        let i = yi * self.w + xi;
+        match &self.texels {
+            Texels::Premultiplied(px) => px.get(i).copied().unwrap_or_default(),
+            Texels::Rgba8(px) => {
+                let [r, g, b, a] = px.get(i).copied().unwrap_or_default();
+                let a = UNIT8[usize::from(a)];
+                [UNIT8[usize::from(r)] * a, UNIT8[usize::from(g)] * a, UNIT8[usize::from(b)] * a, a]
+            }
+        }
     }
 
     /// Bilinear, wrapping sample at continuous tile coordinates (pixel centres at `i + 0.5`).
@@ -327,6 +395,65 @@ mod tests {
         assert!(pattern_rgba(&p, ColorMode::Rgb).is_empty());
         let list = [p];
         assert!(PreparedPatterns::new(&list, 0).get("big", "").is_none());
+    }
+
+    /// Review of #8902: what `Pattern::is_paintable` admits, the compositor expands, up to the
+    /// last pixel. An 8-bit pattern is held at 4 bytes a pixel, so 8000 × 8000 fits; any other is
+    /// 16 bytes a pixel, so 4096 × 4096 is the most, and one pixel more is skipped by both. (Only
+    /// the size is declared: the pattern itself is empty.)
+    #[test]
+    fn the_most_paintable_pixels_still_expand() {
+        let float = PixelFormat::new(ColorMode::Rgb, SampleType::F32, true);
+        let sparse = |name: &str, (width, height): (u32, u32), format: PixelFormat| Pattern {
+            id: name.into(),
+            name: name.into(),
+            width,
+            height,
+            surface: Surface::new(format),
+        };
+        let list = [
+            sparse("max8", (8000, 8000), PixelFormat::RGBA8),
+            sparse("max32", (1 << 12, 1 << 12), float),
+            sparse("over32", ((1 << 12) + 1, 1 << 12), float),
+            sparse("over8", (9000, 8000), PixelFormat::RGBA8),
+        ];
+        assert_eq!(list.each_ref().map(|p| p.is_paintable()), [true, true, false, false]);
+        let prepared = PreparedPatterns::new(&list, PREPARED_PATTERN_BYTES);
+        assert!(prepared.get("max8", "").is_some(), "an 8-bit 8000 x 8000 pattern expands");
+        assert!(PreparedPatterns::new(&list, 0).get("max32", "").is_some(), "uncached too, at the cap");
+        assert!(prepared.get("over32", "").is_none() && prepared.get("over8", "").is_none());
+    }
+
+    /// The 8-bit working copy samples exactly as the premultiplied `f32` one: every 8-bit value
+    /// survives the round trip through `f32`, and a tap reads the same premultiplied numbers.
+    #[test]
+    fn the_compact_tile_reads_the_same_as_the_expanded_one() {
+        for v in 0..=255u8 {
+            assert_eq!(((f32::from(v) / 255.0) * 255.0 + 0.5) as u8, v);
+            assert_eq!(UNIT8[usize::from(v)], f32::from(v) / 255.0);
+        }
+        let mut s = Surface::new(PixelFormat::RGBA8);
+        for y in 0..16i32 {
+            for x in 0..16i32 {
+                let (r, g, b, a) = ((x * 17) as u8, (y * 17) as u8, ((x + y) * 8) as u8, (255 - x * 13 - y * 3) as u8);
+                s.fill_rect(Rect::new(x, y, x + 1, y + 1), &[f32::from(r) / 255.0, f32::from(g) / 255.0, f32::from(b) / 255.0, f32::from(a) / 255.0]);
+            }
+        }
+        let p = Pattern::new("ramp", s, 16, 16);
+        assert!(is_compact(&p));
+        let compact = Tile::new(&p).unwrap();
+        assert!(matches!(compact.texels, Texels::Rgba8(_)));
+        let mut straight = pattern_rgba(&p, ColorMode::Rgb);
+        for q in &mut straight {
+            for c in 0..3 {
+                q[c] *= q[3];
+            }
+        }
+        for y in 0..16 {
+            for x in 0..16 {
+                assert_eq!(compact.at(x, y), straight[(y * 16 + x) as usize], "({x}, {y})");
+            }
+        }
     }
 
     #[test]

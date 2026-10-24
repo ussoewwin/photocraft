@@ -2565,10 +2565,10 @@ fn closed_documents_release_their_pattern_textures() {
     let a = pattern_fill_doc("first", 4);
     let mut b = pattern_fill_doc("second", 4);
     b.id = photocraft_doc::DocId(a.id.0 + 1);
-    let one = 4 * 4 * 16;
+    let one = 4 * 4 * 4;
     assert_eq!(g.comp.pattern_cache_bytes(), 0);
     render_to_vec(&mut g.comp, &g.device, &g.queue, &a, a.bounds()).expect("render a");
-    assert_eq!(g.comp.pattern_cache_bytes(), one, "one 4 x 4 RGBA32F texture");
+    assert_eq!(g.comp.pattern_cache_bytes(), one, "one 4 x 4 RGBA8 texture (an 8-bit pattern stays 8-bit)");
     render_to_vec(&mut g.comp, &g.device, &g.queue, &b, b.bounds()).expect("render b");
     assert_eq!(g.comp.pattern_cache_bytes(), 2 * one);
     g.comp.forget_doc(a.id);
@@ -2589,7 +2589,7 @@ fn pattern_textures_are_evicted_over_budget_and_when_idle() {
     b.id = photocraft_doc::DocId(a.id.0 + 1);
     let mut plain = base_doc(8, 6);
     plain.id = photocraft_doc::DocId(a.id.0 + 2);
-    let one = 4 * 4 * 16;
+    let one = 4 * 4 * 4;
     // Room for one pattern and a half: painting the second drops the first.
     g.comp.set_pattern_budget(one + one / 2);
     render_to_vec(&mut g.comp, &g.device, &g.queue, &a, a.bounds()).expect("render a");

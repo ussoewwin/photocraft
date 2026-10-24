@@ -179,8 +179,9 @@ fn composite_surface(doc: &Document, r: Rect) -> (Surface, bool) {
 }
 
 /// [`composite_surface`], `band_rows` rows at a time. Rendering and converting one band at a
-/// time, and noting opacity as it goes, keeps an 8000 × 8000 pattern (64 MP, about 1 GB per full
-/// `f32` copy) from holding several full-size copies at once.
+/// time, and noting opacity as it goes, keeps a large pattern (16 MP is 256 MiB per full `f32`
+/// copy) from holding several full-size copies at once. Opacity is judged on the stored samples,
+/// as the surface quantizes them: an alpha of 0.999 in an 8-bit document is stored as opaque.
 fn composite_surface_in_bands(doc: &Document, r: Rect, band_rows: u32) -> (Surface, bool) {
     let df = doc.pixel_format();
     let fmt = PixelFormat::new(df.mode, df.sample, true);
@@ -197,9 +198,12 @@ fn composite_surface_in_bands(doc: &Document, r: Rect, band_rows: u32) -> (Surfa
         px.resize(buf.px.len() * n, 0.0f32);
         for (o, p) in px.chunks_exact_mut(n).zip(&buf.px) {
             photocraft_raster::from_rgba_into(&fmt, *p, o);
-            opaque &= o[n - 1] >= 1.0;
         }
-        s.write_region(Rect::new(0, top as i32, width as i32, (top + rows) as i32), &px);
+        let band = Rect::new(0, top as i32, width as i32, (top + rows) as i32);
+        s.write_region(band, &px);
+        if opaque {
+            opaque = s.read_region(band).chunks_exact(n).all(|q| q[n - 1] >= 1.0);
+        }
         top += rows;
     }
     (s, opaque)
@@ -219,7 +223,9 @@ pub fn default_name(s: &Session) -> String {
     (2..).map(|i| format!("{base} {i}")).find(|n| !taken(n)).unwrap_or(base)
 }
 
-/// Longest edge Define Pattern accepts; 8000² stays under `MAX_PAINT_PIXELS`, so a defined pattern always paints.
+/// Longest edge Define Pattern accepts. Its area is limited too, to what can be painted: above
+/// 8 bits per channel a pattern's working copy is 16 bytes a pixel, and a larger one would define
+/// but paint nothing (`Pattern::is_paintable`).
 const MAX_DEFINE_EDGE: u32 = 8000;
 
 fn define(s: &mut Session, p: &Value) -> Result<Value> {
@@ -239,6 +245,10 @@ fn define(s: &mut Session, p: &Value) -> Result<Value> {
     }
     if r.width() > MAX_DEFINE_EDGE || r.height() > MAX_DEFINE_EDGE {
         return Err(bad(cmd, "patterns are limited to 8000 × 8000 px"));
+    }
+    let per_pixel = if doc.pixel_format().sample == photocraft_doc::SampleType::U8 { 4 } else { 16 };
+    if u64::from(r.width()) * u64::from(r.height()) * per_pixel > photocraft_doc::pattern::MAX_WORKING_BYTES {
+        return Err(bad(cmd, "patterns above 8 bits per channel are limited to 16,777,216 px in all (4096 × 4096)"));
     }
     let (mut surf, opaque) = composite_surface(doc, r);
     // Opaque patterns drop their alpha channel (as Photoshop does).
@@ -374,15 +384,14 @@ fn brush_texture(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad("brush.texturePattern", "the pattern is empty or too large to paint"));
     };
     // Brush textures are grey: luminance of the composite over white.
-    let mut px = vec![[0.0f32; 4]; n];
-    pat.surface.read_rgba_into(pat.rect(), &mut px);
-    let lum: Vec<f32> = px
-        .iter()
-        .map(|q| {
+    // Read a band of rows at a time: a whole-tile RGBA copy would cost 16 bytes a pixel.
+    let mut lum: Vec<f32> = Vec::with_capacity(n);
+    for_each_band(&pat, pat.width, pat.height, |band| {
+        lum.extend(band.iter().map(|q| {
             let l = 0.299 * q[0] + 0.587 * q[1] + 0.114 * q[2];
             l * q[3] + (1.0 - q[3])
-        })
-        .collect();
+        }));
+    });
     let tile = photocraft_paint::GrayTile::from_f32(pat.width, pat.height, &lum);
     let t = &mut s.tools.brush.texture;
     t.pattern = photocraft_paint::Pattern::Tile(tile);
@@ -398,11 +407,23 @@ pub fn average_color(p: &Pattern) -> Color {
     // A pattern too large to paint is averaged over its paintable top-left corner.
     let side = photocraft_doc::pattern::MAX_PAINT_PIXELS.isqrt() as u32;
     let (w, h) = (p.width.min(side), p.height.min(side));
-    let mut px = vec![[0.0f32; 4]; w as usize * h as usize];
-    p.surface.read_rgba_into(Rect::new(0, 0, w as i32, h as i32), &mut px);
-    let n = px.len().max(1) as f32;
-    let s = px.iter().fold([0.0f32; 3], |a, q| [a[0] + q[0], a[1] + q[1], a[2] + q[2]]);
+    let mut s = [0.0f32; 3];
+    for_each_band(p, w, h, |band| s = band.iter().fold(s, |a, q| [a[0] + q[0], a[1] + q[1], a[2] + q[2]]));
+    let n = (u64::from(w) * u64::from(h)).max(1) as f32;
     Color::rgb(s[0] / n, s[1] / n, s[2] / n)
+}
+
+/// Calls `f` with the straight RGBA pixels of the top-left `w × h` corner of `p`, a band of rows
+/// at a time in row-major order.
+fn for_each_band(p: &Pattern, w: u32, h: u32, mut f: impl FnMut(&[[f32; 4]])) {
+    let mut band = Vec::new();
+    for top in (0..h).step_by(photocraft_doc::pattern::BAND_ROWS as usize) {
+        let bottom = (top + photocraft_doc::pattern::BAND_ROWS).min(h);
+        band.clear();
+        band.resize(w as usize * (bottom - top) as usize, [0.0f32; 4]);
+        p.surface.read_rgba_into(Rect::new(0, top as i32, w as i32, bottom as i32), &mut band);
+        f(&band);
+    }
 }
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -579,6 +600,61 @@ mod tests {
                 assert_eq!(whole_opaque, !transparent);
             }
         }
+    }
+
+    /// Review of the banded composite: opacity is the stored samples', so an alpha an 8-bit
+    /// document stores as 255 is opaque and a float document's 0.999 is not.
+    #[test]
+    fn alpha_that_stores_as_opaque_counts_as_opaque() {
+        for (depth, opaque) in [(8u64, true), (32, false)] {
+            let mut s = Session::new();
+            s.execute("file.new", json!({"width": 8, "height": 8, "depth": depth, "background": "transparent"})).unwrap();
+            s.execute("edit.fill", json!({"color": "#336699"})).unwrap();
+            s.execute("layer.setProps", json!({"opacity": 0.999})).unwrap();
+            let (_, all_opaque) = composite_surface_in_bands(&s.active().unwrap().doc, Rect::new(0, 0, 8, 8), 3);
+            assert_eq!(all_opaque, opaque, "depth {depth}");
+        }
+    }
+
+    /// Review of #8902: Define Pattern accepts only what the compositor paints. Above 8 bits per
+    /// channel (16 bytes a pixel of working copy) an area over 4096 × 4096 is refused rather than
+    /// defined to render transparent; an 8-bit pattern (4 bytes a pixel) goes up to 8000 × 8000,
+    /// and a large one paints.
+    #[test]
+    fn defined_patterns_paint_and_areas_the_compositor_would_skip_are_refused() {
+        for (w, h) in [(4100, 4100), (8000, 2100)] {
+            for depth in [16, 32] {
+                let mut s = Session::new();
+                s.execute("file.new", json!({"width": w, "height": h, "depth": depth})).unwrap();
+                let e = s.execute("edit.definePattern", json!({})).unwrap_err().to_string();
+                assert!(e.contains("16,777,216"), "{w} x {h} at {depth} bits: {e}");
+                assert!(s.patterns.items.iter().all(|p| p.name != "Pattern"), "{w} x {h} at {depth} bits: nothing defined");
+            }
+        }
+        let mut s = Session::new();
+        s.execute("file.new", json!({"width": 4100, "height": 4100, "depth": 8})).unwrap();
+        s.execute("edit.fill", json!({"color": "#336699"})).unwrap();
+        s.execute("edit.definePattern", json!({"name": "Big"})).unwrap();
+        assert!(s.patterns.items.iter().any(|p| p.name == "Big" && p.is_paintable()));
+        s.execute("file.new", json!({"width": 40, "height": 30, "depth": 8})).unwrap();
+        s.execute("layer.newFillLayer.pattern", json!({"pattern": "Big"})).unwrap();
+        let [r, g, b, a] = pixel(&s, 5, 5);
+        assert!(a == 1.0 && (r - 0.2).abs() < 0.01 && (g - 0.4).abs() < 0.01 && (b - 0.6).abs() < 0.01, "{:?}", [r, g, b, a]);
+    }
+
+    /// An 8-bit pattern of the largest area Define Pattern accepts is paintable: it is held at
+    /// 4 bytes a pixel, 256 MB, as the compositor's cap allows.
+    #[test]
+    fn an_8000_by_8000_pattern_is_defined_and_paintable() {
+        let mut s = Session::new();
+        s.execute("file.new", json!({"width": 8000, "height": 8000, "depth": 8})).unwrap();
+        s.execute("edit.definePattern", json!({"name": "Largest"})).unwrap();
+        let p = s.patterns.items.iter().find(|p| p.name == "Largest").unwrap();
+        assert_eq!((p.width, p.height), (8000, 8000));
+        assert!(p.is_paintable() && p.working_bytes() <= photocraft_doc::pattern::MAX_WORKING_BYTES);
+        let mut s16 = Session::new();
+        s16.execute("file.new", json!({"width": 8000, "height": 8000, "depth": 16})).unwrap();
+        assert!(s16.execute("edit.definePattern", json!({})).is_err(), "above 8 bits it would need 1 GB");
     }
 
     #[test]

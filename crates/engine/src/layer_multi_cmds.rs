@@ -1136,6 +1136,9 @@ fn unbounded_fill(sh: &photocraft_doc::ShapeLayer) -> bool {
 /// stroke bounds stand in.
 const SHAPE_BOUNDS_MAX_PX: u64 = 64 << 20;
 
+/// Pixels [`shape_pixel_bounds`] renders at a time.
+const SHAPE_BOUNDS_BAND_PX: u64 = 1 << 20;
+
 /// The pixels a shape layer draws, wherever they fall. Its cache is rendered clipped to the
 /// canvas, so a shape partly off the canvas measured from it looked smaller and Align moved it
 /// by the wrong amount, a little more on each click (#8660). The shape is rendered again over
@@ -1153,8 +1156,19 @@ fn shape_pixel_bounds(sh: &photocraft_doc::ShapeLayer, canvas: Rect) -> Option<R
     // Gradients lay out in the document's frame (as the cached render does); the feather and the
     // clip cover the shape's whole reach, beyond the canvas too.
     let shape = photocraft_vector::CompiledShape::with_frames(sh, photocraft_vector::DEFAULT_TOLERANCE, reach, canvas);
-    let r = shape.render(PixelFormat::GRAYA8, reach).content_bounds();
-    (!r.is_empty()).then_some(r)
+    // Alpha at full precision: an 8-bit render drops the faint stroke of a 16-bit or float
+    // document, and the opaque body then aligns by a different extent than the document draws.
+    // A band of rows at a time keeps the working copy a few MB however large the shape.
+    let format = PixelFormat::new(photocraft_color::ColorMode::Grayscale, photocraft_color::SampleType::F32, true);
+    let band_rows = i32::try_from((SHAPE_BOUNDS_BAND_PX / u64::from(reach.width().max(1))).max(1)).unwrap_or(i32::MAX);
+    let mut bounds = Rect::EMPTY;
+    let mut top = reach.y0;
+    while top < reach.y1 {
+        let bottom = top.saturating_add(band_rows).min(reach.y1);
+        bounds = bounds.union(&shape.render(format, Rect::new(reach.x0, top, reach.x1, bottom)).content_bounds());
+        top = bottom;
+    }
+    (!bounds.is_empty()).then_some(bounds)
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -2550,6 +2564,26 @@ mod tests {
             sh.cache = None;
         }
         assert_eq!(align_bounds(&uncached, doc(&s).bounds()), Some(doc(&s).bounds()));
+    }
+
+    /// Review of #8779: a faint stroke of a 16-bit or float document counts in the shape's extent,
+    /// so Align moves the opaque body by the same amount as the cached render's bounds would.
+    #[test]
+    fn align_bounds_keep_a_faint_stroke_at_high_depth() {
+        for depth in [16, 32] {
+            let mut s = session(depth);
+            let id =
+                LayerId(s.execute("shape.create", json!({"kind": "rect", "rect": [60, 60, 60, 60], "fill": "#000000"})).unwrap()["layer"].as_u64().unwrap());
+            s.edit("faint stroke", |doc, _| {
+                if let Some(LayerContent::Shape(sh)) = doc.layer_mut(id).map(|l| &mut l.content) {
+                    sh.stroke = Some(photocraft_doc::ShapeStroke { width: 20.0, opacity: 0.001, ..Default::default() });
+                }
+                Ok(())
+            })
+            .unwrap();
+            let LayerContent::Shape(sh) = &doc(&s).layer(id).unwrap().content else { panic!("shape") };
+            assert_eq!(shape_pixel_bounds(sh, doc(&s).bounds()), Some(Rect::new(50, 50, 130, 130)), "depth {depth}");
+        }
     }
 
     #[test]

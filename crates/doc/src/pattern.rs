@@ -2,15 +2,23 @@
 //! and brush textures. Pure data; rendering lives in `photocraft-compose`, the PSD mapping
 //! (`Patt`/`Pat2`/`Pat3` global blocks) in `photocraft-io`.
 
+use photocraft_color::SampleType;
 use photocraft_geom::Rect;
 use photocraft_raster::Surface;
 
 /// Largest pattern edge a file may declare (the PSD reader's limit; Define Pattern stops at 8000).
 pub const MAX_EDGE: u32 = 30_000;
 
-/// Most pixels a pattern may have to be painted. Renderers expand a pattern into a 16-byte-per-pixel
-/// working copy, so this keeps that copy at 1 GiB; larger patterns paint nothing.
+/// Most pixels a pattern may have to be painted (Define Pattern's 8000 × 8000 fits).
 pub const MAX_PAINT_PIXELS: u64 = 1 << 26;
+
+/// Most bytes of working copy one pattern may need to be painted, the most the CPU compositor
+/// expands for it (`photocraft-compose` checks the two agree at build time). See
+/// [`Pattern::working_bytes`].
+pub const MAX_WORKING_BYTES: u64 = 256 << 20;
+
+/// Rows of a pattern read at a time where a whole-tile `f32` copy would cost 16 bytes per pixel.
+pub const BAND_ROWS: u32 = 256;
 
 /// One pattern tile. Pixels cover `0..width × 0..height` of `surface`, in any pixel format
 /// (depth and colour model are the pattern's own, as in Photoshop).
@@ -36,13 +44,18 @@ impl Pattern {
     /// defining a pattern is deterministic and replayable).
     pub fn new(name: impl Into<String>, surface: Surface, width: u32, height: u32) -> Pattern {
         let name = name.into();
-        let r = Rect::new(0, 0, width as i32, height as i32);
-        let px = surface.read_region(r);
         let mut h1 = fnv(0xcbf2_9ce4_8422_2325, name.as_bytes());
         h1 = fnv(h1, &width.to_le_bytes());
         h1 = fnv(h1, &height.to_le_bytes());
-        for v in &px {
-            h1 = fnv(h1, &v.to_bits().to_le_bytes());
+        // The samples row by row, a band at a time: the same sequence as one read of the whole
+        // tile, without a full-size `f32` copy of a large pattern.
+        let mut band = Vec::new();
+        for top in (0..height).step_by(BAND_ROWS as usize) {
+            let bottom = (top + BAND_ROWS).min(height);
+            surface.read_region_into(Rect::new(0, top as i32, width as i32, bottom as i32), &mut band);
+            for v in &band {
+                h1 = fnv(h1, &v.to_bits().to_le_bytes());
+            }
         }
         let h2 = fnv(h1 ^ 0x9e37_79b9_7f4a_7c15, format!("{:?}", surface.format()).as_bytes());
         let id = format!("{:08x}-{:04x}-{:04x}-{:04x}-{:012x}", (h1 >> 32) as u32, (h1 >> 16) as u16, h1 as u16, (h2 >> 48) as u16, h2 & 0xffff_ffff_ffff);
@@ -70,9 +83,17 @@ impl Pattern {
         u64::from(self.width) * u64::from(self.height)
     }
 
-    /// Whether the tile has pixels and is small enough to paint (see [`MAX_PAINT_PIXELS`]).
+    /// Bytes of working copy a renderer holds to paint this pattern: 4 per pixel for an 8-bit
+    /// pattern (kept as it is), 16 for any other (expanded to `f32` RGBA).
+    pub fn working_bytes(&self) -> u64 {
+        let per_pixel = if self.surface.format().sample == SampleType::U8 { 4 } else { 16 };
+        self.pixel_count().saturating_mul(per_pixel)
+    }
+
+    /// Whether the tile has pixels and is small enough to paint (see [`MAX_PAINT_PIXELS`] and
+    /// [`MAX_WORKING_BYTES`]).
     pub fn is_paintable(&self) -> bool {
-        !self.is_empty() && self.pixel_count() <= MAX_PAINT_PIXELS
+        !self.is_empty() && self.pixel_count() <= MAX_PAINT_PIXELS && self.working_bytes() <= MAX_WORKING_BYTES
     }
 }
 

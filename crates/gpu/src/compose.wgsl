@@ -1117,6 +1117,7 @@ fn wrap(i: i32, n: i32) -> i32 {
 }
 
 // One bilinear, wrapping, premultiplied tap at tile coordinates (u, v) (Tile::sample_premul).
+// `pat_tex` holds straight RGBA (RGBA8 or RGBA32F); each texel is premultiplied as it is read.
 fn pattern_tap(u0: f32, v0: f32) -> vec4<f32> {
     let u = u0 - 0.5;
     let v = v0 - 0.5;
@@ -1135,14 +1136,15 @@ fn pattern_tap(u0: f32, v0: f32) -> vec4<f32> {
         if (wy[j] == 0.0) { continue; }
         for (var i = 0; i < 2; i++) {
             if (wx[i] == 0.0) { continue; }
-            acc += textureLoad(pat_tex, vec2(wrap(ix + i, tw), wrap(iy + j, th)), 0) * (wx[i] * wy[j]);
+            let t = textureLoad(pat_tex, vec2(wrap(ix + i, tw), wrap(iy + j, th)), 0);
+            acc += vec4(t.rgb * t.a, t.a) * (wx[i] * wy[j]);
         }
     }
     return acc;
 }
 
 // compose::pattern::Tile::sample_area through Placement::map. p3 = (origin, cos, sin),
-// p4 = (1 / scale, tile w, tile h); `pat_tex` holds premultiplied RGBA. Below 100 % a pixel
+// p4 = (1 / scale, tile w, tile h); `pat_tex` holds straight RGBA. Below 100 % a pixel
 // averages n x n taps over its footprint (n = ceil(1 / scale), at most 8), like the CPU.
 fn pattern_sample(d: vec2<i32>) -> vec4<f32> {
     var n = 1;
