@@ -127,7 +127,17 @@ pub fn resolve(s: &Session, key: &str) -> Option<Pattern> {
 
 pub(crate) fn resolve_param(s: &Session, cmd: &str, p: &Value) -> Result<Pattern> {
     let key = p.get("pattern").and_then(Value::as_str).unwrap_or("");
-    resolve(s, key).ok_or_else(|| bad(cmd, format!("no pattern \"{key}\" (see pattern.list)")))
+    let pat = resolve(s, key).ok_or_else(|| bad(cmd, format!("no pattern \"{key}\" (see pattern.list)")))?;
+    paintable(cmd, pat)
+}
+
+/// `pat`, or the reason it would paint nothing: a pattern too large for the compositor renders as
+/// transparent, so a command that would use one says so up front.
+fn paintable(cmd: &str, pat: Pattern) -> Result<Pattern> {
+    match pat.paint_problem() {
+        Some(why) => Err(bad(cmd, format!("pattern \"{}\" would paint nothing: {why}", pat.display_name()))),
+        None => Ok(pat),
+    }
 }
 
 /// Copies `pat` into the document's patterns unless it is already there (by id).
@@ -146,6 +156,7 @@ pub fn resolve_effect(s: &Session, fx: photocraft_doc::Effect) -> Result<(photoc
         Effect::PatternOverlay { common, name, id, scale, angle, link, phase } => {
             let key = if id.is_empty() { name } else { id };
             let pat = resolve(s, &key).ok_or_else(|| bad("layer.layerStyle.patternOverlay", format!("no pattern \"{key}\" (see pattern.list)")))?;
+            let pat = paintable("layer.layerStyle.patternOverlay", pat)?;
             Ok((Effect::PatternOverlay { common, name: pat.name.clone(), id: pat.id.clone(), scale, angle, link, phase }, Some(pat)))
         }
         other => Ok((other, None)),
@@ -158,6 +169,7 @@ fn info(p: &Pattern, in_doc: bool, in_library: bool) -> Value {
         "id": p.id, "name": p.display_name(), "storedName": p.name, "width": p.width, "height": p.height,
         "mode": format!("{:?}", f.mode), "depth": format!("{:?}", f.sample), "alpha": f.alpha,
         "inDocument": in_doc, "inLibrary": in_library,
+        "paintable": p.is_paintable(), "paintProblem": p.paint_problem(),
     })
 }
 
@@ -664,6 +676,33 @@ mod tests {
         assert!(a == 1.0 && (r - 0.2).abs() < 0.01 && (g - 0.4).abs() < 0.01 && (b - 0.6).abs() < 0.01, "{:?}", [r, g, b, a]);
     }
 
+    /// Review of #8902: a pattern too large to paint is named by every command that would use it
+    /// and by pattern.list, instead of rendering as transparency with no message.
+    #[test]
+    fn a_pattern_that_would_paint_nothing_is_reported() {
+        let mut s = Session::new();
+        s.execute("file.new", json!({"width": 40, "height": 30, "depth": 8})).unwrap();
+        // A 32-bit 5000 x 5000 pattern (declared only: 400 MB as a working copy, past the cap).
+        let surface = photocraft_raster::Surface::new(photocraft_doc::PixelFormat::RGBA32F);
+        s.patterns.items.push(Pattern { id: "huge".into(), name: "Huge".into(), width: 5000, height: 5000, surface });
+        let list = s.execute("pattern.list", json!({})).unwrap();
+        let huge = list.as_array().unwrap().iter().find(|p| p["name"] == "Huge").unwrap().clone();
+        assert_eq!(huge["paintable"], json!(false));
+        assert!(huge["paintProblem"].as_str().unwrap().contains("32 bits"), "{huge}");
+        for (id, params) in [
+            ("layer.newFillLayer.pattern", json!({"pattern": "Huge"})),
+            ("layer.layerStyle.patternOverlay", json!({"pattern": "Huge"})),
+            ("edit.fill", json!({"contents": "pattern", "pattern": "Huge"})),
+            ("brush.texturePattern", json!({"pattern": "Huge"})),
+        ] {
+            let e = s.execute(id, params).expect_err(id).to_string();
+            assert!(e.contains("Huge") && e.contains("would paint nothing"), "{id}: {e}");
+        }
+        let e = s.execute("layer.newFillLayer.pattern", json!({"pattern": "Huge"})).unwrap_err().to_string();
+        assert!(e.contains("would paint nothing") && e.contains("5000 × 5000"), "{e}");
+        assert!(list.as_array().unwrap().iter().any(|p| p["name"] != "Huge" && p["paintable"] == json!(true)), "built-in patterns paint");
+    }
+
     #[test]
     fn define_pattern_accepts_edges_over_4000_up_to_8000() {
         for (w, ok) in [(4100, true), (8000, true), (8001, false)] {
@@ -766,6 +805,6 @@ mod tests {
         let huge = Pattern { id: "huge".into(), name: "Huge".into(), width: 65_536, height: 65_536, surface: Surface::new(PixelFormat::RGBA8) };
         s.patterns.items.push(huge);
         let e = s.execute("brush.texturePattern", json!({"pattern": "huge"})).unwrap_err();
-        assert!(e.to_string().contains("too large"), "{e}");
+        assert!(e.to_string().contains("would paint nothing") && e.to_string().contains("65536 × 65536"), "{e}");
     }
 }

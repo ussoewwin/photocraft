@@ -12,10 +12,11 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 use photocraft_doc::{ColorMode, Pattern, PixelFormat, Rect, SampleType};
 
-/// What one rendering call may keep of its patterns' working copies: room for the largest, so a
-/// large pattern is converted once per call instead of once per output tile. A ceiling, not an
-/// allocation: only the patterns a call paints with are converted.
-pub(crate) const PREPARED_PATTERN_BYTES: usize = 256 << 20;
+/// What one rendering call may keep of its patterns' working copies: room for two of the largest
+/// (a layer's pattern fill and another layer's pattern overlay, say), so each is converted once
+/// per call instead of once per output tile. A ceiling, not an allocation: only the patterns a
+/// call paints with are converted, and a third large one past it is converted when it is asked for.
+pub(crate) const PREPARED_PATTERN_BYTES: usize = 512 << 20;
 const MAX_PREPARED_PATTERNS: usize = 64;
 /// Absolute cap on a single pattern's RGBA conversion on the uncached path. A pattern this
 /// large cannot be cached, so re-expanding it for every output tile would be a DoS; above the
@@ -23,6 +24,8 @@ const MAX_PREPARED_PATTERNS: usize = 64;
 const MAX_UNCACHED_PATTERN_BYTES: usize = 256 << 20;
 // Every paintable pattern must fit that cap, or its fill would render transparent.
 const _: () = assert!(photocraft_doc::pattern::MAX_WORKING_BYTES <= MAX_UNCACHED_PATTERN_BYTES as u64);
+// ... and a call keeps two of the largest, or the second one's fill is rebuilt for every tile.
+const _: () = assert!(2 * photocraft_doc::pattern::MAX_WORKING_BYTES <= PREPARED_PATTERN_BYTES as u64);
 type PreparedSlot = Arc<OnceLock<Option<Arc<Tile>>>>;
 
 struct PreparedState {
@@ -432,6 +435,26 @@ mod tests {
             assert!(prepared.get(name, "").is_none(), "{name} is skipped, not allocated");
         }
         assert!(PreparedPatterns::new(&list, 0).get("max8", "").is_some(), "uncached too, at the cap");
+    }
+
+    /// A render that paints with two large patterns (a pattern fill and a pattern overlay, say)
+    /// converts each once, not once per output tile: both stay in the call's budget. A third that
+    /// does not fit is converted when asked for (correct, just not kept).
+    #[test]
+    fn two_large_patterns_are_each_converted_once_per_call() {
+        let sparse = |name: &str| Pattern { id: name.into(), name: name.into(), width: 5000, height: 5000, surface: Surface::new(PixelFormat::RGBA8) };
+        let list = [sparse("a"), sparse("b"), sparse("c")];
+        assert!(list.iter().all(|p| p.working_bytes() == 100_000_000));
+        let prepared = PreparedPatterns::new(&list, 250_000_000);
+        let same = |name: &str| {
+            let (first, second) = (prepared.get(name, "").unwrap(), prepared.get(name, "").unwrap());
+            Arc::ptr_eq(&first, &second)
+        };
+        assert!(same("a"), "the first is kept");
+        assert!(same("b"), "and the second");
+        assert!(!same("c"), "a third past the budget is converted per use, not kept");
+        // The real budget holds two of the largest paintable ones.
+        assert!(2 * photocraft_doc::pattern::MAX_WORKING_BYTES <= PREPARED_PATTERN_BYTES as u64);
     }
 
     /// A large pattern's compact copy samples exactly as the expanded one: every 8-bit and 16-bit

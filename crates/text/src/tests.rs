@@ -3161,3 +3161,167 @@ fn per_colour_passes_match_full_size_passes() {
         }
     }
 }
+
+/// A legacy (Photoshop-era) `Txt2` block shaped like a real one (psd-tools' `text.psd`): the
+/// fonts in `DocumentResources /FontSet /Resources`, and each object's `Model /StyleRun` runs
+/// holding their style under `RunData /StyleSheet /Features` (named keys) beside `Length`.
+fn styled_era_txt2(text: &str, font: &str, size: f64) -> Vec<u8> {
+    use crate::engine_data::Value as E;
+    let font_entry = |name: &str| {
+        E::Dict(vec![(
+            "Resource".into(),
+            E::Dict(vec![
+                ("StreamTag".into(), E::Name("CoolTypeFont".into())),
+                ("Identifier".into(), E::Dict(vec![("Name".into(), E::String(name.into())), ("Type".into(), E::Int(1))])),
+            ]),
+        )])
+    };
+    let features = E::Dict(vec![
+        ("Font".into(), E::Int(0)),
+        ("FontSize".into(), E::Real(size)),
+        ("FauxBold".into(), E::Bool(false)),
+        ("FauxItalic".into(), E::Bool(false)),
+        ("AutoLeading".into(), E::Bool(true)),
+        ("Leading".into(), E::Real(0.0)),
+        ("HorizontalScale".into(), E::Real(1.0)),
+        ("VerticalScale".into(), E::Real(1.0)),
+        ("Tracking".into(), E::Int(0)),
+        ("AutoKern".into(), E::Int(1)),
+        ("Ligatures".into(), E::Bool(true)),
+        ("ContextualLigatures".into(), E::Bool(true)),
+        ("StylisticSets".into(), E::Int(0)),
+        (
+            "FillColor".into(),
+            E::Dict(vec![
+                ("StreamTag".into(), E::Name("SimplePaint".into())),
+                (
+                    "Color".into(),
+                    E::Dict(vec![("Type".into(), E::Int(1)), ("Values".into(), E::Array(vec![E::Real(1.0), E::Real(0.0), E::Real(0.0), E::Real(0.0)]))]),
+                ),
+            ]),
+        ),
+    ]);
+    let total = format!("{text}\r").encode_utf16().count() as i64;
+    let run = |len: i64, data: E| E::Dict(vec![("RunData".into(), data), ("Length".into(), E::Int(len))]);
+    let placeholder = || E::Dict(vec![("0".into(), E::String(String::new()))]);
+    let style_data = E::Dict(vec![(
+        "StyleSheet".into(),
+        E::Dict(vec![("Name".into(), E::String(String::new())), ("Parent".into(), E::Int(0)), ("Features".into(), features)]),
+    )]);
+    let entry = E::Dict(vec![
+        (
+            "Model".into(),
+            E::Dict(vec![
+                ("Text".into(), E::String(format!("{text}\r"))),
+                ("ParagraphRun".into(), E::Dict(vec![("RunArray".into(), E::Array(vec![run(total, placeholder())]))])),
+                ("StyleRun".into(), E::Dict(vec![("RunArray".into(), E::Array(vec![run(total, style_data)]))])),
+                ("KernRun".into(), E::Dict(vec![("RunArray".into(), E::Array(vec![run(total, placeholder())]))])),
+            ]),
+        ),
+        ("View".into(), E::Dict(vec![("0".into(), E::Array(vec![E::Dict(vec![("0".into(), E::Int(0))])]))])),
+    ]);
+    crate::engine_data::write_bare(&[
+        ("DocumentResources".into(), E::Dict(vec![("FontSet".into(), E::Dict(vec![("Resources".into(), E::Array(vec![font_entry(font)]))]))])),
+        ("DocumentObjects".into(), E::Dict(vec![("TextObjects".into(), E::Array(vec![entry]))])),
+    ])
+}
+
+/// The length and `Features` of each style run of the first legacy object.
+fn era_runs(block: &crate::engine_data::Value) -> Vec<(i64, crate::engine_data::Value)> {
+    use crate::engine_data::Value as E;
+    block
+        .path(&["DocumentObjects", "TextObjects"])
+        .and_then(E::as_array)
+        .and_then(<[E]>::first)
+        .and_then(|e| e.path(&["Model", "StyleRun", "RunArray"]))
+        .and_then(E::as_array)
+        .map(|rs| {
+            rs.iter()
+                .map(|r| (r.get("Length").and_then(E::as_i64).unwrap_or(-1), r.path(&["RunData", "StyleSheet", "Features"]).cloned().unwrap_or(E::Int(0))))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Review of #8888 (CodeRabbit, psd.rs): a style-only edit (no text change) restyles the older
+/// Photoshop's copy too, which Photoshop re-renders from. Its font list gains the new font, the
+/// run keeps every key Photoshop wrote, and the lengths still cover the text.
+#[test]
+fn a_style_only_edit_restyles_the_photoshop_era_objects() {
+    use crate::engine_data::Value as E;
+    let prev = styled_era_txt2("Line 1", "ArialMT", 13.0);
+    let style = CharStyle {
+        postscript_name: Some("Courier".into()),
+        size_pt: 20.0,
+        faux_bold: true,
+        color: Color::rgb(0.0, 0.5, 1.0),
+        tracking: 25.0,
+        ..Default::default()
+    };
+    let out = crate::psd::parse_txt2(&crate::psd::build_txt2(&[(0, &styled("Line 1", style))], Some(&prev))).unwrap();
+    let runs = era_runs(&out);
+    assert_eq!(runs.len(), 1);
+    let (length, f) = &runs[0];
+    assert_eq!(*length, 7, "the run covers the text and its trailing return");
+    assert_eq!(f.get("FontSize").and_then(E::as_f64), Some(20.0));
+    assert_eq!(f.get("FauxBold").and_then(E::as_bool), Some(true));
+    assert_eq!(f.get("Tracking").and_then(E::as_i64), Some(25));
+    assert_eq!(f.path(&["FillColor", "Color", "Type"]).and_then(E::as_i64), Some(1));
+    assert_eq!(f.path(&["FillColor", "Color", "Values"]).and_then(E::as_array).map(<[E]>::len), Some(4));
+    assert_eq!(f.path(&["FillColor", "StreamTag"]).and_then(E::as_str), Some("SimplePaint"), "a key the file held is kept");
+    // The font went into the block's list and the run names it.
+    let fonts = out.path(&["DocumentResources", "FontSet", "Resources"]).and_then(E::as_array).expect("the font list");
+    let index = f.get("Font").and_then(E::as_i64).and_then(|i| usize::try_from(i).ok()).expect("the font index");
+    let name = |i: usize| fonts.get(i).and_then(|r| r.path(&["Resource", "Identifier", "Name"])).and_then(E::as_str);
+    assert_eq!(name(index), Some("Courier"));
+    assert_eq!(name(0), Some("ArialMT"), "the file's font stays first");
+    // The text did not change.
+    let text =
+        out.path(&["DocumentObjects", "TextObjects"]).and_then(E::as_array).and_then(<[E]>::first).and_then(|e| e.path(&["Model", "Text"])).and_then(E::as_str);
+    assert_eq!(text, Some("Line 1\r"));
+}
+
+/// A layer whose style already agrees with the file's run leaves the legacy objects as they are.
+#[test]
+fn an_unedited_style_leaves_the_photoshop_era_objects_alone() {
+    let prev = styled_era_txt2("Line 1", "ArialMT", 13.0);
+    let same = CharStyle { postscript_name: Some("ArialMT".into()), size_pt: 13.0, ..Default::default() };
+    let out = crate::psd::build_txt2(&[(0, &styled("Line 1", same))], Some(&prev));
+    assert_eq!(era_runs(&crate::psd::parse_txt2(&prev).unwrap()), era_runs(&crate::psd::parse_txt2(&out).unwrap()));
+}
+
+/// Both object lists, as CodeRabbit asked: the numbered object and the older copy are restyled by
+/// the same style-only edit.
+#[test]
+fn a_style_only_edit_restyles_both_object_lists() {
+    use crate::engine_data::Value as E;
+    let mut prev = photoshop_txt2(&[(4, 1)]);
+    prev.extend_from_slice(&styled_era_txt2("AVA", "ArialMT", 13.0));
+    let style = CharStyle { postscript_name: Some("ArialMT".into()), size_pt: 31.0, faux_italic: true, ..Default::default() };
+    let out = crate::psd::parse_txt2(&crate::psd::build_txt2(&[(0, &styled("AVA", style))], Some(&prev))).unwrap();
+    let legacy = era_runs(&out);
+    let first = legacy.first().map(|(l, f)| (*l, f.get("FontSize").and_then(E::as_f64), f.get("FauxItalic").and_then(E::as_bool)));
+    assert_eq!(first, Some((4, Some(31.0), Some(true))));
+    let numbered = out
+        .path(&["1", "1"])
+        .and_then(E::as_array)
+        .and_then(<[E]>::first)
+        .and_then(|o| o.path(&["0", "6", "0"]))
+        .and_then(E::as_array)
+        .and_then(<[E]>::first)
+        .and_then(|r| r.path(&["0", "0", "6"]));
+    assert_eq!(numbered.and_then(|s| s.get("1")).and_then(E::as_f64), Some(31.0), "the numbered object is restyled too");
+}
+
+/// Two character runs give two style runs in the legacy copy, with the lengths of the runs.
+#[test]
+fn a_two_run_layer_gives_the_photoshop_era_copy_two_style_runs() {
+    use crate::engine_data::Value as E;
+    let prev = styled_era_txt2("Hello", "ArialMT", 13.0);
+    let small = CharStyle { postscript_name: Some("ArialMT".into()), size_pt: 10.0, ..Default::default() };
+    let big = CharStyle { postscript_name: Some("ArialMT".into()), size_pt: 40.0, ..Default::default() };
+    let t = runs_of("Hello", &[(2, small), (3, big)]);
+    let runs = era_runs(&crate::psd::parse_txt2(&crate::psd::build_txt2(&[(0, &t)], Some(&prev))).unwrap());
+    let seen: Vec<(i64, Option<f64>)> = runs.iter().map(|(l, f)| (*l, f.get("FontSize").and_then(E::as_f64))).collect();
+    assert_eq!(seen, vec![(2, Some(10.0)), (4, Some(40.0))], "the last run takes the trailing return");
+}

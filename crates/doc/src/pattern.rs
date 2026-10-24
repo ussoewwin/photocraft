@@ -91,6 +91,26 @@ impl Pattern {
         working_bytes_for(self.pixel_count(), self.surface.format().sample)
     }
 
+    /// Why this pattern paints nothing, for the person or agent who chose it; `None` when it
+    /// paints. A pattern too large for the compositor's working copy renders as transparent, so
+    /// every command that picks a pattern, and the import that brought it in, says so.
+    pub fn paint_problem(&self) -> Option<String> {
+        if self.is_paintable() {
+            return None;
+        }
+        if self.is_empty() {
+            return Some("it is empty".into());
+        }
+        let sample = self.surface.format().sample;
+        Some(format!(
+            "it is {} × {} px at {} bits per channel, and a pattern of that depth paints up to {} px in all",
+            self.width,
+            self.height,
+            sample.bytes() * 8,
+            max_paint_pixels(sample)
+        ))
+    }
+
     /// Whether the tile has pixels and is small enough to paint (see [`MAX_PAINT_PIXELS`] and
     /// [`MAX_WORKING_BYTES`]).
     pub fn is_paintable(&self) -> bool {
@@ -206,5 +226,18 @@ mod tests {
         assert!(!sparse(float, 4097, 4096).is_paintable(), "float has no smaller exact form");
         assert!(!sparse(PixelFormat::RGBA8, 9000, 8000).is_paintable());
         assert!(!sparse(PixelFormat::RGBA8, 0, 8).is_paintable());
+    }
+
+    #[test]
+    fn a_pattern_that_paints_nothing_says_why() {
+        let sparse =
+            |format: PixelFormat, width: u32, height: u32| Pattern { id: String::new(), name: String::new(), width, height, surface: Surface::new(format) };
+        let float = PixelFormat::new(photocraft_color::ColorMode::Rgb, SampleType::F32, true);
+        assert_eq!(sparse(PixelFormat::RGBA8, 8000, 8000).paint_problem(), None);
+        assert_eq!(sparse(PixelFormat::RGBA8, 0, 4).paint_problem().as_deref(), Some("it is empty"));
+        let reason = sparse(float, 5000, 5000).paint_problem().expect("float 5000 x 5000 paints nothing");
+        assert!(reason.contains("5000 × 5000") && reason.contains("32 bits") && reason.contains("16777216"), "{reason}");
+        let reason = sparse(PixelFormat::RGBA16, 8000, 8000).paint_problem().expect("16-bit 8000 x 8000 paints nothing");
+        assert!(reason.contains("16 bits") && reason.contains("33554432"), "{reason}");
     }
 }

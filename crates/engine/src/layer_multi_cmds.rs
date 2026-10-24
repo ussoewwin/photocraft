@@ -5,7 +5,7 @@
 //! The selection itself lives in [`DocState::selected_layers`] (UI state, like the active layer):
 //! changing it never adds a history step. Every structural change below is one history step.
 
-use photocraft_color::PixelFormat;
+use photocraft_color::{PixelFormat, SampleType};
 use photocraft_doc::{Document, Layer, LayerContent, LayerId, VideoData};
 use photocraft_geom::Rect;
 use serde_json::{Value, json};
@@ -1112,11 +1112,12 @@ pub fn layer_bounds(l: &Layer) -> Option<Rect> {
 /// except that a shape layer is measured over everything it draws, beyond the canvas too (its
 /// cache is clipped to the canvas, #8660), by rendering it again. Only those commands pay for that
 /// render, once per click; `canvas` is the frame a shape's gradients are laid out in, so an opacity
-/// stop measures as it renders.
-pub(crate) fn align_bounds(l: &Layer, canvas: Rect) -> Option<Rect> {
+/// stop measures as it renders, and `sample` is the document's sample type (see
+/// [`shape_pixel_bounds`]).
+pub(crate) fn align_bounds(l: &Layer, canvas: Rect, sample: SampleType) -> Option<Rect> {
     let r = match &l.content {
-        LayerContent::Group(g) => g.children.iter().filter_map(|c| align_bounds(c, canvas)).fold(Rect::EMPTY, |a, b| a.union(&b)),
-        LayerContent::Shape(sh) => shape_pixel_bounds(sh, canvas).unwrap_or_else(|| {
+        LayerContent::Group(g) => g.children.iter().filter_map(|c| align_bounds(c, canvas, sample)).fold(Rect::EMPTY, |a, b| a.union(&b)),
+        LayerContent::Shape(sh) => shape_pixel_bounds(sh, canvas, sample).unwrap_or_else(|| {
             let cached = l.surface().map(|s| s.content_bounds()).unwrap_or(Rect::EMPTY);
             // A fill that shows everywhere covers the canvas, rendered yet or not.
             if cached.is_empty() && unbounded_fill(sh) { canvas } else { cached }
@@ -1145,7 +1146,7 @@ const SHAPE_BOUNDS_BAND_PX: u64 = 1 << 20;
 /// everything it can draw (its path, stroke and feather), unclipped, and measured from that. A fill
 /// that shows everywhere (an inverted path, or below 100 % density) has no extent of its own and
 /// keeps the canvas-clipped measure (`None`).
-fn shape_pixel_bounds(sh: &photocraft_doc::ShapeLayer, canvas: Rect) -> Option<Rect> {
+fn shape_pixel_bounds(sh: &photocraft_doc::ShapeLayer, canvas: Rect, sample: SampleType) -> Option<Rect> {
     if unbounded_fill(sh) {
         return None;
     }
@@ -1156,10 +1157,11 @@ fn shape_pixel_bounds(sh: &photocraft_doc::ShapeLayer, canvas: Rect) -> Option<R
     // Gradients lay out in the document's frame (as the cached render does); the feather and the
     // clip cover the shape's whole reach, beyond the canvas too.
     let shape = photocraft_vector::CompiledShape::with_frames(sh, photocraft_vector::DEFAULT_TOLERANCE, reach, canvas);
-    // Alpha at full precision: an 8-bit render drops the faint stroke of a 16-bit or float
-    // document, and the opaque body then aligns by a different extent than the document draws.
-    // A band of rows at a time keeps the working copy a few MB however large the shape.
-    let format = PixelFormat::new(photocraft_color::ColorMode::Grayscale, photocraft_color::SampleType::F32, true);
+    // Alpha at the document's own precision, as the document stores it: an 8-bit render drops the
+    // faint stroke of a 16-bit or float document (the opaque body then aligns by a different
+    // extent than the document draws), and a float one would find alpha an 8-bit document never
+    // stores. A band of rows at a time keeps the working copy a few MB however large the shape.
+    let format = PixelFormat::new(photocraft_color::ColorMode::Grayscale, sample, true);
     let band_rows = i32::try_from((SHAPE_BOUNDS_BAND_PX / u64::from(reach.width().max(1))).max(1)).unwrap_or(i32::MAX);
     let mut bounds = Rect::EMPTY;
     let mut top = reach.y0;
@@ -1212,7 +1214,7 @@ impl Edge {
 
 /// Selected top-level layers that have content bounds, bottom-to-top.
 fn bounded_selection(doc: &Document, sel: &[LayerId]) -> Vec<(LayerId, Rect)> {
-    top_level(doc, sel).into_iter().filter_map(|id| Some((id, align_bounds(doc.layer(id)?, doc.bounds())?))).collect()
+    top_level(doc, sel).into_iter().filter_map(|id| Some((id, align_bounds(doc.layer(id)?, doc.bounds(), doc.pixel_format().sample)?))).collect()
 }
 
 fn align(s: &mut Session, p: &Value, kind: &str) -> Result<Value> {
@@ -2516,10 +2518,10 @@ mod tests {
     #[test]
     fn align_uses_a_shape_layers_full_extent_off_the_canvas() {
         let mut s = session(8);
-        let drawn = |s: &Session, id: LayerId| align_bounds(doc(s).layer(id).unwrap(), doc(s).bounds()).unwrap();
+        let drawn = |s: &Session, id: LayerId| align_bounds(doc(s).layer(id).unwrap(), doc(s).bounds(), SampleType::U8).unwrap();
         let shape =
             LayerId(s.execute("shape.create", json!({"kind": "rect", "rect": [-20, 10, 40, 20], "fill": "#ff0000"})).unwrap()["layer"].as_u64().unwrap());
-        let measured = align_bounds(doc(&s).layer(shape).unwrap(), doc(&s).bounds());
+        let measured = align_bounds(doc(&s).layer(shape).unwrap(), doc(&s).bounds(), SampleType::U8);
         assert_eq!(measured, Some(Rect::new(-20, 10, 20, 30)), "Align: the shape's own extent, not the canvas-clipped render");
         // Everything else keeps the cheap measure of the cached render (no re-render per layer).
         assert_eq!(bounds(&s, shape), Rect::new(0, 10, 20, 30), "layer_bounds: the cache, clipped to the canvas");
@@ -2557,20 +2559,26 @@ mod tests {
         })
         .unwrap();
         let LayerContent::Shape(sh) = &doc(&s).layer(soft).unwrap().content else { panic!("shape") };
-        assert_eq!(shape_pixel_bounds(sh, doc(&s).bounds()), None);
+        assert_eq!(shape_pixel_bounds(sh, doc(&s).bounds(), SampleType::U8), None);
         // Without a cached render yet, such a fill still measures as the canvas, not as empty.
         let mut uncached = doc(&s).layer(soft).unwrap().clone();
         if let LayerContent::Shape(sh) = &mut uncached.content {
             sh.cache = None;
         }
-        assert_eq!(align_bounds(&uncached, doc(&s).bounds()), Some(doc(&s).bounds()));
+        assert_eq!(align_bounds(&uncached, doc(&s).bounds(), SampleType::U8), Some(doc(&s).bounds()));
     }
 
-    /// Review of #8779: a faint stroke of a 16-bit or float document counts in the shape's extent,
-    /// so Align moves the opaque body by the same amount as the cached render's bounds would.
+    /// Review of #8779: shape extents are measured at the document's own alpha precision. A faint
+    /// stroke (0.001 opacity) is stored by a 16-bit or float document, so it counts in the extent
+    /// and Align moves the opaque body as the document draws it; an 8-bit document stores it as
+    /// nothing, so it does not widen the measure.
     #[test]
-    fn align_bounds_keep_a_faint_stroke_at_high_depth() {
-        for depth in [16, 32] {
+    fn align_bounds_follow_the_documents_alpha_precision() {
+        for (depth, sample, expected) in [
+            (8, SampleType::U8, Rect::new(60, 60, 120, 120)),
+            (16, SampleType::U16, Rect::new(50, 50, 130, 130)),
+            (32, SampleType::F32, Rect::new(50, 50, 130, 130)),
+        ] {
             let mut s = session(depth);
             let id =
                 LayerId(s.execute("shape.create", json!({"kind": "rect", "rect": [60, 60, 60, 60], "fill": "#000000"})).unwrap()["layer"].as_u64().unwrap());
@@ -2581,8 +2589,10 @@ mod tests {
                 Ok(())
             })
             .unwrap();
+            assert_eq!(doc(&s).pixel_format().sample, sample);
             let LayerContent::Shape(sh) = &doc(&s).layer(id).unwrap().content else { panic!("shape") };
-            assert_eq!(shape_pixel_bounds(sh, doc(&s).bounds()), Some(Rect::new(50, 50, 130, 130)), "depth {depth}");
+            assert_eq!(shape_pixel_bounds(sh, doc(&s).bounds(), sample), Some(expected), "depth {depth}");
+            assert_eq!(align_bounds(doc(&s).layer(id).unwrap(), doc(&s).bounds(), sample), Some(expected), "depth {depth}");
         }
     }
 
