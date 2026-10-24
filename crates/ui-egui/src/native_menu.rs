@@ -917,7 +917,8 @@ mod tests {
         let l = photocraft_layout(&crate::menus::menu_items(&a), Lang::EN, "auto");
         let comma: Vec<&str> = l.bar.items().into_iter().filter(|it| it.shortcut.as_deref() == Some("Cmd+,")).map(|it| it.id.as_str()).collect();
         assert_eq!(comma, ["layer.hideLayers"]);
-        assert_eq!(l.bar.find("edit.preferences.general").unwrap().shortcut, None);
+        // None on macOS; elsewhere Settings keeps its own ⌘K.
+        assert_ne!(l.bar.find("edit.preferences.general").unwrap().shortcut.as_deref(), Some("Cmd+,"));
         let clash = l.clashes.iter().find(|c| c.shortcut == "Cmd+,").unwrap();
         assert_eq!((clash.command.as_str(), clash.resolution), ("layer.hideLayers", "Settings has no shortcut"));
     }
@@ -927,7 +928,11 @@ mod tests {
     #[test]
     fn a_saved_cmd_comma_without_a_menu_item_takes_the_key_from_settings() {
         let mut a = app(true);
-        a.session.prefs.edit(|p| p.shortcuts.insert("edit.fillForeground".into(), "Cmd+,".into()));
+        a.session.prefs.edit(|p| {
+            p.shortcuts.insert("edit.fillForeground".into(), "Cmd+,".into());
+            // Hide Layers' own default is ⌘, outside macOS: unbind it so the saved key is the only owner.
+            p.shortcuts.insert("layer.hideLayers".into(), String::new());
+        });
         let items = crate::menus::menu_items(&a);
         assert!(!items.iter().any(|it| it.id == "edit.fillForeground"), "the test needs a command with no menu item");
         let comma = crate::shortcuts::parse("Cmd+,");
@@ -979,11 +984,15 @@ mod tests {
     #[test]
     fn a_saved_cmd_comma_on_about_takes_the_key_from_settings() {
         let mut a = app(true);
-        a.session.prefs.edit(|p| p.shortcuts.insert("help.about".into(), "Cmd+,".into()));
+        a.session.prefs.edit(|p| {
+            p.shortcuts.insert("help.about".into(), "Cmd+,".into());
+            // As above: outside macOS, Hide Layers' default ⌘, would be a second owner.
+            p.shortcuts.insert("layer.hideLayers".into(), String::new());
+        });
         let l = photocraft_layout(&crate::menus::menu_items(&a), Lang::EN, "auto");
         let comma: Vec<&str> = l.bar.items().into_iter().filter(|it| it.shortcut.as_deref() == Some("Cmd+,")).map(|it| it.id.as_str()).collect();
         assert_eq!(comma, ["help.about"]);
-        assert_eq!(l.bar.find("edit.preferences.general").unwrap().shortcut, None);
+        assert_ne!(l.bar.find("edit.preferences.general").unwrap().shortcut.as_deref(), Some("Cmd+,"));
         assert_eq!(l.clashes.iter().find(|c| c.shortcut == "Cmd+,").map(|c| c.command.as_str()), Some("help.about"));
     }
 
