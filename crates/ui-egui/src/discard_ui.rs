@@ -460,6 +460,10 @@ pub fn answer_control(app: &mut PhotocraftApp, ctx: &egui::Context, choice: &str
             return Err(format!("unknown choice `{other}`: {} or {last}", rest.join(", ")));
         }
     };
+    // The client's answer replaces one Apply to All left behind (a save that failed at once).
+    if let Some(p) = app.discard.as_mut() {
+        (p.apply_all, p.auto, p.auto_answered) = (false, None, None);
+    }
     if all {
         apply_to_rest(app, doc, answer);
     }
@@ -870,6 +874,26 @@ mod tests {
         h.run_steps(8);
         assert!(h.state().discard.is_none());
         assert!(h.state().session.documents().is_empty());
+    }
+
+    /// A client answering one document isn't overruled by an Apply to All whose save just failed.
+    #[test]
+    fn a_control_answer_clears_a_stale_apply_to_all() {
+        let mut app = app_with_docs(3);
+        for i in 0..3 {
+            make_dirty(&mut app, i);
+        }
+        let mut h = prompt_for(app, "file.closeAll", egui::os::OperatingSystem::Windows);
+        let (first, last) = (doc_id(h.state(), 0), doc_id(h.state(), 2));
+        if let Some(p) = h.state_mut().discard.as_mut() {
+            (p.apply_all, p.auto, p.auto_answered) = (true, Some(Answer::Discard), Some(first));
+        }
+        let ctx = h.ctx.clone();
+        answer_control(h.state_mut(), &ctx, "dontSave").unwrap();
+        h.run_steps(8);
+        let prompt = h.state().discard.as_ref().unwrap();
+        assert_eq!(prompt.docs.len(), 2, "only the answered document was closed");
+        assert!(prompt.docs.contains(&last) && prompt.auto.is_none());
     }
 
     #[test]
