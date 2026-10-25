@@ -80,18 +80,20 @@ pub(super) fn adjust(surface: &mut Surface, colors: ColorChannels, adjustment: &
                 .collect();
             component.table = Some(Arc::new(IntegerTable { adjusted: table.adjusted.clone(), encoded }));
         }
-        let tone = input(read_sample(surface.default_bytes(), fmt.sample, index), fmt);
-        let mut buf = Buffer { rect: Rect::from_xywh(0, 0, 1, 1), px: vec![[tone, tone, tone, 1.0]] };
-        adjust::apply_in(&component.scalar, &mut buf, transfer, depth, mode);
-        let value = output(tone, buf.px.first().map_or(tone, |p| p[0]), selected_default, &component, fmt);
-        let mut encoded = surface.default_bytes().to_vec();
-        write_sample(&mut encoded, fmt.sample, index, value);
         let transparent = fmt.alpha && surface.default_pixel().last().is_some_and(|a| *a == 0.0);
-        if selected_default > 0.0 && !transparent && encoded != surface.default_bytes() {
-            if u64::from(bounds.width()) * u64::from(bounds.height()) > 268_435_456 {
-                return Err(EngineError::Other("colour-channel edit exceeds the materialization limit".into()));
+        if selected_default > 0.0 && !transparent {
+            let tone = input(read_sample(surface.default_bytes(), fmt.sample, index), fmt);
+            let mut buf = Buffer { rect: Rect::from_xywh(0, 0, 1, 1), px: vec![[tone, tone, tone, 1.0]] };
+            adjust::apply_in(&component.scalar, &mut buf, transfer, depth, mode);
+            let value = output(tone, buf.px.first().map_or(tone, |p| p[0]), selected_default, &component, fmt);
+            let mut encoded = surface.default_bytes().to_vec();
+            write_sample(&mut encoded, fmt.sample, index, value);
+            if encoded != surface.default_bytes() {
+                if u64::from(bounds.width()) * u64::from(bounds.height()) > 268_435_456 {
+                    return Err(EngineError::Other("colour-channel edit exceeds the materialization limit".into()));
+                }
+                coords.extend(bounds.tiles());
             }
-            coords.extend(bounds.tiles());
         }
         components.push(component);
     }
@@ -111,11 +113,16 @@ pub(super) fn adjust(surface: &mut Surface, colors: ColorChannels, adjustment: &
                     if c.table.is_some() || c.lab_invert {
                         return None;
                     }
-                    Some(Buffer { rect: tile_rect, px: Vec::with_capacity((TILE_SIZE as usize).pow(2)) })
+                    Some(Buffer { rect: region, px: Vec::with_capacity(region.width() as usize * region.height() as usize) })
                 })
                 .collect();
             if buffers.iter().any(Option::is_some) {
-                for pixel in dest.bytes().chunks_exact(fmt.bytes_per_pixel()) {
+                for (i, pixel) in dest.bytes().chunks_exact(fmt.bytes_per_pixel()).enumerate() {
+                    let x = tile_rect.x0.saturating_add((i % TILE_SIZE as usize) as i32);
+                    let y = tile_rect.y0.saturating_add((i / TILE_SIZE as usize) as i32);
+                    if !region.contains(x, y) {
+                        continue;
+                    }
                     for (component, buffer) in components.iter().zip(&mut buffers) {
                         if let Some(buffer) = buffer {
                             let v = input(read_sample(pixel, fmt.sample, component.index), fmt);
@@ -169,7 +176,8 @@ pub(super) fn adjust(surface: &mut Surface, colors: ColorChannels, adjustment: &
                             let quantum = (table.adjusted.len() - 1) as f32;
                             table.adjusted.get((tone * quantum).round() as usize).copied().unwrap_or(tone)
                         } else {
-                            buf.as_ref().and_then(|b| b.px.get(row * size + column)).map_or(tone, |p| p[0])
+                            let i = (y - region.y0) as usize * region.width() as usize + (x - region.x0) as usize;
+                            buf.as_ref().and_then(|b| b.px.get(i)).map_or(tone, |p| p[0])
                         };
                         write_sample(pixel, fmt.sample, c.index, output(tone, adjusted, weight, c, fmt));
                     }
