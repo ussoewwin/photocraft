@@ -44,6 +44,8 @@ pub(super) fn replace(app: &mut PhotocraftApp, start: usize, end: usize, text: &
         && !text.is_empty()
     {
         let mut run = json!({"start": start, "end": caret, "font": p.style.font_family, "weight": p.style.weight, "italic": p.style.italic});
+        // Setting weight clears an inherited wght axis; restore the chosen font's axes last.
+        run["variations"] = p.style.variations.iter().map(|v| (v.axis.clone(), json!(v.value))).collect::<serde_json::Map<_, _>>().into();
         if let Some(face) = &p.style.postscript_name {
             run["postscriptName"] = json!(face);
         }

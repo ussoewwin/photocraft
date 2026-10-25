@@ -359,7 +359,7 @@ fn commit_does_not_accept_an_invalid_font_or_interrupt_ime() {
 
 #[test]
 fn font_field_composition_keeps_confirmation_then_releases_global_commit() {
-    for disabled in [false, true] {
+    for cancelled in [false, true] {
         let (mut h, id) = fixture(false, 0, false, "abcdef");
         select(&mut h, [2, 4]);
         h.run();
@@ -370,8 +370,8 @@ fn font_field_composition_keeps_confirmation_then_releases_global_commit() {
         commit(&mut h, "shortcut-focused");
         assert!(h.state().app.ui.text_edit.is_some());
         assert_eq!(families(&saved(&h, id)), vec![FONTS[0]; 6]);
-        if disabled {
-            h.event(egui::Event::Ime(egui::ImeEvent::Disabled));
+        if cancelled {
+            h.event(egui::Event::Ime(egui::ImeEvent::Preedit { text: String::new(), active_range_chars: None }));
             h.run();
             h.key_press_modifiers(Modifiers::COMMAND, Key::A);
             h.event(egui::Event::Text(FONTS[1].into()));
@@ -384,6 +384,36 @@ fn font_field_composition_keeps_confirmation_then_releases_global_commit() {
         assert!(h.state().app.ui.text_edit.is_none());
         assert_eq!(families(&saved(&h, id)), [FONTS[0], FONTS[0], FONTS[1], FONTS[1], FONTS[0], FONTS[0]]);
     }
+}
+
+#[test]
+fn caret_font_insertion_preserves_variable_axes_and_style_changes_can_clear_weight_axis() {
+    let (mut h, id) = fixture(false, 0, false, "abcdef");
+    h.state_mut().app.run("type.setStyle", json!({"layer":id.0,"variations":{"wght":650,"wdth":95}})).unwrap();
+    select(&mut h, [3, 3]);
+    h.run();
+    choose(&mut h, FONTS[1], "enter");
+    super::insert(&mut h.state_mut().app, "X");
+    let variations = |app: &PhotocraftApp, at: usize| {
+        let mut offset = 0;
+        layer(&app.session.active().unwrap().doc, id)
+            .char_runs()
+            .into_iter()
+            .find_map(|r| {
+                offset += r.len;
+                (offset > at).then_some(r.style.variations)
+            })
+            .unwrap()
+    };
+    let axes = variations(&h.state().app, 3);
+    assert!(axes.iter().any(|v| v.axis == "wght" && v.value == 650.0));
+    assert!(axes.iter().any(|v| v.axis == "wdth" && v.value == 95.0));
+    let ctx = h.ctx.clone();
+    super::apply(&mut h.state_mut().app, &ctx, json!({"fontStyle":"Bold"}));
+    super::insert(&mut h.state_mut().app, "Y");
+    let axes = variations(&h.state().app, 4);
+    assert!(!axes.iter().any(|v| v.axis == "wght"));
+    assert!(axes.iter().any(|v| v.axis == "wdth" && v.value == 95.0));
 }
 
 #[test]

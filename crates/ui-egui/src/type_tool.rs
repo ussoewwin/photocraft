@@ -1886,7 +1886,7 @@ pub(crate) fn family_picker_in(
             for event in &i.events {
                 match event {
                     egui::Event::Ime(egui::ImeEvent::Preedit { text, .. }) => edit.composing = !text.is_empty(),
-                    egui::Event::Ime(egui::ImeEvent::Commit(_) | egui::ImeEvent::Disabled) => edit.composing = false,
+                    egui::Event::Ime(egui::ImeEvent::Commit(_)) => edit.composing = false,
                     _ => {}
                 }
             }
