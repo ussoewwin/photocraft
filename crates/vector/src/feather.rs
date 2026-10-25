@@ -42,6 +42,17 @@ pub fn path_area(path: &Path, sigma: f32) -> Rect {
     }
 }
 
+/// The largest buffer (in `f32`s) the blur has allocated, for tests of its working set.
+#[cfg(test)]
+static LARGEST_BUFFER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// Notes a blur buffer of `len` floats ([`LARGEST_BUFFER`]); nothing outside tests.
+fn note_buffer(len: usize) {
+    #[cfg(test)]
+    LARGEST_BUFFER.fetch_max(len, std::sync::atomic::Ordering::Relaxed);
+    let _ = len;
+}
+
 /// One box pass: weight 1 on `±r` around each sample and `end` (0..1) on the two samples just
 /// beyond, so the pass's variance is any real number, not only the `r(r+1)/3` of whole boxes.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -99,16 +110,45 @@ fn blur_line(line: &mut [f32], scratch: &mut [f32], pass: BoxPass) {
 /// Apply three clamped box passes to independent contiguous rows. Scoped OS threads are used
 /// instead of Rayon because mask construction can happen inside a Rayon tile job; nested Rayon
 /// work here can deadlock when every worker waits on the same OnceLock (#276).
-fn blur_rows_chunk(v: &mut [f32], w: usize, pass: BoxPass) {
-    let mut scratch = vec![0.0; w];
+fn blur_rows_chunk(v: &mut [f32], w: usize, pass: BoxPass, halo: usize) {
+    let Some((mut padded, mut scratch)) = line_buffers(w, halo) else { return };
     for row in v.chunks_mut(w) {
-        for _ in 0..3 {
-            blur_line(row, &mut scratch, pass);
-        }
+        blur_padded_line(row, &mut padded, &mut scratch, pass, halo);
     }
 }
 
-fn blur_rows(v: &mut [f32], w: usize, pass: BoxPass) {
+/// A padded line and its scratch for lines of `len` samples with `halo` more on each side; `None`
+/// when they don't fit in memory (the lines are then left unblurred rather than aborting).
+fn line_buffers(len: usize, halo: usize) -> Option<(Vec<f32>, Vec<f32>)> {
+    let n = halo.checked_mul(2)?.checked_add(len)?;
+    let (mut padded, mut scratch) = (Vec::new(), Vec::new());
+    padded.try_reserve_exact(n).ok()?;
+    scratch.try_reserve_exact(n).ok()?;
+    padded.resize(n, 0.0);
+    scratch.resize(n, 0.0);
+    note_buffer(n);
+    Some((padded, scratch))
+}
+
+/// The three box passes on `line` continued `halo` samples past each end with its end values, as
+/// Photoshop continues a mask past the canvas edge (#9475). Padding each line, row pass then
+/// column pass, gives exactly what padding the whole plane would: the plane's padded corners
+/// repeat its corner values, which is what the padded rows' own row pass leaves there. `padded`
+/// and `scratch` hold `line.len() + 2 * halo` samples.
+fn blur_padded_line(line: &mut [f32], padded: &mut [f32], scratch: &mut [f32], pass: BoxPass, halo: usize) {
+    let (Some(&a), Some(&b)) = (line.first(), line.last()) else { return };
+    let n = line.len() + 2 * halo;
+    let (Some(padded), Some(scratch)) = (padded.get_mut(..n), scratch.get_mut(..n)) else { return };
+    padded[..halo].fill(a);
+    padded[halo..halo + line.len()].copy_from_slice(line);
+    padded[halo + line.len()..].fill(b);
+    for _ in 0..3 {
+        blur_line(padded, scratch, pass);
+    }
+    line.copy_from_slice(&padded[halo..halo + line.len()]);
+}
+
+fn blur_rows(v: &mut [f32], w: usize, pass: BoxPass, halo: usize) {
     if w == 0 || v.is_empty() {
         return;
     }
@@ -119,14 +159,14 @@ fn blur_rows(v: &mut [f32], w: usize, pass: BoxPass) {
         std::thread::available_parallelism().map_or(1, |n| n.get()).clamp(1, 16).min(h.max(1))
     };
     if threads == 1 {
-        blur_rows_chunk(v, w, pass);
+        blur_rows_chunk(v, w, pass, halo);
         return;
     }
     let rows_per_worker = h.div_ceil(threads);
     let chunk_len = rows_per_worker.saturating_mul(w);
     std::thread::scope(|scope| {
         for chunk in v.chunks_mut(chunk_len) {
-            scope.spawn(move || blur_rows_chunk(chunk, w, pass));
+            scope.spawn(move || blur_rows_chunk(chunk, w, pass, halo));
         }
     });
 }
@@ -163,71 +203,43 @@ pub fn gaussian(v: &mut [f32], w: usize, h: usize, sigma: f32) {
     // every pass at the edge instead repeated the blurred values there, which brightened a 32 px
     // feather by up to 12 levels where the canvas cut it off.
     let m = pass.r.saturating_add(1).saturating_mul(3);
-    let Some(mut padded) = padded(v, w, h, m) else {
-        blur_plane(v, w, h, pass);
-        return;
-    };
-    let pw = w + 2 * m;
-    blur_plane(&mut padded, pw, h + 2 * m, pass);
-    for (dst, src) in v.chunks_exact_mut(w).zip(padded.chunks_exact(pw).skip(m)) {
-        if let Some(src) = src.get(m..m + w) {
-            dst.copy_from_slice(src);
-        }
-    }
+    blur_plane(v, w, h, pass, m);
 }
 
-/// The `w`×`h` plane `v` with `m` more samples on every side, each the nearest edge value; `None`
-/// when that doesn't fit in memory.
-fn padded(v: &[f32], w: usize, h: usize, m: usize) -> Option<Vec<f32>> {
-    let pw = w.checked_add(m.checked_mul(2)?)?;
-    let len = pw.checked_mul(h.checked_add(m.checked_mul(2)?)?)?;
-    let mut out = Vec::new();
-    out.try_reserve_exact(len).ok()?;
-    let rows: Vec<&[f32]> = v.chunks_exact(w).collect();
-    let (first, last) = (*rows.first()?, *rows.last()?);
-    for row in std::iter::repeat_n(first, m).chain(rows.iter().copied()).chain(std::iter::repeat_n(last, m)) {
-        let (a, b) = (*row.first()?, *row.last()?);
-        out.extend(std::iter::repeat_n(a, m));
-        out.extend_from_slice(row);
-        out.extend(std::iter::repeat_n(b, m));
-    }
-    Some(out)
-}
-
-fn blur_plane(v: &mut [f32], w: usize, h: usize, pass: BoxPass) {
+/// Three box passes along each axis of the `w`×`h` plane, every line continued `halo` samples
+/// past its ends ([`blur_padded_line`]).
+fn blur_plane(v: &mut [f32], w: usize, h: usize, pass: BoxPass, halo: usize) {
     // Reserve before modifying the input so allocation failure can use the sequential fallback
     // without leaving a half-blurred mask.
     let mut transposed = Vec::new();
     if transposed.try_reserve_exact(v.len()).is_err() {
-        gaussian_sequential(v, w, h, pass);
+        gaussian_sequential(v, w, h, pass, halo);
         return;
     }
     transposed.resize(v.len(), 0.0);
-    blur_rows(v, w, pass);
+    note_buffer(v.len());
+    blur_rows(v, w, pass, halo);
     transpose_into(v, &mut transposed, w, h);
-    blur_rows(&mut transposed, h, pass);
+    blur_rows(&mut transposed, h, pass, halo);
     transpose_into(&transposed, v, h, w);
 }
 
 /// Allocation-light reference path used if parallel transpose storage cannot be reserved.
-fn gaussian_sequential(v: &mut [f32], w: usize, h: usize, pass: BoxPass) {
+fn gaussian_sequential(v: &mut [f32], w: usize, h: usize, pass: BoxPass, halo: usize) {
     let mut line = Vec::new();
-    let mut scratch = Vec::new();
     let len = w.max(h);
-    if line.try_reserve_exact(len).is_err() || scratch.try_reserve_exact(len).is_err() {
+    if line.try_reserve_exact(len).is_err() {
         return;
     }
     line.resize(len, 0.0);
-    scratch.resize(len, 0.0);
+    let Some((mut padded, mut scratch)) = line_buffers(len, halo) else { return };
     for axis in [false, true] {
         let (lines, line_len) = if axis { (w, h) } else { (h, w) };
         for k in 0..lines {
             for i in 0..line_len {
                 line[i] = if axis { v[i * w + k] } else { v[k * w + i] };
             }
-            for _ in 0..3 {
-                blur_line(&mut line[..line_len], &mut scratch[..line_len], pass);
-            }
+            blur_padded_line(&mut line[..line_len], &mut padded, &mut scratch, pass, halo);
             for i in 0..line_len {
                 if axis {
                     v[i * w + k] = line[i];
@@ -291,9 +303,31 @@ mod tests {
         let mut parallel: Vec<_> = (0..w * h).map(|i| ((i * 37 % 1009) as f32) / 1008.0).collect();
         let mut sequential = parallel.clone();
         let pass = BoxPass::for_sigma(sigma).unwrap();
-        gaussian_sequential(&mut sequential, w, h, pass);
-        blur_plane(&mut parallel, w, h, pass);
-        assert_eq!(parallel, sequential, "parallel blur must retain the exact per-line arithmetic");
+        let source = parallel.clone();
+        for halo in [0, 3 * (pass.r + 1)] {
+            parallel.copy_from_slice(&source);
+            sequential.copy_from_slice(&source);
+            gaussian_sequential(&mut sequential, w, h, pass, halo);
+            blur_plane(&mut parallel, w, h, pass, halo);
+            assert_eq!(parallel, sequential, "parallel blur must retain the exact per-line arithmetic (halo {halo})");
+        }
+    }
+
+    /// Padding each line (#9493) blurs exactly as padding the whole plane with its edge values
+    /// and cropping it afterwards does, without the padded plane.
+    #[test]
+    fn padding_each_line_matches_padding_the_plane() {
+        let (w, h, sigma): (usize, usize, f32) = (90, 70, 9.0);
+        let source: Vec<f32> = (0..w * h).map(|i| ((i * 37 % 1009) as f32) / 1008.0).collect();
+        let pass = BoxPass::for_sigma(sigma).unwrap();
+        let m = 3 * (pass.r + 1);
+        let (pw, ph) = (w + 2 * m, h + 2 * m);
+        let mut plane: Vec<f32> = (0..pw * ph).map(|i| source[((i / pw).clamp(m, m + h - 1) - m) * w + (i % pw).clamp(m, m + w - 1) - m]).collect();
+        blur_plane(&mut plane, pw, ph, pass, 0);
+        let want: Vec<f32> = (0..w * h).map(|i| plane[(i / w + m) * pw + i % w + m]).collect();
+        let mut got = source;
+        gaussian(&mut got, w, h, sigma);
+        assert_eq!(got, want);
     }
 
     #[test]
@@ -306,7 +340,7 @@ mod tests {
         let source: Vec<_> = (0..w * h).map(|i| ((i * 37 % 1009) as f32) / 1008.0).collect();
         let mut sequential = source.clone();
         let start = Instant::now();
-        gaussian_sequential(&mut sequential, w, h, pass);
+        gaussian_sequential(&mut sequential, w, h, pass, 3 * (pass.r + 1));
         let sequential_time = start.elapsed();
         let mut parallel = source;
         let start = Instant::now();
@@ -314,5 +348,19 @@ mod tests {
         let parallel_time = start.elapsed();
         assert_eq!(parallel, sequential);
         eprintln!("50 MP mask blur: sequential={sequential_time:?}, parallel={parallel_time:?}");
+    }
+
+    /// CodeRabbit on #9493: continuing the mask past the plane's edge must not build a padded copy
+    /// of the whole plane. At the 1000 px maximum feather the halo is about 3000 px a side, so a
+    /// padded 400 × 400 plane would be 6400 × 6400 floats; the blur needs only the plane's
+    /// transpose and one padded line per worker.
+    #[test]
+    fn a_maximum_feather_does_not_pad_the_whole_plane() {
+        let (w, h) = (400usize, 400usize);
+        let mut v: Vec<f32> = (0..w * h).map(|i| if (i % w) < w / 2 { 1.0 } else { 0.0 }).collect();
+        gaussian(&mut v, w, h, feather_sigma(1000.0));
+        let largest = LARGEST_BUFFER.load(std::sync::atomic::Ordering::Relaxed);
+        assert!(largest <= w * h, "the blur allocated a buffer of {largest} floats for a {w} × {h} plane");
+        assert!(v.iter().all(|x| x.is_finite()));
     }
 }
