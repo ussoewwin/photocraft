@@ -146,15 +146,30 @@ Raw samples: [original pre-feature base](benchmarks/multi-channel-editing/baseli
 [environment and binary hashes](benchmarks/multi-channel-editing/environment.json).
 The three `candidate*-before-fused-original.json` files preserve the original feature run.
 
-Validation: 6,472 engine and UI tests passed (38 ignored), including 53 focused engine
-regressions. Strict all-target Clippy, formatting, layering,
-wasm, parity generation and the adversarial command panic hunt passed. The complete
-`cargo xtask perf --quick` runner was attempted: its layout fixture fails because
-it tries to convert an already imported Smart Object. This unrelated runner failure is not
-reported as a passing full performance gate. The feature-specific benchmark above
-completed successfully. Eleven original review/fix rounds and four follow-up reviews were completed; the
-latest review found no actionable issues. Visual captures were rendered offscreen
-and inspected.
+Validation after the main merge and review fixes: 6,542 engine and UI tests passed
+(38 ignored), including 58 focused engine regressions. Strict all-target Clippy,
+formatting, layering, wasm, parity generation and the adversarial command panic hunt passed.
+The complete `cargo xtask perf --quick` runner now finishes successfully after the main
+merge; its report still lists unrelated, non-enforced budget overruns. Six further local
+review/fix rounds followed the latest CodeRabbit review; the last found no actionable issues.
+All visual captures were rendered offscreen and inspected.
+
+The additional 24 MP RGB16 Liquify benchmark uses
+`crates/ui-egui/examples/multi_channel_preview_bench.rs`, with eight Rayon workers and
+no concurrent builds, tests or performance scenarios. It measures field deformation plus
+the dirty CPU proxy render; GPU uploads/presentation are excluded. One warmup and six
+measured updates use interleaved target modes. The field's nonzero displacement is checked.
+
+| Liquify, 120 px brush | All channels | Red only | Red + Blue |
+|---|---:|---:|---:|
+| Preview update p50 | 0.111 ms | 0.345 ms | 0.447 ms |
+| Maximum of six updates | 0.120 ms | 0.360 ms | 0.461 ms |
+| Open workspace, one setup measurement | 22.6 ms | 246.6 ms | 317.7 ms |
+
+Opening a component workspace builds its native proxy once. Open timings are sequential
+single observations, not medians; setup is excluded from update timings. The whole process,
+including all three workspaces, peaked at 380.5 MiB RSS. [Raw samples](benchmarks/multi-channel-editing/liquify-preview.json)
+and [source/binary hashes](benchmarks/multi-channel-editing/environment.json) are retained.
 
 
 ## Visual evidence
@@ -200,3 +215,59 @@ retouch-preview restriction issues are fixed, with regression tests. The propose
 clipboard inversion is unnecessary: destination extraction and scatter already convert
 between tone and ink. Tests cover implicit/explicit singleton copying into explicit targets
 and normal/Paste Into/Paste Outside paths at 8/16/32-bit depths without adding an inversion.
+
+The post-merge review identified missing Copy/Cut parameter documentation; both commands
+now describe explicit colour targets and layer ids/names. Auditing that contract also found
+that Copy ignored an explicit layer with an implicit single-component target. Copy now
+resolves that layer just as Cut does, with a regression that failed before the correction.
+
+The proposed Lab histogram index change is unnecessary: `HistSource::Colors` reserves
+slot 0 for the combined selection and stores native components at `k + 1`, including Lab.
+Ordinary Lab histograms instead use slots 0–2 for L/a/b. The histogram accessor returns
+empty bins for an unavailable slot, rather than panicking. New tests use actual native
+subset histograms for components `[0, 2]`, render every choice in both editors, and check
+Levels Auto against those bins in RGB/CMYK/Lab at 8/16/32-bit depths.
+
+The next local review found that viewing a layer mask after selecting colour channels
+could still send canvas strokes to those colours. Mask view now takes priority in canvas
+painting, implicit engine commands and captured tone-dialog targets. Regressions cover
+live previews and commits plus adjustments/filters at all depths, while explicit native
+targets can still override the viewed mask. Selecting colour rows again leaves mask view
+and restores their editing target and visibility.
+
+A further review caught mask Cut/Clear falling back to layer pixels, dialog capture retaining
+the old colour set over a viewed mask, and Desaturate dropping explicit target parameters.
+Cut/Clear now copy/fill only the selected mask samples, respecting locks and feathering.
+Adjustment/filter dialogs preserve their captured mask through preview, confirmation and
+Curves Reset, and Desaturate forwards its target and layer parameters. Tests cover pixel and
+clipboard preservation, undo/redo, refused edits and changed panel selections.
+Move/Free Transform still work on the viewed unlinked mask when colour rows remain selected
+behind it; native colour subsets retain their geometry restriction. Curves canvas-point
+gestures also honour the captured scalar target after the panel selection changes.
+
+The named-destination visibility guard now resolves layer names just as painting does.
+Filter Gallery, Liquify and Adaptive Wide Angle capture the native colour target, preserve
+unselected components and alpha in their specialized previews, and retain the target for OK.
+Liquify samples only the dirty proxy or detail viewport, with a native proxy built once.
+These full-window workspaces require layer pixels or native colour channels; masks, saved
+channels and Quick Mask remain available through ordinary filter commands/dialogs.
+Geometric writeback retains the original alpha layout, copying selected native bytes even
+when the warp produces an alpha-bearing surface. Changed defaults materialize only within
+the supplied document/preview extent, under the same bounded-pixel limit.
+
+The public-domain Filter Gallery comparison uses R+B with Green manually made visible.
+The original preview filters Green too; the corrected preview retains its original detail.
+The [capture script](images/multi-channel-editing/gallery-channel-preview-script.json)
+records that explicit visibility override.
+
+![Before: Cutout also changes Green](images/multi-channel-editing/gallery-channel-preview-before.png)
+
+![After: Cutout preserves unselected Green](images/multi-channel-editing/gallery-channel-preview-after.png)
+
+The same synthetic gradient and [pointer script](images/multi-channel-editing/mask-view-script.json)
+show the correction: before, the mask stays white while the stroke changes the layer;
+after, the stroke paints the mask while the layer's gradient stays intact.
+
+![Before: the displayed mask stays white](images/multi-channel-editing/mask-view-before.png)
+
+![After: the displayed mask receives the stroke](images/multi-channel-editing/mask-view-after.png)

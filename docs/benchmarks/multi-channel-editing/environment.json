@@ -19,5 +19,27 @@
   "candidate_source_commit": "aeff53449221e8b42a628d832abc595c9503a146",
   "candidate_tone_source_sha256": "da42e686db09ed4e5bf2c19316a6b47261c97185aec83c6bba86831e29e39c6e",
   "before_fused_rerun_resources": "elapsed_seconds=16.47 peak_rss_kib=690516",
-  "before_fused_commit": "15bf0873ba03622e54189e668df20a1403e41d56"
+  "before_fused_commit": "15bf0873ba03622e54189e668df20a1403e41d56",
+  "liquify_preview": {
+    "source_content_commit": "009c4fa6128dad1e564d731656a304953d879842",
+    "build_git_head": "a37d21de7e1a90451d5afcad6772ae358f69e07a",
+    "binary_sha256": "309bc5e882403080ade9410103fba6eb73b296da897274a7816380f50e413c3a",
+    "files_sha256": {
+      "crates/ui-egui/examples/multi_channel_preview_bench.rs": "84f4e6fd4a0f79a35da706a06144401ad06509a06608ea5ed89729d394f6e0b1",
+      "crates/ui-egui/src/liquify_ui.rs": "1179cb7403fa189a8e0d1872212e150bd98b10844d189140e954cd0cdd279f29",
+      "crates/ui-egui/src/gallery_ui.rs": "118249270993f1443882df4808fd0f6e05b129a091441f3560bdcc0e4d80a4ca",
+      "crates/ui-egui/src/wide_angle_ui.rs": "6ebf9f1d291642dc3cc42c72980830f79e9f82c6d9b743c145e9048adddb1b36",
+      "crates/engine/src/color_channels.rs": "e6737a5dfb79a5324f08173d18cf271a539dddb386b9488249c150810537313e"
+    },
+    "measured_at_utc": "2026-10-25T17:45:11.612486+00:00",
+    "profile": "release, thin LTO",
+    "rayon_threads": 8,
+    "measurement": "CPU field deformation plus dirty native proxy render. GPU texture upload/presentation excluded. One warmup plus six interleaved updates; p50 is upper middle; max_ms is max of six. open_ms is one sequential setup timing per mode, not a median.",
+    "resources": {
+      "elapsed_seconds": 0.72,
+      "peak_rss_kib": 389664
+    },
+    "isolation": "Measured after final tests, builds and cargo xtask perf --quick ended; no Cargo or rustc processes were running.",
+    "correctness_proof": "Each workspace reports a nonzero Liquify maxDisplacement after the measured updates."
+  }
 }
