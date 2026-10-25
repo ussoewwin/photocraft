@@ -22,7 +22,7 @@ The “PhotoCraft at branch point” column records behavior before this PR. Pic
 |---|---|---|---|
 | Move | Choose a layer at the point; an auto-select choice also exists in the options bar | Layers | P0; [Adobe layer movement](https://helpx.adobe.com/photoshop/using/moving-stacking-locking-layers.html); exact pop-up layout requires capture |
 | Rectangular/Elliptical Marquee, Lasso, Polygonal Lasso, Magnetic Lasso, Magic Wand, Quick Selection, Object Selection | Active selection: the 2026 selection menu (see *Selection canvas reference* below); no selection: making a selection | Quick Selection: Picker (a brush tool, as in Photoshop); the other six: the selection menu below (#614, #738) | P1; no-selection variant still needs a dated capture |
-| Crop | During crop: ratio/preset, overlay, clear/reset, commit/cancel **(inferred context placement)** | Crop menu on a pending frame (#6561): the options-bar ratios (Original Ratio, 1 : 1, 4 : 5, 5 : 7, 2 : 3, 16 : 9; the current one checked), the saved crop presets, the gear options Use Classic Mode / Show Cropped Area / Auto Center Preview (checked; the last two greyed in Classic Mode), and Reset / Cancel / Commit. Rows route through the same functions as the options bar. No menu on the untouched default frame or outside the image (pasteboard menu wins) | P1; pending crop target; exact Photoshop label/order still needs a dated capture |
+| Crop | During crop: ratio/preset, overlay, clear/reset, commit/cancel **(inferred context placement)** | No tool menu | P1; pending crop target; the menu below landed in #6561; exact Photoshop label/order still needs a dated capture |
 | Eyedropper | Sample-size/source choices **(inferred)** | No tool menu | P2; [Adobe illustration uses Eyedropper](https://helpx.adobe.com/photoshop/using/panels-menus.html), but does not publish item text |
 | Ruler, Note, Count | Unit / measurement, note edit/delete, count-group operations **(inferred)** | No tool menu | P2 |
 | Brush, Pencil, Eraser, Background Eraser, Spot Healing, Healing, Clone Stamp, History Brush, Blur, Sharpen, Smudge, Dodge, Burn, Sponge | Brush preset, size and hardness where applicable | Picker | P0; [Adobe Brush Settings](https://helpx.adobe.com/photoshop/desktop/apply-painting-techniques/brushes-presets/create-brush-set-painting-options.html). Alt+secondary-drag on Windows and Control+Option-drag on macOS adjust size/hardness ([Adobe cursor shortcuts](https://helpx.adobe.com/in/photoshop/desktop/get-started/settings-and-preferences/change-tool-pointers.html)) |
@@ -36,6 +36,10 @@ The “PhotoCraft at branch point” column records behavior before this PR. Pic
 | Any tool with Command/Ctrl + secondary click | List visible layers with pixels under pointer | Layers | P0; preserve existing route |
 
 The layer-list menu on an empty pixel or all-hidden hit should be empty/closed; it must not select a transparent or hidden layer. The right-erase preference is an alternate PhotoCraft behavior, and its selected state takes precedence over the Brush picker only for Brush/Eraser.
+
+### Crop canvas menu (#6561, 2026-10-25)
+
+With the Crop tool and a pending frame, a canvas right-click opens the crop menu: the options-bar ratios (Original Ratio, 1 : 1, 4 : 5, 5 : 7, 2 : 3, 16 : 9; the current one checked), the saved crop presets, the gear options Use Classic Mode / Show Cropped Area / Auto Center Preview (checked; the last two greyed in Classic Mode), and Reset / Cancel / Commit. The rows route through the same functions as the options bar, so the menu and the bar cannot disagree. No menu on the untouched default frame or outside the image (the pasteboard menu wins), and the menu closes when the crop stops being pending.
 
 ## Pen canvas reference capture (2026-10-07)
 
