@@ -101,7 +101,9 @@ pub fn keys(app: &mut PhotocraftApp, ctx: &egui::Context) {
         return;
     }
     if let Some(top) = app.ui.dialogs.last() {
-        if top.kind != DialogKind::Command {
+        // A shortcut field waiting for keys (Keyboard Shortcuts) records ⌘Z like any other key
+        // (#9487); stepping back here undid the click that started the capture.
+        if top.kind != DialogKind::Command || top.fields.get("capture").and_then(Value::as_bool) == Some(true) {
             return;
         }
         let id = top.id;
@@ -112,6 +114,10 @@ pub fn keys(app: &mut PhotocraftApp, ctx: &egui::Context) {
         {
             d.fields.retain(|k, _| k.starts_with("__"));
             d.fields.extend(now);
+            // A step back to before a recorded shortcut doesn't wait for keys again.
+            if let Some(c) = d.fields.get_mut("capture") {
+                *c = Value::Bool(false);
+            }
         }
     } else if let Some(d) = app.distort.gallery.as_mut() {
         if let Some(step) = take_step(ctx) {
