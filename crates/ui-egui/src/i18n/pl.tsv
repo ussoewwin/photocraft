@@ -4038,3 +4038,7 @@ curves	Smooth	Wygładź
 	Grayscale Ramp	Pasek skali szarości
 	Current Colors	Bieżące kolory
 	Make Ramp Web Safe	Ogranicz pasek do kolorów internetowych
+
+# Pen draft after a refused commit (#7648)
+	The path was kept as the Work Path	Ścieżka została zachowana jako ścieżka robocza
+	The path was discarded	Ścieżka została odrzucona

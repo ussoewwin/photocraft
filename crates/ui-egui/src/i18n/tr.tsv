@@ -4150,3 +4150,7 @@ cameraData	Lens	Lens
 	Grayscale Ramp	Gri Tonlama Şeridi
 	Current Colors	Geçerli Renkler
 	Make Ramp Web Safe	Şeridi Web Renkleriyle Sınırla
+
+# Pen draft after a refused commit (#7648)
+	The path was kept as the Work Path	Yol, Çalışma Yolu olarak korundu
+	The path was discarded	Yol atıldı

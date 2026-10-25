@@ -4463,3 +4463,7 @@ shape	Appearance	Apparence
 	Grayscale Ramp	Barre de niveaux de gris
 	Current Colors	Couleurs actuelles
 	Make Ramp Web Safe	Limiter la barre aux couleurs Web
+
+# Pen draft after a refused commit (#7648)
+	The path was kept as the Work Path	Le tracé a été conservé comme tracé de travail
+	The path was discarded	Le tracé a été supprimé

@@ -577,7 +577,8 @@ pub fn pen_end(app: &mut PhotocraftApp) {
     if kept {
         app.ui.selected_path = Some("work".into());
     }
-    app.ui.status = format!("{refused} (the path {})", if kept { "was kept as the Work Path" } else { "was discarded" });
+    let outcome = if kept { tl!("The path was kept as the Work Path") } else { tl!("The path was discarded") };
+    app.ui.status = format!("{refused} ({outcome})");
     app.ui.status_error = true;
 }
 

@@ -3090,3 +3090,7 @@ curves	Smooth	平滑
 	Exported {path}	已导出 {path}
 	Exported {n} files	已导出 {n} 个文件
 	Driver: {driver}	驱动程序：{driver}
+
+# Pen draft after a refused commit (#7648)
+	The path was kept as the Work Path	路径已保留为工作路径
+	The path was discarded	路径已丢弃

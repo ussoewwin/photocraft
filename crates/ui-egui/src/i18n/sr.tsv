@@ -4494,3 +4494,7 @@ shape	Appearance	Izgled
 	Grayscale Ramp	Skala nijansi sive
 	Current Colors	Trenutne boje
 	Make Ramp Web Safe	Učini skalu bezbednom za veb
+
+# Pen draft after a refused commit (#7648)
+	The path was kept as the Work Path	Putanja je sačuvana kao radna putanja
+	The path was discarded	Putanja je odbačena

@@ -3434,3 +3434,7 @@ curves	Smooth	Glätten
 	Grayscale Ramp	Graustufenbalken
 	Current Colors	Aktuelle Farben
 	Make Ramp Web Safe	Farbbalken auf Webfarben beschränken
+
+# Pen draft after a refused commit (#7648)
+	The path was kept as the Work Path	Der Pfad wurde als Arbeitspfad beibehalten
+	The path was discarded	Der Pfad wurde verworfen

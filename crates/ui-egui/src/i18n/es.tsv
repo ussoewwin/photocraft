@@ -4383,3 +4383,7 @@ navigator	Zoom	Zoom
 	Grayscale Ramp	Rampa de escala de grises
 	Current Colors	Colores actuales
 	Make Ramp Web Safe	Hacer rampa segura para web
+
+# Pen draft after a refused commit (#7648)
+	The path was kept as the Work Path	El trazado se conservó como trazado de trabajo
+	The path was discarded	El trazado se descartó

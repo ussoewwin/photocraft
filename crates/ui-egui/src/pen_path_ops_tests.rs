@@ -138,7 +138,7 @@ fn assert_kept_as_work_path(app: &PhotocraftApp, id: LayerId, body: &Path, steps
     assert!(w.subpaths[0].closed);
     assert_eq!(app.session.active().unwrap().history.past_len(), steps + 1);
     assert_eq!(app.ui.selected_path.as_deref(), Some("work"));
-    assert!(app.ui.status.contains("kept as the Work Path"), "{}", app.ui.status);
+    assert!(app.ui.status.contains(tl!("The path was kept as the Work Path")), "{}", app.ui.status);
 }
 
 /// Switching to another tool with a refused draft (feedback on #7648): it was committed again on
@@ -175,14 +175,25 @@ fn esc_ends_a_refused_draft_and_return_keeps_it() {
         crate::shortcuts::handle(app, &ctx);
         ctx.end_pass().textures_delta.clear();
     };
-    let mut app = app();
-    let (id, body, steps) = refused_hole(&mut app);
-    let draft = app.ui.pen.clone();
-    key(&mut app, egui::Key::Enter);
-    assert_eq!(app.ui.pen, draft, "↩ keeps the draft");
-    assert_eq!(app.session.active().unwrap().history.past_len(), steps);
-    key(&mut app, egui::Key::Escape);
-    assert_kept_as_work_path(&app, id, &body, steps);
+    for lang in crate::i18n::Lang::all() {
+        crate::i18n::with_language(lang, || {
+            for message in ["The path was kept as the Work Path", "The path was discarded"] {
+                if lang != crate::i18n::Lang::EN {
+                    assert!(crate::i18n::has(lang, message), "{}: {message}", lang.code());
+                }
+            }
+            let mut app = app();
+            let (id, body, steps) = refused_hole(&mut app);
+            let draft = app.ui.pen.clone();
+            key(&mut app, egui::Key::Enter);
+            assert_eq!(app.ui.pen, draft, "↩ keeps the draft");
+            assert_eq!(app.session.active().unwrap().history.past_len(), steps);
+            let refused = app.ui.status.clone();
+            key(&mut app, egui::Key::Escape);
+            assert_kept_as_work_path(&app, id, &body, steps);
+            assert_eq!(app.ui.status, format!("{refused} ({})", tl!("The path was kept as the Work Path")));
+        });
+    }
 }
 
 /// With no shape layer selected, an operation other than New Layer still starts a shape layer

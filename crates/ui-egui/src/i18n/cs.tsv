@@ -4167,3 +4167,7 @@ cameraRaw	Dehaze	Odstranění oparu
 	Grayscale Ramp	Přechod stupňů šedi
 	Current Colors	Aktuální barvy
 	Make Ramp Web Safe	Omezit pruh na webové barvy
+
+# Pen draft after a refused commit (#7648)
+	The path was kept as the Work Path	Cesta byla zachována jako pracovní cesta
+	The path was discarded	Cesta byla zahozena
