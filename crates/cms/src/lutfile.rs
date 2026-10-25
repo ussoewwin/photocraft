@@ -199,8 +199,13 @@ pub fn parse_3dl(text: &str) -> Result<LutFile, LutError> {
             // line is ignored, as every text line always was.
             let mut it = line.split_whitespace();
             if it.next().is_some_and(|k| k.eq_ignore_ascii_case("Mesh")) {
-                let nums: Vec<u32> = it.filter_map(|s| s.parse().ok()).collect();
-                if let (Some(&n), Some(&bits)) = (nums.first(), nums.get(1))
+                // A declaration is exactly two integer fields after the keyword. Anything else
+                // (a non-numeric field, too few or too many) is not a declaration: `mesh` stays
+                // unset so headerless inference applies, rather than recovering numbers from
+                // the wrong positions (#9078).
+                let fields: Vec<&str> = it.collect();
+                if let [a, b] = fields.as_slice()
+                    && let (Ok(n), Ok(bits)) = (a.parse::<u32>(), b.parse::<u32>())
                     && (1..=7).contains(&n)
                     && (1..=16).contains(&bits)
                 {
@@ -229,11 +234,14 @@ pub fn parse_3dl(text: &str) -> Result<LutFile, LutError> {
             if nodes.len() != expected {
                 return err(format!("expected {expected} rows for the declared {n}³ cube, found {}", nodes.len()));
             }
-            // The declaration wins while it covers the data; a node beyond it is a wrong
-            // declaration, and the old inference keeps such a file loading as before (#9073).
+            // Under a valid declaration the node codes are integers in the declared range, so
+            // the declaration wins for every in-range value — including a small max, where 1 is
+            // 1/declared of full output, not full output itself (#9073). Only a node beyond the
+            // declared range is a wrong declaration, and the old inference keeps such a file
+            // loading as before.
             let max = nodes.iter().flatten().fold(0.0f64, |a, &b| a.max(b));
             let declared = 2f64.powi(i32::try_from(out_bits).unwrap_or(16)) - 1.0;
-            (n, nodes, if max <= 1.0 || max > declared { inferred_3dl_scale(max) } else { declared })
+            (n, nodes, if max > declared { inferred_3dl_scale(max) } else { declared })
         }
         None => {
             let n = (rows.len() as f64).cbrt().round() as usize;
@@ -589,6 +597,46 @@ DOMAIN_MAX 0.5 1 1
         let l = parse_3dl(&text).unwrap();
         let last = &l.data[l.data.len() - 3..];
         assert!((last[0] - 4094.0 / 4095.0).abs() < 1e-6, "{last:?}");
+    }
+
+    #[test]
+    fn three_dl_malformed_mesh_header_falls_back_to_inference() {
+        // A `Mesh` line that is not exactly two integer fields is not a declaration: it is
+        // ignored and the table is inferred as if headerless, rather than recovering numbers
+        // from the wrong positions (#9078). A 2³ cube would otherwise be read as a 3³ cube.
+        for header in ["Mesh invalid 1 12", "Mesh 1 12 13", "Mesh 1 x", "Mesh 1"] {
+            let mut text = format!("3DMESH\n{header}\n");
+            for r in 0..2 {
+                for g in 0..2 {
+                    for b in 0..2 {
+                        text.push_str(&format!("{} {} {}\n", r * 1023, g * 1023, b * 1023));
+                    }
+                }
+            }
+            let l = parse_3dl(&text).unwrap();
+            assert_eq!(l.size, 2, "{header}");
+            assert_eq!(l.data, LutFile::identity(2).data, "{header}");
+        }
+    }
+
+    #[test]
+    fn three_dl_mesh_uses_declared_range_for_small_integer_codes() {
+        // #9073: under a valid `Mesh` declaration the node codes are integers in the declared
+        // range, so a max value of 1 is 1/4095 of full output — not full output itself.
+        let mut text = String::from("3DMESH\nMesh 1 12\n");
+        for r in 0..3 {
+            for g in 0..3 {
+                for b in 0..3 {
+                    let v = u8::from(r == 0 && g == 0 && b == 0);
+                    text.push_str(&format!("{v} {v} {v}\n"));
+                }
+            }
+        }
+        let l = parse_3dl(&text).unwrap();
+        assert_eq!(l.size, 3);
+        // blue fastest: node (0,0,0) is the first entry, code 1 → 1/4095.
+        assert!((l.data[0] - 1.0 / 4095.0).abs() < 1e-6, "{:?}", &l.data[0..3]);
+        assert!(l.data[3..].iter().all(|&v| v == 0.0), "{:?}", l.data);
     }
 
     #[test]
