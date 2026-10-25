@@ -675,6 +675,27 @@ fn last_filter_forwards_explicit_target_before_implicit_panel_selection() {
 }
 
 #[test]
+fn selected_channel_paste_keeps_source_document_placement_and_centers_across_documents() {
+    for target in [None, Some(json!({"color":0})), Some(json!({"colors":[0,2]}))] {
+        let mut s = setup("rgb", 16);
+        let source = s.active().unwrap().doc.id;
+        s.execute("channel.target", json!({"channel":"red"})).unwrap();
+        s.execute("select.rect", json!({"x":2,"y":3,"width":4,"height":4})).unwrap();
+        let params = target.as_ref().map_or(json!({}), |target| json!({"target":target}));
+        s.execute("edit.copy", params.clone()).unwrap();
+        assert_eq!(s.clipboard.as_ref().unwrap().source, Some(source));
+        s.execute("select.deselect", json!({})).unwrap();
+        assert_eq!(s.execute("edit.paste", params.clone()).unwrap()["offset"], json!([0, 0]), "same document: {target:?}");
+
+        s.execute("file.new", json!({"width":40,"height":32,"depth":16})).unwrap();
+        s.execute("layer.new.layer", json!({})).unwrap();
+        s.execute("channel.target", json!({"channel":"red"})).unwrap();
+        assert_ne!(s.active().unwrap().doc.id, source);
+        assert_eq!(s.execute("edit.paste", params).unwrap()["offset"], json!([16, 11]), "another document: {target:?}");
+    }
+}
+
+#[test]
 fn native_plane_writeback_rejects_incompatible_formats_without_editing() {
     let mut dest = surface(&setup("rgb", 16));
     let before = dest.clone();
