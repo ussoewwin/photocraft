@@ -68,6 +68,9 @@ pub(crate) fn update_changed(s: &mut Session, _: &Value) -> Result<Value> {
     let st = s.active().ok_or(EngineError::NoDocument)?;
     let (doc, files) = (st.doc.id.0, resolved_files(st));
     let now = files.into_iter().map(|(p, file, ids)| (p, ids, stamp(file.as_deref()))).collect();
+    // Drop a look still running on a worker thread. It stamped the files before this one, and
+    // applying it later would replace this look's result.
+    s.link_scan = None;
     s.apply_link_stamps(doc, now)
 }
 
@@ -328,6 +331,44 @@ mod tests {
         std::fs::write(&path, png(10, 10, "#0000ff")).unwrap();
         s.execute("layer.smartObjects.updateChanged", json!({})).unwrap();
         assert!(s.missing_links().is_empty(), "the file is back");
+    }
+
+    #[test]
+    fn a_reopened_document_lists_no_file_missing_before_it_closed() {
+        let d = dir("reopen");
+        let (path, saved) = (d.join("art.png"), d.join("doc.pcraft"));
+        std::fs::write(&path, png(10, 10, "#ff0000")).unwrap();
+        let (mut s, _) = placed(&path);
+        s.execute("file.saveACopy", json!({"path": saved.to_string_lossy()})).unwrap();
+        let id = s.active().unwrap().doc.id;
+        std::fs::remove_file(&path).unwrap();
+        s.execute("layer.smartObjects.updateChanged", json!({})).unwrap();
+        assert_eq!(s.missing_links().len(), 1);
+        s.close(0);
+        std::fs::write(&path, png(10, 10, "#0000ff")).unwrap();
+        let bytes = std::fs::read(&saved).unwrap();
+        crate::file_cmds::open_bytes_as(&mut s, "doc.pcraft", &bytes, None, Some(saved.to_string_lossy().into_owned())).unwrap();
+        assert_eq!(s.active().unwrap().doc.id, id, "the saved document keeps its id");
+        assert!(s.missing_links().is_empty(), "nothing looked at since it opened");
+    }
+
+    #[test]
+    fn a_look_started_before_update_changed_does_not_replace_its_result() {
+        let d = dir("stale");
+        let path = d.join("art.png");
+        std::fs::write(&path, png(10, 10, "#ff0000")).unwrap();
+        let (mut s, _) = placed(&path);
+        s.start_link_scan();
+        let t0 = std::time::Instant::now();
+        while s.link_scan.as_ref().is_some_and(|l| l.lock().unwrap_or_else(std::sync::PoisonError::into_inner).is_none()) {
+            assert!(t0.elapsed().as_secs() < 10, "the look never finished");
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        std::fs::remove_file(&path).unwrap();
+        s.execute("layer.smartObjects.updateChanged", json!({})).unwrap();
+        assert_eq!(s.missing_links().len(), 1);
+        let _ = s.poll_link_scan();
+        assert_eq!(s.missing_links().len(), 1, "the earlier look found the file, but it is gone");
     }
 
     #[test]

@@ -670,6 +670,7 @@ impl Session {
             self.cancel_jobs_on(id);
             self.subject_cache.forget_doc(id);
             self.object_finder.forget_doc(id);
+            self.link_missing.retain(|(d, _)| *d != id.0);
         }
         let d = self.docs.remove(index);
         self.active = if self.docs.is_empty() {
