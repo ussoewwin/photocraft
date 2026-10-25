@@ -102,6 +102,46 @@ fn latin_stands_upright_one_per_em_by_default() {
     assert!(up.rect.height() > turned.rect.height() + 50, "{:?} vs {:?}", up.rect, turned.rect);
 }
 
+/// An engine with an installed font that joins "fi" into one ligature glyph, and its family.
+fn ligature_engine() -> Option<(TextEngine, String)> {
+    #[cfg(not(target_arch = "wasm32"))]
+    for path in [
+        "/System/Library/Fonts/Supplemental/Hoefler Text.ttc",
+        "/System/Library/Fonts/Supplemental/Baskerville.ttc",
+        "/System/Library/Fonts/Supplemental/Didot.ttc",
+        "/System/Library/Fonts/Times.ttc",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf",
+        "C:\\Windows\\Fonts\\calibri.ttf",
+        "C:\\Windows\\Fonts\\cambria.ttc",
+    ] {
+        let Ok(bytes) = std::fs::read(path) else { continue };
+        let mut e = TextEngine::new();
+        for fam in e.fonts.register_font_data(bytes) {
+            let flat = TextLayer { orientation: Orientation::Horizontal, ..vertical("fi", &fam, 30.0) };
+            if e.layout(&flat, 72.0).glyphs.len() == 1 {
+                return Some((e, fam));
+            }
+        }
+    }
+    eprintln!("no installed font with an fi ligature found: skipping");
+    None
+}
+
+/// CodeRabbit on #9478: upright roman letters never join into a ligature; "fi" and "ffl" are
+/// one glyph per letter, one em apart.
+#[test]
+fn upright_roman_letters_stay_apart_without_ligatures() {
+    let Some((mut e, fam)) = ligature_engine() else { return };
+    for text in ["fi", "ffl", "office"] {
+        let l = e.layout(&vertical(text, &fam, 30.0), 72.0);
+        assert_eq!(l.glyphs.len(), text.chars().count(), "{fam} {text}: one glyph per letter: {:?}", l.glyphs);
+        let steps: Vec<f32> = l.glyphs.windows(2).map(|w| w[1].y - w[0].y).collect();
+        assert!(steps.iter().all(|d| (d - 30.0).abs() < 0.5), "{fam} {text}: one em apart: {steps:?}");
+    }
+}
+
 /// CodeRabbit on #9478: half-width katakana and Hangul keep their rotated setting; only roman
 /// text stands upright by default (#9470 leaves CJK as it was).
 #[test]

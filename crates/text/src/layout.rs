@@ -703,9 +703,10 @@ impl Layouter {
                 }
                 for ((range, _, _, ri), &spacing) in roman.iter().zip(roman_spacing) {
                     b.push(StyleProperty::LetterSpacing(spacing), range.clone());
-                    // Pair kerning is horizontal: none between letters stacked upright.
+                    // Pair kerning is horizontal: none between letters stacked upright. Nor ligatures:
+                    // each letter stands alone, one per em.
                     let mut feats = feature_list(&out.styles[*ri], small_caps[*ri]);
-                    feats.push("\"kern\" 0".into());
+                    feats.extend(["kern", "liga", "clig", "dlig"].map(|f| format!("\"{f}\" 0")));
                     b.push(StyleProperty::FontFeatures(FontFeatures::Source(Cow::Owned(feats.join(", ")))), range.clone());
                 }
                 b.build(&ptext)
