@@ -818,19 +818,50 @@ impl Layouter {
                     // deliberate, not a run the line breaker pushed out. Without the guard
                     // that row would merge into the line above and the break would vanish;
                     // the breaks of a normal wrapped line are spaces, never this.
-                    if !line
+                    let after_forced = line
                         .items()
                         .find_map(|it| match it {
                             PositionedLayoutItem::GlyphRun(gr) => gr.run().visual_clusters().next().map(|c| c.text_range().start),
                             _ => None,
                         })
-                        .is_some_and(|s| ptext.as_bytes().get(s.wrapping_sub(1)) == Some(&b'\n'))
-                    {
+                        .is_some_and(|s| ptext.as_bytes().get(s.wrapping_sub(1)) == Some(&b'\n'));
+                    // Count the row's clusters first: the merge takes the edge tip only.
+                    let merged_line = out.lines.len() - 1;
+                    let total = line
+                        .items()
+                        .map(|it| match it {
+                            PositionedLayoutItem::GlyphRun(gr) => gr.run().visual_clusters().count(),
+                            _ => 0,
+                        })
+                        .sum::<usize>();
+                    // Photoshop hangs the marks at the edge, not the run: a row of a couple of
+                    // marks was pushed whole because the row above ran out and hangs as one
+                    // tip, but a row split out of a long run carries most of that run and
+                    // keeps its break instead, or a paragraph of dots or hyphens in a narrow
+                    // box would fold into single lines running past the edge by almost the
+                    // whole run's width.
+                    let tip = total <= 2;
+                    // Photoshop hangs once per edge: the row above already ends in a hangable
+                    // mark (its own run's tip, or a mark row already stepped back up), so no
+                    // mark row may chain onto it and grow one line without bound.
+                    let ends_in_mark = out
+                        .clusters
+                        .iter()
+                        .rev()
+                        .find(|c| c.line == merged_line && ptext.get(c.range.clone()).is_some_and(|s| !s.chars().all(char::is_whitespace)))
+                        .and_then(|c| ptext.get(c.range.clone()))
+                        .is_some_and(hang_cluster);
+                    // A marks-only row merged into the last row of a justified paragraph would
+                    // keep the justified (spread) spacing the row above was set out with: the
+                    // placed clusters already carry the spread, but Photoshop centers, rights
+                    // or lefts that last line. The row keeps its own last-line alignment; the
+                    // measure-side hang that follows will not need the merge at all.
+                    let justified_last = ps.align.is_justified() && li + 1 == nlines;
+                    if tip && !ends_in_mark && !justified_last && !after_forced {
                         // Start past the row above's trailing breaking space: that space's cluster
                         // stays on the row, and `prev.x1` excludes trailing whitespace, so starting
                         // there would put the marks on top of the space cluster and carets could
                         // not tell them apart.
-                        let merged_line = out.lines.len() - 1;
                         let mut cx = out.clusters.iter().rev().find(|c| c.line == merged_line).map_or(prev.x1, |c| c.x + c.advance);
                         let merged_baseline = prev.baseline;
                         // The kern of a pair comes from the pair's left cluster's style, as the
@@ -839,15 +870,6 @@ impl Layouter {
                         // crosses a row boundary there, so it contributes none and the first
                         // cluster starts un-kerned.
                         let mut left: Option<(usize, f32)> = None; // (byte, font size) of the pair's left cluster
-                        // Count the row's clusters so the last one (whose pair would lead into
-                        // nothing) keeps its drawn advance only, like the line's last kern slot.
-                        let total = line
-                            .items()
-                            .map(|it| match it {
-                                PositionedLayoutItem::GlyphRun(gr) => gr.run().visual_clusters().count(),
-                                _ => 0,
-                            })
-                            .sum::<usize>();
                         let mut n = 0usize;
                         let mut merged_end = cx;
                         for item in line.items() {

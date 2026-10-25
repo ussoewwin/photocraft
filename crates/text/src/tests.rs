@@ -539,33 +539,93 @@ fn a_hanging_run_steps_back_onto_the_line_above() {
     assert!(on.glyphs.iter().any(|g| g.x >= w && (g.y - ln.baseline).abs() < 1e-3), "the mark's glyphs draw on that row past the edge: {ln:?}");
 }
 
-/// A merged row of several marks keeps its clusters and glyphs in step: each cluster starts
+/// The edge tip that steps back keeps its clusters and glyphs in step: each cluster starts
 /// where the previous one's advance ended, and a mark's glyphs sit relative to its own cluster
 /// (a per-cluster pen), not wherever a shared pen would drop them.
 #[test]
-fn a_merged_mark_row_keeps_its_clusters_and_glyphs_in_step() {
+fn a_stepped_mark_row_keeps_its_clusters_and_glyphs_in_step() {
     let mut e = TextEngine::new();
     let probe = e.layout(&point("xx", 20.0), 72.0);
     let w = probe.lines[0].x1 - probe.lines[0].x0;
     let mut t = point("xx ……", 20.0);
     t.shape = TextShape::Box { x: 0.0, y: 0.0, width: w + 0.5, height: 100.0 };
     let on = e.layout(&with_para(t, ParagraphStyle { hanging: true, ..Default::default() }), 72.0);
-    assert_eq!(on.lines.len(), 1, "both marks step back up: {:?}", on.lines);
+    // The edge tip is one mark: the first ellipsis steps back up, the second keeps its row
+    // (Photoshop hangs the marks at the edge, not the run — a row that merges must not
+    // chain another one onto it, or pushed mark rows would fold runs into one line).
+    assert_eq!(on.lines.len(), 2, "the tip steps up, the rest keeps its row: {:?}", on.lines);
     // The row above keeps its trailing breaking space (as a blank cluster); the mark starts
     // past it, so hit-testing can tell the space from the mark.
 
     let space = on.clusters.iter().find(|c| c.range.start == 2).unwrap_or_else(|| panic!("the space is its own cluster: {:?}", on.clusters));
-    let marks: Vec<_> = on.clusters.iter().filter(|c| c.range.start >= 3).collect();
-    assert_eq!(marks.len(), 2, "the two ellipses are two clusters: {:?}", on.clusters);
-    let first = marks[0];
-    let second = marks[1];
+    let first = on.clusters.iter().find(|c| c.range.start == 3).unwrap_or_else(|| panic!("the first mark is its own cluster: {:?}", on.clusters));
+    let second = on.clusters.iter().find(|c| c.range.start == 6).unwrap_or_else(|| panic!("the second mark is its own cluster: {:?}", on.clusters));
+    assert_eq!(second.line, 1, "the second mark keeps its own row: {second:?}");
     assert!((first.x - (space.x + space.advance)).abs() < 1e-3, "run starts past the space: {first:?} {space:?}");
-    assert!((second.x - (first.x + first.advance)).abs() < 1e-3, "chain: {first:?} {second:?}");
-    // The same glyph in both clusters carries the same offset from its own cluster: a shared
+    // The same glyph in either cluster carries the same offset from its own cluster: a shared
     // (run-wide) pen would leave the second mark's glyph an advance too far right.
     let glyph_shift = |c: &crate::ClusterInfo| on.glyphs.iter().filter(|g| g.x >= c.x - 0.5).map(|g| g.x - c.x).min_by(|a, b| a.partial_cmp(b).unwrap());
-    let (d1, d2) = (glyph_shift(first), glyph_shift(second));
-    assert!(d1.zip(d2).is_some_and(|(a, b)| (a - b).abs() < 1e-3), "glyph pens belong to their clusters: {d1:?} vs {d2:?}");
+    let d1 = glyph_shift(first).unwrap_or(f32::NAN);
+    let d2 = glyph_shift(second).unwrap_or(f32::NAN);
+    assert!((d1 - d2).abs() < 1e-3, "glyph pens belong to their clusters: {d1:?} vs {d2:?}");
+}
+
+/// A long run of marks the box had to split over several rows keeps its breaks with hanging
+/// on: Photoshop hangs the edge tip, not the run, so each row keeps its own row and no line
+/// overflows the box by almost the whole run. A full row of marks (more than two clusters)
+/// does not merge back into the line above; only tipped rows of a couple of marks do.
+#[test]
+fn hanging_marks_of_a_split_run_keep_their_breaks() {
+    let mut e = TextEngine::new();
+    let mut boxed = |hanging: bool| {
+        let mut t = point("Loading..................................", 16.0); // 60 dots
+        t.shape = TextShape::Box { x: 0.0, y: 0.0, width: 200.0, height: 400.0 };
+        e.layout(&with_para(t, ParagraphStyle { hanging, ..Default::default() }), 72.0)
+    };
+    let off = boxed(false);
+    assert!(off.lines.len() >= 2, "the run wraps over several rows: {:?}", off.lines);
+    let on = boxed(true);
+    assert!(on.lines.len() >= 2, "the breaks stay: {:?}", on.lines);
+    // No line runs past the box edge by more than an edge tip (a couple of marks): the fold
+    // that merged every row into one line overflowed by almost the whole run.
+    let adv = on.clusters.iter().map(|c| c.advance).fold(0.0f32, f32::max);
+    for (i, l) in on.lines.iter().enumerate() {
+        assert!(l.x1 - l.x0 <= 200.0 + 2.0 * adv + 0.5, "line {i} overflows the box past the tip: {l:?} (tip {adv})");
+    }
+}
+
+/// The last line of a justified paragraph keeps its own last-line alignment: a marks-only
+/// row that the box pushed out must not merge into the justified row above, whose placed
+/// clusters already carry the spread — that would spread the real last line edge to edge
+/// instead of centering, righting or lefting it.
+#[test]
+fn hanging_marks_stay_off_a_justified_paragraphs_last_line() {
+    let mut e = TextEngine::new();
+    let probe = e.layout(&point("aa bb cc", 20.0), 72.0);
+    let w = probe.lines[0].x1 - probe.lines[0].x0;
+    let mut boxed = |align: TextAlign, hanging: bool| {
+        let mut t = point("aa bb cc …", 20.0);
+        t.shape = TextShape::Box { x: 0.0, y: 0.0, width: w + 1.0, height: 100.0 };
+        e.layout(&with_para(t, ParagraphStyle { align, hanging, ..Default::default() }), 72.0)
+    };
+    for (align, placed) in [(TextAlign::JustifyCenter, "centered"), (TextAlign::JustifyRight, "right"), (TextAlign::JustifyAll, "left")] {
+        let off = boxed(align, false);
+        let on = boxed(align, true);
+        assert_eq!(off.lines.len(), 2, "{align:?}: the ellipsis wraps to its own row: {off:?}");
+        assert_eq!(on.lines.len(), off.lines.len(), "{align:?}: the mark row keeps its row: {on:?}");
+        for (a, b) in off.lines.iter().zip(&on.lines) {
+            assert!((a.x0 - b.x0).abs() < 1e-3 && (a.x1 - b.x1).abs() < 1e-3, "{align:?}: the {placed} last line keeps its place: {a:?} vs {b:?}");
+        }
+        // The last line sits where its alignment puts it, in either setting.
+        let ell = on.clusters.iter().find(|c| c.range.start == 9).unwrap_or_else(|| panic!("{align:?}: the ellipsis is its own cluster: {:?}", on.clusters));
+        match align {
+            TextAlign::JustifyCenter => {
+                assert!((ell.x + ell.advance * 0.5 - (w + 1.0) * 0.5).abs() < 0.5, "{align:?}: the {placed} last line centers: {ell:?}")
+            }
+            TextAlign::JustifyRight => assert!((ell.x + ell.advance - (w + 1.0)).abs() < 0.5, "{align:?}: the {placed} last line rights: {ell:?}"),
+            _ => assert!(ell.x.abs() < 0.5, "{align:?}: the {placed} last line lefts: {ell:?}"),
+        }
+    }
 }
 
 /// Hanging punctuation trims out of centered box lines too, not only ones at the margin: a
