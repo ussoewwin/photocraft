@@ -578,7 +578,7 @@ fn a_stepped_mark_row_keeps_its_clusters_and_glyphs_in_step() {
 fn hanging_marks_of_a_split_run_keep_their_breaks() {
     let mut e = TextEngine::new();
     let mut boxed = |hanging: bool| {
-        let mut t = point("Loading..................................", 16.0); // 60 dots
+        let mut t = point("Loading..................................", 16.0); // 34 dots
         t.shape = TextShape::Box { x: 0.0, y: 0.0, width: 200.0, height: 400.0 };
         e.layout(&with_para(t, ParagraphStyle { hanging, ..Default::default() }), 72.0)
     };
@@ -591,6 +591,33 @@ fn hanging_marks_of_a_split_run_keep_their_breaks() {
     let adv = on.clusters.iter().map(|c| c.advance).fold(0.0f32, f32::max);
     for (i, l) in on.lines.iter().enumerate() {
         assert!(l.x1 - l.x0 <= 200.0 + 2.0 * adv + 0.5, "line {i} overflows the box past the tip: {l:?} (tip {adv})");
+    }
+}
+
+/// The edge-tip cap pins a case the chain guard alone doesn't: a run of marks pushed whole
+/// as one row after a line that does NOT end in a mark. The chain guard only refuses the
+/// second mark row onwards, so without the at-most-two-cluster cap that full row would step
+/// back up and a `word` followed by thirty hyphens would make a 200 px box overflow by a
+/// whole row's worth of marks. With the cap the rows keep their breaks, as with hanging off.
+#[test]
+fn a_full_mark_row_does_not_step_back_onto_a_short_line() {
+    let mut e = TextEngine::new();
+    let hyphens = "word ------------------------------"; // 30 marks, 200 px holds ~28
+    let mut boxed = |hanging: bool| {
+        let mut t = point(hyphens, 16.0);
+        t.shape = TextShape::Box { x: 0.0, y: 0.0, width: 200.0, height: 400.0 };
+        e.layout(&with_para(t, ParagraphStyle { hanging, ..Default::default() }), 72.0)
+    };
+    let off = boxed(false);
+    assert!(off.lines.len() >= 3, "the run wraps over rows: {:?}", off.lines);
+    let on = boxed(true);
+    assert_eq!(on.lines.len(), off.lines.len(), "the full mark row keeps its break: {:?} vs {:?}", on.lines, off.lines);
+    for (a, b) in off.lines.iter().zip(&on.lines) {
+        assert!((a.x0 - b.x0).abs() < 1e-3 && (a.x1 - b.x1).abs() < 1e-3, "same rows either way: {a:?} vs {b:?}");
+    }
+    let adv = on.clusters.iter().map(|c| c.advance).fold(0.0f32, f32::max);
+    for (i, l) in on.lines.iter().enumerate() {
+        assert!(l.x1 - l.x0 <= 200.0 + 2.0 * adv + 0.5, "line {i} steps a full mark row back up: {l:?} (tip {adv})");
     }
 }
 
