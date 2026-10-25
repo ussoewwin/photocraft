@@ -179,7 +179,12 @@ pub fn pointer_secondary(app: &mut PhotocraftApp, ctx: &egui::Context, down: boo
     // Shift+Alt+right is Photoshop's HUD Color Picker (#6098): the down opens it, the up closes
     // it. As on the canvas, the right-erase preference wins over the HUD, and a tool whose
     // right-click is the canvas tool menu keeps that menu (handled by the caller).
-    if right_click_picker(tool) && mods.shift && mods.alt && !right_erases(app, tool) {
+    let hud_gesture = right_click_picker(tool) && mods.shift && mods.alt && !right_erases(app, tool);
+    // A control-channel request carries one modifier set, so the Up need not repeat the Down's:
+    // the caller may release Shift and Alt first. Any Up therefore closes a non-held HUD that is
+    // still open; `release` leaves a real-mouse (held) one to its button release.
+    let hud_up = !down && app.ui.color_hud.is_some_and(|h| !h.hold);
+    if hud_gesture || hud_up {
         if down {
             crate::color_hud::open(app, at, false);
         } else {
@@ -590,6 +595,25 @@ mod tests {
         app.run("prefs.set", json!({"path": "tools.rightClickWithPaintingTools", "value": "brushPicker"})).unwrap();
         assert!(!pointer_secondary(&mut app, &egui::Context::default(), true, shift_alt, [10.0, 10.0]));
         assert!(app.ui.color_hud.is_some_and(|h| !h.hold), "the control-channel HUD opened");
+    }
+
+    #[test]
+    fn a_control_channel_up_closes_the_hud_without_repeating_its_modifiers() {
+        // Each control-channel request carries its own modifiers, so an Up sent after the keys
+        // are released arrives without Shift+Alt: it must still close the HUD it opened, or the
+        // HUD stays up and keeps picking from the hover (#6098 review).
+        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", json!({"width": 120, "height": 80})).unwrap();
+        app.ui.tool = Tool::Brush;
+        let shift_alt = egui::Modifiers { shift: true, alt: true, ..Default::default() };
+        assert!(!pointer_secondary(&mut app, &egui::Context::default(), true, shift_alt, [10.0, 10.0]));
+        assert!(app.ui.color_hud.is_some_and(|h| !h.hold), "the control-channel HUD opened");
+        assert!(!pointer_secondary(&mut app, &egui::Context::default(), false, egui::Modifiers::NONE, [10.0, 10.0]));
+        assert!(app.ui.color_hud.is_none(), "the Up closes it whatever the modifiers say");
+        // A real-mouse HUD belongs to the canvas gesture and waits for its own button release.
+        crate::color_hud::open(&mut app, [10.0, 10.0], true);
+        pointer_secondary(&mut app, &egui::Context::default(), false, egui::Modifiers::NONE, [10.0, 10.0]);
+        assert!(app.ui.color_hud.is_some_and(|h| h.hold), "a held HUD is left to the canvas");
     }
 
     #[test]
