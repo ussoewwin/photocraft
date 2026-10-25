@@ -33,7 +33,7 @@ impl Default for Limits {
 
 impl Limits {
     /// For a decoder that writes a band of rows at a time into the document's tiles instead of
-    /// one buffer (TIFF, #8169): Photoshop's largest document, 300,000 px a side, on 64-bit
+    /// one buffer (TIFF, #8169): the largest document size, 300,000 px a side, on 64-bit
     /// targets, with `max_alloc` bounding each group of bands. 32-bit targets keep the
     /// [`Default`] limits: wasm32's 4 GiB address space can't hold a larger document anyway.
     pub fn banded() -> Self {

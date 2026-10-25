@@ -354,19 +354,34 @@ impl<'a> TiffBands<'a> {
         self.p.lay.out
     }
 
-    /// Decodes the image a group of bands at a time, in order, handing each group to `sink`
-    /// with the position of its top-left pixel in the image [`TiffBands::dimensions`] gives. A
-    /// group is about 64 MiB (at least one strip or row of tiles per worker, at most `max_alloc`). Data
-    /// cut off by the end of the file adds a [`DecodeWarning::Truncated`] to `warnings`.
-    pub fn decode<E: From<CodecError>>(&mut self, mut sink: impl FnMut(u32, u32, &Image) -> Result<(), E>) -> Result<(), E> {
-        let p = &self.p;
-        let band = p.band_bytes()?.max(1);
+    /// Bands decoded at once: about [`GROUP_BYTES`], at least one per worker, at most `max_alloc`.
+    fn bands_per_group(&self) -> Result<usize, CodecError> {
+        let band = self.p.band_bytes()?.max(1);
         #[cfg(not(target_arch = "wasm32"))]
         let workers = rayon::current_num_threads();
         #[cfg(target_arch = "wasm32")]
         let workers = 1;
         let cap = usize::try_from(self.cap).unwrap_or(usize::MAX);
-        let per_group = (GROUP_BYTES / band).max(workers).min(cap / band).max(1);
+        Ok((GROUP_BYTES / band).max(workers).min(cap / band).max(1))
+    }
+
+    /// Bytes of the largest group [`TiffBands::decode`] hands over: what decoding needs beside
+    /// the document, for a caller checking that it fits in memory. A file stored as one strip
+    /// is one group, the whole image.
+    pub fn group_bytes(&self) -> Result<usize, CodecError> {
+        let rows = self.bands_per_group()?.saturating_mul(self.p.band_rows).min(self.p.h as usize);
+        self.p.lay.out_row().checked_mul(rows).ok_or_else(|| CodecError::LimitExceeded("band size".into()))
+    }
+
+    /// Decodes the image a group of bands at a time, in order, handing each group to `sink`
+    /// with the position of its top-left pixel in the image [`TiffBands::dimensions`] gives. A
+    /// group is about 64 MiB (at least one strip or row of tiles per worker, at most `max_alloc`;
+    /// see [`TiffBands::group_bytes`]). Data cut off by the end of the file adds a
+    /// [`DecodeWarning::Truncated`] to `warnings`.
+    pub fn decode<E: From<CodecError>>(&mut self, mut sink: impl FnMut(u32, u32, &Image) -> Result<(), E>) -> Result<(), E> {
+        let per_group = self.bands_per_group()?;
+        let p = &self.p;
+        let band = p.band_bytes()?.max(1);
         let bands = (p.h as usize).div_ceil(p.band_rows.max(1));
         let mut buf: Vec<u8> = Vec::new();
         let mut tally = Tally::default();
@@ -400,7 +415,8 @@ impl<'a> TiffBands<'a> {
             return Err(err("the image data is missing (cut off or past the end of the file)").into());
         }
         if tally.missing > 0 {
-            self.warnings.push(DecodeWarning::Truncated { format: F });
+            // Before `MorePages`, as the whole-image decode orders them.
+            self.warnings.insert(0, DecodeWarning::Truncated { format: F });
         }
         Ok(())
     }

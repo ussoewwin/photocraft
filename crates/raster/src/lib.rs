@@ -21,7 +21,14 @@ use photocraft_geom::{Rect, TILE_SIZE, TileCoord};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AllocationError {
     SizeOverflow,
-    NotEnoughMemory { bytes: usize },
+    NotEnoughMemory {
+        bytes: usize,
+    },
+    /// The pixels given don't fill the region they are written to.
+    LengthMismatch {
+        expected: usize,
+        got: usize,
+    },
 }
 
 impl fmt::Display for AllocationError {
@@ -29,6 +36,7 @@ impl fmt::Display for AllocationError {
         match self {
             Self::SizeOverflow => f.write_str("requested surface allocation is too large"),
             Self::NotEnoughMemory { bytes } => write!(f, "not enough memory to allocate {} bytes", bytes),
+            Self::LengthMismatch { expected, got } => write!(f, "{got} bytes of pixels given for a region that takes {expected}"),
         }
     }
 }
@@ -860,9 +868,9 @@ impl Surface {
     }
 
     /// Fallible counterpart to [`Surface::write_interleaved`], writing the tiles on all cores
-    /// (native targets): a length that doesn't match `r` is an error, not a panic, and a tile that
-    /// can't be allocated stops the write with [`AllocationError::NotEnoughMemory`] (the tiles
-    /// written so far keep their new pixels).
+    /// (native targets): a length that doesn't match `r` is [`AllocationError::LengthMismatch`],
+    /// not a panic, and a tile that can't be allocated stops the write with
+    /// [`AllocationError::NotEnoughMemory`] (the tiles written so far keep their new pixels).
     ///
     /// This enters Rayon, as [`Surface::write_region_par`] does.
     pub fn try_write_interleaved(&mut self, r: Rect, bytes: &[u8]) -> Result<(), AllocationError> {
@@ -870,7 +878,7 @@ impl Surface {
         let w = r.width() as usize;
         let expected = w.checked_mul(r.height() as usize).and_then(|v| v.checked_mul(bpp)).ok_or(AllocationError::SizeOverflow)?;
         if bytes.len() != expected {
-            return Err(AllocationError::SizeOverflow);
+            return Err(AllocationError::LengthMismatch { expected, got: bytes.len() });
         }
         let mut tiles = self.try_take_tiles(r)?;
         let written = copy_tiles(&mut tiles, r, bytes, w, bpp);
@@ -1602,7 +1610,8 @@ mod tests {
             b.try_write_interleaved(r, &bytes).unwrap();
             assert_eq!(a, b);
             let before = b.clone();
-            assert_eq!(b.try_write_interleaved(r, &bytes[1..]), Err(AllocationError::SizeOverflow));
+            let got = bytes.len() - 1;
+            assert_eq!(b.try_write_interleaved(r, &bytes[1..]), Err(AllocationError::LengthMismatch { expected: bytes.len(), got }));
             assert_eq!(b, before);
             // Tiles an undo snapshot shares are copied, not written through.
             let again: Vec<u8> = bytes.iter().map(|v| v ^ 0x5a).collect();

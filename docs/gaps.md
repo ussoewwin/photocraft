@@ -54,7 +54,8 @@ what an agent can't finish alone.
   blank (#1764), perspective placed layers flattened (#579, fixed by #426), PSB > 4 GB fails on Windows (#375; a generated 4.38 GB PSB opens, saves and re-opens
   through io on Windows, io tests/it/large_files.rs, 2026-10-13), a 117,504 × 22,464 px print TIFF
   refused at 2^30 px (#8456, #8169; opens since 2026-10-22, decoded a group of rows at a time into
-  the layer; layered TIFFs over the limit and huge PSBs still decode whole).
+  the layer, refused with an error when it doesn't fit in free memory; a single-strip file is still
+  decoded whole beside the layer; layered TIFFs over the limit and huge PSBs still decode whole).
   No test opens our exports in a third-party editor (FILE-216-4). Mockups whose smart object
   uses Transform Warp's Cylinder re-rendered flat after Replace Contents (#4112, fixed 2026-10-14;
   vertical cylinders and ones with perspective are still unread).

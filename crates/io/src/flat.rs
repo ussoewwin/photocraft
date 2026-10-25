@@ -226,8 +226,9 @@ pub fn tga_alpha_channel_to_transparency(doc: &mut Document) {
 /// Opens one page of a TIFF or BigTIFF file: `None` is the page Photoshop opens (the first
 /// full-resolution one), `Some(i)` an index into [`codecs::tiff_info`]'s pages (every IFD and
 /// SubIFD). A page with Photoshop layer data opens layered. Any other page is decoded a group of
-/// rows at a time straight into the layer's tiles, so it opens up to Photoshop's 300,000 px a
-/// side without a second full-size copy (#8169).
+/// rows at a time straight into the layer's tiles, so it opens up to 300,000 px a side without
+/// a second full-size copy (#8169), when the machine has the memory for it (see
+/// [`crate::memory`]).
 pub fn import_tiff_page(name: &str, bytes: &[u8], page: Option<usize>) -> Result<ImportResult, IoError> {
     let bands = codecs::TiffBands::open(bytes, page, &codecs::Limits::banded())?;
     if bands.meta.photoshop_layers.as_deref().is_some_and(|l| !l.is_empty()) {
@@ -262,9 +263,19 @@ fn tiff_to_document(name: &str, mut bands: codecs::TiffBands<'_>) -> Result<Impo
     let (layout, sample) = (bands.layout(), bands.sample_type());
     let f = document_format(layout, sample);
     let fmt = PixelFormat::new(f.mode, f.depth, true);
+    // The layer's tiles, plus a group as decoded, turned upright, converted and read into a
+    // worker's scratch buffer. Linux overcommits, so the tiles below are allocated even when they
+    // can't be backed, and writing them would have the process killed: refuse first.
+    let bpp = fmt.bytes_per_pixel() as u64;
+    let tiles = |n: u32| u64::from(n).div_ceil(TILE_SIZE as u64).saturating_mul(TILE_SIZE as u64);
+    let layer = tiles(w).saturating_mul(tiles(h)).saturating_mul(bpp);
+    let group = bands.group_bytes()? as u64;
+    let group_px = group / (layout.channels() as u64 * sample.bytes() as u64).max(1);
+    let needed = layer.saturating_add(group.saturating_mul(3)).saturating_add(group_px.saturating_mul(bpp));
+    crate::memory::check_fits(w, h, needed, crate::memory::available())?;
     let mut s = Surface::new(fmt);
     let out_of_memory = |e: photocraft_raster::AllocationError| {
-        let gb = (u64::from(w) * u64::from(h)).saturating_mul(fmt.bytes_per_pixel() as u64) as f64 / 1e9;
+        let gb = (u64::from(w) * u64::from(h)).saturating_mul(bpp) as f64 / 1e9;
         IoError::Unsupported(format!("not enough memory to open this {w} × {h} px image: it needs about {gb:.1} GB ({e})"))
     };
     bands.decode(|x, y, group: &Image| -> Result<(), IoError> {

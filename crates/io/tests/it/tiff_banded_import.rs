@@ -92,8 +92,33 @@ fn big_rgb_tiff(w: u32, h: u32) -> Vec<u8> {
         counts.push(strip.len() as u32);
         f.extend_from_slice(&strip);
     }
+    rgb_tiff_directory(f, w, h, rows, &offsets, &counts)
+}
+
+/// An all-black RGB8 TIFF of `w`×`h` whose Deflate strips of 64 rows all point at one
+/// compressed strip, padded with zeros just past what the decompression-bomb guard asks for: a
+/// valid file of tens of MB declaring hundreds of GB of pixels (#8536 review).
+fn black_rgb_tiff(w: u32, h: u32) -> Vec<u8> {
+    use flate2::{Compression, write::ZlibEncoder};
+    use std::io::Write;
+    let rows = 64u32;
+    let mut z = ZlibEncoder::new(Vec::new(), Compression::fast());
+    z.write_all(&vec![0u8; w as usize * 3 * rows as usize]).unwrap();
+    let strip = z.finish().unwrap();
+    let mut f = b"II*\0\0\0\0\0".to_vec();
+    let at = f.len() as u32;
+    f.extend_from_slice(&strip);
+    let stored = u64::from(w) * u64::from(h) * 3;
+    f.resize((stored / 4096 + (1 << 20)) as usize, 0);
+    let n = h.div_ceil(rows) as usize;
+    rgb_tiff_directory(f, w, h, rows, &vec![at; n], &vec![strip.len() as u32; n])
+}
+
+/// `f` (a little-endian header and the strip data) with the strip tables and the directory of
+/// an RGB8 Deflate image appended.
+fn rgb_tiff_directory(mut f: Vec<u8>, w: u32, h: u32, rows: u32, offsets: &[u32], counts: &[u32]) -> Vec<u8> {
     let arrays_at = f.len() as u32;
-    for v in offsets.iter().chain(&counts) {
+    for v in offsets.iter().chain(counts) {
         f.extend_from_slice(&v.to_le_bytes());
     }
     let bits_at = f.len() as u32;
@@ -155,4 +180,19 @@ fn opens_a_tiff_over_a_gigapixel() {
         peak_rss().unwrap_or(0) as f64 / 1e9,
         layer_gb as f64 / 1e9
     );
+}
+
+/// A file that declares more pixels than the machine can hold is refused before the layer is
+/// allocated (#8536 review). Linux overcommits, so allocating the tiles succeeded and writing them
+/// had the process killed (with every open document) instead of returning an error.
+#[test]
+#[cfg(target_os = "linux")]
+fn a_tiff_larger_than_free_memory_is_refused() {
+    let (w, h) = (300_000, 300_000);
+    let bytes = black_rgb_tiff(w, h);
+    let layer = u64::from(w) * u64::from(h) * 4;
+    let free = photocraft_io::memory::available().unwrap();
+    assert!(free < layer, "this machine has {free} bytes free, enough for the {layer} byte layer");
+    let e = photocraft_io::import("huge.tif", &bytes).map(|_| ()).unwrap_err().to_string();
+    assert!(e.contains("not enough memory to open this 300000 × 300000 px image"), "{e}");
 }

@@ -205,6 +205,43 @@ fn other_pages_and_the_more_pages_warning_match() {
 }
 
 #[test]
+fn a_cut_off_page_of_several_warns_in_the_whole_image_order() {
+    // Truncated before MorePages, as the whole-image decode reports them (#8536 review).
+    let n = (W * H) as usize;
+    let a = strips(W, H, 8, 3, 2, 4, &noise(n * 3, 42));
+    let b = strips(W, H, 8, 1, 1, 5, &noise(n, 43));
+    let mut built = build(true, false, &[a, b], &[0, 1]);
+    let past = built.bytes.len() as u64 + 4096;
+    for i in 4..8 {
+        patch_value(&mut built, true, false, 0, 273, i, past);
+    }
+    let want = whole(&built.bytes, None, false);
+    assert!(matches!(want.warnings[..], [DecodeWarning::Truncated { .. }, DecodeWarning::MorePages { .. }]), "{:?}", want.warnings);
+    let got = banded(&built.bytes, None, &Limits::banded(), false).unwrap();
+    assert_eq!(got.warnings, want.warnings);
+}
+
+#[test]
+fn group_bytes_is_the_largest_group_handed_over() {
+    let n = (W * H) as usize;
+    // Eight strips of four rows, two to a group; one strip holding the whole image.
+    let bytes = build(true, false, &[strips(W, H, 8, 3, 2, 4, &noise(n * 3, 44))], &[0]).bytes;
+    let band = W as usize * 3 * 4;
+    let mut t = TiffBands::open(&bytes, None, &grouped(band, 2)).unwrap();
+    assert_eq!(t.group_bytes().unwrap(), 2 * band);
+    let mut largest = 0;
+    t.decode(|_, _, g: &Image| -> Result<(), CodecError> {
+        largest = largest.max(g.data().len());
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(largest, 2 * band);
+    let single = build(true, false, &[strips(W, H, 8, 3, 2, H, &noise(n * 3, 45))], &[0]).bytes;
+    let t = TiffBands::open(&single, None, &Limits::banded()).unwrap();
+    assert_eq!(t.group_bytes().unwrap(), n * 3, "a single strip is one group: the whole image");
+}
+
+#[test]
 #[cfg(target_pointer_width = "64")]
 fn opens_an_image_over_the_whole_image_budget() {
     // The whole-image decoder needs the image in one buffer; the banded one only a band (on
@@ -259,7 +296,7 @@ fn a_hostile_header_is_refused_before_allocating() {
         patch_value(&mut built, true, true, 0, tag, 0, 300_000);
     }
     assert!(matches!(TiffBands::open(&built.bytes, None, &Limits::banded()), Err(CodecError::Malformed { .. } | CodecError::LimitExceeded(_))));
-    // Past Photoshop's 300000 px a side.
+    // Past the 300000 px a side documents allow.
     let mut wide = build(true, true, &[strips(1000, 4, 8, 3, 2, 4, &noise(12_000, 71))], &[0]);
     patch_value(&mut wide, true, true, 0, 256, 0, 300_001);
     assert!(matches!(TiffBands::open(&wide.bytes, None, &Limits::banded()), Err(CodecError::LimitExceeded(_))));
