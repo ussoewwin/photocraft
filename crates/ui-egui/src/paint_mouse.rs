@@ -117,7 +117,10 @@ pub fn canvas_buttons(app: &mut PhotocraftApp, response: &Response, tool: Tool) 
     let sticky = crate::workspace_ui::sticky_mods(app, mods);
     let hud_gesture = has_brush_picker(tool) && !layer_menu && !erase && sticky.shift && sticky.alt;
     let right_press = response.ctx.input(|i| i.pointer.button_pressed(PointerButton::Secondary)) && response.contains_pointer();
-    if hud_gesture && right_press && let Some(p) = response.ctx.input(|i| i.pointer.hover_pos()) {
+    if hud_gesture
+        && right_press
+        && let Some(p) = response.ctx.input(|i| i.pointer.hover_pos())
+    {
         crate::color_hud::open(app, [p.x, p.y], true);
     }
     let right_stroke = erase && app.drag.is_some();

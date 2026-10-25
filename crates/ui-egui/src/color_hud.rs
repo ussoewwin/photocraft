@@ -145,7 +145,12 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
         return;
     }
     let (released, esc, pressed_left, hover) = ctx.input(|i| {
-        (i.pointer.button_released(PointerButton::Secondary), i.key_pressed(egui::Key::Escape), i.pointer.button_pressed(PointerButton::Primary), i.pointer.hover_pos())
+        (
+            i.pointer.button_released(PointerButton::Secondary),
+            i.key_pressed(egui::Key::Escape),
+            i.pointer.button_pressed(PointerButton::Primary),
+            i.pointer.hover_pos(),
+        )
     });
     if esc {
         let start = hud.start;
@@ -257,7 +262,8 @@ mod tests {
         let style = h.ctx.global_style();
         let m = style.spacing.menu_margin;
         let w = style.visuals.window_stroke().width;
-        let inner = Rect::from_min_max(area.min + vec2(f32::from(m.left) + w, f32::from(m.top) + w), area.max - vec2(f32::from(m.right) + w, f32::from(m.bottom) + w));
+        let inner =
+            Rect::from_min_max(area.min + vec2(f32::from(m.left) + w, f32::from(m.top) + w), area.max - vec2(f32::from(m.right) + w, f32::from(m.bottom) + w));
         let strip = Rect::from_min_size(inner.min, vec2(HUE_W, SQUARE));
         (strip, Rect::from_min_max(inner.min + vec2(HUE_W + GAP, 0.0), inner.max))
     }
