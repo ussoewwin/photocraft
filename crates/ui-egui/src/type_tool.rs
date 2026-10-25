@@ -1297,7 +1297,8 @@ pub fn draw_overlay(app: &mut PhotocraftApp, painter: &egui::Painter, xf: &ViewX
     };
     let shape = app.session.active().and_then(|s| text_layer(&s.doc, id).map(|t| t.shape.clone()));
     // Type on a path: the caret, selection and underline follow the curve the glyphs sit on.
-    let bend = shape.as_ref().and_then(photocraft_text::warp::Warp::on_path);
+    let text_start = l.bounds().map_or(0.0, |bounds| f64::from(bounds[0]));
+    let bend = shape.as_ref().and_then(|shape| photocraft_text::warp::Warp::on_path_with_text_start(shape, text_start));
     // Line space (lines, clusters, carets) → screen: vertical type turns it 90° clockwise.
     let scr = |x: f32, y: f32| -> Pos2 {
         let (x, y) = l.to_text(x, y);
@@ -3578,6 +3579,39 @@ mod tests {
         assert_eq!(app.ui.text_edit_return_tool, None);
         commit(&mut app);
         assert_eq!(app.ui.tool, crate::state::Tool::Type, "Layers-thumbnail edit stays on Type tool");
+    }
+
+    #[test]
+    fn closed_path_aligned_selection_highlights_every_visible_cluster() {
+        for align in ["center", "right"] {
+            let mut app = app();
+            app.ui.tool_options.type_align = align.into();
+            let path = photocraft_vector::shapes::rect(20.0, 20.0, 200.0, 100.0);
+            app.run("path.set", json!({"path":photocraft_engine::vector_cmds::path_json(&path)})).unwrap();
+            pointer_up(&mut app, [20.0, 45.0], [20.0, 45.0]);
+            insert(&mut app, "ssssssssssss");
+            let id = LayerId(app.ui.text_edit.as_ref().unwrap().layer);
+            let (l, _, _) = layout(&mut app, id).unwrap();
+            assert!(l.bounds().unwrap()[0] < 0.0, "{align} must exercise negative text coordinates");
+            let text_layer = text_layer(&app.session.active().unwrap().doc, id).unwrap();
+            let rendered = photocraft_text::render::layout_deform(&l, text_layer).unwrap();
+            let visible =
+                l.clusters.iter().filter(|c| rendered.place_glyph(f64::from(c.x + c.advance / 2.0)) != photocraft_text::warp::Placement::Hidden).count();
+            assert_eq!(visible, l.clusters.len());
+            let ed = app.ui.text_edit.as_mut().unwrap();
+            ed.anchor = 0;
+            ed.caret = 12;
+            let ctx = egui::Context::default();
+            let mut output = ctx.run_ui(Default::default(), |ui| {
+                let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(600.0, 400.0));
+                let painter = ui.ctx().layer_painter(egui::LayerId::background()).with_clip_rect(rect);
+                let xf = ViewXform { rect, zoom: 1.0, center: [120.0, 70.0], flip: false, rotation: 0.0, aspect: 1.0 };
+                draw_overlay(&mut app, &painter, &xf);
+            });
+            output.textures_delta.clear();
+            let highlights = output.shapes.iter().filter(|s| matches!(&s.shape, egui::Shape::Path(p) if p.closed && p.fill.a() == 110)).count();
+            assert_eq!(highlights, visible, "{align}: every visible selected cluster needs its highlight");
+        }
     }
 }
 
