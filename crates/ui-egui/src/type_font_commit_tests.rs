@@ -279,6 +279,19 @@ fn global_commit_accepts_pending_font_queries_and_leaves_no_focused_field() {
 }
 
 #[test]
+fn global_commit_clears_hover_before_preview_can_expand_to_the_whole_layer() {
+    let (mut h, id) = fixture(false, 2, false, "abcdef");
+    select(&mut h, [2, 4]);
+    h.run();
+    choose(&mut h, FONTS[1], "hover");
+    h.event(egui::Event::Key { key: Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::COMMAND });
+    h.run_steps(1);
+    assert!(h.state().app.ui.text_edit.is_none());
+    let (shown, _) = crate::canvas::display_doc(&mut h.state_mut().app, 0);
+    assert_eq!(styles(&shown, id), saved(&h, id), "the first committed frame must show real runs, not a full-layer hover preview");
+}
+
+#[test]
 fn caret_style_is_discarded_by_navigation_cancel_undo_and_document_switch() {
     for action in ["navigation", "cancel", "undo", "document-switch"] {
         let (mut h, id) = fixture(false, 0, false, "abcdef");

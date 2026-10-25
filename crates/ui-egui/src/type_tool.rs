@@ -1235,6 +1235,10 @@ pub(crate) fn commit_shortcut(app: &mut PhotocraftApp, ctx: &egui::Context) -> b
         ctx.data_mut(|d| d.remove::<FontFieldEdit>(field.with("edit")));
     }
     egui::Popup::close_all(ctx);
+    ctx.data_mut(|d| {
+        d.remove::<String>(egui::Id::new("type-font-hover"));
+        d.remove::<(String, f64)>(egui::Id::new("type-font-hover-since"));
+    });
     crate::type_font_preview::clear(app);
     commit_with(app, mods);
     true
@@ -1245,6 +1249,7 @@ pub(crate) fn commit_shortcut(app: &mut PhotocraftApp, ctx: &egui::Context) -> b
 /// replaces the selection.
 pub fn commit_with(app: &mut PhotocraftApp, mods: egui::Modifiers) {
     app.ui.type_insertion_style = None;
+    crate::type_font_preview::clear(app);
     let current = app.session.active_index();
     let Some(home) = app.ui.text_edit.as_ref().map(|ed| edit_home(app, ed)) else {
         return commit_here(app, mods);
