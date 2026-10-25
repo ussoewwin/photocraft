@@ -254,3 +254,60 @@ fn view_mapping_fractional_offsets_and_transient_state_are_preserved() {
         assert_eq!(work(&app), before.transform(&Affine::translate(delta[0], delta[1])));
     }
 }
+
+fn canvas_frame(app: &mut PhotocraftApp, primary: bool, focused: bool) {
+    let ctx = egui::Context::default();
+    PhotocraftApp::setup_context(&ctx, crate::theme::ThemeKind::ALL[0]);
+    let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0));
+    let input = egui::RawInput { screen_rect: Some(rect), focused, ..Default::default() };
+    let view = app.ui.views[0].clone();
+    ctx.run_ui(input, |ui| {
+        crate::canvas::canvas_view(app, ui, 0, rect, view.clone(), primary);
+    })
+    .textures_delta
+    .clear();
+}
+
+#[test]
+fn secondary_canvas_focus_does_not_cancel_primary_drag_or_split_history() {
+    let mut app = app();
+    let before = work(&app);
+    let history = app.session.active().unwrap().history.past_len();
+    down(&mut app, [10.0, 20.0]);
+    moving(&mut app, [21.25, 24.5]);
+    assert_eq!(preview(&app), Some([11.25, 4.5]));
+    canvas_frame(&mut app, true, true);
+    assert_eq!(preview(&app), Some([11.25, 4.5]));
+    canvas_frame(&mut app, false, false);
+    assert_eq!(preview(&app), Some([11.25, 4.5]), "secondary view must not cancel the primary drag");
+    assert!(app.drag.is_some());
+    assert_eq!(work(&app), before);
+    assert_eq!(app.session.active().unwrap().history.past_len(), history);
+    moving(&mut app, [23.375, 26.125]);
+    canvas_frame(&mut app, false, false);
+    assert_eq!(preview(&app), Some([13.375, 6.125]));
+    up(&mut app, [23.375, 26.125]);
+    let after = before.transform(&Affine::translate(13.375, 6.125));
+    assert_eq!(work(&app), after);
+    assert_eq!(app.session.active().unwrap().history.past_len(), history + 1);
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(work(&app), before);
+    app.run("edit.redo", json!({})).unwrap();
+    assert_eq!(work(&app), after);
+}
+
+#[test]
+fn primary_canvas_focus_loss_cancels_drag_without_history_or_late_release() {
+    let mut app = app();
+    let before = work(&app);
+    let history = app.session.active().unwrap().history.past_len();
+    down(&mut app, [10.0, 20.0]);
+    moving(&mut app, [21.25, 24.5]);
+    assert!(preview(&app).is_some());
+    canvas_frame(&mut app, true, false);
+    assert!(preview(&app).is_none());
+    assert!(app.drag.is_none());
+    assert!(finish(&mut app, [10.0, 20.0], [21.25, 24.5]).unwrap().is_err());
+    assert_eq!(work(&app), before);
+    assert_eq!(app.session.active().unwrap().history.past_len(), history);
+}
