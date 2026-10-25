@@ -312,6 +312,24 @@ mod tests {
         assert!(!h.state().session.journal.iter().any(|(id, _)| id == "paint.stroke"));
     }
 
+    /// Quick Selection's canvas right-click is the selection menu (#7268), so Shift+Alt+right
+    /// must not open the HUD from the same gesture (#6098).
+    #[test]
+    fn quick_selections_shift_alt_right_opens_only_the_selection_menu() {
+        let mut h = harness();
+        h.state_mut().ui.tool = Tool::QuickSelection;
+        h.run_steps(1);
+        let c = h.state().last_canvas_rect.center();
+        h.event(egui::Event::PointerMoved(c));
+        h.run_steps(1);
+        button(&mut h, c, true, SHIFT_ALT);
+        assert_eq!(h.state().ui.color_hud, None, "no HUD for Quick Selection");
+        assert_eq!(h.state().ui.brush_picker, None, "and no Brush Preset picker");
+        button(&mut h, c, false, SHIFT_ALT);
+        assert_eq!(h.state().ui.color_hud, None, "the release does not open it either");
+        assert!(h.state().ui.canvas_tool_menu.is_some(), "the selection menu opens, once");
+    }
+
     /// A press near the bottom-right edge clamps the HUD under the still pointer: the opening
     /// press alone must not pick — the colour changes only once the pointer moves (#6098).
     #[test]
