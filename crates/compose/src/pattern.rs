@@ -127,15 +127,15 @@ impl<'a> PreparedPatterns<'a> {
                 if !self.over_budget.warned.swap(true, Ordering::Relaxed) {
                     // Written, not printed: a warning must never panic, even with no stderr.
                     #[cfg(not(target_arch = "wasm32"))]
-                    let _ = std::io::Write::write_fmt(
-                        &mut std::io::stderr(),
-                        format_args!(
-                            "photocraft: pattern \"{}\" is past this render's pattern memory ({} MiB) and is converted again as tiles need it
-",
+                    {
+                        use std::io::Write as _;
+                        let _ = writeln!(
+                            std::io::stderr(),
+                            "photocraft: pattern \"{}\" is past this render's pattern memory ({} MiB) and is converted again as tiles need it",
                             p.display_name(),
                             self.budget >> 20
-                        ),
-                    );
+                        );
+                    }
                 }
                 let tile = Tile::new_in(p, self.mode).map(Arc::new)?;
                 live.retain(|_, w| w.strong_count() > 0);
