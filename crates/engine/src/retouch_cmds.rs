@@ -1325,7 +1325,10 @@ impl LiveDab {
         let mut live = Self::with_neighborhood_on(doc, cmd, p, stroke, id, neighborhood, effect)?;
         live.base = Some(base);
         live.colors = crate::color_channels::target(s, p)?;
-        live.push(&[])?;
+        if let Some(colors) = live.colors {
+            let (surf, _) = crate::channel_cmds::target_surface(std::sync::Arc::make_mut(&mut live.doc), live.id, &live.params)?;
+            crate::color_channels::restrict_region(&live.pre_surf, surf, colors, live.bounds)?;
+        }
         Ok(live)
     }
 

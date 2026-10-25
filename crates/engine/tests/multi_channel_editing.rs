@@ -582,6 +582,81 @@ fn legacy_cmyk_channel_clips_keep_their_tone_when_pasted_into_a_set_or_single_ch
 }
 
 #[test]
+fn cmyk_grayscale_clips_roundtrip_explicit_and_limited_paste_at_every_depth() {
+    for depth in [8, 16, 32] {
+        for explicit_copy in [false, true] {
+            for command in ["edit.paste", "edit.pasteSpecial.pasteInto", "edit.pasteSpecial.pasteOutside"] {
+                let mut s = setup("cmyk", depth);
+                s.execute("channel.target", json!({"channel":{"color":0}})).unwrap();
+                let before = surface(&s);
+                s.execute("edit.copy", if explicit_copy { json!({"target":{"color":0}}) } else { json!({}) }).unwrap();
+                s.edit("clear cyan", |doc, id| {
+                    let surf = doc.layer_mut(id.unwrap()).unwrap().surface_mut().unwrap();
+                    let mut raw = surf.read_region(Rect::new(0, 0, 32, 24));
+                    for p in raw.as_chunks_mut::<5>().0 {
+                        p[0] = 0.93;
+                    }
+                    surf.write_region(Rect::new(0, 0, 32, 24), &raw);
+                    Ok(())
+                })
+                .unwrap();
+                if command != "edit.paste" {
+                    s.execute("select.rect", json!({"x":0,"y":0,"width":16,"height":24})).unwrap();
+                }
+                s.execute(command, json!({"target":{"color":0},"center":[16,12]})).unwrap();
+                let after = surface(&s);
+                let x = if command.ends_with("pasteOutside") { 20 } else { 4 };
+                assert!((before.pixel(x, 8)[0] - after.pixel(x, 8)[0]).abs() < 2.0 / 255.0, "{depth} {explicit_copy} {command}");
+            }
+        }
+    }
+}
+
+#[test]
+fn last_filter_rejects_non_object_journal_params_without_panicking() {
+    for saved in [json!(17), json!(true), json!([]), json!("bad")] {
+        let mut s = setup("rgb", 16);
+        s.journal.push(("filter.blur.gaussianBlur".into(), saved));
+        let before = surface(&s);
+        let p = json!({"target":{"colors":[0,2]},"layer":s.active().unwrap().active_layer.unwrap().0});
+        assert!(s.execute("filter.lastFilter", p.clone()).is_err());
+        let spec = photocraft_engine::command_specs().iter().find(|s| s.id == "filter.lastFilter").unwrap();
+        assert!((spec.run)(&mut s, &p).is_err());
+        assert_eq!(surface(&s), before);
+    }
+    let mut s = setup("rgb", 16);
+    s.journal.push(("filter.blur.gaussianBlur".into(), json!(null)));
+    s.execute("filter.lastFilter", json!({"target":{"color":0}})).unwrap();
+}
+
+#[test]
+fn first_single_channel_retouch_preview_preserves_every_other_sample() {
+    for cmd in ["paint.dodge", "paint.burn", "paint.sponge", "paint.blur", "paint.sharpen", "paint.smudge", "paint.colorReplacement"] {
+        let mut s = setup("rgb", 32);
+        s.execute("channel.target", json!({"channel":{"color":0}})).unwrap();
+        let before = surface(&s);
+        let p = json!({"points":[[6,7,1],[23,15,0.7]],"size":9,"color":"#ffffff","tolerance":100});
+        let live = if cmd == "paint.colorReplacement" {
+            photocraft_engine::brush_cmds::live_color_replacement(&s, &p).unwrap()
+        } else {
+            photocraft_engine::retouch_cmds::LiveDab::begin(&s, cmd, &p).unwrap()
+        };
+        let shown = live.doc.layer(s.active().unwrap().active_layer.unwrap()).unwrap().surface().unwrap();
+        for y in 0..24 {
+            for x in 0..32 {
+                for k in [1, 2, 3] {
+                    assert_eq!(before.pixel(x, y)[k].to_bits(), shown.pixel(x, y)[k].to_bits(), "{cmd} {x} {y} {k}");
+                }
+            }
+        }
+        if cmd != "paint.colorReplacement" {
+            s.offer_live_dab(live).unwrap();
+        }
+        s.execute(cmd, p).unwrap();
+    }
+}
+
+#[test]
 fn last_filter_forwards_explicit_target_before_implicit_panel_selection() {
     let mut s = setup("rgb", 32);
     subset(&mut s);

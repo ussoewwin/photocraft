@@ -501,8 +501,14 @@ pub fn specs() -> Vec<CommandSpec> {
             run: |s, p| {
                 let (id, mut params) = last_filter(s).ok_or_else(|| EngineError::Other("no filter applied yet".into()))?;
                 if let Some(target) = p.get("target") {
-                    params["target"] = target.clone();
+                    if params.is_null() {
+                        params = json!({});
+                    }
+                    if let Some(object) = params.as_object_mut() {
+                        object.insert("target".into(), target.clone());
+                    }
                 }
+                crate::param_check::check(crate::commands::find(&id).ok_or_else(|| EngineError::Other("unknown saved filter".into()))?, &params)?;
                 run_filter(s, &id, &params)
             },
             journal: true,

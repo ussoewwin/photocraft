@@ -785,7 +785,12 @@ impl Session {
         {
             for key in ["target", "layer"] {
                 if let Some(value) = params.get(key) {
-                    p[key] = value.clone();
+                    if p.is_null() {
+                        p = serde_json::json!({});
+                    }
+                    if let Some(object) = p.as_object_mut() {
+                        object.insert(key.into(), value.clone());
+                    }
                 }
             }
             return self.dispatch(&filter, p, background);

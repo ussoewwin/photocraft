@@ -6,6 +6,8 @@ use serde_json::{Value, json};
 
 use crate::{EngineError, Result, Session, channel_cmds::ChannelTarget};
 
+mod tone;
+
 /// A bounded, cheap-to-copy set of native colour components (never transparency).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ColorChannels(u64);
@@ -302,7 +304,7 @@ pub(crate) fn adjust(
     selection: Option<&Surface>,
     bounds: photocraft_geom::Rect,
 ) -> Result<()> {
-    use photocraft_doc::{Adjustment, adjust::ToneSpace};
+    use photocraft_doc::Adjustment;
     if !matches!(
         adjustment,
         Adjustment::BrightnessContrast { .. }
@@ -318,29 +320,47 @@ pub(crate) fn adjust(
         crate::pixels::adjust_surface(surface, adjustment, selection, surface.format().mode).map_err(EngineError::Other)?;
         return restrict_surface(&before, surface, colors);
     }
+    tone::adjust(surface, colors, adjustment, selection, bounds)
+}
+
+/// Map a native tone record to the scalar RGB oracle without losing its combined record.
+fn scalar_adjustment(adjustment: &photocraft_doc::Adjustment, k: usize) -> photocraft_doc::Adjustment {
+    use photocraft_doc::{Adjustment, adjust::ToneSpace};
+    match adjustment {
+        Adjustment::Levels { master, per_channel, black, .. } => {
+            let channel = if k == 3 { black.clone() } else { per_channel.get(k).cloned().unwrap_or_default() };
+            Adjustment::Levels {
+                master: master.clone(),
+                per_channel: [channel.clone(), channel.clone(), channel],
+                space: ToneSpace::Rgb,
+                black: Default::default(),
+            }
+        }
+        Adjustment::Curves { master, per_channel, black, pencil, .. } => {
+            let channel = if k == 3 { black.clone() } else { per_channel.get(k).cloned().unwrap_or_default() };
+            Adjustment::Curves {
+                master: master.clone(),
+                per_channel: [channel.clone(), channel.clone(), channel],
+                space: ToneSpace::Rgb,
+                black: Vec::new(),
+                pencil: *pencil,
+            }
+        }
+        other => other.clone(),
+    }
+}
+
+#[cfg(test)]
+fn adjust_reference(
+    surface: &mut Surface,
+    colors: ColorChannels,
+    adjustment: &photocraft_doc::Adjustment,
+    selection: Option<&Surface>,
+    bounds: photocraft_geom::Rect,
+) -> Result<()> {
+    use photocraft_doc::Adjustment;
     for k in colors.indices() {
-        let scalar = match adjustment {
-            Adjustment::Levels { master, per_channel, black, .. } => {
-                let channel = if k == 3 { black.clone() } else { per_channel.get(k).cloned().unwrap_or_default() };
-                Adjustment::Levels {
-                    master: master.clone(),
-                    per_channel: [channel.clone(), channel.clone(), channel],
-                    space: ToneSpace::Rgb,
-                    black: Default::default(),
-                }
-            }
-            Adjustment::Curves { master, per_channel, black, pencil, .. } => {
-                let channel = if k == 3 { black.clone() } else { per_channel.get(k).cloned().unwrap_or_default() };
-                Adjustment::Curves {
-                    master: master.clone(),
-                    per_channel: [channel.clone(), channel.clone(), channel],
-                    space: ToneSpace::Rgb,
-                    black: Vec::new(),
-                    pencil: *pencil,
-                }
-            }
-            other => other.clone(),
-        };
+        let scalar = scalar_adjustment(adjustment, k);
         let region = selection.filter(|mask| mask.default_pixel().first().is_none_or(|v| *v <= 0.0)).map(|mask| mask.content_bounds().intersect(&bounds));
         let mut plane = extract_region(surface, k, region)?;
         if matches!(adjustment, Adjustment::Invert)
@@ -382,6 +402,7 @@ pub(crate) fn adjust(
 
 /// Scalar planes have independent tiles. Full-layer tone edits must not serialize all pixels on
 /// the UI thread; use the existing scalar oracle on one tile per worker and commit atomically.
+#[cfg(test)]
 fn adjust_plane(
     plane: &mut Surface,
     adjustment: &photocraft_doc::Adjustment,
