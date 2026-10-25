@@ -424,7 +424,7 @@
 	Fill Content	შევსების შიგთავსი
 	Deselect Layers	შრეების მონიშვნის მოხსნა
 	Find Layers	შრეების ძებნა
-	Layer Comps	შრეების კომპოზიციები
+	Layer Comps	კომპოზიციები
 	Layers	შრეები
 	All Layers	ყველა შრე
 	Hidden Layers	დამალული შრეები
@@ -721,7 +721,7 @@
 	Clone Source	კლონირების წყარო
 	Color	ფერი
 	Glyphs	გლიფები
-	Gradients	გრადიენტები
+	Gradients	გრადიენტი
 	Histogram	ჰისტოგრამა
 	History	ისტორია
 	Info	ინფორმაცია
@@ -736,7 +736,7 @@
 	Properties	თვისებები
 	Shapes	ფიგურები
 	Styles	სტილები
-	Swatches	ფერის ნიმუშები
+	Swatches	ნიმუშები
 	Timeline	დროის ხაზი
 	Tool Presets	ხელსაწყოს პრესეტები
 	Tools	ხელსაწყოები
@@ -1552,7 +1552,7 @@
 	Brush	ფუნჯი
 	Block	ბლოკი
 	Brush Pose	ფუნჯის პოზა
-	Brush Tip Shape	ფუნჯის წვერის ფორმა
+	Brush Tip Shape	წვერის ფორმა
 	Brush Tool	ფუნჯის ხელსაწყო
 	Build-up	აეროგრაფი
 	Burn Tool	გამამუქებლის ხელსაწყო
@@ -1729,7 +1729,7 @@
 	Selection	მონიშნული
 	SemiBold	ნახევრად მუქი
 	Shadows up to:	ჩრდილები, ზედა ზღვარი:
-	Shape Dynamics	ფორმის დინამიკა
+	Shape Dynamics	ფორმის ცვლა
 	Sharpen Tool	გამკვეთრების ხელსაწყო
 	Show Extras Options	დამატებითი ელემენტების პარამეტრების ჩვენება
 	Slice Select Tool	ნაჭრის მონიშვნის ხელსაწყო
@@ -1809,7 +1809,7 @@
 	Brush preview color	ფუნჯის წინასწარი ნახვის ფერი
 	Cache levels	ქეშის დონეები
 	Cache tile size	ქეშის ფილის ზომა
-	Camera Raw Defaults	Camera Raw-ის ნაგულისხმევი პარამეტრები
+	Camera Raw Defaults	Camera Raw: ნაგულისხმევი
 	Canvas border	ტილოს საზღვარი
 	Show canvas dots	ტილოს წერტილების ჩვენება
 	Canvas color	ტილოს ფერი
@@ -1839,7 +1839,7 @@
 	Enable floating document window docking	მცურავი დოკუმენტის ფანჯრების მიმაგრების ჩართვა
 	Enable narrow options bar	ვიწრო პარამეტრების ზოლის ჩართვა
 	Enabled	ჩართულია
-	Enhanced Controls	გაუმჯობესებული მართვის ელემენტები
+	Enhanced Controls	გაუმჯობესებული მართვა
 	Export clipboard	გაცვლის ბუფერის ექსპორტი
 	Extra large	ძალიან დიდი
 	File Handling	ფაილებთან მუშაობა
@@ -1860,7 +1860,7 @@
 	Gridline every	ბადის ხაზი ყოველ
 	Guide color	დამხმარე ხაზის ფერი
 	Guide style	დამხმარე ხაზის სტილი
-	Guides, Grid & Slices	დამხმარე ხაზები, ბადე და ნაჭრები
+	Guides, Grid & Slices	ხაზები, ბადე, ნაჭრები
 	Gutter	შუალედი
 	History Log	ისტორიის ჟურნალი
 	History states	ისტორიის მდგომარეობები
@@ -1946,11 +1946,11 @@
 	Text file	ტექსტური ფაილი
 	Tiny	ძალიან პატარა
 	Touch gestures	სენსორული ჟესტები
-	Transparency & Gamut	გამჭვირვალობა და ფერთა დიაპაზონი
+	Transparency & Gamut	გამჭვირვალობა და გამი
 	Type units	ტექსტის ერთეულები
 	UI font size	ინტერფეისის შრიფტის ზომა
 	UI scale	ინტერფეისის მასშტაბი
-	Units & Rulers	ერთეულები და სახაზავები
+	Units & Rulers	ერთეულები, სახაზავები
 	Use additional plugins folder	პლაგინების დამატებითი საქაღალდის გამოყენება
 	Use esc to commit	დადასტურება Esc-ით
 	Use gpu	GPU-ის გამოყენება
@@ -3029,7 +3029,7 @@ layerLabel	No Color	ფერის გარეშე
 	Clipping Mask	მომჭრელი ნიღაბი
 	Tool Options	ხელსაწყოების პარამეტრები
 	Color Picker	ფერის ამრჩევი
-	Color Swatches	ფერის ნიმუშები
+	Color Swatches	ნიმუშები
 	Linear Dodge	წრფივი გაღიავება
 	Preview Image	გამოსახულების გადახედვა
 	Save As	შენახვა როგორც
@@ -3420,7 +3420,7 @@ layerLabel	No Color	ფერის გარეშე
 	Circle	წრე
 	Clumped	შეჯგუფებული
 	Coarse Dots	მსხვილი წერტილები
-	Colored Pencil	ფერადი ფანქარი
+	Colored Pencil	ფანქარი
 	Contrasty	კონტრასტული
 	Cool	ცივი
 	Craquelure	კრაკელიური
@@ -3447,7 +3447,7 @@ layerLabel	No Color	ფერის გარეშე
 	Enlarged	გადიდებული
 	Even Fields	ლუწი ველები
 	Faded Film	გახუნებული ფირი
-	Film Grain	ფირის მარცვლოვნება
+	Film Grain	ფირის მარცვალი
 	Fine	წვრილი
 	Fine Dots	წვრილი წერტილები
 	Flat	ბრტყელი
@@ -3488,7 +3488,7 @@ layerLabel	No Color	ფერის გარეშე
 	Out From Center	ცენტრიდან გარეთ
 	Oval	ოვალი
 	Overlay Edge	კიდის გადაფარვა
-	Palette Knife	პალიტრის დანა
+	Palette Knife	მასტიხინი
 	Parallel	პარალელური
 	Patchwork	ნაჭრების მოზაიკა
 	Pentagon	ხუთკუთხედი
@@ -3580,7 +3580,7 @@ layerLabel	No Color	ფერის გარეშე
 	Tiny Lens	პატარა ლინზა
 	To Center	ცენტრისკენ
 	Unaltered	უცვლელი
-	Underpainting	ქვედა ფენის ხატვა
+	Underpainting	ქვედა ფენა
 	Underwater	წყალქვეშა
 	Uniform	ერთგვაროვანი
 	Upper	ზედა
@@ -3692,7 +3692,7 @@ layerLabel	No Color	ფერის გარეშე
 	Oil Paint	ზეთის საღებავი
 	Open As	გახსნა როგორც
 	Package	შეფუთვა
-	Paint Daubs	საღებავის ლაქები
+	Paint Daubs	მონასმები
 	Path Blur	ტრაექტორიის გასწვრივ გაბუნდოვნება
 	Paths to Illustrator	ტრაექტორიები Illustrator-ში
 	Photomerge	Photomerge
@@ -3701,11 +3701,11 @@ layerLabel	No Color	ფერის გარეშე
 	Place Embedded	ჩაშენებულის განთავსება
 	Place Linked	დაკავშირებულის განთავსება
 	Place Scale Marker	მასშტაბის მარკერის განთავსება
-	Plastic Wrap	პლასტიკური შეფუთვა
+	Plastic Wrap	ცელოფანი
 	Pointillize	პუანტილიზმი
 	Polar Coordinates	პოლარული კოორდინატები
 	Polar To Rectangular	პოლარულიდან მართკუთხაში
-	Poster Edges	პოსტერის კიდეები
+	Poster Edges	პოსტერის კიდე
 	Preset Manager	პრესეტების მართვა
 	Profile	პროფილი
 	Radial Blur	რადიალური გაბუნდოვნება
@@ -3734,7 +3734,7 @@ layerLabel	No Color	ფერის გარეშე
 	Shear	დახრა
 	Smart Blur	ჭკვიანი გაბუნდოვნება
 	Smart Sharpen	ჭკვიანი გამკვეთრება
-	Smudge Stick	გამღაბნელი ჩხირი
+	Smudge Stick	ღაბნის ჯოხი
 	Solid Color	მყარი ფერი
 	Spherize	სფერიზება
 	Spin Blur	ბრუნვითი გაბუნდოვნება
