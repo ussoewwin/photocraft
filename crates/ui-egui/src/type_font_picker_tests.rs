@@ -110,6 +110,36 @@ fn empty_or_unmatched_input_applies_nothing_and_escape_restores_the_name() {
 }
 
 #[test]
+fn no_matching_fonts_shows_a_compact_message_and_clearing_restores_the_list() {
+    for preview in [FontPreview::Off, FontPreview::Medium, FontPreview::ExtraLarge] {
+        let mut h = harness_with(preview);
+        open(&mut h);
+        let full = popup_rect(&h).expect("full menu open");
+        let field = h.get_by_role(Role::TextInput).rect();
+        h.get_by_role(Role::TextInput).type_text("fdsfdsfds");
+        h.run();
+        let empty = popup_rect(&h).expect("unmatched input keeps the menu open");
+        assert!(empty.width() >= field.width(), "{preview:?}: empty popup collapsed to {empty:?}");
+        assert!(empty.height() < full.height() / 4.0, "{preview:?}: empty popup retained the full height: {empty:?} vs {full:?}");
+        assert!(empty.contains(h.get_by_label("No matching fonts").rect().center()));
+        assert_eq!(h.state().current, "Family 00");
+        h.key_press(Key::ArrowDown);
+        h.key_press(Key::ArrowUp);
+        h.key_press(Key::Enter);
+        h.run();
+        assert_eq!(h.state().current, "Family 00", "empty-result navigation applies nothing");
+        h.key_press_modifiers(Modifiers::COMMAND, Key::A);
+        h.key_press(Key::Backspace);
+        h.run();
+        let restored = popup_rect(&h).expect("clearing restores the list");
+        assert!(h.query_by_label("No matching fonts").is_none());
+        assert!(h.query_by_label("Family 01").is_some());
+        assert!((restored.width() - full.width()).abs() < 0.5, "{preview:?}: width {restored:?} != {full:?}");
+        assert!((restored.height() - full.height()).abs() < 0.5, "{preview:?}: height {restored:?} != {full:?}");
+    }
+}
+
+#[test]
 fn clicking_elsewhere_discards_unaccepted_input() {
     let mut h = harness();
     open(&mut h);
@@ -1114,7 +1144,8 @@ fn capture_font_field_gpu_visual_fixtures() {
             for width in [140.0, 170.0] {
                 let mut h = Harness::builder().with_size(vec2(420.0, 560.0)).with_pixels_per_point(scale).wgpu().build_ui_state(
                     move |ui, current: &mut String| {
-                        let families = ["Arial", "Consolas", "Inter", "JetBrains Mono"].map(str::to_string);
+                        let mut families: Vec<String> = ["Arial", "Consolas", "Inter", "JetBrains Mono"].map(str::to_string).into();
+                        families.extend((0..60).map(|i| format!("Z Fixture Family {i:02}")));
                         font_picker_in(ui, current, width, &families, FontPreview::Medium, &[]);
                     },
                     "Inter".to_string(),
@@ -1130,6 +1161,14 @@ fn capture_font_field_gpu_visual_fixtures() {
                 h.event(egui::Event::Text("C".into()));
                 h.run();
                 h.render().unwrap().save(directory.join(format!("{stem}-filtered.png"))).unwrap();
+                h.key_press_modifiers(Modifiers::COMMAND, Key::A);
+                h.event(egui::Event::Text("fdsfdsfds".into()));
+                h.run();
+                h.render().unwrap().save(directory.join(format!("{stem}-no-matches.png"))).unwrap();
+                h.key_press_modifiers(Modifiers::COMMAND, Key::A);
+                h.key_press(Key::Backspace);
+                h.run();
+                h.render().unwrap().save(directory.join(format!("{stem}-cleared.png"))).unwrap();
             }
         }
     }

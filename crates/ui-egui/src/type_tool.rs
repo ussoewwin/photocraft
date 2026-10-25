@@ -1885,7 +1885,14 @@ pub(crate) fn family_picker_in(
     // The name is outside the popup: clicking it to move the caret keeps the list open.
     let close = if input.contains_pointer() { egui::PopupCloseBehavior::IgnoreClicks } else { egui::PopupCloseBehavior::CloseOnClickOutside };
     let response = crate::press_menu::show_with_close_behavior(&anchor, close, |ui, press| {
+        // Rows normally size the popup. With no matches, keep a readable width and omit
+        // the cached scroll viewport so an empty list cannot become a tall, narrow bar.
+        ui.set_min_width(width.max(330.0));
         let (rows, n_recent) = font_menu_rows(families, labels, &edit.query, &edit.recents);
+        if rows.is_empty() {
+            ui.weak(tl!("No matching fonts"));
+            return None;
+        }
         let mut selected = edit
             .row
             .filter(|&i| rows.get(i).is_some_and(|(f, _)| *f == current))
