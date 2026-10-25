@@ -90,13 +90,26 @@ impl LutFile {
 /// Parses a LUT, picking the format from `file_name`'s extension (falls back to sniffing).
 pub fn parse(file_name: &str, bytes: &[u8]) -> Result<LutFile, LutError> {
     let lower = file_name.to_ascii_lowercase();
-    let text = String::from_utf8_lossy(bytes);
+    let text = decode_text(bytes);
     if lower.ends_with(".3dl") {
         parse_3dl(&text)
     } else if lower.ends_with(".look") || text.trim_start().starts_with('<') {
         parse_look(&text)
     } else {
         parse_cube(&text)
+    }
+}
+
+/// UTF-16 with a byte-order mark (Photoshop loads such `.look` files, #9118), else UTF-8.
+fn decode_text(bytes: &[u8]) -> std::borrow::Cow<'_, str> {
+    let utf16 = |rest: &[u8], from: fn([u8; 2]) -> u16| {
+        let units: Vec<u16> = rest.as_chunks::<2>().0.iter().map(|&c| from(c)).collect();
+        String::from_utf16_lossy(&units).into()
+    };
+    match bytes {
+        [0xFF, 0xFE, rest @ ..] => utf16(rest, u16::from_le_bytes),
+        [0xFE, 0xFF, rest @ ..] => utf16(rest, u16::from_be_bytes),
+        _ => String::from_utf8_lossy(bytes),
     }
 }
 
@@ -182,19 +195,23 @@ pub fn parse_cube(text: &str) -> Result<LutFile, LutError> {
 /// shaper line of input values, then integer RGB rows with **blue** varying fastest. The
 /// `Mesh` line declares the cube edge (2^inBits + 1) and the output code range (up to
 /// 2^outBits − 1), and Photoshop honours both (#9073, #9078); without it the edge is the cube
-/// root of the row count and the range is inferred from the largest value.
+/// root of the row count and the range is inferred from the largest value (#9121).
 pub fn parse_3dl(text: &str) -> Result<LutFile, LutError> {
     let mut mesh: Option<(u32, u32)> = None;
     let mut rows: Vec<[f64; 3]> = Vec::new();
     // How many numbers the first numeric line carried: a shaper of exactly `n` values (n ≤ 3)
     // is otherwise indistinguishable from a node row.
     let mut first_len: Option<usize> = None;
+    // Any text line before the rows is a header: a headerless table peaking at 255 or 1023 is
+    // on the 12-bit scale, as Photoshop 27.11 reads it (#9121).
+    let mut header = false;
     for line in text.lines() {
         let line = line.split('#').next().unwrap_or("").trim();
         if line.is_empty() {
             continue;
         }
         if line.starts_with(|c: char| c.is_ascii_alphabetic()) {
+            header = true;
             // The only header keyword that carries data. A malformed or out-of-range `Mesh`
             // line is ignored, as every text line always was.
             let mut it = line.split_whitespace();
@@ -216,6 +233,9 @@ pub fn parse_3dl(text: &str) -> Result<LutFile, LutError> {
         }
         let v: Vec<f64> = line.split_whitespace().filter_map(|s| s.parse().ok()).collect();
         if v.is_empty() {
+            // The `3DMESH` magic carries no numbers, but it is a header all the same: a table
+            // behind it reads a 1023 peak on the 10-bit scale (#9121).
+            header = true;
             continue;
         }
         first_len.get_or_insert(v.len());
@@ -241,7 +261,7 @@ pub fn parse_3dl(text: &str) -> Result<LutFile, LutError> {
             // loading as before.
             let max = nodes.iter().flatten().fold(0.0f64, |a, &b| a.max(b));
             let declared = 2f64.powi(i32::try_from(out_bits).unwrap_or(16)) - 1.0;
-            (n, nodes, if max > declared { inferred_3dl_scale(max) } else { declared })
+            (n, nodes, if max > declared { inferred_3dl_scale(max, header) } else { declared })
         }
         None => {
             let n = (rows.len() as f64).cbrt().round() as usize;
@@ -249,7 +269,7 @@ pub fn parse_3dl(text: &str) -> Result<LutFile, LutError> {
                 return err(format!("{} rows is not a cube", rows.len()));
             }
             let max = rows.iter().flatten().fold(0.0f64, |a, &b| a.max(b));
-            (n, &rows[..], inferred_3dl_scale(max))
+            (n, &rows[..], inferred_3dl_scale(max, header))
         }
     };
     let mut data = vec![0.0f32; n * n * n * 3];
@@ -265,14 +285,28 @@ pub fn parse_3dl(text: &str) -> Result<LutFile, LutError> {
 
 /// The code range a `.3dl` node table without a declared output depth was written with: the
 /// smallest common integer depth that covers the largest value; a table of 0..1 floats passes
-/// through.
-fn inferred_3dl_scale(max: f64) -> f64 {
-    if max <= 1.0 { 1.0 } else { [1023.0, 4095.0, 16383.0, 65535.0].into_iter().find(|&s| max <= s).unwrap_or(max) }
+/// through. A headerless table has no 10-bit reading — 255 and 1023 are on the 12-bit scale, as
+/// Photoshop 27.11 reads them (#9121).
+fn inferred_3dl_scale(max: f64, header: bool) -> f64 {
+    if max <= 1.0 {
+        return 1.0;
+    }
+    let depths: &[f64] = if header { &[1023.0, 4095.0, 16383.0, 65535.0] } else { &[4095.0, 16383.0, 65535.0] };
+    depths.iter().copied().find(|&s| max <= s).unwrap_or(max)
 }
 
 /// SpeedGrade `.look`: `<size>` and a hex `<data>` string of little-endian float32 RGB triplets
 /// (red fastest).
 pub fn parse_look(text: &str) -> Result<LutFile, LutError> {
+    // Comments may hold tag-like text, so drop them before looking for tags (#9109).
+    let mut clean = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(i) = rest.find("<!--") {
+        clean.push_str(&rest[..i]);
+        rest = rest[i + 4..].find("-->").map_or("", |e| &rest[i + 4 + e + 3..]);
+    }
+    clean.push_str(rest);
+    let text = clean.as_str();
     let tag = |name: &str| -> Option<String> {
         let open = format!("<{name}>");
         let start = text.find(&open)? + open.len();
@@ -501,6 +535,26 @@ DOMAIN_MAX 0.5 1 1
     }
 
     #[test]
+    fn three_dl_without_a_header_reads_low_nodes_as_12_bit() {
+        let table = |peak: u32| -> String {
+            let mut text = String::from("0 1023\n");
+            for i in 0..8 {
+                let on = |bit: u32| if i & bit != 0 { peak } else { 0 };
+                text.push_str(&format!("{} {} {}\n", on(4), on(2), on(1)));
+            }
+            text
+        };
+        for peak in [255, 1023, 4095] {
+            let white = parse_3dl(&table(peak)).unwrap().data[21..24].to_vec();
+            assert_eq!(white, [peak as f32 / 4095.0; 3], "peak {peak}");
+        }
+        // A header keeps the inferred 10-bit depth. The bare `3DMESH` magic is a header without a
+        // cube declaration; `Mesh 1 10` would declare a 3³ cube and refuse this 2³ table (#9078).
+        let white = parse_3dl(&format!("3DMESH\n{}", table(1023))).unwrap().data[21..24].to_vec();
+        assert_eq!(white, [1.0; 3]);
+    }
+
+    #[test]
     fn three_dl_blue_fastest_and_bit_depth() {
         let mut text = String::from("0 1023\n");
         for r in 0..2 {
@@ -645,6 +699,29 @@ DOMAIN_MAX 0.5 1 1
         let hex: String = id.data.iter().flat_map(|v| v.to_le_bytes()).map(|b| format!("{b:02X}")).collect();
         let xml = format!("<?xml version=\"1.0\"?><look><LUT><size>\"2\"</size><data>\"{hex}\"</data></LUT></look>");
         assert_eq!(parse("a.look", xml.as_bytes()).unwrap().data, id.data);
+    }
+
+    #[test]
+    fn look_reads_utf16_with_either_byte_order() {
+        let id = LutFile::identity(2);
+        let hex: String = id.data.iter().flat_map(|v| v.to_le_bytes()).map(|b| format!("{b:02X}")).collect();
+        let xml = format!("<?xml version=\"1.0\" encoding=\"UTF-16\"?><look><LUT><size>\"2\"</size><data>\"{hex}\"</data></LUT></look>");
+        let le: Vec<u8> = [0xFF, 0xFE].into_iter().chain(xml.encode_utf16().flat_map(u16::to_le_bytes)).collect();
+        let be: Vec<u8> = [0xFE, 0xFF].into_iter().chain(xml.encode_utf16().flat_map(u16::to_be_bytes)).collect();
+        assert_eq!(parse("a.look", &le).unwrap().data, id.data);
+        assert_eq!(parse("a.look", &be).unwrap().data, id.data);
+    }
+
+    #[test]
+    fn look_ignores_tags_inside_xml_comments() {
+        let hex = |l: &LutFile| -> String { l.data.iter().flat_map(|v| v.to_le_bytes()).map(|b| format!("{b:02X}")).collect() };
+        let inverse = LutFile::from_fn("", 2, |[r, g, b]| [1.0 - r, 1.0 - g, 1.0 - b]);
+        let xml = format!(
+            "<look><!-- <size>\"3\"</size><data>\"{}\"</data> --><LUT><size>\"2\"</size><data>\"{}\"</data></LUT><!-- unterminated <data>00",
+            hex(&LutFile::identity(2)),
+            hex(&inverse)
+        );
+        assert_eq!(parse("commented.look", xml.as_bytes()).unwrap().data, inverse.data);
     }
 
     #[test]
