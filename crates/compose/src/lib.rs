@@ -1764,15 +1764,18 @@ fn blend_if_weight(layer: &Layer, mode: photocraft_color::ColorMode, this: Optio
     k
 }
 
-/// A channel value on Blend If's 0..=255 scale. Compositing can leave an 8- or 16-bit level a few
-/// millionths off (a level-20 backdrop composited at partial alpha reads 19.999998), which would
-/// put it on the wrong side of a hard point at that level: a value that close to a level is that
-/// level. Values of those depths that aren't on a level are at least 1/257 away from one. The GPU
-/// compositor (`compose.wgsl` `blend_if_weight`) snaps alike.
+/// A channel value on Blend If's 0..=255 scale. Photoshop compares Blend If at its 16-bit
+/// precision (0..=32768): a cutoff at level `c` falls on the step `round(c · 32768 / 255)`, and a
+/// value on that step is exactly level `c`, inside both a black point and a white point there
+/// (#9521: RGB16 32895 is step 16448, level 128's, so it passes a hard black point at 128; read as
+/// 127.996 it didn't). Every 8-bit level is on its own step, which also absorbs compositing's few
+/// millionths of drift (a level-20 backdrop at partial alpha reads 19.999998). The GPU compositor
+/// (`compose.wgsl` `blend_if_weight`) snaps alike.
 fn blend_if_level(x: f32) -> f32 {
-    let v = x.clamp(0.0, 1.0) * 255.0;
-    let r = v.round();
-    if (v - r).abs() < 1e-4 { r } else { v }
+    let x = x.clamp(0.0, 1.0);
+    let v = x * 255.0;
+    let level = v.round();
+    if (x * 32768.0).round() == (level * 32768.0 / 255.0).round() { level } else { v }
 }
 
 /// Blend If groups inside one another whose own colour is still rendered separately. Each extra
