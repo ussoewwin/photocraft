@@ -4432,3 +4432,21 @@ layers	Fill:	Fyll:
 navigator	Zoom	Zoom
 shape	Appearance	Utseende
 	The document has an embedded colour profile that does not match the working space.\nEmbedded: {embedded}\nWorking: {working}	Dokumentet har en innebygd fargeprofil som ikke samsvarer med arbeidsområdet.\nInnebygd: {embedded}\nArbeidsområde: {working}
+	Check Again	Sjekk igjen
+	Checking for updates.	Ser etter oppdateringer…
+	Copy Color as HTML	Kopier farge som HTML
+	Copy Color's Hex Code	Kopier fargens hex-kode
+	Could not check for updates.	Kunne ikke se etter oppdateringer.
+	Export Selected Styles…	Eksporter valgte stiler…
+	Export Styles…	Eksporter stiler…
+	If you continue, saving over the original may permanently discard unreadable data. Save a copy to keep the original.	Hvis du fortsetter, kan lagring over originalen permanent forkaste uleselige data. Lagre en kopi for å beholde originalen.
+	Import Styles…	Importer stiler…
+	Open Download Page	Åpne nedlastingssiden
+	Open the release page to choose an installer for your system.	Åpne utgivelsessiden for å velge en installasjonspakke for systemet ditt.
+	PhotoCraft Updates	PhotoCraft-oppdateringer
+	PhotoCraft is up to date.	PhotoCraft er oppdatert.
+	Some layers, pixels or masks could not be read. Do you want to continue opening it?	Enkelte lag, piksler eller masker kunne ikke leses. Vil du fortsette å åpne den?
+	The document “{name}” may be damaged.	Dokumentet «{name}» kan være skadet.
+	Updates have not been checked yet.	Oppdateringer er ikke sjekket ennå.
+	{file} is not a style library (.asl)	{file} er ikke et stilbibliotek (.asl)
+	Checking for updates…	Ser etter oppdateringer…
