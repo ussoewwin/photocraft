@@ -20,6 +20,7 @@ pub(super) fn fit(pts: &[Pt], closed: bool, s: &Settings) -> Vec<Pt> {
     if n < 3 {
         return pts.to_vec();
     }
+    let original = pts;
     let rounded = round_off(pts, closed, s.rounding());
     let pts = &rounded[..];
     let at = |i: isize| pts[i.rem_euclid(n as isize) as usize];
@@ -92,7 +93,34 @@ pub(super) fn fit(pts: &[Pt], closed: bool, s: &Settings) -> Vec<Pt> {
     }
     let v: Vec<Pt> = verts.iter().map(|&i| p[i]).collect();
     let corner: Vec<bool> = verts.iter().map(|&i| is_corner[i]).collect();
-    curves(&v, &corner, closed)
+    let out = curves(&v, &corner, closed);
+    if closed {
+        let before = signed_area(original);
+        let after = signed_area(&out);
+        // Region merging decides which islands survive. Rounding and simplification must not
+        // erase one (or reverse its hole): keep the original shared outline if half its area
+        // would be lost. Close it explicitly because the fill consumes consecutive segments.
+        if before * after <= 0.0 || after.abs() < before.abs() * 0.5 {
+            let mut out = original.to_vec();
+            out.extend(original.first().copied());
+            return out;
+        }
+    }
+    out
+}
+
+/// Signed loop area, relative to its first point to avoid cancellation far from the origin.
+fn signed_area(pts: &[Pt]) -> f64 {
+    let Some(origin) = pts.first() else { return 0.0 };
+    pts.iter()
+        .zip(pts.iter().cycle().skip(1))
+        .map(|(a, b)| {
+            let (ax, ay) = (f64::from(a[0]) - f64::from(origin[0]), f64::from(a[1]) - f64::from(origin[1]));
+            let (bx, by) = (f64::from(b[0]) - f64::from(origin[0]), f64::from(b[1]) - f64::from(origin[1]));
+            ax * by - bx * ay
+        })
+        .sum::<f64>()
+        * 0.5
 }
 
 /// Two passes of a moving average over `r` points either side; an open chain's ends (junctions)
@@ -312,6 +340,37 @@ mod tests {
         assert!(out.len() > 8, "flattened into steps: {}", out.len());
         // Between two corners a segment is straight.
         assert_eq!(curves(&v, &[true; 4], false), v.to_vec());
+    }
+
+    #[test]
+    fn fitting_keeps_small_islands_and_their_winding() {
+        use super::super::edges::follow_edges;
+        let (w, h) = (32, 32);
+        for size in [2, 3, 4, 6] {
+            let reg: Vec<u32> = (0..w * h).map(|i| u32::from((12..12 + size).contains(&(i % w)) && (12..12 + size).contains(&(i / w)))).collect();
+            let colours = [[0.2; 3], [0.9; 3]];
+            let c: Vec<_> = reg.iter().map(|&r| colours[r as usize]).collect();
+            let (chains, _) = follow_edges(&reg, &colours, &c, w, h);
+            let (pts, closed) = chains.iter().find(|(_, closed)| *closed).unwrap();
+            assert!(*closed);
+            let area = |p: &[Pt]| p.iter().zip(p.iter().cycle().skip(1)).map(|(a, b)| a[0] as f64 * b[1] as f64 - b[0] as f64 * a[1] as f64).sum::<f64>() / 2.0;
+            let original = area(pts);
+            for simplicity in [0.0, 2.0] {
+                let s = Settings { simplicity, ..settings(2.0) };
+                if size * size < s.min_area() as usize {
+                    continue;
+                }
+                for fidelity in [1.0, 1.5, 2.0, 3.0] {
+                    let out = fit(pts, true, &Settings { fidelity, ..s });
+                    let fitted = area(&out);
+                    assert!(
+                        fitted * original > 0.0 && fitted.abs() >= original.abs() * 0.5,
+                        "{size}x{size}, simplicity {simplicity}, fidelity {fidelity}: {original} -> {fitted}"
+                    );
+                    assert_eq!(out.first(), out.last(), "fallbacks must close the loop for the fill");
+                }
+            }
+        }
     }
 
     #[test]
