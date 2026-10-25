@@ -98,6 +98,7 @@ fn big_rgb_tiff(w: u32, h: u32) -> Vec<u8> {
 /// An all-black RGB8 TIFF of `w`×`h` whose Deflate strips of 64 rows all point at one
 /// compressed strip, padded with zeros just past what the decompression-bomb guard asks for: a
 /// valid file of tens of MB declaring hundreds of GB of pixels (#8536 review).
+#[cfg(target_os = "linux")]
 fn black_rgb_tiff(w: u32, h: u32) -> Vec<u8> {
     use flate2::{Compression, write::ZlibEncoder};
     use std::io::Write;
