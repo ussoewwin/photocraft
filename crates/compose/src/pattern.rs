@@ -116,20 +116,27 @@ impl<'a> PreparedPatterns<'a> {
             // still convert on demand when nothing is cached.
             None if bytes.is_none_or(|b| b > MAX_UNCACHED_PATTERN_BYTES) => None,
             None => {
+                // The lock is held through the conversion, so conversions of different
+                // over-budget patterns run one at a time. That is the point (one extra copy
+                // being built at once, not one per worker) and fine for a fallback: patterns
+                // that fit the budget never come here.
                 let mut live = self.over_budget.live.lock().unwrap_or_else(|e| e.into_inner());
                 if let Some(shared) = live.get(&key).and_then(Weak::upgrade) {
                     return Some(shared);
                 }
-                #[cfg(not(target_arch = "wasm32"))]
                 if !self.over_budget.warned.swap(true, Ordering::Relaxed) {
-                    eprintln!(
-                        "photocraft: pattern \"{}\" is past this render's pattern memory ({} MiB) and is converted again as tiles need it",
-                        p.display_name(),
-                        self.budget >> 20
+                    // Written, not printed: a warning must never panic, even with no stderr.
+                    #[cfg(not(target_arch = "wasm32"))]
+                    let _ = std::io::Write::write_fmt(
+                        &mut std::io::stderr(),
+                        format_args!(
+                            "photocraft: pattern \"{}\" is past this render's pattern memory ({} MiB) and is converted again as tiles need it
+",
+                            p.display_name(),
+                            self.budget >> 20
+                        ),
                     );
                 }
-                #[cfg(target_arch = "wasm32")]
-                self.over_budget.warned.store(true, Ordering::Relaxed);
                 let tile = Tile::new_in(p, self.mode).map(Arc::new)?;
                 live.retain(|_, w| w.strong_count() > 0);
                 live.insert(key, Arc::downgrade(&tile));

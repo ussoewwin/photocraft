@@ -3409,3 +3409,37 @@ fn legacy_auto_kern_is_read_on_import() {
     crate::psd::apply_txt2(&mut back, &tysh, &txt2);
     assert!(back.char_runs().iter().all(|r| r.style.kerning == Kerning::Metrics));
 }
+
+/// Review of the batch (FredApps, with #9104): a style-only save rewrites `Txt2`, and the raw
+/// (non-BOM) strings Photoshop wrote in it, `/2 (0100)` and `/3 (01110)` under `/98`, must come
+/// back as the same bytes: re-encoded as `FE FF` UTF-16 they make Photoshop refuse the file.
+#[test]
+fn a_style_only_save_keeps_the_raw_strings_of_the_file() {
+    let mut prev = photoshop_txt2(&[(4, 1)]);
+    let version = b"/98 << /0 14 >>";
+    let at = prev.windows(version.len()).position(|w| w == version).expect("the version key");
+    prev.splice(at..at + version.len(), b"/98 << /0 14 /2 (0100) /3 (01110) >>".iter().copied());
+    // A size the file's runs do not have: the block is rewritten.
+    let style = CharStyle { size_pt: 31.0, faux_bold: false, ..Default::default() };
+    let out = crate::psd::build_txt2(&[(0, &styled("AVA", style))], Some(&prev));
+    assert_ne!(out, prev, "the style edit rewrites the block");
+    let has = |needle: &[u8]| out.windows(needle.len()).any(|w| w == needle);
+    assert!(has(b"(0100)") && has(b"(01110)"), "the raw strings come back as the same bytes: {:?}", String::from_utf8_lossy(&out));
+    assert!(!has(b"(\xfe\xff\x000\x001\x000\x000)"), "and not as UTF-16");
+}
+
+/// The same for the older Photoshop's objects: restyling the legacy copy leaves a raw string
+/// elsewhere in the block as the file wrote it.
+#[test]
+fn restyling_the_photoshop_era_objects_keeps_the_raw_strings_of_the_file() {
+    use crate::engine_data::Value as E;
+    let era = crate::psd::parse_txt2(&styled_era_txt2("Line 1", "ArialMT", 13.0, 1)).unwrap();
+    let E::Dict(mut items) = era else { panic!("a dictionary") };
+    items.push(("98".into(), E::Dict(vec![("0".into(), E::Int(14)), ("2".into(), E::RawString("0100".into()))])));
+    let prev = crate::engine_data::write_bare(&items);
+    let style = CharStyle { postscript_name: Some("ArialMT".into()), size_pt: 24.0, ..Default::default() };
+    let out = crate::psd::build_txt2(&[(0, &styled("Line 1", style))], Some(&prev));
+    assert!(out.windows(6).any(|w| w == b"(0100)"), "{:?}", String::from_utf8_lossy(&out));
+    let runs = era_runs(&crate::psd::parse_txt2(&out).unwrap());
+    assert_eq!(runs.first().and_then(|(_, f)| f.get("FontSize")).and_then(E::as_f64), Some(24.0), "and the legacy copy was restyled");
+}
