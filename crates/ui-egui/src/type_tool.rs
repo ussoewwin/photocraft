@@ -1497,8 +1497,8 @@ fn overflow_port(app: &mut PhotocraftApp, painter: &egui::Painter, corner: Pos2)
     painter.rect_filled(rect.expand(1.0), 2.0, t.shadow);
     painter.rect_filled(rect, 2.0, t.card);
     painter.galley(rect.min + pad * 0.5, galley, t.text);
-    // The tooltip follows the pointer, so the frame that shows it needs a repaint to hide it.
-    ctx.request_repaint();
+    // No repaint here: the tooltip anchors at the port, a resting pointer draws it until it
+    // moves, and egui schedules the frame a movement hides it in.
 }
 
 /// The text caret, drawn in order: a white halo, then a solid black line inside it, so it reads on
