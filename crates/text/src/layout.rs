@@ -625,7 +625,7 @@ impl Layouter {
                     let piece = ptext.get(base..base + (z - a)).unwrap_or("");
                     let px = st.size_pt * k;
                     for (i, ch) in piece.char_indices() {
-                        if vertical_class(ch) == VClass::Rotate && !ch.is_whitespace() {
+                        if upright_roman(ch) && !ch.is_whitespace() {
                             roman.push(((base + i)..(base + i + ch.len_utf8()), st.tracking / 1000.0 * px, px, ri));
                         }
                     }
@@ -673,7 +673,7 @@ impl Layouter {
                         for (i, ch) in piece.char_indices() {
                             // Roman text stands upright too unless the run rotates it (#9470).
                             let cls = match vertical_class(ch) {
-                                VClass::Rotate if !st.rotate_roman => VClass::Upright,
+                                VClass::Rotate if !st.rotate_roman && upright_roman(ch) => VClass::Upright,
                                 cls => cls,
                             };
                             match seg {
@@ -1421,8 +1421,12 @@ struct TabWidth {
     width: f32,
 }
 
-/// The width of each tab (offsets `tabs` in the paragraph text) on the broken lines of `layout`,
-/// before kerning and alignment.
+/// Whether vertical type sets `c` upright when its style doesn't rotate roman text (#9470): the
+/// rotating class except half-width katakana and Hangul, which keep their rotated setting.
+fn upright_roman(c: char) -> bool {
+    vertical_class(c) == VClass::Rotate && !(0xFF61..=0xFFDC).contains(&(c as u32))
+}
+
 /// The shaped advance (px, letter spacing included) of the cluster starting each of `ranges`
 /// (sorted byte ranges of the shaped text), `None` where no cluster starts there.
 fn cluster_advances(layout: &Layout<RunBrush>, ranges: &[(Range<usize>, f32, f32, usize)]) -> Vec<Option<f32>> {
@@ -1442,6 +1446,8 @@ fn cluster_advances(layout: &Layout<RunBrush>, ranges: &[(Range<usize>, f32, f32
     out
 }
 
+/// The width of each tab (offsets `tabs` in the paragraph text) on the broken lines of `layout`,
+/// before kerning and alignment.
 fn tab_widths(layout: &Layout<RunBrush>, tabs: &[usize], styles: &[CharStyle], indent: f32, first_indent: f32, interval: f32) -> Vec<TabWidth> {
     let mut out: Vec<TabWidth> = tabs.iter().map(|_| TabWidth { advance: interval, scale: 1.0, width: interval }).collect();
     for (li, line) in layout.lines().enumerate() {

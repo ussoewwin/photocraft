@@ -102,6 +102,20 @@ fn latin_stands_upright_one_per_em_by_default() {
     assert!(up.rect.height() > turned.rect.height() + 50, "{:?} vs {:?}", up.rect, turned.rect);
 }
 
+/// CodeRabbit on #9478: half-width katakana and Hangul keep their rotated setting; only roman
+/// text stands upright by default (#9470 leaves CJK as it was).
+#[test]
+fn half_width_cjk_stays_rotated_beside_upright_roman() {
+    let mut e = TextEngine::new();
+    for text in ["ｱｲｳ", "ﾡﾢﾣ"] {
+        let l = e.layout(&vertical(text, "Inter", 24.0), 72.0);
+        assert!(!l.glyphs.is_empty());
+        assert!(l.glyphs.iter().all(|g| g.orient == GlyphOrient::Rotated), "{text}: {:?}", l.glyphs);
+    }
+    let l = e.layout(&vertical("A", "Inter", 24.0), 72.0);
+    assert!(l.glyphs.iter().all(|g| g.orient == GlyphOrient::Upright), "roman stays upright");
+}
+
 #[test]
 fn rotated_render_ink_is_taller_than_wide() {
     let mut e = TextEngine::new();
