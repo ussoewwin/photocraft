@@ -491,6 +491,11 @@ pub fn open(app: &mut PhotocraftApp, command: &str) -> Option<u64> {
     }
     restore_remembered(app, command, spec.params, &mut fields);
     apply_command_defaults(app, command, &mut fields);
+    if photocraft_engine::channel_cmds::follows_target(command)
+        && let Some(colors) = photocraft_engine::color_channels::selected(&app.session)
+    {
+        fields.insert("target".into(), colors.params());
+    }
     if crate::blur_pins::handles(command) {
         crate::blur_pins::init(app, &mut fields);
     }
@@ -579,6 +584,12 @@ pub fn open_with_spec(app: &mut PhotocraftApp, command: &str, label: &str, spec:
             _ => continue,
         };
         fields.insert(p.key, v);
+    }
+    if !fields.contains_key("target")
+        && !fields.contains_key("__smartFilter")
+        && let Some(colors) = photocraft_engine::color_channels::selected(&app.session).filter(|c| c.len() > 1)
+    {
+        fields.insert("target".into(), colors.params());
     }
     app.ui.open_dialog(crate::state::DialogKind::Command, fields)
 }
@@ -2866,5 +2877,33 @@ mod tests {
         let px = |x: i32| doc.layers[0].surface().unwrap().read_region(photocraft_geom::Rect::new(x, 5, x + 1, 6));
         assert!(px(2)[1] > 0.5, "near the point: shifted to green {:?}", px(2));
         assert!(px(38)[0] > 0.9 && px(38)[1] < 0.1, "far away: still red {:?}", px(38));
+    }
+}
+
+#[cfg(test)]
+mod multi_channel_dialog_tests {
+    use super::*;
+    #[test]
+    fn ordinary_filter_captures_the_set_and_preview_equals_confirmation() {
+        let mut session = photocraft_engine::Session::new();
+        session.execute("file.new", json!({"width":32,"height":24,"depth":16})).unwrap();
+        session
+            .edit("edge", |doc, id| {
+                doc.layer_mut(id.unwrap()).unwrap().surface_mut().unwrap().fill_rect(photocraft_geom::Rect::new(0, 0, 16, 24), &[0.2, 0.4, 0.6, 1.0]);
+                Ok(())
+            })
+            .unwrap();
+        session.execute("channel.target", json!({"colors":[0,2]})).unwrap();
+        let mut app = PhotocraftApp::new(session, Default::default());
+        let command = "filter.blur.gaussianBlur";
+        let id = open(&mut app, command).unwrap();
+        let params = params_of(&app.ui.dialog_mut(id).unwrap().fields);
+        assert_eq!(params["target"], json!({"colors":[0,2]}));
+        app.session.execute("channel.target", json!({"channel":"green"})).unwrap();
+        let st = app.session.active().unwrap();
+        let layer = st.active_layer.unwrap();
+        let preview = preview_document(&st.doc, Some(layer), command, &params, 1).unwrap();
+        app.session.execute(command, params).unwrap();
+        assert_eq!(preview.layer(layer).unwrap().surface(), app.session.active().unwrap().doc.layer(layer).unwrap().surface());
     }
 }

@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-25",
+  "cpu": "AMD Ryzen 7 9700X (8 cores / 16 threads)",
+  "compiler": "rustc 1.99.0",
+  "profile": "release (workspace defaults, thin LTO)",
+  "rayon_threads": 8,
+  "base_commit": "6719f1813e84e96129fc31676cc945d51be0e736",
+  "baseline_binary_sha256": "103b32f5aeeeef26e7554a1f8287a6b5bbeff32f7400280f4a7d34c3163a0f94",
+  "baseline_resources": "elapsed_seconds=14.81 peak_rss_kib=665344",
+  "candidate_binary_sha256": "91568e5215657c1127ab5cb330ebfadb6a1545687607b48c168370a2c5c8dc9c",
+  "candidate_resources": "elapsed_seconds=17.22 peak_rss_kib=700760",
+  "measurement_isolation": "Retained full-image, small-selection and one-pixel clipboard runs had no concurrent Rust compilation or engine/UI test processes. Interrupted runs were discarded and repeated.",
+  "baseline_harness_sha256": "d8503bfea031eb9da9689d2676c42f87190f201f12789e391621495ca2a1b289",
+  "candidate_harness_sha256": "28f1d433f20a72e97069521362899d0b6d724eed5788cb612eb70e20113d0ec7",
+  "candidate_region_resources": "elapsed_seconds=3.03 peak_rss_kib=442288",
+  "candidate_clipboard_resources": "elapsed_seconds=0.10 peak_rss_kib=213892"
+}

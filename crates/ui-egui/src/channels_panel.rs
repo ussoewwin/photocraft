@@ -107,7 +107,7 @@ pub fn show(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                     1 + k,
                     Some(3 + k),
                     view.color_visible(k) && !gray_view,
-                    (view.target == ChannelTarget::Composite && !quick && !mask_targeted) || view.target == ChannelTarget::Color(k),
+                    (view.target == ChannelTarget::Composite && !quick && !mask_targeted) || view.color_selection(colors).is_some_and(|c| c.contains(k)),
                 ),
                 Row::Alpha(i) => (
                     doc.channels[i].name.clone(),
@@ -214,7 +214,7 @@ pub fn show(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                         mask_click = Some(false);
                     }
                     let target = if row == Row::QuickMask { json!("composite") } else { row.reference() };
-                    actions.push(("channel.target".into(), json!({ "channel": target })));
+                    actions.push(("channel.target".into(), json!({ "channel": target, "extend": m.shift && matches!(row, Row::Color(_)) })));
                 }
             }
             // Like Photoshop: double-clicking the thumbnail opens Channel Options (where an alpha

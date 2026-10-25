@@ -461,6 +461,18 @@ fn new_adjustment(s: &mut Session, adj: Adjustment, p: &Value, cmd: &str) -> Res
 
 /// Apply `adj` in place to the targeted layer mask, the targeted alpha channel or Quick Mask, or else the active layer's pixels, as one history step named `label`.
 fn destructive_adjust(s: &mut Session, label: &str, adj: Adjustment, p: &Value) -> Result<Value> {
+    if let Some(colors) = crate::color_channels::target(s, p)? {
+        let id = layer_param(s, p)?;
+        return s.edit(label, |doc, _| {
+            let bounds = doc.bounds();
+            let selection = doc.selection.clone();
+            let surf = paint_surface(doc, id, p)?;
+            let extent = bounds.union(&surf.content_bounds());
+            crate::color_channels::adjust(surf, colors, &adj, selection.as_ref(), extent)?;
+            Ok(Value::Null)
+        });
+    }
+
     if is_mask_target(p) {
         // The targeted layer mask (#780): ⌘I inverts it, as in Photoshop.
         let id = layer_param(s, &Value::Null)?;
@@ -615,14 +627,26 @@ fn build() -> Vec<CommandSpec> {
         cmd!("edit.clear", "Clear", ["Edit"], Some("Delete"), "{} (a targeted channel or Quick Mask is cleared alone)", has_pixel_or_channel, |s, p| {
             let bg = s.tools.background;
             // A targeted alpha channel or Quick Mask is filled instead (#2734).
-            if let Some(t) = crate::channel_cmds::targeted_channel(s) {
+            let channel = if crate::channel_cmds::is_channel_target(p) {
+                Some(p.clone())
+            } else if p.get("target").is_none() {
+                crate::channel_cmds::targeted_channel(s)
+            } else {
+                None
+            };
+            if let Some(t) = channel {
                 s.edit("Clear", |doc, _| crate::channel_cmds::clear_channel(doc, &t, bg))?;
                 return Ok(Value::Null);
             }
             let id = layer_param(s, p)?;
             // A targeted colour channel clears that channel only (#2720).
-            if let Some(k) = crate::channel_cmds::targeted_color(s) {
-                s.edit("Clear", |doc, _| crate::channel_cmds::clear_color_channel(doc, id, k, bg))?;
+            if let Some(colors) = crate::color_channels::target(s, p)? {
+                s.edit("Clear", |doc, _| {
+                    for k in colors.indices() {
+                        crate::channel_cmds::clear_color_channel(doc, id, k, bg)?;
+                    }
+                    Ok(())
+                })?;
                 return Ok(Value::Null);
             }
             s.edit("Clear", |doc, _| {
@@ -1476,6 +1500,13 @@ fn build() -> Vec<CommandSpec> {
                         };
                         crate::adjust_params::from_params(&kind, &tone, None, adjust_mode(s, p))?
                     }
+                };
+                let adj = if matches!(kind.as_str(), "levels" | "curves")
+                    && let Some(colors) = crate::color_channels::target(s, p)?
+                {
+                    crate::color_channels::tone_adjustment(&kind, p, adj, doc_mode(s), colors)?
+                } else {
+                    adj
                 };
                 let label = adj.label().to_string();
                 // A smart object records the adjustment as a smart filter (Photoshop), which

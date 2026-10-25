@@ -22,6 +22,8 @@ pub(crate) use paste_target;
 /// Pixels on the session clipboard, with where they came from (for Paste in Place).
 #[derive(Clone, Debug)]
 pub struct Clip {
+    /// Native colour indices for a multi-component clip, in channel order. Singletons are grayscale.
+    pub components: Option<Vec<usize>>,
     pub surface: Surface,
     pub bounds: Rect,
     /// The copied layer itself, when Copy took a whole layer that Paste should recreate rather
@@ -195,7 +197,7 @@ fn lift(src: &Surface, sel: Option<&Surface>, canvas: Rect) -> Result<Clip> {
     };
     let mut out = Surface::new(with_alpha);
     if area.is_empty() {
-        return Ok(Clip { surface: out, bounds: Rect::EMPTY, layers: None, resolution: None });
+        return Ok(Clip { components: None, surface: out, bounds: Rect::EMPTY, layers: None, resolution: None });
     }
     // Only the selected area is read: converting the whole layer (a 24 MP Background gaining
     // alpha) cost about a second per Layer via Copy (#668).
@@ -217,7 +219,7 @@ fn lift(src: &Surface, sel: Option<&Surface>, canvas: Rect) -> Result<Clip> {
     out.put_tiles(shared);
     out.prune();
     let bounds = out.content_bounds();
-    Ok(Clip { surface: out, bounds, layers: None, resolution: None })
+    Ok(Clip { components: None, surface: out, bounds, layers: None, resolution: None })
 }
 
 /// [`lift`] over one rectangle: `src`'s pixels with alpha (`n` channels), the selection
@@ -278,7 +280,7 @@ fn copy(s: &mut Session, merged: bool) -> Result<Value> {
             copy_linked_sources(&d.doc, copies)?;
         }
         match (d.doc.layer(id).and_then(Layer::surface).filter(|_| several.is_empty()), &layers) {
-            (Some(surf), _) => Clip { layers, ..lift(surf, d.doc.selection.as_ref(), canvas)? },
+            (Some(surf), _) => Clip { components: None, layers, ..lift(surf, d.doc.selection.as_ref(), canvas)? },
             // A group or fill layer has no pixels of its own: the clipboard pixels are what it
             // shows. Adjustment layers show nothing by themselves, so their clip spans the canvas
             // they apply to: Paste places them as a full-canvas layer, and the UI still mirrors
@@ -290,7 +292,7 @@ fn copy(s: &mut Session, merged: bool) -> Result<Value> {
                 }
                 let clip = lift(&merged_surface(&shown), None, canvas)?;
                 let bounds = if clip.bounds.is_empty() { canvas } else { clip.bounds };
-                Clip { layers, bounds, ..clip }
+                Clip { components: None, layers, bounds, ..clip }
             }
             (None, None) => return Err(EngineError::Other("the active layer has no pixels".into())),
         }
@@ -299,7 +301,7 @@ fn copy(s: &mut Session, merged: bool) -> Result<Value> {
         return Err(EngineError::Other("Could not copy: the selected area is empty".into()));
     }
     let b = clip.bounds;
-    let clip = Clip { resolution: Some(d.doc.resolution_dpi), ..clip };
+    let clip = Clip { components: None, resolution: Some(d.doc.resolution_dpi), ..clip };
     s.clipboard = Some(clip);
     Ok(json!({"bounds": [b.x0, b.y0, b.width(), b.height()]}))
 }
@@ -343,7 +345,7 @@ fn copy_mask(s: &mut Session) -> Result<Value> {
     }
     let b = bounds;
     let resolution = Some(d.doc.resolution_dpi);
-    s.clipboard = Some(Clip { surface, bounds: b, layers: None, resolution });
+    s.clipboard = Some(Clip { components: None, surface, bounds: b, layers: None, resolution });
     Ok(json!({"bounds": [b.x0, b.y0, b.width(), b.height()], "target": "mask"}))
 }
 
@@ -380,6 +382,9 @@ fn paste(s: &mut Session, p: &Value, in_place: bool) -> Result<Value> {
     };
     if crate::channel_cmds::target_of(p) != crate::channel_cmds::Target::Pixels {
         return paste_to_target(s, p, in_place, None, "Paste");
+    }
+    if let Some(colors) = crate::color_channels::target(s, p)?.filter(|c| c.len() > 1 || p.get("target").is_some() || clip.components.is_some()) {
+        return crate::channel_clip::paste_colors(s, p, colors, in_place, None, "Paste");
     }
     // A targeted colour channel takes the paste instead of a new layer (#2307).
     if let Some(k) = crate::channel_clip::paste_color_target(s, p) {
@@ -979,8 +984,22 @@ pub fn specs() -> Vec<CommandSpec> {
     vec![
         spec!("edit.cut", "Cut", &["Edit"], Some("Cmd+X"), "{} (a targeted colour channel cuts that channel only)", has_pixels, |s, p| {
             // Refuse a locked layer before copying, so a refused Cut leaves the clipboard alone.
-            let id = active_id(s)?;
+            let colors = crate::color_channels::target(s, p)?.filter(|c| c.len() > 1 || p.get("target").is_some() || p.get("layer").is_some());
+            // Composite Cut retains Copy's active-layer semantics. A native colour target uses
+            // the same resolved destination for both the copied planes and the cleared samples.
+            let id = if colors.is_some() { crate::commands::layer_param(s, p)? } else { active_id(s)? };
             crate::commands::check_pixels_unlocked(&s.active().ok_or(EngineError::NoDocument)?.doc, id)?;
+            if let Some(colors) = colors {
+                let result = crate::channel_clip::copy_colors(s, p, colors)?;
+                let bg = s.tools.background;
+                s.edit("Cut Pixels", |doc, _| {
+                    for k in colors.indices() {
+                        crate::channel_cmds::clear_color_channel(doc, id, k, bg)?;
+                    }
+                    Ok(())
+                })?;
+                return Ok(result);
+            }
             // A targeted colour channel cuts that channel only (#2698).
             if let Some(k) = crate::channel_clip::paste_color_target(s, p) {
                 return crate::channel_clip::cut(s, id, k);
@@ -1001,7 +1020,7 @@ pub fn specs() -> Vec<CommandSpec> {
                 if crate::commands::is_mask_target(p) {
                     return copy_mask(s);
                 }
-                match crate::channel_clip::copy(s)? {
+                match crate::channel_clip::copy(s, p)? {
                     Some(r) => Ok(r),
                     None => copy(s, false),
                 }
@@ -1121,7 +1140,7 @@ mod tests {
         let mut s = Session::new();
         let mut surface = Surface::new(PixelFormat::RGBA8);
         surface.write_pixel(i32::MIN, 0, &[1.0, 0.0, 0.0, 1.0]);
-        s.clipboard = Some(Clip { surface, bounds: Rect::from_xywh(i32::MIN, 0, 1, 1), layers: None, resolution: None });
+        s.clipboard = Some(Clip { components: None, surface, bounds: Rect::from_xywh(i32::MIN, 0, 1, 1), layers: None, resolution: None });
         let result = new_from_clipboard(&mut s);
         assert!(result.unwrap_err().to_string().contains("clipboard origin"));
         assert!(s.execute("file.newFromClipboard", json!({})).is_err());
@@ -1132,11 +1151,17 @@ mod tests {
     #[test]
     fn paste_centers_clipboard_bounds_near_coordinate_limits() {
         for origin in [i32::MAX - 512, i32::MIN + 512] {
-            let clip = Clip { surface: Surface::new(PixelFormat::RGBA8), bounds: Rect::from_xywh(origin, origin, 2, 2), layers: None, resolution: None };
+            let clip = Clip {
+                components: None,
+                surface: Surface::new(PixelFormat::RGBA8),
+                bounds: Rect::from_xywh(origin, origin, 2, 2),
+                layers: None,
+                resolution: None,
+            };
             let (dx, dy) = paste_offset(&clip, Rect::new(0, 0, 20, 20), &json!({}), false);
             assert_eq!(i64::from(origin) + i64::from(dx), 9);
             assert_eq!(i64::from(origin) + i64::from(dy), 9);
-            let clip = Clip { bounds: Rect::new(0, 0, 2, 2), ..clip };
+            let clip = Clip { components: None, bounds: Rect::new(0, 0, 2, 2), ..clip };
             let (dx, dy) = paste_offset(&clip, Rect::from_xywh(origin, origin, 20, 20), &json!({}), false);
             assert_eq!(dx, origin + 9);
             assert_eq!(dy, origin + 9);
@@ -1314,7 +1339,7 @@ mod tests {
         s.execute("file.new", json!({"width": w, "height": h})).unwrap();
         let mut surface = Surface::new(PixelFormat::RGBA8);
         surface.fill_rect(Rect::new(0, 0, cw, ch), &[1.0, 0.0, 0.0, 1.0]);
-        s.clipboard = Some(Clip { surface, bounds: Rect::new(0, 0, cw, ch), layers: None, resolution: None });
+        s.clipboard = Some(Clip { components: None, surface, bounds: Rect::new(0, 0, cw, ch), layers: None, resolution: None });
         s
     }
 
@@ -1371,6 +1396,7 @@ mod tests {
         assert_eq!(clamp_shift(f64::NEG_INFINITY, i32::MIN, i32::MAX, 0, 1), i32::MAX);
         assert_eq!(clamp_shift(1e30, i32::MIN, i32::MIN + 1, i32::MAX - 1, i32::MAX), i32::MAX);
         let clip = Clip {
+            components: None,
             surface: Surface::new(PixelFormat::RGBA8),
             bounds: Rect::new(i32::MAX - 2, i32::MAX - 2, i32::MAX, i32::MAX),
             layers: None,
@@ -2471,13 +2497,13 @@ mod tests {
         };
         let mut out = Surface::new(with_alpha);
         if area.is_empty() {
-            return Clip { surface: out, bounds: Rect::EMPTY, layers: None, resolution: None };
+            return Clip { components: None, surface: out, bounds: Rect::EMPTY, layers: None, resolution: None };
         }
         let px = lift_region(src, sel, area, with_alpha.channels()).unwrap();
         out.try_write_region(area, &px).unwrap();
         out.prune();
         let bounds = out.content_bounds();
-        Clip { surface: out, bounds, layers: None, resolution: None }
+        Clip { components: None, surface: out, bounds, layers: None, resolution: None }
     }
 
     fn noise(fmt: PixelFormat, r: Rect, seed: u32) -> Surface {

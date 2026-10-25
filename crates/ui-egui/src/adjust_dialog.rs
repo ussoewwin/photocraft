@@ -73,7 +73,7 @@ pub fn sample_at(app: &mut PhotocraftApp, x: f64, y: f64) -> bool {
     let Some(dialog) = app.ui.dialog_mut(id) else { return true };
     dialog.fields.insert(CURVE_PICKER_BASE.into(), base);
     if let Value::Object(params) = params {
-        dialog.fields.retain(|key, _| key.starts_with("__"));
+        dialog.fields.retain(|key, _| key.starts_with("__") || key == "target");
         dialog.fields.extend(params);
     }
     true
@@ -106,13 +106,31 @@ pub fn add_point_at(app: &mut PhotocraftApp, ctx: &egui::Context, x: f64, y: f64
         return true;
     }
     // A mask, saved channel or Quick Mask holds its own gray levels, not the composite's.
-    let isolated = isolated(app);
+    let isolated = if values.get("target").is_some() {
+        app.session
+            .active()
+            .and_then(|st| {
+                photocraft_engine::color_channels::explicit(&values, photocraft_engine::channel_cmds::color_count(&st.doc))
+                    .ok()
+                    .flatten()
+                    .and_then(|colors| photocraft_engine::channel_cmds::curve_channel_for_colors(&st.doc, colors))
+            })
+            .or_else(|| isolated(app))
+    } else {
+        isolated(app)
+    };
     if isolated.as_ref().is_some_and(|c| c.gray.is_some()) {
         return true;
     }
     let Some(sample) = crate::canvas::composite_color(app, x, y) else { return true };
     let gray = adjust_editors::is_gray(mode);
     let (shown, shown_key) = match &isolated {
+        Some(c) if c.components.is_some() => {
+            let ch: usize = ctx.data(|d| d.get_temp(dialog_mem("curves").with("curves-ch"))).unwrap_or(0);
+            let keys = photocraft_engine::adjust_params::channel_keys(adjust_editors::space_of(&values));
+            let key = ch.checked_sub(1).and_then(|i| c.components.and_then(|colors| colors.indices().nth(i))).and_then(|i| keys.get(i)).copied().unwrap_or("");
+            (ch, key)
+        }
         Some(c) => (0, c.key),
         None => {
             let ch: usize = ctx.data(|d| d.get_temp(dialog_mem("curves").with("curves-ch"))).unwrap_or(0);
@@ -164,7 +182,7 @@ pub fn add_point_at(app: &mut PhotocraftApp, ctx: &egui::Context, x: f64, y: f64
         && let Some(dialog) = app.ui.dialog_mut(id)
         && let Value::Object(v) = values
     {
-        dialog.fields.retain(|k, _| k.starts_with("__"));
+        dialog.fields.retain(|k, _| k.starts_with("__") || k == "target");
         dialog.fields.extend(v);
         if picker(dialog.fields.get(CURVE_PICKER)).is_some() {
             let base = crate::filter_dialog::params_of(&dialog.fields);
@@ -247,7 +265,7 @@ pub fn reset(app: &PhotocraftApp, ctx: &egui::Context, fields: &mut Map<String, 
     let Ok(defaults) = photocraft_engine::adjust_params::default_for(&kind, mode) else { return };
     let values = photocraft_engine::adjust_params::to_params(&defaults);
     // Replace parameter keys; keep private `__` chrome (preview, command, …).
-    fields.retain(|k, _| k.starts_with("__"));
+    fields.retain(|k, _| k.starts_with("__") || k == "target");
     if let Value::Object(v) = values {
         fields.extend(v);
     }
@@ -276,6 +294,9 @@ pub fn open(app: &mut PhotocraftApp, command: &str) -> Option<u64> {
     if let Value::Object(p) = photocraft_engine::adjust_params::to_params(&defaults) {
         fields.extend(p);
     }
+    if let Some(colors) = photocraft_engine::color_channels::selected(&app.session) {
+        fields.insert("target".into(), colors.params());
+    }
     Some(app.ui.open_dialog(crate::state::DialogKind::Command, fields))
 }
 
@@ -288,8 +309,26 @@ pub fn open_last(app: &mut PhotocraftApp, command: &str) -> Option<u64> {
     let mode = curve_mode(app, kind);
     let Some(last) = app.session.prefs().dialogs.get(command).cloned() else { return Some(id) };
     let Ok(adjustment) = photocraft_engine::adjust_params::from_params(kind, &last, None, mode) else { return Some(id) };
-    if let (Some(dialog), Value::Object(values)) = (app.ui.dialog_mut(id), photocraft_engine::adjust_params::to_params(&adjustment)) {
-        dialog.fields.retain(|k, _| k.starts_with("__"));
+    let mut restored = photocraft_engine::adjust_params::to_params(&adjustment);
+    if mode == photocraft_doc::ColorMode::Lab
+        && matches!(kind, "levels" | "curves")
+        && photocraft_engine::color_channels::selected(&app.session).is_some_and(|c| c.len() > 1)
+    {
+        // The parser validates all records, but ordinary Lab serialization aliases the master
+        // to Lightness. A partial set keeps the separately saved combined record.
+        let neutral = photocraft_engine::adjust_params::default_for(kind, photocraft_doc::ColorMode::Grayscale)
+            .ok()
+            .map(|a| photocraft_engine::adjust_params::to_params(&a))
+            .unwrap_or(Value::Null);
+        let combined = if last.get("__combinedLab").and_then(Value::as_bool) == Some(true) { &last } else { &neutral };
+        for key in ["points", "inBlack", "inWhite", "gamma", "outBlack", "outWhite"] {
+            if let Some(value) = combined.get(key) {
+                restored[key] = value.clone();
+            }
+        }
+    }
+    if let (Some(dialog), Value::Object(values)) = (app.ui.dialog_mut(id), restored) {
+        dialog.fields.retain(|k, _| k.starts_with("__") || k == "target");
         dialog.fields.extend(values);
     }
     Some(id)
@@ -302,7 +341,16 @@ pub(crate) fn remember(app: &mut PhotocraftApp, fields: &Map<String, Value>) {
         return;
     }
     let Some(command) = fields.get("__command").and_then(Value::as_str).filter(|c| has_dialog(c)) else { return };
-    let values = crate::filter_dialog::params_of(fields);
+    let mut values = crate::filter_dialog::params_of(fields);
+    if let Some(o) = values.as_object_mut() {
+        o.remove("target");
+    }
+    if app.session.active().is_some_and(|st| st.doc.mode == photocraft_doc::ColorMode::Lab)
+        && photocraft_engine::color_channels::explicit(&crate::filter_dialog::params_of(fields), 3).ok().flatten().is_some_and(|c| c.len() > 1)
+        && matches!(command.strip_prefix(PREFIX), Some("levels" | "curves"))
+    {
+        values["__combinedLab"] = json!(true);
+    }
     app.session.prefs.edit(|prefs| prefs.dialogs.insert(command.into(), values));
 }
 
@@ -336,7 +384,19 @@ pub fn body(app: &mut PhotocraftApp, ui: &mut egui::Ui, fields: &mut Map<String,
         .and_then(Value::as_u64)
         .map(photocraft_doc::LayerId)
         .or_else(|| app.session.active().and_then(|s| s.active_layer));
-    let isolated_curve = isolated(app);
+    let isolated_curve = if fields.contains_key("__smartFilter") {
+        None
+    } else if fields.contains_key("target") {
+        app.session.active().and_then(|st| {
+            photocraft_engine::color_channels::explicit(&crate::filter_dialog::params_of(fields), photocraft_engine::channel_cmds::color_count(&st.doc))
+                .ok()
+                .flatten()
+                .and_then(|colors| photocraft_engine::channel_cmds::curve_channel_for_colors(&st.doc, colors))
+                .or_else(|| isolated(app))
+        })
+    } else {
+        isolated(app)
+    };
     // Only Curves gets an isolated single-channel target here; Levels keeps its usual fields.
     let gray_plane = (kind == "curves").then(|| isolated_curve.as_ref().and_then(|c| c.gray)).flatten();
     let gray = gray_plane.is_some() || app.session.active().is_some_and(|s| adjust_editors::is_gray(s.doc.mode));
@@ -346,7 +406,13 @@ pub fn body(app: &mut PhotocraftApp, ui: &mut egui::Ui, fields: &mut Map<String,
             // describes it, not the colour layers beneath (#5335).
             let source = match gray_plane {
                 Some(surface) => HistSource::Channel { layer: id, surface },
-                None => HistSource::Layer(id),
+                None => {
+                    if let Some(colors) = isolated_curve.as_ref().and_then(|c| c.components) {
+                        HistSource::Colors { layer: id, colors }
+                    } else {
+                        HistSource::Layer(id)
+                    }
+                }
             };
             Some(tone::histograms(app, source, adjust_editors::space_of(&values)))
         }
@@ -370,7 +436,7 @@ pub fn body(app: &mut PhotocraftApp, ui: &mut egui::Ui, fields: &mut Map<String,
         && let Value::Object(v) = values
     {
         // Replace the parameter keys (an editor may remove one), keep the private ones.
-        fields.retain(|k, _| k.starts_with("__"));
+        fields.retain(|k, _| k.starts_with("__") || k == "target");
         fields.extend(v);
         if picker(fields.get(CURVE_PICKER)).is_some() {
             let base = crate::filter_dialog::params_of(fields);
@@ -1209,5 +1275,27 @@ mod tests {
     /// The Channel popup's selected value (its option labels are what it shows).
     fn popup_channels(h: &mut Harness<'static, PhotocraftApp>) -> Vec<String> {
         h.query_all_by_role(egui::accesskit::Role::ComboBox).filter_map(|n| n.value().map(|s| s.to_string())).collect()
+    }
+    #[test]
+    fn lab_subset_recall_preserves_combined_record_beside_native_lightness() {
+        for kind in ["levels", "curves"] {
+            let mut app = app_with_image();
+            app.run("file.new", json!({"width":32,"height":24,"mode":"lab","depth":16})).unwrap();
+            app.run("channel.target", json!({"colors":[0,2]})).unwrap();
+            let command = format!("image.adjustments.{kind}");
+            let id = open(&mut app, &command).unwrap();
+            let dialog = app.ui.dialog_mut(id).unwrap();
+            let (key, combined) = if kind == "curves" { ("points", json!([[0, 0], [100, 170], [255, 255]])) } else { ("gamma", json!(1.7)) };
+            dialog.fields.insert(key.into(), combined.clone());
+            let fields = dialog.fields.clone();
+            let lightness = fields["lightness"].clone();
+            remember(&mut app, &fields);
+            app.ui.dialogs.clear();
+            let id = open_last(&mut app, &command).unwrap();
+            let fields = &app.ui.dialog_mut(id).unwrap().fields;
+            assert_eq!(fields[key], combined);
+            assert_eq!(fields["lightness"], lightness);
+            assert_eq!(fields["target"], json!({"colors":[0,2]}));
+        }
     }
 }
