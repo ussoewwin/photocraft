@@ -226,11 +226,7 @@ pub fn crop_rows(menu: &CanvasToolMenu) -> Vec<Option<(String, String)>> {
 /// The rows of an open menu as owned labels and ids: [`rows`] for the static menus, [`crop_rows`]
 /// for the crop menu with its saved presets.
 pub fn menu_rows(menu: &CanvasToolMenu) -> Vec<Option<(String, String)>> {
-    if menu.crop {
-        crop_rows(menu)
-    } else {
-        rows(menu).iter().map(|r| r.map(|(l, id)| (l.to_string(), id.to_string()))).collect()
-    }
+    if menu.crop { crop_rows(menu) } else { rows(menu).iter().map(|r| r.map(|(l, id)| (l.to_string(), id.to_string()))).collect() }
 }
 
 /// The pasteboard colours in the menu's order, which Space+F steps through.
@@ -800,22 +796,21 @@ pub fn open_at(app: &mut PhotocraftApp, ctx: &Context, tool: Tool, pos: [f32; 2]
     let has_path = crate::vector_ui::active_path_name(app).is_some() || app.ui.pen.as_ref().is_some_and(|p| p.knots.len() >= 2);
     let path_name = crate::vector_ui::active_path_name(app);
     let spelling = if text { doc.and_then(|d| spelling_at(app, d)) } else { None };
-    app.ui.canvas_tool_menu =
-        Some(CanvasToolMenu {
-            pos,
-            tool,
-            has_selection,
-            has_path,
-            path_name,
-            transform: false,
-            pasteboard: false,
-            anchor: None,
-            text,
-            guide: false,
-            spelling,
-            crop: false,
-            crop_presets: Vec::new(),
-        });
+    app.ui.canvas_tool_menu = Some(CanvasToolMenu {
+        pos,
+        tool,
+        has_selection,
+        has_path,
+        path_name,
+        transform: false,
+        pasteboard: false,
+        anchor: None,
+        text,
+        guide: false,
+        spelling,
+        crop: false,
+        crop_presets: Vec::new(),
+    });
     crate::canvas_popup::mark_open(ctx, menu_id());
     true
 }
