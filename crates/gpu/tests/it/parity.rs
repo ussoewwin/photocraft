@@ -651,6 +651,18 @@ fn special_eight_fill_on_adjustment_layers_matches_cpu() {
             l.fill_opacity = fill;
             d.layers.push(l);
             check(&mut g, &d, &format!("adjustment {mode:?} fill {fill}"));
+            // CodeRabbit on #9512: clipped to a pixel layer, the adjustment takes Fill as
+            // coverage on both paths (compose's clipped branch, the planner's `atop`).
+            let mut d = base_doc(64, 48);
+            d.layers[0] = noise_layer("bg", PixelFormat::RGBA8, Rect::from_xywh(0, 0, 64, 48), 5, 1.0);
+            d.layers.push(noise_layer("base", PixelFormat::RGBA8, Rect::from_xywh(8, 6, 40, 30), 9, 1.0));
+            let mut l = Layer::new("invert", LayerContent::Adjustment(Adjustment::Invert));
+            l.blend = mode;
+            l.opacity = 0.7;
+            l.fill_opacity = fill;
+            l.clipped = true;
+            d.layers.push(l);
+            check(&mut g, &d, &format!("clipped adjustment {mode:?} fill {fill}"));
         }
     }
 }

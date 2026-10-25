@@ -999,7 +999,9 @@ impl<'a> Planner<'a> {
             p.a = Some(before);
             p.b = Some(adjusted);
             p.mode = layer.blend;
-            (p.opacity, p.fill) = adjustment_fill(layer, opacity);
+            // Clipped, an adjustment takes Fill as coverage in every mode, as compose's clipped
+            // branch (`composite_atop`) does.
+            (p.opacity, p.fill) = (opacity, 1.0);
             p.mask = self.mask_use(layer);
             return Ok(self.emit(p));
         }
