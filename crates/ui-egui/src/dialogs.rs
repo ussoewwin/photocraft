@@ -503,7 +503,12 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
                 DialogKind::Command if crate::new_guide_ui::owns(&fields) => crate::new_guide_ui::body(ui, &mut fields),
                 DialogKind::Command if fields.contains_key("__form") => crate::view_cmds::form_body(ui, &mut fields),
                 DialogKind::Command => {}
-                DialogKind::LayerStyle => crate::layer_style::body(app, ui, &mut fields),
+                DialogKind::LayerStyle => {
+                    // Bevel & Emboss is taller than a small window: the pages scroll, as a long
+                    // filter dialog does, so OK and Cancel stay on screen (#9515).
+                    let room = (ctx.content_rect().height() - DIALOG_CHROME).max(120.0);
+                    egui::ScrollArea::vertical().id_salt(id.with("body")).max_height(room).show(ui, |ui| crate::layer_style::body(app, ui, &mut fields));
+                }
                 DialogKind::Error => {
                     ui.label(fields.get("message").and_then(Value::as_str).unwrap_or("Error"));
                 }
@@ -1164,6 +1169,25 @@ mod tests {
             h.hover_at(margin);
             h.run_steps(1);
             assert!(free_pointer_over(&h.ctx, egui::Rect::from_min_size(egui::Pos2::ZERO, size)).is_none());
+        }
+    }
+
+    /// #9515: Bevel & Emboss is taller than a small window (1435 × 858, the reporter's): its page
+    /// scrolls, so OK and Cancel stay on screen.
+    #[test]
+    fn layer_style_buttons_stay_on_a_short_window() {
+        use egui_kittest::{Harness, kittest::Queryable};
+
+        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", serde_json::json!({"width": 64, "height": 64})).unwrap();
+        app.run("layer.new.layer", serde_json::json!({})).unwrap();
+        let mut h = Harness::builder().with_size(egui::vec2(1435.0, 858.0)).build_ui_state(|ui, app| show(app, ui.ctx()), app);
+        PhotocraftApp::setup_context(&h.ctx, crate::theme::ThemeKind::ALL[0]);
+        crate::layer_style::open(h.state_mut(), Some("bevelEmboss")).unwrap();
+        h.run_steps(4);
+        for label in ["OK", "Cancel"] {
+            let r = h.get_by_label(label).rect();
+            assert!(r.bottom() <= 858.0, "{label} is off the window: {r:?}");
         }
     }
 
