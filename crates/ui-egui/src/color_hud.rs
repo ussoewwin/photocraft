@@ -45,6 +45,10 @@ pub struct Hud {
     /// Begun by a real right-press: it ends when the right button comes up. One opened through
     /// the control channel ends with its Up event instead.
     pub hold: bool,
+    /// The gesture has just opened: near a screen edge the clamped HUD can sit under the still
+    /// pointer, so hover picking waits until the pointer moves from the anchor.
+    #[serde(default)]
+    pub just_opened: bool,
 }
 
 pub(crate) fn hud_id() -> egui::Id {
@@ -62,7 +66,7 @@ pub fn open(app: &mut PhotocraftApp, at: [f32; 2], hold: bool) {
     static KEY: AtomicU64 = AtomicU64::new(0);
     let fg = app.session.tools.foreground;
     let hsv = rgb_to_hsb([fg[0], fg[1], fg[2]]);
-    app.ui.color_hud = Some(Hud { anchor: at, hsv: [hsv[0], hsv[1], hsv[2]], start: fg, key: KEY.fetch_add(1, Ordering::Relaxed), hold });
+    app.ui.color_hud = Some(Hud { anchor: at, hsv: [hsv[0], hsv[1], hsv[2]], start: fg, key: KEY.fetch_add(1, Ordering::Relaxed), hold, just_opened: true });
 }
 
 /// Close the HUD, keeping the picked colour.
@@ -199,7 +203,14 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
             .inner
     });
     let (strip, square) = area.inner;
-    if let Some(p) = hover
+    // Near a screen edge the clamped HUD can appear under the stationary pointer: picking starts
+    // only once the pointer has moved from where the gesture began, so the opening press alone
+    // never changes the colour.
+    if hud.just_opened && hover.is_some_and(|p| p != egui::pos2(hud.anchor[0], hud.anchor[1])) {
+        hud.just_opened = false;
+    }
+    if !hud.just_opened
+        && let Some(p) = hover
         && let Some(new) = pick_at(hud.hsv, strip, square, p)
         && new != hud.hsv
     {
@@ -236,8 +247,12 @@ mod tests {
     const SHIFT_ALT: Modifiers = Modifiers { alt: true, ctrl: false, shift: true, mac_cmd: false, command: false };
 
     fn harness() -> Harness<'static, PhotocraftApp> {
+        harness_size(400, 300)
+    }
+
+    fn harness_size(width: u32, height: u32) -> Harness<'static, PhotocraftApp> {
         let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), Default::default());
-        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        app.run("file.new", json!({"width": width, "height": height})).unwrap();
         app.run("tools.setColors", json!({"foreground": "#0000ff"})).unwrap();
         app.ui.tool = Tool::Brush;
         app.sync_views();
@@ -295,6 +310,28 @@ mod tests {
         assert!(square.right() < h.ctx.content_rect().right());
         // Nothing painted.
         assert!(!h.state().session.journal.iter().any(|(id, _)| id == "paint.stroke"));
+    }
+
+    /// A press near the bottom-right edge clamps the HUD under the still pointer: the opening
+    /// press alone must not pick — the colour changes only once the pointer moves (#6098).
+    #[test]
+    fn a_hud_clamped_under_the_still_pointer_picks_nothing_until_it_moves() {
+        let mut h = harness_size(1200, 800);
+        let near = egui::pos2(h.state().last_canvas_rect.max.x - 10.0, h.state().last_canvas_rect.max.y - 10.0);
+        h.event(egui::Event::PointerMoved(near));
+        h.run_steps(1);
+        button(&mut h, near, true, SHIFT_ALT);
+        assert!(h.state().ui.color_hud.is_some_and(|hud| hud.just_opened), "the HUD opened under the pointer");
+        let (_strip, square) = rects(&h);
+        assert!(square.contains(near), "the clamped HUD sits under the pointer: {near:?} in {square:?}");
+        h.run_steps(4);
+        assert_eq!(foreground(&h), [0.0, 0.0, 1.0, 1.0], "the stationary opening pointer picks nothing");
+        // Moving inside the HUD now picks, as during any other gesture.
+        let to = square.min + vec2(1.0, square.height() - 1.0);
+        h.event(egui::Event::PointerMoved(to));
+        h.run_steps(2);
+        assert_ne!(foreground(&h), [0.0, 0.0, 1.0, 1.0], "the move picks");
+        button(&mut h, to, false, SHIFT_ALT);
     }
 
     #[test]
