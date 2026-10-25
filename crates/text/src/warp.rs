@@ -110,6 +110,20 @@ impl Warp {
         Some(if frame.closed { (offset - frame.text_start).rem_euclid(frame.length()) + frame.text_start } else { offset })
     }
 
+    /// Caret hit testing in the occupied text interval. In a closed path's unused gap,
+    /// choose the nearer endpoint along the path instead of always choosing the last caret.
+    pub fn path_text_x_near_text(&self, x: f64, y: f64, text_end: f64) -> Option<f64> {
+        let offset = self.path_text_x(x, y)?;
+        let Kind::Path(frame) = &self.0 else { return None };
+        if frame.closed && text_end.is_finite() && offset > text_end {
+            let previous = offset - frame.length();
+            if frame.text_start - previous < offset - text_end {
+                return Some(previous);
+            }
+        }
+        Some(offset)
+    }
+
     /// Longest segment (text-space px) worth sending through [`Warp::apply`] unsplit.
     pub fn max_segment(&self) -> f64 {
         match &self.0 {

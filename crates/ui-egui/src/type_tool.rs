@@ -196,7 +196,7 @@ pub(crate) fn offset_at(app: &mut PhotocraftApp, id: LayerId, x: f64, y: f64) ->
     let (tx, ty) = shape
         .as_ref()
         .and_then(|shape| photocraft_text::warp::Warp::on_path_with_text_start(shape, text_start))
-        .and_then(|warp| warp.path_text_x(f64::from(tx), f64::from(ty)))
+        .and_then(|warp| warp.path_text_x_near_text(f64::from(tx), f64::from(ty), l.bounds().map_or(0.0, |bounds| f64::from(bounds[2]))))
         .map_or((tx, ty), |offset| (offset as f32, -1.0));
     photocraft_text::hit_char(&l, &text, tx, ty).0
 }
@@ -3256,8 +3256,70 @@ mod tests {
         assert!(app.ui.text_edit.is_none());
     }
 
-    /// TYPE-218-1: a Type tool click on the work path starts type on the path from the point
-    /// clicked, in one history step with the placeholder selected; a click off it is point text.
+    // Independent perimeter oracle for the rectangle used by the endpoint hit tests.
+    fn closed_path_endpoint_test_point(s: f64) -> (f64, f64) {
+        if s < 200.0 {
+            (20.0 + s, 20.0)
+        } else if s < 300.0 {
+            (220.0, 20.0 + s - 200.0)
+        } else if s < 500.0 {
+            (220.0 - (s - 300.0), 120.0)
+        } else {
+            (20.0, 120.0 - (s - 500.0))
+        }
+    }
+
+    #[test]
+    fn closed_path_forward_hit_after_last_caret() {
+        for align in ["left", "center", "right"] {
+            let mut app = app();
+            app.ui.tool_options.type_align = align.into();
+            let path = photocraft_vector::shapes::rect(20.0, 20.0, 200.0, 100.0);
+            app.run("path.set", json!({"path": photocraft_engine::vector_cmds::path_json(&path)})).unwrap();
+            pointer_up(&mut app, [20.0, 45.0], [20.0, 45.0]);
+            insert(&mut app, "ssssssssssss");
+            let id = LayerId(app.ui.text_edit.as_ref().unwrap().layer);
+            let (l, _, _) = layout(&mut app, id).unwrap();
+            let (last, _, _) = l.caret(12);
+            let s = (575.0 + f64::from(last) + 2.0).rem_euclid(600.0);
+            let (x, y) = closed_path_endpoint_test_point(s);
+            assert_eq!(offset_at(&mut app, id, x, y), 12, "{align}");
+        }
+    }
+
+    #[test]
+    fn open_path_hits_keep_endpoint_clamping() {
+        let mut app = app();
+        let path = photocraft_doc::vector::Path::new(vec![photocraft_doc::vector::Subpath::polyline(&[(20.0, 100.0), (380.0, 100.0)])]);
+        app.run("path.set", json!({"path": photocraft_engine::vector_cmds::path_json(&path)})).unwrap();
+        pointer_up(&mut app, [200.0, 100.0], [200.0, 100.0]);
+        insert(&mut app, "ssss");
+        let id = LayerId(app.ui.text_edit.as_ref().unwrap().layer);
+        assert_eq!(offset_at(&mut app, id, 198.0, 100.0), 0);
+        assert_eq!(offset_at(&mut app, id, 20.0, 100.0), 0);
+        assert_eq!(offset_at(&mut app, id, 380.0, 100.0), 4);
+    }
+
+    #[test]
+    fn closed_path_backward_hit_before_first_caret() {
+        for align in ["left", "center", "right"] {
+            let mut app = app();
+            app.ui.tool_options.type_align = align.into();
+            let path = photocraft_vector::shapes::rect(20.0, 20.0, 200.0, 100.0);
+            app.run("path.set", json!({"path": photocraft_engine::vector_cmds::path_json(&path)})).unwrap();
+            pointer_up(&mut app, [20.0, 45.0], [20.0, 45.0]);
+            insert(&mut app, "ssssssssssss");
+            let id = LayerId(app.ui.text_edit.as_ref().unwrap().layer);
+            let (l, _, _) = layout(&mut app, id).unwrap();
+            // The rectangle runs clockwise; the text origin is perimeter distance 575.
+            // Project 2 px backward from the first caret, using an independent oracle.
+            let (first, _, _) = l.caret(0);
+            let s = (575.0 + f64::from(first) - 2.0).rem_euclid(600.0);
+            let (x, y) = closed_path_endpoint_test_point(s);
+            assert_eq!(offset_at(&mut app, id, x, y), 0, "{align}");
+        }
+    }
+
     #[test]
     fn closed_path_upstream_caret_rectangle_left_edge_roundtrip() {
         let mut app = app();
@@ -3297,6 +3359,8 @@ mod tests {
         assert!(tested_after_seam, "fixture must cross the seam");
     }
 
+    /// TYPE-218-1: a Type tool click on the work path starts type on the path from the point
+    /// clicked, in one history step with the placeholder selected; a click off it is point text.
     #[test]
     fn click_on_a_path_starts_type_on_the_path() {
         use photocraft_doc::text::TextShape;
