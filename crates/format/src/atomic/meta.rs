@@ -59,15 +59,17 @@ pub fn copy_metadata(from: &Path, to: &Path) -> io::Result<()> {
     #[cfg(not(unix))]
     let attributes = Ok(());
 
-    #[cfg(target_os = "macos")]
-    let acl = copy_acl(from, to);
-    #[cfg(not(target_os = "macos"))]
-    let acl = Ok(());
-
+    // The creation time before the ACL: it needs the destination open for writing, which a
+    // copied ACL denying its owner write access would refuse.
     #[cfg(target_os = "macos")]
     let created = copy_created(from, to);
     #[cfg(not(target_os = "macos"))]
     let created = Ok(());
+
+    #[cfg(target_os = "macos")]
+    let acl = copy_acl(from, to);
+    #[cfg(not(target_os = "macos"))]
+    let acl = Ok(());
 
     // A save over a 0600 file must not widen it to whatever the process default is.
     let permissions = std::fs::metadata(from).and_then(|m| std::fs::set_permissions(to, m.permissions()));
@@ -80,10 +82,27 @@ pub fn copy_metadata(from: &Path, to: &Path) -> io::Result<()> {
 /// original's (#9388). The rename keeps the time set here.
 #[cfg(target_os = "macos")]
 fn copy_created(from: &Path, to: &Path) -> io::Result<()> {
-    use std::os::macos::fs::FileTimesExt;
-    let created = std::fs::metadata(from)?.created()?;
-    let file = std::fs::OpenOptions::new().write(true).open(to)?;
-    file.set_times(std::fs::FileTimes::new().set_created(created))
+    let old = std::fs::File::open(from)?;
+    let new = std::fs::OpenOptions::new().write(true).open(to)?;
+    copy_created_file(&old, &new)
+}
+
+/// [`copy_created`] through two open files rather than their paths, for the automation write
+/// path's capability-checked handles (see [`copy_xattrs`]). `to` must be open for writing.
+/// Nothing to do outside macOS: Windows keeps the time in [`replace_existing`], and Linux has no
+/// settable creation time.
+pub fn copy_created_file(from: &std::fs::File, to: &std::fs::File) -> io::Result<()> {
+    #[cfg(target_os = "macos")]
+    {
+        use std::os::macos::fs::FileTimesExt;
+        let created = from.metadata()?.created()?;
+        to.set_times(std::fs::FileTimes::new().set_created(created))
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (from, to);
+        Ok(())
+    }
 }
 
 /// [`copy_metadata`]'s extended-attribute step, by path: open both files and hand the
