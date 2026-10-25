@@ -3165,7 +3165,7 @@ fn per_colour_passes_match_full_size_passes() {
 /// A legacy (Photoshop-era) `Txt2` block shaped like a real one (psd-tools' `text.psd`): the
 /// fonts in `DocumentResources /FontSet /Resources`, and each object's `Model /StyleRun` runs
 /// holding their style under `RunData /StyleSheet /Features` (named keys) beside `Length`.
-fn styled_era_txt2(text: &str, font: &str, size: f64) -> Vec<u8> {
+fn styled_era_txt2(text: &str, font: &str, size: f64, auto_kern: i64) -> Vec<u8> {
     use crate::engine_data::Value as E;
     let font_entry = |name: &str| {
         E::Dict(vec![(
@@ -3182,12 +3182,18 @@ fn styled_era_txt2(text: &str, font: &str, size: f64) -> Vec<u8> {
         ("FauxBold".into(), E::Bool(false)),
         ("FauxItalic".into(), E::Bool(false)),
         ("AutoLeading".into(), E::Bool(true)),
-        ("Leading".into(), E::Real(0.0)),
+        ("Leading".into(), E::Real(0.01)),
         ("HorizontalScale".into(), E::Real(1.0)),
         ("VerticalScale".into(), E::Real(1.0)),
         ("Tracking".into(), E::Int(0)),
-        ("AutoKern".into(), E::Int(1)),
+        ("AutoKern".into(), E::Int(auto_kern)),
+        ("BaselineShift".into(), E::Real(0.0)),
+        ("FontCaps".into(), E::Int(0)),
+        ("FontBaseline".into(), E::Int(0)),
+        ("UnderlinePosition".into(), E::Int(0)),
+        ("StrikethroughPosition".into(), E::Int(0)),
         ("Ligatures".into(), E::Bool(true)),
+        ("DiscretionaryLigatures".into(), E::Bool(false)),
         ("ContextualLigatures".into(), E::Bool(true)),
         ("StylisticSets".into(), E::Int(0)),
         (
@@ -3249,7 +3255,7 @@ fn era_runs(block: &crate::engine_data::Value) -> Vec<(i64, crate::engine_data::
 #[test]
 fn a_style_only_edit_restyles_the_photoshop_era_objects() {
     use crate::engine_data::Value as E;
-    let prev = styled_era_txt2("Line 1", "ArialMT", 13.0);
+    let prev = styled_era_txt2("Line 1", "ArialMT", 13.0, 1);
     let style = CharStyle {
         postscript_name: Some("Courier".into()),
         size_pt: 20.0,
@@ -3266,6 +3272,7 @@ fn a_style_only_edit_restyles_the_photoshop_era_objects() {
     assert_eq!(f.get("FontSize").and_then(E::as_f64), Some(20.0));
     assert_eq!(f.get("FauxBold").and_then(E::as_bool), Some(true));
     assert_eq!(f.get("Tracking").and_then(E::as_i64), Some(25));
+    assert_eq!(f.get("Leading").and_then(E::as_f64), Some(0.01), "an automatic leading keeps Photoshop's own value");
     assert_eq!(f.path(&["FillColor", "Color", "Type"]).and_then(E::as_i64), Some(1));
     assert_eq!(f.path(&["FillColor", "Color", "Values"]).and_then(E::as_array).map(<[E]>::len), Some(4));
     assert_eq!(f.path(&["FillColor", "StreamTag"]).and_then(E::as_str), Some("SimplePaint"), "a key the file held is kept");
@@ -3284,7 +3291,7 @@ fn a_style_only_edit_restyles_the_photoshop_era_objects() {
 /// A layer whose style already agrees with the file's run leaves the legacy objects as they are.
 #[test]
 fn an_unedited_style_leaves_the_photoshop_era_objects_alone() {
-    let prev = styled_era_txt2("Line 1", "ArialMT", 13.0);
+    let prev = styled_era_txt2("Line 1", "ArialMT", 13.0, 1);
     let same = CharStyle { postscript_name: Some("ArialMT".into()), size_pt: 13.0, ..Default::default() };
     let out = crate::psd::build_txt2(&[(0, &styled("Line 1", same))], Some(&prev));
     assert_eq!(era_runs(&crate::psd::parse_txt2(&prev).unwrap()), era_runs(&crate::psd::parse_txt2(&out).unwrap()));
@@ -3296,7 +3303,7 @@ fn an_unedited_style_leaves_the_photoshop_era_objects_alone() {
 fn a_style_only_edit_restyles_both_object_lists() {
     use crate::engine_data::Value as E;
     let mut prev = photoshop_txt2(&[(4, 1)]);
-    prev.extend_from_slice(&styled_era_txt2("AVA", "ArialMT", 13.0));
+    prev.extend_from_slice(&styled_era_txt2("AVA", "ArialMT", 13.0, 1));
     let style = CharStyle { postscript_name: Some("ArialMT".into()), size_pt: 31.0, faux_italic: true, ..Default::default() };
     let out = crate::psd::parse_txt2(&crate::psd::build_txt2(&[(0, &styled("AVA", style))], Some(&prev))).unwrap();
     let legacy = era_runs(&out);
@@ -3317,11 +3324,88 @@ fn a_style_only_edit_restyles_both_object_lists() {
 #[test]
 fn a_two_run_layer_gives_the_photoshop_era_copy_two_style_runs() {
     use crate::engine_data::Value as E;
-    let prev = styled_era_txt2("Hello", "ArialMT", 13.0);
+    let prev = styled_era_txt2("Hello", "ArialMT", 13.0, 1);
     let small = CharStyle { postscript_name: Some("ArialMT".into()), size_pt: 10.0, ..Default::default() };
     let big = CharStyle { postscript_name: Some("ArialMT".into()), size_pt: 40.0, ..Default::default() };
     let t = runs_of("Hello", &[(2, small), (3, big)]);
     let runs = era_runs(&crate::psd::parse_txt2(&crate::psd::build_txt2(&[(0, &t)], Some(&prev))).unwrap());
     let seen: Vec<(i64, Option<f64>)> = runs.iter().map(|(l, f)| (*l, f.get("FontSize").and_then(E::as_f64))).collect();
     assert_eq!(seen, vec![(2, Some(10.0)), (4, Some(40.0))], "the last run takes the trailing return");
+}
+
+/// Review of #8888: every key the legacy restyle writes is written per run, so a multi-run edit
+/// does not copy the first run's baseline shift, case, underline or strikethrough to the others.
+#[test]
+fn each_photoshop_era_style_run_gets_its_own_values() {
+    use crate::engine_data::Value as E;
+    use photocraft_doc::text::{Caps, FontBaseline};
+    let prev = styled_era_txt2("Hello", "ArialMT", 13.0, 1);
+    let base = CharStyle { postscript_name: Some("ArialMT".into()), size_pt: 13.0, ..Default::default() };
+    let decorated = CharStyle { baseline_shift_pt: 3.0, caps: Caps::SmallCaps, baseline: FontBaseline::Superscript, underline: true, ..base.clone() };
+    let struck = CharStyle { strikethrough: true, caps: Caps::AllCaps, ligatures: false, discretionary_ligatures: true, ..base.clone() };
+    let t = runs_of("Hello", &[(2, decorated), (2, base.clone()), (1, struck)]);
+    let runs = era_runs(&crate::psd::parse_txt2(&crate::psd::build_txt2(&[(0, &t)], Some(&prev))).unwrap());
+    let key = |i: usize, k: &str| runs.get(i).and_then(|(_, f)| f.get(k)).cloned();
+    assert_eq!(runs.iter().map(|r| r.0).collect::<Vec<_>>(), vec![2, 2, 2]);
+    assert_eq!(key(0, "BaselineShift").and_then(|v| v.as_f64()), Some(3.0));
+    assert_eq!(key(1, "BaselineShift").and_then(|v| v.as_f64()), Some(0.0), "the second run is not the first");
+    assert_eq!([0, 1, 2].map(|i| key(i, "FontCaps").and_then(|v| v.as_i64())), [Some(1), Some(0), Some(2)]);
+    assert_eq!([0, 1, 2].map(|i| key(i, "FontBaseline").and_then(|v| v.as_i64())), [Some(1), Some(0), Some(0)]);
+    assert_eq!([0, 1, 2].map(|i| key(i, "UnderlinePosition").and_then(|v| v.as_i64()).map(|v| v != 0)), [Some(true), Some(false), Some(false)]);
+    assert_eq!([0, 1, 2].map(|i| key(i, "StrikethroughPosition").and_then(|v| v.as_i64()).map(|v| v != 0)), [Some(false), Some(false), Some(true)]);
+    assert_eq!([0, 1, 2].map(|i| key(i, "Ligatures").and_then(|v| v.as_bool())), [Some(true), Some(true), Some(false)]);
+    assert_eq!([0, 1, 2].map(|i| key(i, "DiscretionaryLigatures").and_then(|v| v.as_bool())), [Some(false), Some(false), Some(true)]);
+    let _ = E::Int(0);
+}
+
+/// Each of those keys alone is enough to restyle the legacy copy (an edit of only that key), and
+/// a layer that agrees on all of them leaves the block's bytes alone.
+#[test]
+fn every_legacy_style_key_is_compared() {
+    use photocraft_doc::text::{Caps, FontBaseline, Kerning};
+    let prev = styled_era_txt2("Hello", "ArialMT", 13.0, 1);
+    let base = CharStyle { postscript_name: Some("ArialMT".into()), size_pt: 13.0, ..Default::default() };
+    let unedited = crate::psd::build_txt2(&[(0, &styled("Hello", base.clone()))], Some(&prev));
+    assert!(
+        era_runs(&crate::psd::parse_txt2(&unedited).unwrap()) == era_runs(&crate::psd::parse_txt2(&prev).unwrap()),
+        "an agreeing layer leaves the legacy copy as it is"
+    );
+    let edits = [
+        CharStyle { baseline_shift_pt: 2.0, ..base.clone() },
+        CharStyle { caps: Caps::AllCaps, ..base.clone() },
+        CharStyle { baseline: FontBaseline::Subscript, ..base.clone() },
+        CharStyle { underline: true, ..base.clone() },
+        CharStyle { strikethrough: true, ..base.clone() },
+        CharStyle { ligatures: false, ..base.clone() },
+        CharStyle { discretionary_ligatures: true, ..base.clone() },
+        CharStyle { kerning: Kerning::Optical, ..base.clone() },
+    ];
+    for (i, edit) in edits.into_iter().enumerate() {
+        let out = crate::psd::build_txt2(&[(0, &styled("Hello", edit))], Some(&prev));
+        assert!(era_runs(&crate::psd::parse_txt2(&out).unwrap()) != era_runs(&crate::psd::parse_txt2(&prev).unwrap()), "edit {i} restyles the legacy copy");
+    }
+}
+
+/// Review of #8888: the legacy `AutoKern` mode is read on import, as `/11` is for the numbered
+/// objects, so the layer a legacy file opens as agrees with its legacy copy.
+#[test]
+fn legacy_auto_kern_is_read_on_import() {
+    use photocraft_doc::text::Kerning;
+    let t = styled("AVA", CharStyle::default());
+    let tysh = with_text_index(&crate::psd::build_tysh(&t, 72.0, None), 0);
+    for (mode, want) in [(0, Kerning::Off), (1, Kerning::Metrics), (2, Kerning::Optical)] {
+        let txt2 = crate::psd::parse_txt2(&styled_era_txt2("AVA", "ArialMT", 13.0, mode)).unwrap();
+        let mut back = crate::psd::text_layer_from_tysh(&tysh, 72.0).unwrap();
+        crate::psd::apply_txt2(&mut back, &tysh, &txt2);
+        assert!(
+            back.char_runs().iter().all(|r| r.style.kerning == want),
+            "AutoKern {mode}: {:?}",
+            back.char_runs().iter().map(|r| r.style.kerning).collect::<Vec<_>>()
+        );
+    }
+    // Other text, or another object, changes nothing.
+    let txt2 = crate::psd::parse_txt2(&styled_era_txt2("AVX", "ArialMT", 13.0, 2)).unwrap();
+    let mut back = crate::psd::text_layer_from_tysh(&tysh, 72.0).unwrap();
+    crate::psd::apply_txt2(&mut back, &tysh, &txt2);
+    assert!(back.char_runs().iter().all(|r| r.style.kerning == Kerning::Metrics));
 }

@@ -169,19 +169,32 @@ pub fn apply_txt2(layer: &mut TextLayer, tysh: &[u8], txt2: &E) {
     }) else {
         return;
     };
-    let Some(model) = txt2.path(&["1", "1"]).and_then(E::as_array).and_then(|a| a.get(index)).and_then(|o| o.get("0")) else {
-        return;
+    // The numbered object, else the older Photoshop's at `/DocumentObjects /TextObjects` (named
+    // keys: run lengths under `Length`, the style under `RunData /StyleSheet /Features`, the
+    // auto-kern mode under `AutoKern`).
+    let numbered = txt2
+        .path(&["1", "1"])
+        .and_then(E::as_array)
+        .and_then(|a| a.get(index))
+        .and_then(|o| o.get("0"))
+        .and_then(|model| Some((model.get("0").and_then(E::as_str)?, model.path(&["6", "0"]).and_then(E::as_array)?)));
+    let legacy = || {
+        let model = txt2.path(&["DocumentObjects", "TextObjects"]).and_then(E::as_array).and_then(|a| a.get(index))?.get("Model")?;
+        Some((model.get("Text").and_then(E::as_str)?, model.path(&["StyleRun", "RunArray"]).and_then(E::as_array)?))
     };
-    let Some(text) = model.get("0").and_then(E::as_str) else {
-        return;
+    let (text, style_runs, is_numbered) = match numbered {
+        Some((text, runs)) => (text, runs, true),
+        None => {
+            let Some((text, runs)) = legacy() else { return };
+            (text, runs, false)
+        }
     };
     if text.strip_suffix('\r').unwrap_or(text).replace('\r', "\n") != layer.text {
         return;
     }
-    let Some(style_runs) = model.path(&["6", "0"]).and_then(E::as_array) else {
-        return;
-    };
-    let styles: Vec<(f64, Option<&E>)> = style_runs.iter().map(|r| (r.get("1").and_then(E::as_f64).unwrap_or(0.0), r.path(&["0", "0", "6"]))).collect();
+    let (len_key, style_path, kern_key): (&str, &[&str], &str) =
+        if is_numbered { ("1", &["0", "0", "6"], "11") } else { ("Length", &["RunData", "StyleSheet", "Features"], "AutoKern") };
+    let styles: Vec<(f64, Option<&E>)> = style_runs.iter().map(|r| (r.get(len_key).and_then(E::as_f64).unwrap_or(0.0), r.path(style_path))).collect();
     let lens = utf16_to_byte_lengths(text, &styles.iter().map(|m| m.0).collect::<Vec<_>>());
     // Txt2 style per byte segment, then split the model runs at segment boundaries.
     let mut segs: Vec<(usize, Option<&E>)> = lens.into_iter().zip(styles.iter().map(|m| m.1)).collect();
@@ -202,13 +215,13 @@ pub fn apply_txt2(layer: &mut TextLayer, tysh: &[u8], txt2: &E) {
             let txt2_style = segs.get(si).and_then(|s| s.1).filter(|_| at < seg_end);
             // Txt2 has the exact mode (EngineData's reading also marks neighbours of manual
             // kerns manual, like Photoshop's legacy reader).
-            match txt2_style.and_then(|st| st.get("11")).and_then(E::as_i64) {
+            match txt2_style.and_then(|st| st.get(kern_key)).and_then(E::as_i64) {
                 Some(0) => style.kerning = Kerning::Off,
                 Some(1) => style.kerning = Kerning::Metrics,
                 Some(2) => style.kerning = Kerning::Optical,
                 _ => {}
             }
-            if let Some(st) = txt2_style {
+            if let Some(st) = txt2_style.filter(|_| is_numbered) {
                 add_txt2_features(&mut style, st);
             }
             let len = piece_end - at;
@@ -1205,6 +1218,24 @@ fn txt2_style_agrees(s: &CharStyle, style: &E, fonts: &[E], k: f32) -> bool {
     style.get(TXT2_STYLISTIC_SETS).and_then(E::as_i64).filter(|m| (0..1 << 20).contains(m)).is_none_or(|m| m == sets)
 }
 
+/// EngineData's `FontCaps` code of a style: 0 normal, 1 small caps, 2 all caps.
+fn caps_code(s: &CharStyle) -> i64 {
+    match s.caps {
+        Caps::Normal => 0,
+        Caps::SmallCaps => 1,
+        Caps::AllCaps => 2,
+    }
+}
+
+/// EngineData's `FontBaseline` code of a style: 0 normal, 1 superscript, 2 subscript.
+fn baseline_code(s: &CharStyle) -> i64 {
+    match s.baseline {
+        FontBaseline::Normal => 0,
+        FontBaseline::Superscript => 1,
+        FontBaseline::Subscript => 2,
+    }
+}
+
 /// The OpenType flags of a legacy style (`Features`), by key, and the feature each turns on: the
 /// named keys of [`TXT2_FEATURES`].
 const TD_FEATURES: [(&str, &str); 7] = [
@@ -1243,6 +1274,22 @@ fn td_style_agrees(s: &CharStyle, style: &E, fonts: &[E], k: f32) -> bool {
         return false;
     }
     if !(number("HorizontalScale", s.horizontal_scale) && number("VerticalScale", s.vertical_scale) && number("Tracking", s.tracking.round())) {
+        return false;
+    }
+    // Per run, like the rest: a baseline shift, the case and baseline position, the underline and
+    // strikethrough (a non-zero position is on, whichever position the file chose), the ligatures
+    // and the auto-kern mode.
+    let whole = |key: &str, want: i64| style.get(key).and_then(E::as_i64).is_none_or(|v| v == want);
+    let on = |key: &str, want: bool| style.get(key).and_then(E::as_i64).is_none_or(|v| (v != 0) == want);
+    if !(number("BaselineShift", s.baseline_shift_pt * k)
+        && whole("FontCaps", caps_code(s))
+        && whole("FontBaseline", baseline_code(s))
+        && on("UnderlinePosition", s.underline)
+        && on("StrikethroughPosition", s.strikethrough)
+        && flag("Ligatures", s.ligatures)
+        && flag("DiscretionaryLigatures", s.discretionary_ligatures)
+        && whole("AutoKern", txt2_mode(s)))
+    {
         return false;
     }
     if let Some(paint) = style.get("FillColor").and_then(|p| p.get("Color")) {
@@ -1305,11 +1352,24 @@ fn td_restyled(entry: &E, layer: &TextLayer, fonts: &mut Vec<E>, dpi: f32) -> Op
         features.set("FauxBold", E::Bool(s.faux_bold));
         features.set("FauxItalic", E::Bool(s.faux_italic));
         features.set("AutoLeading", E::Bool(s.leading_pt.is_none()));
-        features.set("Leading", real(s.leading_pt.unwrap_or(0.0) * k));
+        // An automatic leading's value is Photoshop's own (`.01` in the files seen): kept.
+        if let Some(leading) = s.leading_pt {
+            features.set("Leading", real(leading * k));
+        }
         features.set("HorizontalScale", real(s.horizontal_scale));
         features.set("VerticalScale", real(s.vertical_scale));
         features.set("Tracking", E::Int(s.tracking.round() as i64));
         features.set("AutoKern", E::Int(txt2_mode(s)));
+        features.set("BaselineShift", real(s.baseline_shift_pt * k));
+        features.set("FontCaps", E::Int(caps_code(s)));
+        features.set("FontBaseline", E::Int(baseline_code(s)));
+        // On keeps the position the file chose (a non-zero value), else the first one.
+        for (key, on) in [("UnderlinePosition", s.underline), ("StrikethroughPosition", s.strikethrough)] {
+            let kept = features.get(key).and_then(E::as_i64).filter(|v| *v != 0).unwrap_or(1);
+            features.set(key, E::Int(if on { kept } else { 0 }));
+        }
+        features.set("Ligatures", E::Bool(s.ligatures));
+        features.set("DiscretionaryLigatures", E::Bool(s.discretionary_ligatures));
         if let Some(paint @ E::Dict(_)) = features.get_mut("FillColor").and_then(|p| p.get_mut("Color")) {
             let (kind, values) = fill_color(&s.color);
             paint.set("Type", E::Int(kind));

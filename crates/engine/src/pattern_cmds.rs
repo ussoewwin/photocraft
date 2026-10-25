@@ -400,7 +400,8 @@ fn brush_texture(s: &mut Session, p: &Value) -> Result<Value> {
     };
     // Brush textures are grey: luminance of the composite over white.
     // Read a band of rows at a time: a whole-tile RGBA copy would cost 16 bytes a pixel.
-    let mut lum: Vec<f32> = Vec::with_capacity(n);
+    let mut lum: Vec<f32> = Vec::new();
+    lum.try_reserve_exact(n).map_err(|_| bad("brush.texturePattern", "not enough memory for the pattern"))?;
     for_each_band(&pat, pat.width, pat.height, |band| {
         lum.extend(band.iter().map(|q| {
             let l = 0.299 * q[0] + 0.587 * q[1] + 0.114 * q[2];

@@ -14,8 +14,14 @@ pub const MAX_EDGE: u32 = 30_000;
 pub const MAX_PAINT_PIXELS: u64 = 1 << 26;
 
 /// Most bytes of working copy the CPU compositor holds for one pattern (`photocraft-compose`
-/// checks the two agree at build time). See [`Pattern::working_bytes`].
+/// checks the two agree at build time). See [`Pattern::working_bytes`]. A browser tab has far less
+/// memory than a desktop process, and a failed allocation there aborts the tab, so the web build
+/// holds half as much: an 8-bit pattern paints up to 33,554,432 px (about 5792²) there.
+#[cfg(not(target_arch = "wasm32"))]
 pub const MAX_WORKING_BYTES: u64 = 256 << 20;
+/// See the desktop value above.
+#[cfg(target_arch = "wasm32")]
+pub const MAX_WORKING_BYTES: u64 = 128 << 20;
 
 /// Rows of a pattern read at a time where a whole-tile `f32` copy would cost 16 bytes per pixel.
 pub const BAND_ROWS: u32 = 256;

@@ -8,29 +8,41 @@
 //! minified tile is box-filtered instead of aliased; at 100 % and above it is a single tap.
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, OnceLock, Weak};
 
 use photocraft_doc::{ColorMode, Pattern, PixelFormat, Rect, SampleType};
 
-/// What one rendering call may keep of its patterns' working copies: room for two of the largest
-/// (a layer's pattern fill and another layer's pattern overlay, say), so each is converted once
-/// per call instead of once per output tile. A ceiling, not an allocation: only the patterns a
-/// call paints with are converted, and a third large one past it is converted when it is asked for.
-pub(crate) const PREPARED_PATTERN_BYTES: usize = 512 << 20;
+/// What one rendering call may keep of its patterns' working copies: every pattern it paints with
+/// stays converted for the call (four of the largest 8-bit ones on desktop), so none is converted
+/// once per output tile. A ceiling, not an allocation: only the patterns a call paints with are
+/// converted. Past it a pattern is converted under one lock and shared while in use (see
+/// [`PreparedPatterns::get`]). The web build keeps a quarter of that.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) const PREPARED_PATTERN_BYTES: usize = 1 << 30;
+/// See the desktop value above.
+#[cfg(target_arch = "wasm32")]
+pub(crate) const PREPARED_PATTERN_BYTES: usize = 256 << 20;
 const MAX_PREPARED_PATTERNS: usize = 64;
-/// Absolute cap on a single pattern's RGBA conversion on the uncached path. A pattern this
-/// large cannot be cached, so re-expanding it for every output tile would be a DoS; above the
-/// cap it is skipped instead. Independent of the cache budget so small patterns still convert.
-const MAX_UNCACHED_PATTERN_BYTES: usize = 256 << 20;
-// Every paintable pattern must fit that cap, or its fill would render transparent.
-const _: () = assert!(photocraft_doc::pattern::MAX_WORKING_BYTES <= MAX_UNCACHED_PATTERN_BYTES as u64);
-// ... and a call keeps two of the largest, or the second one's fill is rebuilt for every tile.
+/// Absolute cap on a single pattern's working copy on the uncached path: the document's own cap
+/// on what paints (`Pattern::is_paintable`). A pattern above it is skipped, not converted.
+const MAX_UNCACHED_PATTERN_BYTES: usize = photocraft_doc::pattern::MAX_WORKING_BYTES as usize;
+// A call keeps at least two of the largest, or a second large fill is converted for every tile.
 const _: () = assert!(2 * photocraft_doc::pattern::MAX_WORKING_BYTES <= PREPARED_PATTERN_BYTES as u64);
 type PreparedSlot = Arc<OnceLock<Option<Arc<Tile>>>>;
 
 struct PreparedState {
     slots: HashMap<usize, PreparedSlot>,
     reserved_bytes: usize,
+}
+
+/// Patterns past the call's budget: converted one at a time under this lock, and shared by the
+/// workers using one at the same moment (a `Weak` per pattern), so the extra copies in memory are
+/// the patterns in use, not one per worker.
+#[derive(Default)]
+struct OverBudget {
+    live: Mutex<HashMap<usize, Weak<Tile>>>,
+    warned: AtomicBool,
 }
 
 /// Demand-prepared pixels owned by one rendering call, never by the document.
@@ -40,11 +52,18 @@ pub(crate) struct PreparedPatterns<'a> {
     /// The colour mode the patterns are painted into (see [`pattern_rgba`]).
     mode: ColorMode,
     state: Mutex<PreparedState>,
+    over_budget: OverBudget,
 }
 
 impl<'a> PreparedPatterns<'a> {
     pub(crate) fn new(patterns: &'a [Pattern], budget: usize) -> Self {
-        Self { patterns, budget, mode: ColorMode::Rgb, state: Mutex::new(PreparedState { slots: HashMap::new(), reserved_bytes: 0 }) }
+        Self {
+            patterns,
+            budget,
+            mode: ColorMode::Rgb,
+            state: Mutex::new(PreparedState { slots: HashMap::new(), reserved_bytes: 0 }),
+            over_budget: OverBudget::default(),
+        }
     }
 
     /// Patterns painted into a document of colour mode `mode`.
@@ -89,14 +108,33 @@ impl<'a> PreparedPatterns<'a> {
                 // Run on the requesting worker to preserve its active CMYK profile.
                 slot.get_or_init(|| Tile::new_in(p, self.mode).map(Arc::new)).clone()
             }
-            // Uncached path: a pattern whose full conversion would exceed an absolute cap is
-            // not materialized at all. Otherwise every output tile would re-expand the entire
-            // sparse pattern into RGBA floats (and could do so concurrently), exhausting CPU and
-            // memory even though cache admission already refused to retain it. The cap is
-            // independent of the (possibly zero) cache budget, so small patterns still convert
-            // on demand when nothing is cached.
+            // Uncached path: a pattern whose working copy would exceed an absolute cap is not
+            // materialized at all. One past the call's budget is converted under one lock, and
+            // shared while some worker still holds it, so workers painting tiles at the same
+            // time do not each convert their own copy (CPU and memory), and it says so once.
+            // The cap is independent of the (possibly zero) cache budget, so small patterns
+            // still convert on demand when nothing is cached.
             None if bytes.is_none_or(|b| b > MAX_UNCACHED_PATTERN_BYTES) => None,
-            None => Tile::new_in(p, self.mode).map(Arc::new),
+            None => {
+                let mut live = self.over_budget.live.lock().unwrap_or_else(|e| e.into_inner());
+                if let Some(shared) = live.get(&key).and_then(Weak::upgrade) {
+                    return Some(shared);
+                }
+                #[cfg(not(target_arch = "wasm32"))]
+                if !self.over_budget.warned.swap(true, Ordering::Relaxed) {
+                    eprintln!(
+                        "photocraft: pattern \"{}\" is past this render's pattern memory ({} MiB) and is converted again as tiles need it",
+                        p.display_name(),
+                        self.budget >> 20
+                    );
+                }
+                #[cfg(target_arch = "wasm32")]
+                self.over_budget.warned.store(true, Ordering::Relaxed);
+                let tile = Tile::new_in(p, self.mode).map(Arc::new)?;
+                live.retain(|_, w| w.strong_count() > 0);
+                live.insert(key, Arc::downgrade(&tile));
+                Some(tile)
+            }
         }
     }
 }
@@ -109,19 +147,23 @@ impl<'a> PreparedPatterns<'a> {
 /// [paintable](Pattern::is_paintable).
 pub fn pattern_rgba(p: &Pattern, mode: ColorMode) -> Vec<[f32; 4]> {
     let mut px = Vec::new();
-    if p.is_paintable() {
-        pattern_rgba_rows(p, mode, 0, p.height, &mut px);
+    if p.is_paintable() && pattern_rgba_rows(p, mode, 0, p.height, &mut px).is_none() {
+        px = Vec::new();
     }
     px
 }
 
 /// Rows `top..bottom` of [`pattern_rgba`] (of a paintable pattern), replacing `out`: a large
-/// pattern is read a band at a time instead of as one copy at 16 bytes per pixel.
-pub fn pattern_rgba_rows(p: &Pattern, mode: ColorMode, top: u32, bottom: u32, out: &mut Vec<[f32; 4]>) {
+/// pattern is read a band at a time instead of as one copy at 16 bytes per pixel. `None` when the
+/// memory for the rows cannot be had (on the web a failed allocation aborts the tab, so it is
+/// asked for, not assumed).
+pub fn pattern_rgba_rows(p: &Pattern, mode: ColorMode, top: u32, bottom: u32, out: &mut Vec<[f32; 4]>) -> Option<()> {
     let bottom = bottom.min(p.height);
     let top = top.min(bottom);
     out.clear();
-    out.resize(p.width as usize * (bottom - top) as usize, [0.0f32; 4]);
+    let pixels = (p.width as usize).checked_mul((bottom - top) as usize)?;
+    out.try_reserve_exact(pixels).ok()?;
+    out.resize(pixels, [0.0f32; 4]);
     p.surface.read_rgba_into(Rect::new(0, top as i32, p.width as i32, bottom as i32), out);
     let paints_in = matches!(mode, ColorMode::Grayscale | ColorMode::Bitmap | ColorMode::Duotone | ColorMode::Cmyk);
     if paints_in && p.surface.format().mode != mode {
@@ -132,20 +174,23 @@ pub fn pattern_rgba_rows(p: &Pattern, mode: ColorMode, top: u32, bottom: u32, ou
             *q = photocraft_raster::to_rgba(&fmt, v.get(..n).unwrap_or_default());
         }
     }
+    Some(())
 }
 
 /// The pixels of a paintable pattern as they paint in a document of colour mode `mode`, rounded
 /// to the pattern's own sample grid by `quantize`, read a band of rows at a time: no full-size
 /// `f32` copy. A pattern with its own colours comes through exactly (its samples are on that
-/// grid); one converted to a grey or CMYK document is rounded to the grid it was drawn on.
-fn quantized_rgba<T>(p: &Pattern, mode: ColorMode, quantize: impl Fn(f32) -> T) -> Vec<[T; 4]> {
-    let mut out = Vec::with_capacity(p.width as usize * p.height as usize);
+/// grid); one converted to a grey or CMYK document is rounded to the grid it was drawn on. `None`
+/// when the memory cannot be had.
+fn quantized_rgba<T>(p: &Pattern, mode: ColorMode, quantize: impl Fn(f32) -> T) -> Option<Vec<[T; 4]>> {
+    let mut out = Vec::new();
+    out.try_reserve_exact((p.width as usize).checked_mul(p.height as usize)?).ok()?;
     let mut band = Vec::new();
     for top in (0..p.height).step_by(photocraft_doc::pattern::BAND_ROWS as usize) {
-        pattern_rgba_rows(p, mode, top, top + photocraft_doc::pattern::BAND_ROWS, &mut band);
+        pattern_rgba_rows(p, mode, top, top + photocraft_doc::pattern::BAND_ROWS, &mut band)?;
         out.extend(band.iter().map(|c| [quantize(c[0]), quantize(c[1]), quantize(c[2]), quantize(c[3])]));
     }
-    out
+    Some(out)
 }
 
 /// `u8 / 255` as `f32`, for every `u8`: the value an 8-bit sample reads as.
@@ -196,10 +241,13 @@ impl Tile {
         let (w, h) = (p.width as usize, p.height as usize);
         let texels = match p.surface.format().sample {
             // A large pattern is held at its own depth (`Pattern::working_bytes`).
-            SampleType::U8 if compact => Texels::Rgba8(quantized_rgba(p, mode, |v| (v.clamp(0.0, 1.0) * 255.0 + 0.5) as u8)),
-            SampleType::U16 if compact => Texels::Rgba16(quantized_rgba(p, mode, |v| (v.clamp(0.0, 1.0) * 65535.0 + 0.5) as u16)),
+            SampleType::U8 if compact => Texels::Rgba8(quantized_rgba(p, mode, |v| (v.clamp(0.0, 1.0) * 255.0 + 0.5) as u8)?),
+            SampleType::U16 if compact => Texels::Rgba16(quantized_rgba(p, mode, |v| (v.clamp(0.0, 1.0) * 65535.0 + 0.5) as u16)?),
             _ => {
                 let mut px = pattern_rgba(p, mode);
+                if px.len() as u64 != p.pixel_count() {
+                    return None;
+                }
                 for q in &mut px {
                     for c in 0..3 {
                         q[c] *= q[3];
@@ -452,7 +500,14 @@ mod tests {
         };
         assert!(same("a"), "the first is kept");
         assert!(same("b"), "and the second");
-        assert!(!same("c"), "a third past the budget is converted per use, not kept");
+        // A third past the budget is converted under one lock and shared while a worker holds it,
+        // so concurrent tiles use one copy; it is converted again once nobody holds it.
+        assert!(same("c"), "shared while in use");
+        let held = prepared.get("c", "").unwrap();
+        let other = prepared.get("c", "").unwrap();
+        assert!(Arc::ptr_eq(&held, &other), "two workers at once get one copy");
+        drop((held, other));
+        assert!(prepared.get("c", "").is_some(), "and it converts again after");
         // The real budget holds two of the largest paintable ones.
         assert!(2 * photocraft_doc::pattern::MAX_WORKING_BYTES <= PREPARED_PATTERN_BYTES as u64);
     }
@@ -489,6 +544,21 @@ mod tests {
             let place = Placement::new(Rect::new(3, 5, 40, 40), true, (2.0, 1.0), 0.6, 20.0);
             assert_eq!(render(&compact, &place, Rect::new(-9, -7, 30, 25)), render(&expanded, &place, Rect::new(-9, -7, 30, 25)));
         }
+    }
+
+    /// Memory for the rows is asked for, not assumed: a pattern whose rows cannot be had (here a
+    /// declared size past what any allocation could be) gives `None`, never an aborted allocation.
+    #[test]
+    fn rows_that_cannot_be_allocated_give_none() {
+        let huge = Pattern { id: "huge".into(), name: "huge".into(), width: u32::MAX, height: u32::MAX, surface: Surface::new(PixelFormat::RGBA8) };
+        let mut out = Vec::new();
+        assert!(pattern_rgba_rows(&huge, ColorMode::Rgb, 0, u32::MAX, &mut out).is_none());
+        assert!(quantized_rgba(&huge, ColorMode::Rgb, |v| v as u8).is_none());
+        assert!(pattern_rgba(&huge, ColorMode::Rgb).is_empty());
+        assert!(Tile::new(&huge).is_none());
+        let small = Pattern { id: "small".into(), name: "small".into(), width: 3, height: 2, surface: Surface::new(PixelFormat::RGBA8) };
+        assert_eq!(pattern_rgba_rows(&small, ColorMode::Rgb, 0, 2, &mut out), Some(()));
+        assert_eq!(out.len(), 6);
     }
 
     #[test]
