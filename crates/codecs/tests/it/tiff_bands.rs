@@ -273,7 +273,7 @@ fn size_limits_still_apply() {
 }
 
 #[test]
-fn banded_limits_allow_photoshops_largest_document() {
+fn banded_limits_allow_the_largest_document_size() {
     let l = Limits::banded();
     if cfg!(target_pointer_width = "64") {
         assert_eq!((l.max_width, l.max_height), (300_000, 300_000));
