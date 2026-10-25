@@ -308,6 +308,16 @@ mod tests {
     }
 
     #[test]
+    fn empty_images_stop_before_the_transpose_and_row_passes() {
+        for r in [Rect::new(0, 0, 0, 4), Rect::new(0, 0, 4, 0), Rect::new(0, 0, 0, 0)] {
+            let t = trace(&[], r, &settings(4, 2.0, 1.0));
+            assert!(t.regions.is_empty());
+            assert!(t.chains.is_empty());
+            assert!(t.field.is_empty());
+        }
+    }
+
+    #[test]
     fn filling_does_not_depend_on_the_tiling() {
         let (w, h) = (40usize, 30usize);
         let c: Vec<Px> = (0..w * h).map(|i| if ((i % w) / 6 + (i / w) / 5) % 3 == 0 { [0.8, 0.3, 0.1] } else { [0.1, 0.3, 0.7] }).collect();

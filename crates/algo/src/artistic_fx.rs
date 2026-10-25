@@ -1413,6 +1413,26 @@ mod tests {
     }
 
     #[test]
+    fn cutout_keeps_the_tone_of_surviving_islands_at_low_fidelity() {
+        for (size, simplicity) in [(2, 0.0), (3, 2.0), (4, 0.0), (4, 2.0), (6, 2.0)] {
+            let rows: Vec<Vec<f32>> =
+                (0..32).map(|y| (0..32).map(|x| if (12..12 + size).contains(&x) && (12..12 + size).contains(&y) { 0.9 } else { 0.2 }).collect()).collect();
+            let reference = cutout_on(&rows, &[("edgeSimplicity", simplicity), ("edgeFidelity", 2.0)]);
+            let centre = 12 + size / 2;
+            for fidelity in [1.0, 1.5, 2.0] {
+                let out = cutout_on(&rows, &[("edgeSimplicity", simplicity), ("edgeFidelity", fidelity)]);
+                assert!(
+                    size == 2 || (out[centre][centre] - reference[centre][centre]).abs() < 0.02,
+                    "{size}x{size}, simplicity {simplicity}, fidelity {fidelity}: {} vs {}",
+                    out[centre][centre],
+                    reference[centre][centre]
+                );
+                assert!(out[centre][centre] - out[2][2] > 0.5, "the island keeps its contrast");
+            }
+        }
+    }
+
+    #[test]
     fn a_stack_around_a_cutout_is_tile_independent() {
         // Effects before a Cutout are traced with it over the whole image; effects after it run
         // per tile on the filled-in shapes.
