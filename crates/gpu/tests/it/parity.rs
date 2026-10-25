@@ -626,6 +626,35 @@ fn special_eight_fill_matches_cpu() {
     }
 }
 
+/// The same for adjustment layers (#9501): the GPU's adjustment mix takes Fill inside the special
+/// eight's blend, as compose's adjustment branch does, with a mask and Opacity on top.
+#[test]
+fn special_eight_fill_on_adjustment_layers_matches_cpu() {
+    let Some(mut g) = gpu() else { return };
+    let special = [
+        BlendMode::ColorBurn,
+        BlendMode::LinearBurn,
+        BlendMode::ColorDodge,
+        BlendMode::LinearDodge,
+        BlendMode::VividLight,
+        BlendMode::LinearLight,
+        BlendMode::HardMix,
+        BlendMode::Difference,
+    ];
+    for mode in special {
+        for fill in [0.3, 0.6] {
+            let mut d = base_doc(64, 48);
+            d.layers[0] = noise_layer("bg", PixelFormat::RGBA8, Rect::from_xywh(0, 0, 64, 48), 5, 1.0);
+            let mut l = Layer::new("invert", LayerContent::Adjustment(Adjustment::Invert));
+            l.blend = mode;
+            l.opacity = 0.7;
+            l.fill_opacity = fill;
+            d.layers.push(l);
+            check(&mut g, &d, &format!("adjustment {mode:?} fill {fill}"));
+        }
+    }
+}
+
 #[test]
 fn xor_rounding_on_half_float_targets() {
     let Some((_adapter, device, queue, _lock)) = any_device() else { return };

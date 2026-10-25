@@ -417,6 +417,27 @@ fn every_blend_mode_matches_reference_on_opaque_pixels() {
     }
 }
 
+/// #9501: an adjustment layer at 40% Fill in Color Dodge or Linear Burn blends a result pulled
+/// toward the mode's neutral colour, as a pixel layer does, instead of fading the blend by Fill.
+/// Photoshop: a constant 0.5 look over (64, 128, 192) gives (80, 160, 240) and (13, 77, 141).
+#[test]
+fn adjustment_fill_changes_the_special_blend_modes() {
+    for (mode, want) in [(BlendMode::ColorDodge, [80, 160, 240]), (BlendMode::LinearBurn, [13, 77, 141])] {
+        let mut d = Document::with_background("fill", Size::new(1, 1), ColorMode::Rgb, SampleType::U8, Color::WHITE);
+        let mut base = Layer::raster("b", PixelFormat::RGBA8);
+        base.surface_mut().unwrap().fill_rect(Rect::new(0, 0, 1, 1), &[64.0 / 255.0, 128.0 / 255.0, 192.0 / 255.0, 1.0]);
+        let look = Adjustment::ColorLookup { name: "half".into(), lut: Some(std::sync::Arc::new(vec![0.5; 24])), size: 2, tetrahedral: false, dither: false };
+        let mut adj = Layer::new("look", LayerContent::Adjustment(look));
+        adj.blend = mode;
+        adj.fill_opacity = 0.4;
+        d.layers.push(base);
+        d.layers.push(adj);
+        let got = px(&d, 0, 0);
+        let got: Vec<i32> = got[..3].iter().map(|v| (v * 255.0).round() as i32).collect();
+        assert!(got.iter().zip(want).all(|(g, w)| (g - w).abs() <= 1), "{mode:?}: {got:?} vs Photoshop {want:?}");
+    }
+}
+
 /// One opaque pixel: `top` in `mode` over `bottom`, in a document of `depth`.
 fn blend_px(depth: SampleType, mode: BlendMode, bottom: [f32; 3], top: [f32; 3]) -> [f32; 4] {
     let mut d = Document::new("b", Size::new(1, 1), ColorMode::Rgb, depth);
