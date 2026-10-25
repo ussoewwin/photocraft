@@ -93,6 +93,7 @@ pub mod duplicate_layer_ui;
 pub mod edit_history;
 pub mod egui_fonts;
 pub mod enable_rules;
+pub mod equalize_ui;
 pub mod eraser_ui;
 pub mod export_dialog;
 pub mod eyedropper_ui;

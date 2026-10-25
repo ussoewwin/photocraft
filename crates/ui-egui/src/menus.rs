@@ -602,6 +602,10 @@ pub(crate) fn invoke_unguarded(app: &mut PhotocraftApp, ctx: &egui::Context, id:
             Ok(json!({"dialog": crate::sizing::open(app, sz).ok_or("no document")?}))
         }
         "view.newGuide" if params.as_object().is_none_or(|o| o.is_empty()) => Ok(json!({"dialog": crate::new_guide_ui::open(app)})),
+        // Image › Adjustments › Equalize with a selection asks what to equalize, as in Photoshop.
+        crate::equalize_ui::COMMAND if params.as_object().is_none_or(|o| o.is_empty()) && crate::equalize_ui::asks(app) => {
+            Ok(json!({"dialog": crate::equalize_ui::open(app)}))
+        }
         fl if crate::filter_dialog::has_dialog(fl) && params.as_object().is_none_or(|o| o.is_empty()) => {
             Ok(json!({"dialog": crate::filter_dialog::open(app, fl)}))
         }
