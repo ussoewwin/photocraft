@@ -289,8 +289,13 @@ fn export_document(doc: &Document, f: &Map<String, Value>, max_side: Option<u32>
     let resample = resample_method(f, max_side)?;
     let mut session = photocraft_engine::Session::new();
     session.add_document(doc.clone(), None);
-    if s(f, "profile") == "srgb" && doc.icc_profile.is_some() {
-        session.execute("edit.convertToProfile", json!({"profile": "srgb", "intent": "perceptual"})).map_err(|e| e.to_string())?;
+    if s(f, "profile") == "srgb" {
+        let result = if doc.icc_profile.is_none() && session.color.working(doc.mode).same_bytes(photocraft_cms::Builtin::Srgb.profile()) {
+            session.execute("edit.assignProfile", json!({"profile": "srgb"}))
+        } else {
+            session.execute("edit.convertToProfile", json!({"profile": "srgb", "intent": "perceptual"}))
+        };
+        result.map_err(|e| e.to_string())?;
     }
     let (w, h) = export_pixels(f64::from(doc.size.width), f64::from(doc.size.height), f, max_side)?;
     if s_fmt(f) == "ico" && (w > 256.0 || h > 256.0) && max_side.is_none() {
@@ -1686,6 +1691,76 @@ mod tests {
         let proxy = export_document(&doc, &f, Some(20)).unwrap();
         assert_eq!((proxy.size.width, proxy.size.height), (20, 7));
         assert_eq!(doc, before, "export leaves the source document unchanged");
+    }
+
+    fn check_profile_only_export(width: u32, height: u32) -> std::time::Duration {
+        use photocraft_doc::{Color, ColorMode, SampleType, Size};
+        let mut doc = Document::with_background("untagged", Size::new(width, height), ColorMode::Rgb, SampleType::U8, Color::WHITE);
+        let mut pixels = vec![0u8; width as usize * height as usize * 4];
+        for (i, p) in pixels.as_chunks_mut::<4>().0.iter_mut().enumerate() {
+            p.copy_from_slice(&[(i % 251) as u8, ((i / 251) % 251) as u8, ((i / 63001) % 251) as u8, 255]);
+        }
+        doc.layers[0].surface_mut().unwrap().write_interleaved(photocraft_geom::Rect::from_xywh(0, 0, width, height), &pixels);
+        let before = doc.clone();
+        let fields = json!({"format": "png", "profile": "srgb", "transparency": true, "width": width, "height": height}).as_object().unwrap().clone();
+        let start = std::time::Instant::now();
+        let converted = export_document(&doc, &fields, None).unwrap();
+        let elapsed = start.elapsed();
+        let profile = photocraft_cms::Profile::parse(converted.icc_profile.as_deref().unwrap()).unwrap();
+        assert!(profile.same_bytes(photocraft_cms::Builtin::Srgb.profile()));
+        let source = doc.layers[0].surface().unwrap();
+        let output = converted.layers[0].surface().unwrap();
+        assert!(source.tile_count() > 0);
+        assert_eq!(source.tile_count(), output.tile_count());
+        assert_eq!(source.default_pixel(), output.default_pixel());
+        for (coord, tile) in source.tiles() {
+            assert!(Arc::ptr_eq(tile, output.tile(*coord).unwrap()), "tagging must reuse pixel tiles");
+        }
+        assert_eq!(doc, before);
+        elapsed
+    }
+
+    #[test]
+    fn untagged_srgb_export_tags_without_rewriting_pixels() {
+        check_profile_only_export(8, 8);
+    }
+
+    #[test]
+    #[ignore = "24 MP profile-preparation measurement"]
+    fn untagged_srgb_export_24mp_keeps_pixel_tiles() {
+        let elapsed = check_profile_only_export(6000, 4000);
+        println!("24 MP sRGB profile preparation (optimized test build): {elapsed:?}; all pixel tiles shared");
+    }
+
+    #[test]
+    fn untagged_jpeg_export_embeds_the_requested_srgb_profile() {
+        use photocraft_doc::{Color, ColorMode, SampleType, Size};
+        for (mode, depth) in [
+            (ColorMode::Rgb, SampleType::U8),
+            (ColorMode::Rgb, SampleType::U16),
+            (ColorMode::Rgb, SampleType::F32),
+            (ColorMode::Grayscale, SampleType::U8),
+            (ColorMode::Cmyk, SampleType::U8),
+        ] {
+            let doc = Document::with_background("untagged", Size::new(8, 8), mode, depth, Color::WHITE);
+            assert!(doc.icc_profile.is_none());
+            let before = doc.clone();
+            let mut fields =
+                json!({"format": "jpg", "profile": "srgb", "embedProfile": true, "metadata": "none", "width": 8, "height": 8}).as_object().unwrap().clone();
+            let converted = export_document(&doc, &fields, None).unwrap();
+            let bytes = photocraft_io::export(&converted, "out.jpg", &settings(&fields).io_options()).unwrap().bytes;
+            let reloaded = photocraft_io::import("out.jpg", &bytes).unwrap().document;
+            let profile = photocraft_cms::Profile::parse(reloaded.icc_profile.as_deref().expect("explicit sRGB export must embed its profile")).unwrap();
+            assert!(profile.same_colors(photocraft_cms::Builtin::Srgb.profile()), "{depth:?}");
+            fields.insert("embedProfile".into(), json!(false));
+            let bytes = photocraft_io::export(&converted, "out.jpg", &settings(&fields).io_options()).unwrap().bytes;
+            assert!(photocraft_io::import("out.jpg", &bytes).unwrap().document.icc_profile.is_none(), "embedding remains optional");
+            fields.insert("profile".into(), json!("document"));
+            fields.insert("embedProfile".into(), json!(true));
+            let unchanged = export_document(&doc, &fields, None).unwrap();
+            assert!(unchanged.icc_profile.is_none(), "Document Profile preserves an untagged source");
+            assert_eq!(doc, before, "export must not tag or convert the source document");
+        }
     }
 
     #[test]
