@@ -152,8 +152,9 @@ pub fn canvas_buttons(app: &mut PhotocraftApp, response: &Response, tool: Tool) 
 /// the Brush Preset picker at screen point `at`, and nothing paints.
 pub fn pointer_secondary(app: &mut PhotocraftApp, ctx: &egui::Context, down: bool, mods: egui::Modifiers, at: [f32; 2]) -> bool {
     let tool = app.ui.tool;
-    // Shift+Alt+right is Photoshop's HUD Color Picker (#6098): the down opens it, the up closes it.
-    if has_brush_picker(tool) && mods.shift && mods.alt {
+    // Shift+Alt+right is Photoshop's HUD Color Picker (#6098): the down opens it, the up closes
+    // it. As on the canvas, the right-erase preference wins over the HUD for these tools.
+    if has_brush_picker(tool) && mods.shift && mods.alt && !right_erases(app, tool) {
         if down {
             crate::color_hud::open(app, at, false);
         } else {
@@ -545,6 +546,25 @@ mod tests {
         app.run("prefs.set", json!({"path": "tools.rightClickWithPaintingTools", "value": "brushPicker"})).unwrap();
         assert!(!pointer_secondary(&mut app, &egui::Context::default(), true, egui::Modifiers::NONE, [0.0, 0.0]));
         assert!(app.ui.brush_picker.is_some() && !app.secondary_erase);
+    }
+
+    #[test]
+    fn shift_alt_right_through_the_control_channel_respects_the_erase_preference() {
+        // As on the canvas, with the right-erase preference the erase stroke wins over the HUD
+        // for Brush/Eraser; without it, Shift+Alt+right opens the HUD (#6098).
+        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", json!({"width": 120, "height": 80})).unwrap();
+        app.ui.tool = Tool::Brush;
+        let shift_alt = egui::Modifiers { shift: true, alt: true, ..Default::default() };
+        app.run("prefs.set", json!({"path": "tools.rightClickWithPaintingTools", "value": "erase"})).unwrap();
+        assert!(pointer_secondary(&mut app, &egui::Context::default(), true, shift_alt, [10.0, 10.0]), "the events reach the tool");
+        assert!(app.ui.color_hud.is_none(), "no HUD with the erase preference");
+        assert!(app.secondary_erase, "the down arms the erasing stroke");
+        pointer_secondary(&mut app, &egui::Context::default(), false, shift_alt, [10.0, 10.0]);
+        // With the default preference the same gesture opens the HUD instead.
+        app.run("prefs.set", json!({"path": "tools.rightClickWithPaintingTools", "value": "brushPicker"})).unwrap();
+        assert!(!pointer_secondary(&mut app, &egui::Context::default(), true, shift_alt, [10.0, 10.0]));
+        assert!(app.ui.color_hud.is_some_and(|h| !h.hold), "the control-channel HUD opened");
     }
 
     #[test]

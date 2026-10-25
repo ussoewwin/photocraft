@@ -98,8 +98,9 @@ fn rgb_color(c: [f32; 3]) -> Color32 {
 }
 
 /// The vertical hue strip: red at the top, a full spectrum cycle. One mesh of bands, so its cost
-/// doesn't grow with the HUD.
-fn paint_hue_strip(painter: &egui::Painter, r: Rect) {
+/// doesn't grow with the HUD. Row `k` (of `n + 1`) holds the left vertex at index `2k` and the
+/// right one at `2k + 1`; band `k` joins rows `k` and `k + 1`.
+fn hue_strip_mesh(r: Rect) -> Mesh {
     let n = 12;
     let mut mesh = Mesh::default();
     for k in 0..=n {
@@ -110,10 +111,14 @@ fn paint_hue_strip(painter: &egui::Painter, r: Rect) {
     }
     for k in 0..n {
         let (a, b) = (2 * k, 2 * k + 1);
-        mesh.add_triangle(a, b, b + 3);
-        mesh.add_triangle(a, b + 3, a + 2);
+        mesh.add_triangle(a, b, b + 2);
+        mesh.add_triangle(a, b + 2, a + 2);
     }
-    painter.add(mesh);
+    mesh
+}
+
+fn paint_hue_strip(painter: &egui::Painter, r: Rect) {
+    painter.add(hue_strip_mesh(r));
 }
 
 /// The saturation/value square for `hue`: white→hue horizontally, then clear→black vertically.
@@ -187,7 +192,7 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
                 p.circle(sv, 4.0, Color32::TRANSPARENT, Stroke::new(1.5, Color32::WHITE));
                 p.circle(sv, 5.5, Color32::TRANSPARENT, Stroke::new(1.0, Color32::from_black_alpha(160)));
                 let hy = strip.top() + hud.hsv[0] / 360.0 * strip.height();
-                p.line_segment([strip.min + vec2(1.0, hy - strip.top()), strip.right_center()], Stroke::new(2.0, Color32::WHITE));
+                p.line_segment([egui::pos2(strip.left() + 1.0, hy), egui::pos2(strip.right(), hy)], Stroke::new(2.0, Color32::WHITE));
                 (strip, square)
             })
             .inner
@@ -409,6 +414,22 @@ mod tests {
         );
         let _ = crate::control::handle(&mut app, &ctx, &req);
         assert!(app.ui.color_hud.is_some_and(|h| !h.hold));
+    }
+
+    #[test]
+    fn hue_strip_mesh_indices_stay_within_its_rows() {
+        let mesh = hue_strip_mesh(Rect::from_min_size(Pos2::ZERO, vec2(HUE_W, SQUARE)));
+        let rows = 13; // n + 1 rows, two vertices each
+        assert_eq!(mesh.vertices.len(), 2 * rows);
+        assert_eq!(mesh.indices.len(), 3 * 2 * (rows - 1), "two triangles per band");
+        for (j, tri) in mesh.indices.chunks(3).enumerate() {
+            // Band k = j/2 joins rows k and k+1: vertices 2k..=2k+3, nothing further ahead.
+            let k = j / 2;
+            for &i in tri {
+                assert!((2 * k) as u32 <= i && i <= (2 * k + 3) as u32, "band {k} uses index {i}: {tri:?}");
+                assert!((i as usize) < mesh.vertices.len(), "index {i} out of range");
+            }
+        }
     }
 
     #[test]
