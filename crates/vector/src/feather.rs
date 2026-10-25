@@ -46,6 +46,10 @@ pub fn path_area(path: &Path, sigma: f32) -> Rect {
 #[cfg(test)]
 static LARGEST_BUFFER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
+/// Tests make [`line_buffers`] fail for lines of this many samples (0: never).
+#[cfg(test)]
+static FAIL_LINE_BUFFERS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
 /// Notes a blur buffer of `len` floats ([`LARGEST_BUFFER`]); nothing outside tests.
 fn note_buffer(len: usize) {
     #[cfg(test)]
@@ -110,16 +114,20 @@ fn blur_line(line: &mut [f32], scratch: &mut [f32], pass: BoxPass) {
 /// Apply three clamped box passes to independent contiguous rows. Scoped OS threads are used
 /// instead of Rayon because mask construction can happen inside a Rayon tile job; nested Rayon
 /// work here can deadlock when every worker waits on the same OnceLock (#276).
-fn blur_rows_chunk(v: &mut [f32], w: usize, pass: BoxPass, halo: usize) {
-    let Some((mut padded, mut scratch)) = line_buffers(w, halo) else { return };
+fn blur_rows_chunk(v: &mut [f32], w: usize, pass: BoxPass, halo: usize, buffers: &mut (Vec<f32>, Vec<f32>)) {
+    let (padded, scratch) = buffers;
     for row in v.chunks_mut(w) {
-        blur_padded_line(row, &mut padded, &mut scratch, pass, halo);
+        blur_padded_line(row, padded, scratch, pass, halo);
     }
 }
 
 /// A padded line and its scratch for lines of `len` samples with `halo` more on each side; `None`
-/// when they don't fit in memory (the lines are then left unblurred rather than aborting).
+/// when they don't fit in memory.
 fn line_buffers(len: usize, halo: usize) -> Option<(Vec<f32>, Vec<f32>)> {
+    #[cfg(test)]
+    if FAIL_LINE_BUFFERS.load(std::sync::atomic::Ordering::Relaxed) == len {
+        return None;
+    }
     let n = halo.checked_mul(2)?.checked_add(len)?;
     let (mut padded, mut scratch) = (Vec::new(), Vec::new());
     padded.try_reserve_exact(n).ok()?;
@@ -148,25 +156,35 @@ fn blur_padded_line(line: &mut [f32], padded: &mut [f32], scratch: &mut [f32], p
     line.copy_from_slice(&padded[halo..halo + line.len()]);
 }
 
-fn blur_rows(v: &mut [f32], w: usize, pass: BoxPass, halo: usize) {
-    if w == 0 || v.is_empty() {
+/// How many workers blur `lines` lines of `len` samples.
+fn row_workers(lines: usize, len: usize) -> usize {
+    if cfg!(target_arch = "wasm32") || lines.saturating_mul(len) < 1 << 16 {
+        1
+    } else {
+        std::thread::available_parallelism().map_or(1, |n| n.get()).clamp(1, 16).min(lines.max(1))
+    }
+}
+
+/// Line buffers for each of [`row_workers`]; `None` unless every one fits in memory.
+fn worker_buffers(lines: usize, len: usize, halo: usize) -> Option<Vec<(Vec<f32>, Vec<f32>)>> {
+    (0..row_workers(lines, len)).map(|_| line_buffers(len, halo)).collect()
+}
+
+/// Blurs the rows of `v` on one worker per entry of `buffers` (from [`worker_buffers`]).
+fn blur_rows(v: &mut [f32], w: usize, pass: BoxPass, halo: usize, buffers: &mut [(Vec<f32>, Vec<f32>)]) {
+    if w == 0 || v.is_empty() || buffers.is_empty() {
         return;
     }
     let h = v.len() / w;
-    let threads = if cfg!(target_arch = "wasm32") || v.len() < 1 << 16 {
-        1
-    } else {
-        std::thread::available_parallelism().map_or(1, |n| n.get()).clamp(1, 16).min(h.max(1))
-    };
-    if threads == 1 {
-        blur_rows_chunk(v, w, pass, halo);
+    if let [only] = buffers {
+        blur_rows_chunk(v, w, pass, halo, only);
         return;
     }
-    let rows_per_worker = h.div_ceil(threads);
+    let rows_per_worker = h.div_ceil(buffers.len());
     let chunk_len = rows_per_worker.saturating_mul(w);
     std::thread::scope(|scope| {
-        for chunk in v.chunks_mut(chunk_len) {
-            scope.spawn(move || blur_rows_chunk(chunk, w, pass, halo));
+        for (chunk, buffers) in v.chunks_mut(chunk_len).zip(buffers.iter_mut()) {
+            scope.spawn(move || blur_rows_chunk(chunk, w, pass, halo, buffers));
         }
     });
 }
@@ -209,22 +227,25 @@ pub fn gaussian(v: &mut [f32], w: usize, h: usize, sigma: f32) {
 /// Three box passes along each axis of the `w`×`h` plane, every line continued `halo` samples
 /// past its ends ([`blur_padded_line`]).
 fn blur_plane(v: &mut [f32], w: usize, h: usize, pass: BoxPass, halo: usize) {
-    // Reserve before modifying the input so allocation failure can use the sequential fallback
-    // without leaving a half-blurred mask.
+    // Reserve everything before modifying the input, so an allocation failure can use the
+    // sequential fallback (which also reserves first) and never leaves a half-blurred mask.
     let mut transposed = Vec::new();
-    if transposed.try_reserve_exact(v.len()).is_err() {
+    let buffers = if transposed.try_reserve_exact(v.len()).is_ok() { worker_buffers(h, w, halo).zip(worker_buffers(w, h, halo)) } else { None };
+    let Some((mut rows, mut columns)) = buffers else {
         gaussian_sequential(v, w, h, pass, halo);
         return;
-    }
+    };
     transposed.resize(v.len(), 0.0);
     note_buffer(v.len());
-    blur_rows(v, w, pass, halo);
+    blur_rows(v, w, pass, halo, &mut rows);
     transpose_into(v, &mut transposed, w, h);
-    blur_rows(&mut transposed, h, pass, halo);
+    blur_rows(&mut transposed, h, pass, halo, &mut columns);
     transpose_into(&transposed, v, h, w);
 }
 
-/// Allocation-light reference path used if parallel transpose storage cannot be reserved.
+/// Allocation-light reference path used if parallel transpose storage cannot be reserved. It
+/// reserves its lines before touching `v`: without them the plane is left as it was, never half
+/// blurred.
 fn gaussian_sequential(v: &mut [f32], w: usize, h: usize, pass: BoxPass, halo: usize) {
     let mut line = Vec::new();
     let len = w.max(h);
@@ -362,5 +383,23 @@ mod tests {
         let largest = LARGEST_BUFFER.load(std::sync::atomic::Ordering::Relaxed);
         assert!(largest <= w * h, "the blur allocated a buffer of {largest} floats for a {w} × {h} plane");
         assert!(v.iter().all(|x| x.is_finite()));
+    }
+
+    /// CodeRabbit on #9493: when a line buffer can't be had, the mask is never left half blurred
+    /// (rows untouched but columns blurred, or some workers' rows only): the plane is either fully
+    /// blurred or untouched.
+    #[test]
+    fn a_failed_line_buffer_never_leaves_a_half_blurred_mask() {
+        let (w, h, sigma): (usize, usize, f32) = (433, 211, 7.0);
+        let source: Vec<f32> = (0..w * h).map(|i| ((i * 37 % 1009) as f32) / 1008.0).collect();
+        let mut want = source.clone();
+        gaussian(&mut want, w, h, sigma);
+        for fail in [w, h] {
+            FAIL_LINE_BUFFERS.store(fail, std::sync::atomic::Ordering::Relaxed);
+            let mut got = source.clone();
+            gaussian(&mut got, w, h, sigma);
+            FAIL_LINE_BUFFERS.store(0, std::sync::atomic::Ordering::Relaxed);
+            assert!(got == want || got == source, "lines of {fail} failing left a partly blurred plane");
+        }
     }
 }
