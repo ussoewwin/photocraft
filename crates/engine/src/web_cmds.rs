@@ -512,12 +512,14 @@ pub fn optimize(
         WebFormat::Webp => {
             let (data, layout) = true_color();
             let icc = icc.filter(|_| st.embed_icc);
-            let img = photocraft_codecs::Image::from_u8(ww, hh, layout, data).map_err(e)?.with_icc(icc.map(<[u8]>::to_vec)).with_meta(meta());
+            // WebP holds EXIF (the metadata choice's "All" passes it in), so it rides along with the XMP.
+            let webp_meta = photocraft_codecs::Metadata { exif: exif.map(<[u8]>::to_vec), ..meta() };
+            let img = photocraft_codecs::Image::from_u8(ww, hh, layout, data).map_err(e)?.with_icc(icc.map(<[u8]>::to_vec)).with_meta(webp_meta);
             let opts = photocraft_codecs::EncodeOptions {
                 webp_lossless: st.lossless,
                 webp_quality: st.quality.min(100),
                 embed_icc: icc.is_some(),
-                embed_metadata: xmp.is_some(),
+                embed_metadata: exif.is_some() || xmp.is_some(),
                 ..Default::default()
             };
             let bytes = photocraft_codecs::encode(&img, photocraft_codecs::Format::WebP, &opts).map_err(e)?;

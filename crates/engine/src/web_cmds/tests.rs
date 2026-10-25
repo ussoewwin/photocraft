@@ -1191,6 +1191,33 @@ fn save_for_web_all_writes_the_photos_exif() {
     assert_eq!(WebSettings::from_params(&json!({"metadata": "allExceptCameraInfo"}), "x").unwrap().to_params()["metadata"], "allExceptCameraInfo");
 }
 
+/// WebP holds EXIF in both modes: "All" keeps an EXIF-only photo's camera data (no XMP needed to
+/// trigger the metadata), every other choice leaves it out.
+#[test]
+fn save_for_web_webp_all_keeps_an_exif_only_photos_exif() {
+    let dir = tmp("webp_exif");
+    let mut s = session(8);
+    s.edit("exif", |doc, _| {
+        doc.metadata.exif = Some(std::sync::Arc::new(camera_exif()));
+        Ok(())
+    })
+    .unwrap();
+    for lossless in [false, true] {
+        for metadata in ["all", "none", "copyright", "allExceptCameraInfo"] {
+            let path = format!("{dir}/{metadata}-{lossless}.webp");
+            s.execute("file.export.saveForWebLegacy", json!({"format": "webp", "lossless": lossless, "metadata": metadata, "path": path})).unwrap();
+            let meta = decode(&path).meta;
+            if metadata == "all" {
+                let exif = meta.exif.unwrap_or_else(|| panic!("EXIF kept (lossless {lossless})"));
+                assert_eq!(photocraft_algo::exif::read(&exif).make.as_deref(), Some("TestMake"), "lossless {lossless}");
+                assert!(meta.xmp.is_none(), "the photo had no XMP");
+            } else {
+                assert!(meta.exif.is_none(), "{metadata} leaves the camera data out (lossless {lossless})");
+            }
+        }
+    }
+}
+
 #[test]
 fn quick_export_all_writes_the_photos_exif() {
     let dir = tmp("quick_exif");
