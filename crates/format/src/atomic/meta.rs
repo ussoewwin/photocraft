@@ -12,7 +12,7 @@
 //! | extended attributes (Finder tags, `user.*`) | `copy_xattrs` | `copy_xattrs` | — |
 //! | "downloaded from the internet" | `com.apple.quarantine`, an xattr | — | `Zone.Identifier`, a named stream kept by [`replace_existing`] |
 //! | access-control list | `copy_acl` (`exacl`) | not carried over (see below) | DACL, kept by [`replace_existing`] |
-//! | creation time | not carried over (#6603) | — | kept by [`replace_existing`] |
+//! | creation time | `copy_created` (#9388) | — | kept by [`replace_existing`] |
 //!
 //! Everything here except [`replace_existing`] is **best effort and never touches the file's
 //! bytes**: a save that cannot carry a piece of metadata across is still a save, because a
@@ -22,7 +22,7 @@
 //!
 //! Not carried over, and why: Linux POSIX ACLs live in `system.posix_acl_access`, which
 //! `listxattr` does not report, so copying the listed attributes misses them; they would need
-//! their own step. macOS creation time needs `setattrlist`, which has no safe wrapper here.
+//! their own step.
 
 use std::io;
 use std::path::Path;
@@ -64,10 +64,26 @@ pub fn copy_metadata(from: &Path, to: &Path) -> io::Result<()> {
     #[cfg(not(target_os = "macos"))]
     let acl = Ok(());
 
+    #[cfg(target_os = "macos")]
+    let created = copy_created(from, to);
+    #[cfg(not(target_os = "macos"))]
+    let created = Ok(());
+
     // A save over a 0600 file must not widen it to whatever the process default is.
     let permissions = std::fs::metadata(from).and_then(|m| std::fs::set_permissions(to, m.permissions()));
 
-    attributes.and(acl).and(permissions)
+    attributes.and(acl).and(created).and(permissions)
+}
+
+/// The creation time ("Created" in Finder) of the file being replaced, onto the file replacing
+/// it: the rename leaves a new file born at the time of the save, where Photoshop keeps the
+/// original's (#9388). The rename keeps the time set here.
+#[cfg(target_os = "macos")]
+fn copy_created(from: &Path, to: &Path) -> io::Result<()> {
+    use std::os::macos::fs::FileTimesExt;
+    let created = std::fs::metadata(from)?.created()?;
+    let file = std::fs::OpenOptions::new().write(true).open(to)?;
+    file.set_times(std::fs::FileTimes::new().set_created(created))
 }
 
 /// [`copy_metadata`]'s extended-attribute step, by path: open both files and hand the

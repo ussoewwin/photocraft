@@ -481,3 +481,22 @@ fn a_directory_flush_the_file_system_cannot_do_still_saves() {
     let fs = Faulty { fail_sync_dir: Some(Ok(5)), ..Default::default() };
     assert!(atomic_write_with(&fs, NO_RETRY, &p, b"newer").is_err());
 }
+
+/// #9388: on macOS a save keeps the replaced file's creation time ("Created" in Finder), as
+/// Photoshop's does; the rename would otherwise leave a file born at the time of the save.
+#[cfg(target_os = "macos")]
+#[test]
+fn keeps_the_original_creation_time() {
+    use std::os::macos::fs::FileTimesExt;
+    let d = TempDir::new("created");
+    let p = d.0.join("doc.psd");
+    std::fs::write(&p, ORIGINAL).unwrap();
+    // A creation time well in the past, so a reset to "now" can't pass for it.
+    let born = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_600_000_000);
+    std::fs::OpenOptions::new().write(true).open(&p).unwrap().set_times(std::fs::FileTimes::new().set_created(born)).unwrap();
+    assert_eq!(std::fs::metadata(&p).unwrap().created().unwrap(), born);
+    atomic_write(&p, b"new").unwrap();
+    assert_eq!(std::fs::read(&p).unwrap(), b"new");
+    assert_eq!(std::fs::metadata(&p).unwrap().created().unwrap(), born, "the creation time survives the save");
+    assert_no_temp(&d.0);
+}
