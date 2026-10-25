@@ -4445,12 +4445,12 @@ layerLabel	Magenta	მეწამული
 # Update checks (Help menu and startup)
 	Automatically Check for Updates	განახლებების ავტომატური შემოწმება
 	Check for Updates…	განახლებების შემოწმება…
-	Checking for updates…	მიმდინარეობს განახლებების შემოწმება…
+	Checking for updates…	განახლებების შემოწმება…
 	Check Again	ხელახლა შემოწმება
 	Could not check for updates.	განახლებების შემოწმება ვერ მოხერხდა.
 	Installed version: {version}	დაინსტალირებული ვერსია: {version}
 	Open Download Page	ჩამოტვირთვის გვერდის გახსნა
-	Open the release page to choose an installer for your system.	გახსენით გამოშვების გვერდი და აირჩიეთ ინსტალერი თქვენი სისტემისთვის.
+	Open the release page to choose an installer for your system.	გახსენით გამოშვების გვერდი და აირჩიეთ თქვენი სისტემის ინსტალატორი.
 	PhotoCraft {version} is available.	ხელმისაწვდომია PhotoCraft {version}.
 	PhotoCraft is up to date.	PhotoCraft განახლებულია.
 	PhotoCraft Updates	PhotoCraft-ის განახლებები
@@ -4460,7 +4460,7 @@ layerLabel	Magenta	მეწამული
 	HSB Sliders	HSB სლაიდერები
 	CMYK Sliders	CMYK სლაიდერები
 	Lab Sliders	Lab სლაიდერები
-	Web Color Sliders	ვებ-ფერების სლაიდერები
+	Web Color Sliders	ვებფერის სლაიდერები
 	Hue Cube	ფერის ტონის კუბი
 	Brightness Cube	სიკაშკაშის კუბი
 	Color Wheel	ფერთა წრე
@@ -4468,8 +4468,8 @@ layerLabel	Magenta	მეწამული
 	CMYK Spectrum	CMYK სპექტრი
 	Grayscale Ramp	ნაცრისფერი ტონების შკალა
 	Current Colors	მიმდინარე ფერები
-	Make Ramp Web Safe	შკალაში მხოლოდ ვებ-ფერები
-	Copy Color as HTML	ფერის კოპირება HTML-ის სახით
+	Make Ramp Web Safe	ვებისთვის უსაფრთხო შკალა
+	Copy Color as HTML	ფერის კოპირება HTML კოდად
 	Copy Color's Hex Code	ფერის Hex კოდის კოპირება
 # Styles panel: .asl style libraries
 	Import Styles…	სტილების იმპორტი…
@@ -4482,6 +4482,6 @@ layerLabel	Magenta	მეწამული
 	Damaged Photoshop document	დაზიანებული Photoshop-ის დოკუმენტი
 	The document “{name}” may be damaged.	დოკუმენტი „{name}“ შესაძლოა დაზიანებული იყოს.
 	Some layers, pixels or masks could not be read. Do you want to continue opening it?	ზოგიერთი შრის, პიქსელის ან ნიღბის წაკითხვა ვერ მოხერხდა. გსურთ, გააგრძელოთ გახსნა?
-	If you continue, saving over the original may permanently discard unreadable data. Save a copy to keep the original.	თუ გააგრძელებთ, ორიგინალზე გადაწერით შენახვამ შეიძლება წაუკითხავი მონაცემები სამუდამოდ დაკარგოს. ორიგინალის შესანარჩუნებლად შეინახეთ ასლი.
+	If you continue, saving over the original may permanently discard unreadable data. Save a copy to keep the original.	თუ გააგრძელებთ და ორიგინალს გადააწერთ, წაუკითხავი მონაცემები შეიძლება სამუდამოდ დაიკარგოს. ორიგინალის შესანარჩუნებლად შეინახეთ ასლი.
 # Select and Mask: the workspace's edits (select.refineEdge)
 	Edits	ცვლილებები
