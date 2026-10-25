@@ -3060,3 +3060,5 @@ curves	Smooth	平滑
 	Grayscale Ramp	灰階色帶
 	Current Colors	目前色彩
 	Make Ramp Web Safe	讓色帶成為網頁安全色
+	Select and Mask was closed: its document is no longer the active one	已關閉「選取並遮住」：其文件已不是使用中的文件
+	Select and Mask was closed: another layer was selected	已關閉「選取並遮住」：已選取另一個圖層

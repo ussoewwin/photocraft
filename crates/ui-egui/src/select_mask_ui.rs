@@ -778,10 +778,10 @@ pub fn open(app: &mut PhotocraftApp) -> Result<(), String> {
 pub(crate) fn stale(app: &PhotocraftApp) -> Option<&'static str> {
     let w = app.distort.select_mask.as_ref()?;
     let Some(st) = app.session.active().filter(|st| st.doc.id == w.document) else {
-        return Some("Select and Mask was closed: its document is no longer the active one");
+        return Some(tl!("Select and Mask was closed: its document is no longer the active one"));
     };
     let layer = st.active_layer.filter(|id| st.doc.layer(*id).is_some());
-    (layer != w.layer).then_some("Select and Mask was closed: another layer was selected")
+    (layer != w.layer).then_some(tl!("Select and Mask was closed: another layer was selected"))
 }
 
 /// Closes a [`stale`] workspace (its work is dropped, the new target untouched): the reason.

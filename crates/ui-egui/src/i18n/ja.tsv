@@ -4114,3 +4114,5 @@ curves	Smooth	スムーズ
 	Grayscale Ramp	グレースケールランプ
 	Current Colors	現在のカラー
 	Make Ramp Web Safe	ランプを Web セーフにする
+	Select and Mask was closed: its document is no longer the active one	「選択とマスク」を閉じました: 対象のドキュメントがアクティブではなくなりました
+	Select and Mask was closed: another layer was selected	「選択とマスク」を閉じました: 別のレイヤーが選択されました

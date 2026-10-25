@@ -4163,3 +4163,5 @@ cameraData	Lens	Lens
 	Grayscale Ramp	Gri Tonlama Şeridi
 	Current Colors	Geçerli Renkler
 	Make Ramp Web Safe	Şeridi Web Renkleriyle Sınırla
+	Select and Mask was closed: its document is no longer the active one	Seç ve Maskele kapatıldı: belgesi artık etkin değil
+	Select and Mask was closed: another layer was selected	Seç ve Maskele kapatıldı: başka bir katman seçildi

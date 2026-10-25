@@ -743,3 +743,32 @@ fn ok_after_a_layer_switch_leaves_the_new_layer_alone() {
     assert!(revision_after_select >= revision && st.revision == revision_after_select, "nothing was edited after the switch");
     assert!(app.distort.select_mask.is_none());
 }
+
+/// The reason a stale workspace was closed is user-visible text: it is shown in the status bar and
+/// returned to the control channel in the language in use, and every catalogue has it (#8896).
+#[test]
+fn the_reason_a_stale_workspace_closed_is_translated() {
+    let document = "Select and Mask was closed: its document is no longer the active one";
+    let layer = "Select and Mask was closed: another layer was selected";
+    for lang in crate::i18n::Lang::all().filter(|l| l.code() != "en") {
+        for (reason, english) in [("document", document), ("layer", layer)] {
+            assert!(crate::i18n::has(lang, english), "{}: no row for the {reason} reason", lang.code());
+            let shown = crate::i18n::tr(lang, english);
+            let mut app = if reason == "document" { two_documents() } else { app_with_selection() };
+            let first = app.session.active().unwrap().active_layer.unwrap();
+            let other = (reason == "layer").then(|| app.run("layer.new.layer", json!({"name": "Other"})).unwrap()["layer"].as_u64().map(LayerId).unwrap());
+            app.run("layer.select", json!({"layer": first.0})).unwrap();
+            open(&mut app).unwrap();
+            crate::i18n::with_language(lang, || {
+                match other {
+                    Some(other) => drop(app.session.execute("layer.select", json!({"layer": other.0}))),
+                    None => assert!(app.session.set_active(1)),
+                }
+                let err = commit(&mut app).expect_err(&format!("{} / {reason}: the stale OK is refused", lang.code()));
+                assert_eq!(err, shown, "{}: the error is translated", lang.code());
+                assert_eq!(app.ui.status, shown, "{}: the status is translated", lang.code());
+            });
+            assert_ne!(shown, english, "{}: the {reason} reason reads differently from English", lang.code());
+        }
+    }
+}

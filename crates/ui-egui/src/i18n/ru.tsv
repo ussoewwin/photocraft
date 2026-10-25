@@ -4637,3 +4637,5 @@ shape	Appearance	Оформление
 	Grayscale Ramp	Шкала градаций серого
 	Current Colors	Текущие цвета
 	Make Ramp Web Safe	Сделать шкалу безопасной для web
+	Select and Mask was closed: its document is no longer the active one	Окно «Выделение и маска» закрыто: его документ больше не активен
+	Select and Mask was closed: another layer was selected	Окно «Выделение и маска» закрыто: выбран другой слой

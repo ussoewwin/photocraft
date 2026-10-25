@@ -4180,3 +4180,5 @@ cameraRaw	Dehaze	Odstranění oparu
 	Grayscale Ramp	Přechod stupňů šedi
 	Current Colors	Aktuální barvy
 	Make Ramp Web Safe	Omezit pruh na webové barvy
+	Select and Mask was closed: its document is no longer the active one	Vybrat a maskovat bylo zavřeno: jeho dokument již není aktivní
+	Select and Mask was closed: another layer was selected	Vybrat a maskovat bylo zavřeno: byla vybrána jiná vrstva
