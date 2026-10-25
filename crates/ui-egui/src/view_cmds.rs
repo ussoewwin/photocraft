@@ -722,7 +722,11 @@ fn run(app: &mut PhotocraftApp, ctx: &egui::Context, id: &str, p: &Value) -> Res
         return Ok(json!(*slot));
     }
     if let Some(k) = id.strip_prefix("view.screenMode.") {
-        let next = if k == "cycle" {
+        let next = if k == "cycle" && app.session.documents().is_empty() {
+            // Without a document Cycle can only leave a full screen mode (#9349): straight back
+            // to Standard, not on to the next full screen mode.
+            "standard"
+        } else if k == "cycle" {
             let i = SCREEN_MODES.iter().position(|m| *m == o.screen_mode).unwrap_or(0);
             SCREEN_MODES[(i + 1) % SCREEN_MODES.len()]
         } else {

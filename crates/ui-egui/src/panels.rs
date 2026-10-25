@@ -6053,6 +6053,8 @@ mod type_flyout_tests {
     #[test]
     fn long_press_screen_mode_opens_the_modes_without_cycling() {
         let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+        // A document open: Full Screen Mode needs one (#9349), so without it a click can't cycle.
+        app.run("file.new", serde_json::json!({"width": 64, "height": 48})).unwrap();
         let ctx = egui::Context::default();
         PhotocraftApp::setup_context(&ctx, crate::theme::ThemeKind::ALL[0]);
         frame(&mut app, &ctx, 0.0, vec![]);

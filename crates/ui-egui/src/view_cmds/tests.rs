@@ -804,6 +804,10 @@ fn full_screen_modes_need_a_document() {
     // A full screen mode reached anyway (automation) with no document drops back the same way.
     app.ui.view.screen_mode = "fullScreenWithMenuBar".into();
     assert_eq!(is_enabled(&app, "view.screenMode.cycle"), Some(true), "Cycle can still leave it");
+    // #9354 review: and Cycle itself goes straight back to Standard, not on to Full Screen.
+    menu(&mut app, &ctx, "view.screenMode.cycle", json!({})).unwrap();
+    assert_eq!(app.ui.view.screen_mode, "standard", "Cycle without a document returns to Standard");
+    app.ui.view.screen_mode = "fullScreenWithMenuBar".into();
     leave_full_screen_without_document(&mut app, &ctx);
     assert_eq!(app.ui.view.screen_mode, "standard");
 }
