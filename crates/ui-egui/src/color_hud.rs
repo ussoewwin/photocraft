@@ -16,8 +16,9 @@ use egui::{Color32, Mesh, PointerButton, Rect, Stroke, Vec2, vec2};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
+use photocraft_color::convert::{hsb_to_rgb, rgb_to_hsb};
+
 use crate::PhotocraftApp;
-use crate::color_picker_ui::{hsv_to_rgb, rgb_to_hsv};
 use crate::paint_mouse::has_brush_picker;
 use crate::state::UiState;
 
@@ -60,7 +61,7 @@ pub fn is_open(ui: &UiState) -> bool {
 pub fn open(app: &mut PhotocraftApp, at: [f32; 2], hold: bool) {
     static KEY: AtomicU64 = AtomicU64::new(0);
     let fg = app.session.tools.foreground;
-    let hsv = rgb_to_hsv([fg[0], fg[1], fg[2]]);
+    let hsv = rgb_to_hsb([fg[0], fg[1], fg[2]]);
     app.ui.color_hud = Some(Hud { anchor: at, hsv: [hsv[0], hsv[1], hsv[2]], start: fg, key: KEY.fetch_add(1, Ordering::Relaxed), hold });
 }
 
@@ -105,7 +106,7 @@ fn hue_strip_mesh(r: Rect) -> Mesh {
     let mut mesh = Mesh::default();
     for k in 0..=n {
         let y = r.top() + r.height() * k as f32 / n as f32;
-        let c = rgb_color(hsv_to_rgb(k as f32 / n as f32 * 360.0, 1.0, 1.0));
+        let c = rgb_color(hsb_to_rgb([k as f32 / n as f32 * 360.0, 1.0, 1.0]));
         mesh.colored_vertex(egui::pos2(r.left(), y), c);
         mesh.colored_vertex(egui::pos2(r.right(), y), c);
     }
@@ -123,7 +124,7 @@ fn paint_hue_strip(painter: &egui::Painter, r: Rect) {
 
 /// The saturation/value square for `hue`: white→hue horizontally, then clear→black vertically.
 fn paint_sv_square(painter: &egui::Painter, r: Rect, hue: f32) {
-    let hue_c = rgb_color(hsv_to_rgb(hue, 1.0, 1.0));
+    let hue_c = rgb_color(hsb_to_rgb([hue, 1.0, 1.0]));
     let mut mesh = Mesh::default();
     mesh.colored_vertex(r.left_top(), Color32::WHITE);
     mesh.colored_vertex(r.right_top(), hue_c);
@@ -203,7 +204,7 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
         && new != hud.hsv
     {
         hud.hsv = new;
-        let [r, g, b] = hsv_to_rgb(new[0], new[1], new[2]);
+        let [r, g, b] = hsb_to_rgb(new);
         let fg = app.session.tools.foreground;
         if (r - fg[0]).abs() > f32::EPSILON || (g - fg[1]).abs() > f32::EPSILON || (b - fg[2]).abs() > f32::EPSILON {
             set_foreground(app, [r, g, b, hud.start[3]], hud.key);
