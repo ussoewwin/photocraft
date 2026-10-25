@@ -788,6 +788,11 @@ fn full_screen_modes_need_a_document() {
     for id in ["view.screenMode.fullScreen", "view.screenMode.fullScreenWithMenuBar", "view.screenMode.cycle"] {
         assert_eq!(is_enabled(&app, id), Some(false), "{id} without a document");
     }
+    // #9354 review: run anyway (the toolbar list, automation), they are refused and Standard stays.
+    for id in ["view.screenMode.fullScreen", "view.screenMode.fullScreenWithMenuBar"] {
+        assert!(menu(&mut app, &ctx, id, json!({})).is_err(), "{id} is refused without a document");
+        assert_eq!(app.ui.view.screen_mode, "standard", "{id}");
+    }
     assert_eq!(is_enabled(&app, "view.screenMode.standard"), Some(true));
     let (mut with_doc, _) = app_with(1);
     for id in ["view.screenMode.fullScreen", "view.screenMode.fullScreenWithMenuBar", "view.screenMode.cycle"] {

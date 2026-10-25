@@ -376,7 +376,8 @@ pub fn toolbar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                         ("view.screenMode.fullScreen", tl!("Full Screen Mode")),
                     ] {
                         let on = crate::view_cmds::checked(app, id).unwrap_or(false);
-                        if ui.add(egui::Button::selectable(on, label)).clicked() {
+                        let enabled = crate::view_cmds::is_enabled(app, id).unwrap_or(true);
+                        if ui.add_enabled(enabled, egui::Button::selectable(on, label)).clicked() {
                             let _ = crate::menus::invoke(app, &ctx, id, json!({}));
                             ui.close();
                         }

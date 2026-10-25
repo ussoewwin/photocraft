@@ -722,6 +722,11 @@ fn run(app: &mut PhotocraftApp, ctx: &egui::Context, id: &str, p: &Value) -> Res
         return Ok(json!(*slot));
     }
     if let Some(k) = id.strip_prefix("view.screenMode.") {
+        // Full Screen Mode shows a document (#9349): refused without one, from any caller (the
+        // toolbar's list, automation), before a viewport command can go out.
+        if matches!(k, "fullScreen" | "fullScreenWithMenuBar") && app.session.documents().is_empty() {
+            return Err("Full Screen Mode needs an open document".into());
+        }
         let next = if k == "cycle" && app.session.documents().is_empty() {
             // Without a document Cycle can only leave a full screen mode (#9349): straight back
             // to Standard, not on to the next full screen mode.
