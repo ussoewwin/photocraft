@@ -1,9 +1,11 @@
 //! Selected path components and their Path Operations, as in Photoshop. Path Selection (A) clicks a
 //! component to select it (⇧ adds or removes one, a click off every component deselects) and drags
-//! the selected components. With components selected, the Path Operations menu and its keys (`+`
-//! Combine Shapes, `-` Subtract Front Shape, with the Pen tools or Path Selection) change their
-//! operation through `path.setOperation`, one History step; with none selected they set how the
-//! next path is added. The selection is Direct Selection's: every anchor of a selected component.
+//! the selected components. With components selected, Path Selection's Path Operations menu and
+//! its keys (`+` Combine Shapes, `-` Subtract Front Shape) change their operation through
+//! `path.setOperation`, one History step; with none selected, and always with the Pen tools (which
+//! show no component selection), they set how the next path is added. The first component always
+//! combines, so it keeps its operation. The selection is Direct Selection's: every anchor of a
+//! selected component.
 
 use egui::{Event, Key};
 use photocraft_doc::{Path, PathOp};
@@ -31,8 +33,12 @@ fn target(app: &PhotocraftApp) -> Option<(PathRef, Path)> {
 }
 
 /// The selected components: their path and the first subpath of each, in order. `None` with
-/// nothing selected, or a selection on a path that is not an active one any more.
+/// nothing selected, a selection on a path that is not an active one any more, or a tool other
+/// than Path Selection (the only one that shows it, so the only one that acts on it).
 pub(crate) fn selected(app: &PhotocraftApp) -> Option<(PathRef, Path, Vec<usize>)> {
+    if app.ui.tool != Tool::PathSelection {
+        return None;
+    }
     let sel = &app.ui.direct_selection;
     let r = sel.target.filter(|r| *r != PathRef::Pen)?;
     let (_, path) = active_paths(app).into_iter().find(|(p, _)| *p == r)?;
@@ -46,19 +52,21 @@ pub(crate) fn selected(app: &PhotocraftApp) -> Option<(PathRef, Path, Vec<usize>
 /// The operation every selected component has, for the menu's icon; `None` when they differ.
 pub(crate) fn selected_op(app: &PhotocraftApp) -> Option<&'static str> {
     let (_, path, heads) = selected(app)?;
-    let mut ops = heads.iter().filter_map(|h| path.subpaths.get(*h)).map(|s| op_value(s.op));
+    let mut ops = heads.iter().filter(|h| **h < path.subpaths.len()).map(|h| op_value(path.effective_op(*h)));
     let first = ops.next()?;
     ops.all(|o| o == first).then_some(first)
 }
 
 /// A Path Operations pick (menu or key): the selected components take `op`, and the tool keeps it
 /// for the next path. New Layer is not an operation a component can have: it only sets the tool.
+/// The first component always combines (it is what the others act on), so it keeps its operation.
 pub(crate) fn set_op(app: &mut PhotocraftApp, op: &str) -> Result<(), String> {
     app.ui.tool_options.pen_path_op = op.into();
     if op == "newLayer" {
         return Ok(());
     }
     let Some((r, path, heads)) = selected(app) else { return Ok(()) };
+    let heads: Vec<usize> = heads.into_iter().filter(|h| *h != 0).collect();
     if heads.iter().all(|h| path.subpaths.get(*h).is_some_and(|s| op_value(s.op) == op)) {
         return Ok(());
     }
@@ -139,10 +147,11 @@ pub(crate) fn press(app: &mut PhotocraftApp, at: [f64; 2], shift: bool) {
 }
 
 /// Path Selection's drag by `d` with components selected on the path it edits: moves those
-/// components, one History step. `None` with none selected (the whole path moves instead).
+/// components, one History step. `None` with none or all of them selected: the whole path moves
+/// instead, which keeps a live rectangle or ellipse live.
 pub(crate) fn move_selected(app: &mut PhotocraftApp, d: [f64; 2]) -> Option<Result<(), String>> {
-    let (r, ..) = selected(app)?;
-    if target(app).map(|(t, _)| t) != Some(r) {
+    let (r, path, heads) = selected(app)?;
+    if target(app).map(|(t, _)| t) != Some(r) || heads.len() >= path.components().len() {
         return None;
     }
     let mut params = r.params();

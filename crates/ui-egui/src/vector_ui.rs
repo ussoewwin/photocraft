@@ -551,6 +551,36 @@ pub fn pen_commit(app: &mut PhotocraftApp, closed: bool) -> bool {
     true
 }
 
+/// End the Pen path for good (Esc, or switching to another tool): commit it, and when the
+/// document refuses that (a locked shape layer or vector mask to add to…) keep it as the Work Path
+/// instead, so what was drawn is neither lost nor retried on every frame. A draft even the Work
+/// Path refuses is dropped; the status bar says which happened.
+pub fn pen_end(app: &mut PhotocraftApp) {
+    if pen_commit(app, false) {
+        return;
+    }
+    let active = app.session.active().map(|st| st.doc.id);
+    if app.ui.pen_doc.is_some_and(|d| Some(d) != active) {
+        // Drawn on another document that refused it (`cancel_stale`): left as it was.
+        return;
+    }
+    let Some(mut pen) = app.ui.pen.take() else { return };
+    app.ui.pen_doc = None;
+    if app.ui.direct_selection.target == Some(crate::direct_select::PathRef::Pen) {
+        app.ui.direct_selection = Default::default();
+    }
+    if pen.curvature {
+        curvature_refresh(&mut pen, false);
+    }
+    let refused = std::mem::take(&mut app.ui.status);
+    let kept = app.run("path.set", json!({"name": "work", "op": "combine", "path": pen_to_json(&pen, false)})).is_ok();
+    if kept {
+        app.ui.selected_path = Some("work".into());
+    }
+    app.ui.status = format!("{refused} (the path {})", if kept { "was kept as the Work Path" } else { "was discarded" });
+    app.ui.status_error = true;
+}
+
 /// Commit a finished Pen, Freeform Pen or Curvature Pen path, as one History step: in Shape mode a
 /// new shape layer, or with a Path Operation other than New Layer a subpath of the selected shape
 /// layer; in Path mode a subpath of the targeted vector mask, else of the selected path or a new

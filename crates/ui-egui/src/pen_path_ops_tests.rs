@@ -114,6 +114,77 @@ fn a_locked_shape_layer_keeps_the_drawn_path() {
     }
 }
 
+/// A hole drawn for a locked shape layer: the Pen's draft, refused, and the History length then.
+fn refused_hole(app: &mut PhotocraftApp) -> (LayerId, Path, usize) {
+    app.ui.tool_options.vector_mode = "shape".into();
+    square(app, 20.0, 20.0, 100.0);
+    let (id, body) = shape_path(app);
+    app.run("layer.lockLayers", json!({"all": true})).unwrap();
+    let steps = app.session.active().unwrap().history.past_len();
+    app.ui.tool_options.pen_path_op = "subtract".into();
+    square(app, 50.0, 50.0, 40.0);
+    assert!(app.ui.pen.is_some() && app.ui.status_error, "refused: {}", app.ui.status);
+    (id, body, steps)
+}
+
+/// The refused hole ended for good: kept, closed, as the Work Path, one History step; the locked
+/// shape is as it was.
+fn assert_kept_as_work_path(app: &PhotocraftApp, id: LayerId, body: &Path, steps: usize) {
+    assert!(app.ui.pen.is_none() && app.ui.pen_doc.is_none());
+    assert_eq!(shape_path(app), (id, body.clone()), "the locked shape is unchanged");
+    let w = work(app);
+    assert_eq!(w.subpaths.len(), 1);
+    assert_eq!(w.subpaths[0].knots.len(), 4);
+    assert!(w.subpaths[0].closed);
+    assert_eq!(app.session.active().unwrap().history.past_len(), steps + 1);
+    assert_eq!(app.ui.selected_path.as_deref(), Some("work"));
+    assert!(app.ui.status.contains("kept as the Work Path"), "{}", app.ui.status);
+}
+
+/// Switching to another tool with a refused draft (feedback on #7648): it was committed again on
+/// every frame, re-running `shape.create` and the error. Now it is ended once: kept as the Work
+/// Path, and later frames do nothing more.
+#[test]
+fn switching_tools_ends_a_refused_draft_once() {
+    let mut h = egui_kittest::Harness::builder().with_size(vec2(1400.0, 900.0)).with_max_steps(64).build_eframe(|cc| {
+        PhotocraftApp::setup_context(&cc.egui_ctx, Default::default());
+        app()
+    });
+    h.run_steps(2);
+    let (id, body, steps) = refused_hole(h.state_mut());
+    h.state_mut().ui.tool = Tool::Brush;
+    h.run_steps(2);
+    assert_kept_as_work_path(h.state(), id, &body, steps);
+    let status = h.state().ui.status.clone();
+    h.run_steps(4);
+    assert_eq!(h.state().ui.status, status, "no retry");
+    assert_eq!(h.state().session.active().unwrap().history.past_len(), steps + 1);
+}
+
+/// Esc with a refused draft ends it the same way; ↩ keeps it as the draft, to commit again once
+/// the layer is unlocked.
+#[test]
+fn esc_ends_a_refused_draft_and_return_keeps_it() {
+    let ctx = egui::Context::default();
+    let key = |app: &mut PhotocraftApp, key: egui::Key| {
+        let raw = egui::RawInput {
+            events: vec![egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE }],
+            ..Default::default()
+        };
+        ctx.begin_pass(raw);
+        crate::shortcuts::handle(app, &ctx);
+        ctx.end_pass().textures_delta.clear();
+    };
+    let mut app = app();
+    let (id, body, steps) = refused_hole(&mut app);
+    let draft = app.ui.pen.clone();
+    key(&mut app, egui::Key::Enter);
+    assert_eq!(app.ui.pen, draft, "↩ keeps the draft");
+    assert_eq!(app.session.active().unwrap().history.past_len(), steps);
+    key(&mut app, egui::Key::Escape);
+    assert_kept_as_work_path(&app, id, &body, steps);
+}
+
 /// With no shape layer selected, an operation other than New Layer still starts a shape layer
 /// (Photoshop: there is nothing to combine with), and the next path joins it.
 #[test]

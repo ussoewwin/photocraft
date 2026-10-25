@@ -166,12 +166,87 @@ fn a_stale_selection_changes_nothing() {
     let mut app = app();
     square(&mut app, 10.0, 10.0, 40.0);
     let (id, _) = shape(&app);
+    app.ui.tool = Tool::PathSelection;
     app.ui.direct_selection = crate::direct_select::DirectSelection { target: Some(PathRef::Layer(id.0)), anchors: vec![[5, 0]], ..Default::default() };
     assert!(super::selected(&app).is_none());
     let steps = history(&app);
     super::set_op(&mut app, "subtract").unwrap();
     assert_eq!(history(&app), steps);
     assert_eq!(super::move_selected(&mut app, [3.0, 3.0]), None);
+}
+
+/// The first component always draws as Combine (feedback on #7648): selected alone, `-` and the
+/// menu leave it as it is, with no History step, and the menu shows Combine; selected with
+/// another, only the other takes the operation.
+#[test]
+fn the_first_component_keeps_combining() {
+    let ctx = egui::Context::default();
+    let mut app = app();
+    square(&mut app, 20.0, 20.0, 120.0);
+    app.ui.tool_options.pen_path_op = "combine".into();
+    square(&mut app, 60.0, 60.0, 40.0);
+    app.ui.tool = Tool::PathSelection;
+    super::press(&mut app, [30.0, 30.0], false);
+    assert_eq!(super::selected(&app).map(|(.., h)| h), Some(vec![0]));
+    let steps = history(&app);
+    key(&mut app, &ctx, Key::Minus, egui::Modifiers::NONE);
+    super::set_op(&mut app, "intersect").unwrap();
+    assert_eq!(history(&app), steps, "no step");
+    assert_eq!(ops(&shape(&app).1.path), [PathOp::Combine, PathOp::Combine]);
+    assert_eq!(super::selected_op(&app), Some("combine"), "the menu shows what it draws as");
+    super::press(&mut app, [80.0, 80.0], true);
+    super::set_op(&mut app, "subtract").unwrap();
+    assert_eq!(history(&app), steps + 1);
+    assert_eq!(ops(&shape(&app).1.path), [PathOp::Combine, PathOp::Subtract]);
+    assert_eq!(super::selected_op(&app), None, "they differ");
+}
+
+/// A component selection is Path Selection's: with the Pen, which doesn't show it, `-` and the
+/// menu set the next path's operation and leave the components alone (feedback on #7648).
+#[test]
+fn the_pen_does_not_edit_a_hidden_component_selection() {
+    let ctx = egui::Context::default();
+    let mut app = app();
+    square(&mut app, 20.0, 20.0, 120.0);
+    app.ui.tool_options.pen_path_op = "combine".into();
+    square(&mut app, 60.0, 60.0, 40.0);
+    app.ui.tool = Tool::PathSelection;
+    super::press(&mut app, [80.0, 80.0], false);
+    assert!(super::selected(&app).is_some());
+    app.ui.tool = Tool::Pen;
+    let steps = history(&app);
+    key(&mut app, &ctx, Key::Minus, egui::Modifiers::NONE);
+    assert_eq!(app.ui.tool_options.pen_path_op, "subtract", "the next path's");
+    assert_eq!(super::selected_op(&app), None);
+    assert_eq!(history(&app), steps);
+    assert_eq!(ops(&shape(&app).1.path), [PathOp::Combine, PathOp::Combine]);
+}
+
+/// Dragging a live rectangle or ellipse with Path Selection (its only component selected by the
+/// press) moves the whole shape, which stays live: its corner-radius widgets stay (feedback on
+/// #7648).
+#[test]
+fn dragging_a_live_shape_keeps_it_live() {
+    for kind in ["rect", "ellipse"] {
+        let mut app = app();
+        app.run("shape.create", json!({"kind": kind, "rect": [20, 20, 60, 40], "fill": "#ff0000"})).unwrap();
+        assert!(shape(&app).1.live.is_some(), "{kind}");
+        app.ui.tool = Tool::PathSelection;
+        super::press(&mut app, [50.0, 40.0], false);
+        assert_eq!(super::selected(&app).map(|(.., h)| h), Some(vec![0]), "{kind}");
+        let steps = history(&app);
+        crate::vector_ui::path_selection_finish(&mut app, [50.0, 40.0], [60.0, 45.0]);
+        let (_, sh) = shape(&app);
+        assert_eq!(history(&app), steps + 1, "{kind}");
+        let (x0, y0, ..) = sh.path.control_bounds().unwrap();
+        assert_eq!((x0.round(), y0.round()), (30.0, 25.0), "{kind}: moved");
+        match sh.live {
+            Some(photocraft_doc::vector::LiveShape::Rect { rect, .. } | photocraft_doc::vector::LiveShape::Ellipse { rect }) => {
+                assert_eq!(rect, [30.0, 25.0, 60.0, 40.0], "{kind}")
+            }
+            other => panic!("{kind}: still live, got {other:?}"),
+        }
+    }
 }
 
 /// A shape path left open (Enter before closing it) is carried on from its endpoint and closed on

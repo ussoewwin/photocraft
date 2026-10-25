@@ -2301,7 +2301,7 @@ impl eframe::App for PhotocraftApp {
         // So does selecting another layer or document by any route (#6483).
         type_tool::end_if_left(self);
         if self.ui.pen.as_ref().is_some_and(|p| !p.drawn_with(self.ui.tool)) {
-            vector_ui::pen_commit(self, false);
+            vector_ui::pen_end(self);
         }
         transform_tool::end_if_left(self);
         shape_stroke_ui::sync_editor(self, ctx);

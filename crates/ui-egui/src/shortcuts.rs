@@ -564,8 +564,13 @@ pub fn handle(app: &mut PhotocraftApp, ctx: &egui::Context) {
         }
     }
     // Pen path in progress: ↩ and Esc both end it as an open path and keep it, as in Photoshop (#1769).
-    if app.ui.pen.is_some() && ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Enter) || i.consume_key(Modifiers::NONE, Key::Escape)) {
+    // When the document refuses it, ↩ keeps the draft to commit again; Esc keeps it as the Work Path.
+    if app.ui.pen.is_some() && ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Enter)) {
         crate::vector_ui::pen_commit(app, false);
+        return;
+    }
+    if app.ui.pen.is_some() && ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape)) {
+        crate::vector_ui::pen_end(app);
         return;
     }
     // A finished work path shown by the Pen or Path Selection: ⌫/Delete deletes it, as in

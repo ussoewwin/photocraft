@@ -180,7 +180,9 @@ fn merge_components(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// The Path Operations menu (or + / −) with path components selected: the components holding
 /// `subpaths` take `op`, the way Photoshop changes the operation of the selected components. A
-/// component's operation lives on its first subpath; the subpaths joined to it keep theirs.
+/// component's operation lives on its first subpath; the subpaths joined to it keep theirs. The
+/// first component is what the others combine with and always draws as Combine
+/// (`Path::effective_op`), so it keeps its operation; naming only it is refused.
 fn set_operation(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "path.setOperation";
     let op = p
@@ -202,7 +204,12 @@ fn set_operation(s: &mut Session, p: &Value) -> Result<Value> {
         let mut heads = Vec::with_capacity(subpaths.len());
         for i in &subpaths {
             let c = components.iter().find(|c| c.contains(i)).ok_or_else(|| format!("no subpath {i} (the path has {})", path.subpaths.len()))?;
-            heads.push(c.start);
+            if c.start != 0 {
+                heads.push(c.start);
+            }
+        }
+        if heads.is_empty() {
+            return Err("the first component always combines: it is the shape the others act on".into());
         }
         for h in heads {
             if let Some(sp) = path.subpaths.get_mut(h) {
@@ -266,7 +273,7 @@ pub fn specs() -> Vec<CommandSpec> {
         spec(
             "path.setOperation",
             "Path Operation",
-            r#""subpaths":[i,…],"op":"combine|subtract|intersect|exclude" (the shape components holding these subpaths take the operation; the Path Operations menu with components selected)"#.into(),
+            r#""subpaths":[i,…],"op":"combine|subtract|intersect|exclude" (the shape components holding these subpaths take the operation; the first component always combines and keeps its own; the Path Operations menu with components selected)"#.into(),
             set_operation,
         ),
     ]
@@ -579,6 +586,24 @@ mod tests {
         s.execute("path.setOperation", json!({"subpaths": [2], "op": "exclude"})).unwrap();
         let ops: Vec<_> = work(&s).subpaths.iter().map(|sp| sp.op).collect();
         assert_eq!(ops, [PathOp::Combine, PathOp::Exclude, PathOp::Join]);
+    }
+
+    /// The first component always draws as Combine: naming it with others changes only the
+    /// others, and naming only it is refused without a History step (feedback on #7648).
+    #[test]
+    fn set_operation_leaves_the_first_component_combining() {
+        let mut s = session();
+        let hole = json!({"subpaths": [{"closed": true, "knots": [[25, 25], [45, 25], [45, 45], [25, 45]]}]});
+        s.execute("path.set", json!({"path": square()})).unwrap();
+        s.execute("path.set", json!({"path": hole, "op": "combine"})).unwrap();
+        let steps = s.active().unwrap().history.entries().len();
+        let e = s.execute("path.setOperation", json!({"subpaths": [0], "op": "subtract"})).unwrap_err().to_string();
+        assert!(e.contains("first component"), "{e}");
+        assert_eq!(s.active().unwrap().history.entries().len(), steps);
+        s.execute("path.setOperation", json!({"subpaths": [0, 1], "op": "subtract"})).unwrap();
+        let ops: Vec<_> = work(&s).subpaths.iter().map(|sp| sp.op).collect();
+        assert_eq!(ops, [PathOp::Combine, PathOp::Subtract]);
+        assert_eq!((covered(&work(&s), 35, 35), covered(&work(&s), 15, 15)), (0.0, 1.0));
     }
 
     #[test]
