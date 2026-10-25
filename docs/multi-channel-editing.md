@@ -2,7 +2,9 @@
 
 Shift-click colour rows in the Channels panel to add or remove them from the editing
 set. Only native colour channels can be combined. Selecting every colour channel
-returns to the composite. Channel visibility can still be changed independently.
+returns to the composite. Selecting a channel shows it alone; Shift-clicking another
+shows exactly the selected set. The eye controls can then change visibility without
+changing the editing target. A subsequent row selection resets visibility to its set.
 
 Partial sets work with the existing raster drawing tools (Brush, Pencil, erasers,
 stamps, Mixer Brush, retouching tools, Bucket, Gradient and raster Fill/Stroke Path),
@@ -61,7 +63,9 @@ while a dialog is open does not redirect its operation.
 selected-plane math, byte preservation, live/committed drawing, selections, clipboard,
 explicit layer targets, HDR Curves, selected-default masks, missing destinations,
 errors, undo and redo. UI tests cover the selected tone
-choices, captured drawing targets and guide/path interaction.
+choices, captured drawing targets and guide/path interaction. A real pointer regression
+checks normal clicks, Shift-clicks and independent eye overrides across RGB, CMYK and Lab,
+including visibility persistence through an edit and the return to composite selection.
 
 The release benchmark is `crates/engine/examples/multi_channel_bench.rs`. It uses a
 6000 × 4000 synthetic RGB16 raster, one warmup and six measured repetitions per case,
@@ -142,13 +146,13 @@ Raw samples: [original pre-feature base](benchmarks/multi-channel-editing/baseli
 [environment and binary hashes](benchmarks/multi-channel-editing/environment.json).
 The three `candidate*-before-fused-original.json` files preserve the original feature run.
 
-Validation: 6,471 engine and UI tests passed (38 ignored), including 53 focused engine
+Validation: 6,472 engine and UI tests passed (38 ignored), including 53 focused engine
 regressions. Strict all-target Clippy, formatting, layering,
 wasm, parity generation and the adversarial command panic hunt passed. The complete
 `cargo xtask perf --quick` runner was attempted: its layout fixture fails because
 it tries to convert an already imported Smart Object. This unrelated runner failure is not
 reported as a passing full performance gate. The feature-specific benchmark above
-completed successfully. Eleven original review/fix rounds and three follow-up reviews were completed; the
+completed successfully. Eleven original review/fix rounds and four follow-up reviews were completed; the
 latest review found no actionable issues. Visual captures were rendered offscreen
 and inspected.
 
@@ -175,9 +179,9 @@ These captures use Hokusai’s *The Great Wave off Kanagawa*, c. 1830–1832, a 
 work reproduced by the Metropolitan Museum and distributed through
 [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Tsunami_by_hokusai_19th_century.jpg).
 The unchanged source image, public-domain notice and scripts are adjacent to the captures.
-All channels are visible so the artwork remains in full colour; the highlighted rows are
-the editing set. The open Curves dropdown shows the neutral combined entry and only its
-selected component choices.
+These captures show the default visibility: only the selected R+B, CMY or a+b
+components are visible. The remaining component eyes are off. The open Curves dropdown
+shows the neutral combined entry and only its selected component choices.
 
 Reproduce with the snapshot command above, adding `--open docs/images/multi-channel-editing/great-wave.jpg`
 and using `rgb-script.json`, `cmyk-script.json` or `lab-script.json`. For the dropdown, add

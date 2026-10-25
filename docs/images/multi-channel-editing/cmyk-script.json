@@ -30,16 +30,6 @@
     }
   ],
   [
-    "engine.execute",
-    {
-      "command": "channel.setVisible",
-      "params": {
-        "channel": "composite",
-        "visible": true
-      }
-    }
-  ],
-  [
     "ui.set",
     {
       "dockTabs": {
