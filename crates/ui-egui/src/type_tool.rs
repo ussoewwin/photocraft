@@ -192,12 +192,12 @@ pub(crate) fn offset_at(app: &mut PhotocraftApp, id: LayerId, x: f64, y: f64) ->
     let (tx, ty) = to_text(&aff, x, y);
     // Type on a path: the point's place along the path is the position in the (single) line.
     let shape = app.session.active().and_then(|s| text_layer(&s.doc, id).map(|t| t.shape.clone()));
-    let (tx, ty) = match shape {
-        Some(photocraft_doc::text::TextShape::Path { path, start, flip }) => {
-            photocraft_text::warp::arc_length_at(&path, flip, f64::from(tx), f64::from(ty)).map_or((tx, ty), |s| ((s - f64::from(start)) as f32, -1.0))
-        }
-        _ => (tx, ty),
-    };
+    let text_start = l.bounds().map_or(0.0, |bounds| f64::from(bounds[0]));
+    let (tx, ty) = shape
+        .as_ref()
+        .and_then(|shape| photocraft_text::warp::Warp::on_path_with_text_start(shape, text_start))
+        .and_then(|warp| warp.path_text_x(f64::from(tx), f64::from(ty)))
+        .map_or((tx, ty), |offset| (offset as f32, -1.0));
     photocraft_text::hit_char(&l, &text, tx, ty).0
 }
 
@@ -3257,6 +3257,45 @@ mod tests {
 
     /// TYPE-218-1: a Type tool click on the work path starts type on the path from the point
     /// clicked, in one history step with the placeholder selected; a click off it is point text.
+    #[test]
+    fn closed_path_upstream_caret_rectangle_left_edge_roundtrip() {
+        let mut app = app();
+        let path = photocraft_vector::shapes::rect(20.0, 20.0, 200.0, 100.0);
+        app.run("path.set", json!({"path": photocraft_engine::vector_cmds::path_json(&path)})).unwrap();
+        pointer_up(&mut app, [20.0, 45.0], [20.0, 45.0]);
+        insert(&mut app, "ssssssssssss");
+        let id = LayerId(app.ui.text_edit.as_ref().unwrap().layer);
+        let (layout, _, _) = layout(&mut app, id).unwrap();
+        let shape = text_layer(&app.session.active().unwrap().doc, id).unwrap().shape.clone();
+        let photocraft_doc::text::TextShape::Path { start, .. } = shape else {
+            assert!(matches!(shape, photocraft_doc::text::TextShape::Path { .. }), "outline click must attach path text");
+            return;
+        };
+        // Independent rectangle perimeter oracle: never use the warp under test to
+        // generate expected caret coordinates. Start is 25 px before the top-left seam.
+        assert!((f64::from(start) - 575.0).abs() < 0.5);
+        let mut tested_after_seam = false;
+        for index in [1, 4, 7, 10] {
+            let (x, _, _) = layout.caret(index);
+            let distance = f64::from(start) + f64::from(x);
+            tested_after_seam |= distance > 600.0;
+            let s = distance.rem_euclid(600.0);
+            let point = if s < 200.0 {
+                Point::new(20.0 + s, 20.0)
+            } else if s < 300.0 {
+                Point::new(220.0, 20.0 + s - 200.0)
+            } else if s < 500.0 {
+                Point::new(220.0 - (s - 300.0), 120.0)
+            } else {
+                Point::new(20.0, 120.0 - (s - 500.0))
+            };
+            // The rectangle oracle already returns document coordinates.
+            let doc = point;
+            assert_eq!(offset_at(&mut app, id, doc.x, doc.y), index, "caret round trip at {index}");
+        }
+        assert!(tested_after_seam, "fixture must cross the seam");
+    }
+
     #[test]
     fn click_on_a_path_starts_type_on_the_path() {
         use photocraft_doc::text::TextShape;
