@@ -49,6 +49,9 @@ pub struct CropState {
     /// `UiState::crop_rect` is the untouched default frame ([`ensure_frame`]): a drag inside it
     /// draws a new frame (as in Photoshop) instead of moving it, and committing it does nothing.
     pub default_frame: bool,
+    /// The frame is what the crop menu's Reset made it ([`reset`]): the whole canvas, still a
+    /// pending frame, but committing it crops nothing as long as it still matches the bounds.
+    pub reset_frame: bool,
     /// The document (index and size) the default frame was made for.
     frame_for: Option<(usize, u32, u32)>,
     /// The frame is being edited (pressed since it was made): the canvas shows what lies past it.
@@ -360,6 +363,7 @@ fn frame(app: &mut PhotocraftApp) {
     }
     app.ui.crop_rect = Some([f64::from(r.x0), f64::from(r.y0), f64::from(r.x1), f64::from(r.y1)]);
     app.crop.default_frame = true;
+    app.crop.reset_frame = false;
     app.crop.frame_for = key;
     app.crop.editing = false;
     app.crop.undo.clear();
@@ -397,6 +401,7 @@ pub fn cancel(app: &mut PhotocraftApp) {
     app.ui.crop_angle = 0.0;
     app.crop.drag = None;
     app.crop.default_frame = false;
+    app.crop.reset_frame = false;
     app.crop.frame_for = None;
     app.crop.editing = false;
     clear_history(app);
@@ -410,6 +415,7 @@ pub fn reset(app: &mut PhotocraftApp) {
     let b = st.doc.bounds();
     app.ui.crop_angle = 0.0;
     keyed(app, [f64::from(b.x0), f64::from(b.y0), f64::from(b.x1), f64::from(b.y1)]);
+    app.crop.reset_frame = true;
     crate::crop_mode::sync(app, None);
     crate::crop_mode::sync_frame(app);
 }
@@ -431,6 +437,7 @@ fn apply_step(app: &mut PhotocraftApp, s: CropStep) {
     app.ui.crop_rect = s.rect;
     app.ui.crop_angle = s.angle;
     app.crop.default_frame = s.default_frame;
+    app.crop.reset_frame = false;
 }
 
 /// While the Crop tool has box history, Undo/Redo step the *box*, not the document (Photoshop keeps
@@ -620,6 +627,7 @@ fn keyed(app: &mut PhotocraftApp, r: [f64; 4]) {
     if r.iter().all(|v| v.is_finite()) {
         app.ui.crop_rect = Some(r);
         app.crop.default_frame = false;
+        app.crop.reset_frame = false;
         app.crop.editing = true;
     }
 }
@@ -1661,6 +1669,34 @@ mod tests {
         assert_eq!(app.session.active().unwrap().doc.size, Size::new(60, 40));
         assert_eq!(crate::crop_mode::view_rotation(&app), 0.0);
         assert_eq!((app.ui.tool, app.ui.crop_rect), (Tool::Brush, None));
+    }
+
+    /// #6561: the crop menu's Reset leaves a pending full-canvas frame; committing it is a no-op:
+    /// no history step, and with Delete Cropped Pixels on, layer pixels past the canvas survive.
+    #[test]
+    fn reset_then_commit_crops_nothing() {
+        let mut app = app(SampleType::U8);
+        app.ui.tool_options.crop_delete = true;
+        // A layer whose pixels reach past the right edge: a full-canvas crop with delete would
+        // trim them.
+        app.run("layer.new.layer", json!({"name": "over"})).unwrap();
+        app.run("edit.fill", json!({"color": "#ff0000"})).unwrap();
+        app.run("layer.translate", json!({"dx": 40, "dy": 0})).unwrap();
+        let over = app.session.active().unwrap().doc.layers.iter().rev().find(|l| l.name == "over").unwrap();
+        let past = over.surface().unwrap().content_bounds().x1;
+        assert!(past > 200, "the layer reaches past the canvas: {past}");
+        // A drawn frame, then Reset: the whole canvas again, still pending.
+        drag(&mut app, &[[10.0, 10.0], [50.0, 40.0]], NONE);
+        reset(&mut app);
+        assert_eq!(app.ui.crop_rect, Some([0.0, 0.0, 200.0, 100.0]));
+        assert!(pending(&app), "Reset keeps the crop pending");
+        let steps = app.session.active().unwrap().history.past_len();
+        crate::canvas::commit_crop(&mut app);
+        let st = app.session.active().unwrap();
+        assert_eq!((st.doc.size, st.history.past_len()), (Size::new(200, 100), steps), "a reset frame commits as a no-op");
+        assert!(app.ui.crop_rect.is_none(), "the frame is gone");
+        let over = st.doc.layers.iter().rev().find(|l| l.name == "over").unwrap();
+        assert_eq!(over.surface().unwrap().content_bounds().x1, past, "pixels outside the canvas are kept");
     }
 
     /// #3368: the untouched default frame (the canvas, or the selection's bounds) is just dropped
