@@ -665,14 +665,15 @@ pub(crate) fn export_flat_with(doc: &Document, format: Format, opts: &ExportOpti
             warnings.push(format!("colours converted to sGray; {format:?} can't embed the document's colour profile"));
         }
     } else if img.icc.is_none() {
-        // An untagged document is in the profile assumed for its mode (sRGB, sGray), which is
-        // what Photoshop embeds for it (#9325): a JPEG or PNG with Embed Color Profile then says
-        // so instead of leaving viewers to guess. The codec still leaves it out when embedding
-        // is off.
+        // An untagged document is in the default working space for its mode, which is how the
+        // canvas shows it and what Photoshop embeds for it (#9325): sRGB, and for gray the Dot
+        // Gain 20 %-compatible working gray (not sGray, which would show the same samples
+        // darker). A JPEG or PNG with Embed Color Profile then says so instead of leaving
+        // viewers to guess. The codec still leaves it out when embedding is off.
         if img.layout().is_rgb() {
             img.icc = Some(Builtin::Srgb.profile().to_bytes().to_vec());
         } else if img.layout().is_gray() {
-            img.icc = Some(Builtin::SGray.profile().to_bytes().to_vec());
+            img.icc = Some(Builtin::DotGain20Compat.profile().to_bytes().to_vec());
         }
     }
     if format == Format::Tga {
@@ -1072,8 +1073,11 @@ mod assumed_profile_tests {
             let r = crate::export(&doc(ColorMode::Rgb), ext, &opts).unwrap();
             assert_eq!(embedded(&r).as_deref(), Some(Builtin::Srgb.description()), "{ext}");
         }
+        // #9342 review: an untagged gray document shows through the default working gray (Dot
+        // Gain 20 %-compatible), so that is the profile its samples are tagged with, not sGray
+        // (which would show them darker than the canvas).
         let r = crate::export(&doc(ColorMode::Grayscale), "png", &opts).unwrap();
-        assert_eq!(embedded(&r).as_deref(), Some(Builtin::SGray.description()));
+        assert_eq!(embedded(&r).as_deref(), Some(Builtin::DotGain20Compat.description()));
         // Embed Color Profile off: still none.
         let mut off = ExportOptions::default();
         off.encode.embed_icc = false;
