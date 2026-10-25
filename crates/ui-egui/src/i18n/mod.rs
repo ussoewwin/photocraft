@@ -187,7 +187,7 @@ fn expand(packed: &str, keys: &[&str]) -> Result<String, String> {
 }
 
 /// The registry. English first: it is the fallback and the source language.
-pub static LANGUAGES: [LangInfo; 22] = [
+pub static LANGUAGES: [LangInfo; 23] = [
     LangInfo { code: "en", name: "English", source: b"", plural: plural_one_other, complete_menus: false, catalog: OnceLock::new() },
     LangInfo { code: "ja", name: "日本語", source: catalog!("ja"), plural: plural_none, complete_menus: true, catalog: OnceLock::new() },
     LangInfo { code: "zh-hans", name: "简体中文", source: catalog!("zh-hans"), plural: plural_none, complete_menus: true, catalog: OnceLock::new() },
@@ -220,6 +220,8 @@ pub static LANGUAGES: [LangInfo; 22] = [
     LangInfo { code: "tr", name: "Türkçe", source: catalog!("tr"), plural: plural_none, complete_menus: true, catalog: OnceLock::new() },
     // Vietnamese; `vi-VN` resolves here.
     LangInfo { code: "vi", name: "Tiếng Việt", source: catalog!("vi"), plural: plural_none, complete_menus: true, catalog: OnceLock::new() },
+    // Swedish; `sv`, `sv-SE`, `sv-FI` locales resolve here.
+    LangInfo { code: "sv", name: "Svenska", source: catalog!("sv"), plural: plural_one_other, complete_menus: true, catalog: OnceLock::new() },
     // Hindi; `hi`, `hi-IN` locales resolve here.
     LangInfo { code: "hi", name: "हिन्दी", source: catalog!("hi"), plural: plural_one_other, complete_menus: false, catalog: OnceLock::new() },
 ];
@@ -737,6 +739,16 @@ mod tests {
     fn polish_plural_rule() {
         let forms: Vec<usize> = [0, 1, 2, 4, 5, 12, 14, 21, 22, 25, 112, 122].into_iter().map(plural_polish).collect();
         assert_eq!(forms, [2, 0, 1, 1, 2, 2, 2, 2, 1, 2, 2, 1]);
+    }
+
+    #[test]
+    fn swedish_resolves_and_pluralises() {
+        let sv = Lang::from_code("sv").expect("sv registered");
+        for tag in ["sv", "sv_SE.UTF-8", "sv-SE", "sv_FI", "sv-FI"] {
+            assert_eq!(lang_from_tag(tag), Some(sv), "{tag}");
+        }
+        let forms: Vec<usize> = [0, 1, 2, 5, 100, u64::MAX].into_iter().map(sv.0.plural).collect();
+        assert_eq!(forms, [1, 0, 1, 1, 1, 1]);
     }
 
     #[test]
