@@ -147,17 +147,54 @@ fn transpose_into(v: &[f32], out: &mut [f32], w: usize, h: usize) {
 }
 
 /// Approximate Gaussian blur of a `w`×`h` plane: three box passes per axis whose variance is
-/// exactly `sigma²` ([`BoxPass`]; edges clamp, which is exact here since the planes extend into
-/// constant mask regions). Whole-pixel boxes rounded the variance (a 6 px feather blurred like
-/// 6.48 px, a 3 px one like 3.46) and missed Photoshop's feathered edges by up to 4 levels
-/// (psd-tools mask-parameters-no-real-channel.psd); the exact variance is within 1.5. The axes
-/// are processed in parallel on bounded OS threads, preserving each line's floating-point
+/// exactly `sigma²` ([`BoxPass`]). Beyond its edges the plane continues with its edge values, as
+/// Photoshop feathers a mask at the canvas edge: a mask white up to the edge stays white there,
+/// one black there stays black (#9475). Whole-pixel boxes rounded the variance (a 6 px feather
+/// blurred like 6.48 px, a 3 px one like 3.46) and missed Photoshop's feathered edges by up to 4
+/// levels (psd-tools mask-parameters-no-real-channel.psd); the exact variance is within 1.5. The
+/// axes are processed in parallel on bounded OS threads, preserving each line's floating-point
 /// operation order.
 pub fn gaussian(v: &mut [f32], w: usize, h: usize, sigma: f32) {
     if w == 0 || h == 0 || v.len() != w.saturating_mul(h) {
         return;
     }
     let Some(pass) = BoxPass::for_sigma(sigma) else { return };
+    // Each pass reads `r + 1` samples past a pixel, so three see `3(r + 1)` past the edge. Clamping
+    // every pass at the edge instead repeated the blurred values there, which brightened a 32 px
+    // feather by up to 12 levels where the canvas cut it off.
+    let m = pass.r.saturating_add(1).saturating_mul(3);
+    let Some(mut padded) = padded(v, w, h, m) else {
+        blur_plane(v, w, h, pass);
+        return;
+    };
+    let pw = w + 2 * m;
+    blur_plane(&mut padded, pw, h + 2 * m, pass);
+    for (dst, src) in v.chunks_exact_mut(w).zip(padded.chunks_exact(pw).skip(m)) {
+        if let Some(src) = src.get(m..m + w) {
+            dst.copy_from_slice(src);
+        }
+    }
+}
+
+/// The `w`×`h` plane `v` with `m` more samples on every side, each the nearest edge value; `None`
+/// when that doesn't fit in memory.
+fn padded(v: &[f32], w: usize, h: usize, m: usize) -> Option<Vec<f32>> {
+    let pw = w.checked_add(m.checked_mul(2)?)?;
+    let len = pw.checked_mul(h.checked_add(m.checked_mul(2)?)?)?;
+    let mut out = Vec::new();
+    out.try_reserve_exact(len).ok()?;
+    let rows: Vec<&[f32]> = v.chunks_exact(w).collect();
+    let (first, last) = (*rows.first()?, *rows.last()?);
+    for row in std::iter::repeat_n(first, m).chain(rows.iter().copied()).chain(std::iter::repeat_n(last, m)) {
+        let (a, b) = (*row.first()?, *row.last()?);
+        out.extend(std::iter::repeat_n(a, m));
+        out.extend_from_slice(row);
+        out.extend(std::iter::repeat_n(b, m));
+    }
+    Some(out)
+}
+
+fn blur_plane(v: &mut [f32], w: usize, h: usize, pass: BoxPass) {
     // Reserve before modifying the input so allocation failure can use the sequential fallback
     // without leaving a half-blurred mask.
     let mut transposed = Vec::new();
@@ -255,7 +292,7 @@ mod tests {
         let mut sequential = parallel.clone();
         let pass = BoxPass::for_sigma(sigma).unwrap();
         gaussian_sequential(&mut sequential, w, h, pass);
-        gaussian(&mut parallel, w, h, sigma);
+        blur_plane(&mut parallel, w, h, pass);
         assert_eq!(parallel, sequential, "parallel blur must retain the exact per-line arithmetic");
     }
 
