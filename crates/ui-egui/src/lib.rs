@@ -2620,6 +2620,11 @@ impl PhotocraftApp {
         let layer_mask = st.channel_view.target == photocraft_engine::channel_cmds::ChannelTarget::LayerMask;
         let composite = (st.channel_view.target == photocraft_engine::channel_cmds::ChannelTarget::Composite || layer_mask) && st.doc.quick_mask.is_none();
         let has_mask = st.active_layer.and_then(|id| st.doc.layer(id)).is_some_and(|l| l.mask.is_some());
+        if matches!(st.channel_view.target, photocraft_engine::channel_cmds::ChannelTarget::Color(_))
+            && photocraft_engine::mask_view_cmds::current(st).is_some()
+        {
+            return true;
+        }
         if !composite || !has_mask {
             return false;
         }

@@ -341,7 +341,7 @@ pub(crate) fn run_filter(s: &mut Session, id: &str, p: &Value) -> Result<Value> 
                 // or texture map, and colour-valued settings belong to the source colour model.
                 let before = surf.clone();
                 *surf = filter(surf, &fp, area, bounds, selection.as_ref(), extent)?;
-                crate::color_channels::restrict_surface(&before, surf, colors)?;
+                crate::color_channels::restrict_surface_in(&before, surf, colors, extent)?;
                 return Ok(fp);
             }
             let before = locks.transparency.then(|| surf.clone());

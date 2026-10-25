@@ -6061,7 +6061,7 @@ pub fn tool_event(app: &mut PhotocraftApp, ev: ToolEvent, mods: egui::Modifiers)
                 app.guide_drag = Some(crate::rulers::GuideDrag::existing(vertical, i, [x, y]));
                 return;
             }
-            if photocraft_engine::color_channels::selected(&app.session).is_some_and(|c| c.len() > 1) {
+            if multiple_color_target(app) {
                 app.ui.status = "Move and transforms on several colour channels are not implemented yet".into();
                 return;
             }
@@ -6887,6 +6887,9 @@ pub fn paint_target(app: &PhotocraftApp) -> serde_json::Value {
         ChannelTarget::Composite if st.doc.quick_mask.is_some() => return json!("quickMask"),
         ChannelTarget::LayerMask => return json!("mask"),
         ChannelTarget::Color(_) => {
+            if photocraft_engine::mask_view_cmds::current(st).is_some() {
+                return json!("mask");
+            }
             if let Some(colors) = photocraft_engine::color_channels::selected(&app.session) {
                 return colors.params();
             }
@@ -6898,6 +6901,11 @@ pub fn paint_target(app: &PhotocraftApp) -> serde_json::Value {
     let viewing = photocraft_engine::mask_view_cmds::current(st).is_some();
     let mask = app.ui.mask_target || viewing || crate::adjustment_layer_active(st);
     json!(if mask && has_mask { "mask" } else { "pixels" })
+}
+
+/// Colour rows can remain selected behind a viewed mask; restrictions follow what is edited.
+pub(crate) fn multiple_color_target(app: &PhotocraftApp) -> bool {
+    paint_target(app).get("colors").and_then(serde_json::Value::as_array).is_some_and(|colors| colors.len() > 1)
 }
 
 #[cfg(test)]
@@ -10476,6 +10484,44 @@ mod multi_channel_ui_tests {
         app.ui.tool = Tool::Gradient;
         app.ui.tool_options.gradient_classic = false;
         assert!(!crate::gradient_ui::live_mode(&app));
+    }
+    #[test]
+    fn viewing_a_layer_mask_overrides_colour_targets_for_live_brush_strokes() {
+        for depth in [8, 16, 32] {
+            for view in ["gray", "overlay"] {
+                for colors in [vec![0], vec![0, 2]] {
+                    let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+                    app.run("file.new", json!({"width":64,"height":64,"depth":depth})).unwrap();
+                    app.run("layer.layerMask.revealAll", json!({})).unwrap();
+                    app.run("channel.target", json!({"colors":colors})).unwrap();
+                    app.run("view.layerMask", json!({"mode":view})).unwrap();
+                    assert_eq!(paint_target(&app), json!("mask"), "{depth}-bit {view} {colors:?}");
+                    assert!(app.layer_mask_targeted());
+                    app.run("tools.setColors", json!({"foreground":[0.0,0.0,0.0,1.0]})).unwrap();
+                    app.run("tools.setBrush", json!({"brush":{"size":12,"hardness":1.0,"smoothing":{"amount":0.0}}})).unwrap();
+                    app.ui.tool = Tool::Brush;
+                    let st = app.session.active().unwrap();
+                    let layer = st.active_layer.unwrap();
+                    let original = st.doc.layer(layer).unwrap().surface().unwrap().clone();
+                    let steps = st.history.past_len();
+                    tool_event(&mut app, ToolEvent::Down { x: 12.0, y: 32.0, pressure: 1.0 }, egui::Modifiers::NONE);
+                    tool_event(&mut app, ToolEvent::Move { x: 32.0, y: 32.0, pressure: 1.0 }, egui::Modifiers::NONE);
+                    let shown = display_doc(&mut app, 0).0;
+                    let shown_layer = shown.layer(layer).unwrap();
+                    assert_eq!(shown_layer.surface().unwrap(), &original);
+                    assert!(shown_layer.mask.as_ref().unwrap().surface.sample_channel(28, 32, 0) < 0.1);
+                    tool_event(&mut app, ToolEvent::Up { x: 32.0, y: 32.0 }, egui::Modifiers::NONE);
+                    let st = app.session.active().unwrap();
+                    let committed = st.doc.layer(layer).unwrap();
+                    assert_eq!(committed.surface().unwrap(), &original);
+                    assert_eq!(committed.mask.as_ref().unwrap().surface, shown_layer.mask.as_ref().unwrap().surface);
+                    assert_eq!(st.history.past_len(), steps + 1);
+                    app.run("channel.target", json!({"colors":colors})).unwrap();
+                    assert_eq!(paint_target(&app), json!({"colors":colors}));
+                    assert!(!app.layer_mask_targeted());
+                }
+            }
+        }
     }
     #[test]
     fn subset_does_not_block_guides_or_vector_path_transforms() {

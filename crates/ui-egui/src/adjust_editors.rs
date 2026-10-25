@@ -302,6 +302,7 @@ fn editor_channels(cx: &EditorCx, space: ToneSpace) -> Vec<(ToneChannel, String,
             let mut result = vec![(ToneChannel { key: "", label: "" }, iso.name.clone(), 0)];
             for k in colors.indices() {
                 if let Some(key) = keys.get(k) {
+                    // HistSource::Colors reserves slot 0 for the combined set, including Lab.
                     let histogram = k + 1;
                     let channel = channels.iter().find(|c| c.key == *key).copied().unwrap_or(ToneChannel { key, label: key });
                     result.push((channel, tl!(channel.label).to_owned(), histogram));
@@ -1869,6 +1870,74 @@ mod multi_channel_tests {
             harness.run();
             drop(harness);
             assert_eq!(values, base);
+        }
+    }
+    #[test]
+    fn subset_histograms_match_both_editors_in_all_native_spaces_and_depths() {
+        use egui_kittest::kittest::Queryable;
+        use photocraft_geom::Rect as PixelRect;
+
+        for mode in ["rgb", "cmyk", "lab"] {
+            for depth in [8, 16, 32] {
+                let mut s = Session::new();
+                s.execute("file.new", json!({"width":32,"height":24,"mode":mode,"depth":depth})).unwrap();
+                s.edit("Distinct native histogram bins", |doc, id| {
+                    let surface = doc.layer_mut(id.unwrap()).unwrap().surface_mut().unwrap();
+                    let mut pixel = vec![0.25, 0.5, 0.75];
+                    pixel.resize(surface.format().mode.color_channels(), 0.0);
+                    pixel.push(1.0);
+                    surface.fill_rect(PixelRect::new(0, 0, 32, 24), &pixel);
+                    pixel[0] = 0.375;
+                    pixel[2] = 0.875;
+                    surface.fill_rect(PixelRect::new(16, 0, 32, 24), &pixel);
+                    Ok(())
+                })
+                .unwrap();
+                s.execute("channel.target", json!({"colors":[0,2]})).unwrap();
+                let st = s.active().unwrap();
+                let isolated = channel_cmds::isolated_curve_channel(st).unwrap();
+                let colors = isolated.components.unwrap();
+                let mut cx = context(mode);
+                cx.isolated_curve = Some(isolated);
+                for kind in ["levels", "curves"] {
+                    let base = adjust_params::to_params(&adjust_params::default_for(kind, st.doc.mode).unwrap());
+                    let space = space_of(&base);
+                    let hist = Arc::new(tone::compute_histograms(&st.doc, HistSource::Colors { layer: st.active_layer.unwrap(), colors }, space));
+                    // Native subset histograms have their own combined slot even in Lab, whose
+                    // ordinary composite histograms instead start with Lightness at slot 0.
+                    assert_eq!(hist.ch.len(), 1 + st.doc.pixel_format().mode.color_channels());
+                    assert_eq!(hist[0].iter().sum::<u32>(), 2 * 32 * 24);
+                    assert_eq!(hist[1].iter().sum::<u32>(), 32 * 24);
+                    assert_eq!(hist[2], [0; 256]);
+                    assert_eq!(hist[3].iter().sum::<u32>(), 32 * 24);
+                    assert_ne!(hist[1], hist[3]);
+                    cx.hist = Some(hist.clone());
+                    for (choice, (channel, _, histogram)) in editor_channels(&cx, space).into_iter().enumerate() {
+                        assert!(hist[histogram].iter().any(|n| *n > 0));
+                        let mut values = base.clone();
+                        let mut harness = egui_kittest::Harness::new_ui(|ui| {
+                            if ui.ctx().fonts(|f| f.families().contains(&egui::FontFamily::Name("medium".into()))) {
+                                editor(ui, kind, &mut values, &cx);
+                            }
+                        });
+                        PhotocraftApp::setup_context(&harness.ctx, Default::default());
+                        harness.ctx.data_mut(|d| d.insert_temp(cx.mem.with(format!("{kind}-ch")), choice));
+                        harness.run_steps(4);
+                        if kind == "levels" {
+                            harness.get_by_label("Auto").click();
+                            harness.run_steps(2);
+                        }
+                        drop(harness);
+                        if kind == "levels" {
+                            let (lo, hi) = auto_levels(&hist[histogram]);
+                            let levels = read_levels(&values, channel.key);
+                            assert_eq!((levels[0], levels[2]), (lo, hi), "{mode}@{depth} {}", channel.key);
+                        } else {
+                            assert_eq!(values, base);
+                        }
+                    }
+                }
+            }
         }
     }
     #[test]

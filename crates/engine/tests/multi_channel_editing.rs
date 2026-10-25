@@ -1277,7 +1277,154 @@ fn rgb_float_curves_keep_endpoint_extrapolation_in_selected_planes() {
 }
 
 #[test]
-fn cut_copies_and_clears_the_same_layer_for_composite_and_colour_targets() {
+fn clear_and_cut_in_mask_view_preserve_pixels_and_clear_only_selected_mask_samples() {
+    for mode in ["rgb", "cmyk", "lab"] {
+        for depth in [8, 16, 32] {
+            for command in ["edit.clear", "edit.cut"] {
+                let mut s = setup(mode, depth);
+                s.execute("layer.layerMask.revealAll", json!({})).unwrap();
+                subset(&mut s);
+                s.execute("view.layerMask", json!({"mode":"gray"})).unwrap();
+                s.execute("tools.setColors", json!({"background":"#000000"})).unwrap();
+                s.edit("Feathered selection", |doc, _| {
+                    let mut mask = Surface::new(photocraft_color::PixelFormat::GRAY8);
+                    mask.fill_rect(Rect::new(4, 4, 12, 12), &[0.5]);
+                    doc.selection = Some(mask);
+                    Ok(())
+                })
+                .unwrap();
+                let before = surface(&s);
+                let layer = s.active().unwrap().active_layer.unwrap();
+                let mask = |s: &Session| s.active().unwrap().doc.layer(layer).unwrap().mask.as_ref().unwrap().surface.clone();
+                let mask_before = mask(&s);
+                let steps = s.active().unwrap().history.past_len();
+                s.execute(command, json!({})).unwrap();
+                assert_eq!(surface(&s), before, "{command} {mode}@{depth}");
+                let cleared = mask(&s);
+                assert!((cleared.sample_channel(8, 8, 0) - (1.0 - 128.0 / 255.0)).abs() < 0.005);
+                assert_eq!(cleared.sample_channel(20, 20, 0), 1.0);
+                assert_eq!(s.active().unwrap().history.past_len(), steps + 1);
+                if command == "edit.cut" {
+                    let clip = s.clipboard.as_ref().unwrap();
+                    assert_eq!(clip.surface.format().mode, photocraft_doc::ColorMode::Grayscale);
+                    assert_eq!(clip.surface.sample_channel(8, 8, 0), 1.0);
+                    assert!(clip.components.is_none());
+                }
+                s.undo();
+                assert_eq!(mask(&s), mask_before);
+                assert_eq!(surface(&s), before);
+                s.redo();
+                assert_eq!(mask(&s), cleared);
+            }
+        }
+    }
+}
+
+#[test]
+fn refused_mask_cut_and_clear_leave_the_pixels_mask_and_clipboard_unchanged() {
+    for command in ["edit.cut", "edit.clear"] {
+        let mut s = setup("rgb", 16);
+        let before = surface(&s);
+        assert!(s.execute(command, json!({"target":"mask"})).is_err());
+        assert_eq!(surface(&s), before);
+        s.execute("edit.copy", json!({})).unwrap();
+        let clipboard = s.clipboard.as_ref().unwrap().surface.clone();
+        s.execute("layer.layerMask.revealAll", json!({})).unwrap();
+        subset(&mut s);
+        s.execute("view.layerMask", json!({"mode":"gray"})).unwrap();
+        s.edit("Lock layer", |doc, id| {
+            doc.layer_mut(id.unwrap()).unwrap().locks.all = true;
+            Ok(())
+        })
+        .unwrap();
+        let doc = s.active().unwrap().doc.clone();
+        let layer = s.active().unwrap().active_layer.unwrap();
+        let steps = s.active().unwrap().history.past_len();
+        assert!(s.execute(command, json!({})).is_err());
+        assert_eq!(surface(&s), before);
+        assert_eq!(s.active().unwrap().doc.layer(layer).unwrap().mask, doc.layer(layer).unwrap().mask);
+        assert_eq!(s.clipboard.as_ref().unwrap().surface, clipboard);
+        assert_eq!(s.active().unwrap().history.past_len(), steps);
+    }
+}
+
+#[test]
+fn desaturate_honours_explicit_native_targets_over_the_panel_selection() {
+    for mode in ["rgb", "cmyk", "lab"] {
+        for depth in [8, 16, 32] {
+            for target in [json!({"color":1}), json!({"colors":[1]}), json!("pixels")] {
+                let mut s = setup(mode, depth);
+                let before = surface(&s);
+                let mut control = Session::new();
+                let st = s.active().unwrap();
+                control.add_document((*st.doc).clone(), None);
+                control.select_layer(st.active_layer.unwrap()).unwrap();
+                control.execute("image.adjustments.desaturate", json!({})).unwrap();
+                let expected = surface(&control);
+                subset(&mut s);
+                s.execute("image.adjustments.desaturate", json!({"target":target})).unwrap();
+                let actual = surface(&s);
+                assert_ne!(actual, before, "{mode}@{depth} {target}");
+                for y in 0..24 {
+                    for x in 0..32 {
+                        for k in 0..actual.channels() {
+                            let want = if target == "pixels" || k == 1 { &expected } else { &before };
+                            assert_eq!(
+                                actual.sample_channel(x, y, k).to_bits(),
+                                want.sample_channel(x, y, k).to_bits(),
+                                "{mode}@{depth} {target} component {k}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn mask_view_routes_implicit_edits_and_tone_editors_to_the_mask_before_colour_sets() {
+    for mode in ["rgb", "cmyk", "lab"] {
+        for depth in [8, 16, 32] {
+            for view in ["gray", "overlay"] {
+                for colors in [vec![0], vec![0, 2]] {
+                    let mut s = setup(mode, depth);
+                    s.execute("layer.layerMask.revealAll", json!({})).unwrap();
+                    s.execute("channel.target", json!({"colors":colors})).unwrap();
+                    s.execute("view.layerMask", json!({"mode":view})).unwrap();
+                    let before = surface(&s);
+                    let st = s.active().unwrap();
+                    let layer = st.active_layer.unwrap();
+                    let descriptor = photocraft_engine::channel_cmds::isolated_curve_channel(st).unwrap();
+                    assert_eq!(descriptor.gray, Some(photocraft_engine::channel_cmds::GraySurface::LayerMask));
+                    assert!(descriptor.components.is_none());
+                    s.execute("image.adjustments.invert", json!({})).unwrap();
+                    assert_eq!(surface(&s), before);
+                    let mask = |s: &Session| s.active().unwrap().doc.layer(layer).unwrap().mask.as_ref().unwrap().surface.clone();
+                    assert_eq!(mask(&s).sample_channel(8, 8, 0), 0.0);
+                    s.execute("paint.stroke", json!({"points":[[8,8]],"size":6,"hardness":1.0,"color":"#ffffff"})).unwrap();
+                    assert!(mask(&s).sample_channel(8, 8, 0) > 0.9);
+                    s.execute("filter.blur.gaussianBlur", json!({"radius":2})).unwrap();
+                    s.execute("image.adjustments.desaturate", json!({})).unwrap();
+                    assert_eq!(surface(&s), before);
+                    let mask_before = mask(&s);
+                    // An explicit native target can still override the viewed mask.
+                    s.execute("image.adjustments.invert", json!({"target":{"colors":colors}})).unwrap();
+                    assert_ne!(surface(&s), before);
+                    assert_eq!(mask(&s), mask_before);
+                    s.execute("channel.target", json!({"colors":colors})).unwrap();
+                    assert!(photocraft_engine::mask_view_cmds::current(s.active().unwrap()).is_none(), "selecting colours leaves mask view");
+                    s.execute("view.layerMask", json!({"mode":view})).unwrap();
+                    s.execute("channel.target", json!({"channel":"composite"})).unwrap();
+                    assert!(photocraft_engine::mask_view_cmds::current(s.active().unwrap()).is_none(), "selecting the composite leaves mask view");
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn copy_and_cut_resolve_the_same_layer_for_composite_and_colour_targets() {
     for indices in [vec![], vec![0], vec![0, 2]] {
         let mut s = Session::new();
         s.execute("file.new", json!({"width":8,"height":8,"depth":32})).unwrap();
@@ -1292,6 +1439,12 @@ fn cut_copies_and_clears_the_same_layer_for_composite_and_colour_targets() {
         if !indices.is_empty() {
             s.execute("channel.target", json!({"colors":indices})).unwrap();
         }
+        s.execute("edit.copy", json!({"layer":"source"})).unwrap();
+        let copied = &s.clipboard.as_ref().unwrap().surface;
+        let expected = if indices.is_empty() { &active_before } else { &source_before };
+        assert_eq!(copied.pixel(4, 4)[0], expected.pixel(4, 4)[0], "Copy {indices:?}");
+        assert_eq!(surface(&s), active_before);
+        assert_eq!(s.active().unwrap().doc.layer(source_id).unwrap().surface().unwrap(), &source_before);
         s.execute("edit.cut", json!({"layer":"source"})).unwrap();
         let source_after = s.active().unwrap().doc.layer(source_id).unwrap().surface().unwrap();
         let clipboard = &s.clipboard.as_ref().unwrap().surface;

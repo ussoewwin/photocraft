@@ -359,6 +359,15 @@ fn clear_selected(doc: &mut Document, id: LayerId, background: [f32; 4]) -> Resu
     clear_area(doc, id, area, sel.as_ref(), background)
 }
 
+/// Clear/Cut fill the selected mask samples with background gray, preserving layer pixels.
+pub(crate) fn clear_mask(doc: &mut Document, id: LayerId, background: [f32; 4]) -> Result<()> {
+    let sel = doc.selection.clone();
+    let canvas = doc.bounds();
+    let area = sel.as_ref().map_or(canvas, |m| m.content_bounds().intersect(&canvas));
+    let mask = crate::commands::paint_surface(doc, id, &json!({"target":"mask"}))?;
+    crate::fill_cmds::fill_color(mask, area, [background[0], background[1], background[2], 1.0], sel.as_ref())
+}
+
 /// Cut / Clear on a layer: makes the selected pixels transparent. The Background can't hold
 /// transparency, so there the area is filled with the background colour instead (Photoshop).
 pub(crate) fn clear_area(doc: &mut Document, id: LayerId, area: Rect, sel: Option<&Surface>, background: [f32; 4]) -> Result<()> {
@@ -986,39 +995,55 @@ pub fn specs() -> Vec<CommandSpec> {
         };
     }
     vec![
-        spec!("edit.cut", "Cut", &["Edit"], Some("Cmd+X"), "{} (a targeted colour channel cuts that channel only)", has_pixels, |s, p| {
-            // Refuse a locked layer before copying, so a refused Cut leaves the clipboard alone.
-            let colors = crate::color_channels::target(s, p)?.filter(|c| c.len() > 1 || p.get("target").is_some() || p.get("layer").is_some());
-            // Composite Cut retains Copy's active-layer semantics. A native colour target uses
-            // the same resolved destination for both the copied planes and the cleared samples.
-            let id = if colors.is_some() { crate::commands::layer_param(s, p)? } else { active_id(s)? };
-            crate::commands::check_pixels_unlocked(&s.active().ok_or(EngineError::NoDocument)?.doc, id)?;
-            if let Some(colors) = colors {
-                let result = crate::channel_clip::copy_colors(s, p, colors)?;
+        spec!(
+            "edit.cut",
+            "Cut",
+            &["Edit"],
+            Some("Cmd+X"),
+            r##"{"target":"mask"|{"color":i}|{"colors":[i,…]}?=Channels panel target,"layer":id|name?=active (colour targets only)} (a targeted mask or colour channel cuts that channel only; a colour set cuts its selected components)"##,
+            has_pixels,
+            |s, p| {
+                if crate::commands::is_mask_target(p) {
+                    let id = active_id(s)?;
+                    crate::commands::check_all_unlocked(&s.active().ok_or(EngineError::NoDocument)?.doc, id)?;
+                    let result = copy_mask(s)?;
+                    let bg = s.tools.background;
+                    s.edit("Cut Mask", |doc, _| clear_mask(doc, id, bg))?;
+                    return Ok(result);
+                }
+                // Refuse a locked layer before copying, so a refused Cut leaves the clipboard alone.
+                let colors = crate::color_channels::target(s, p)?.filter(|c| c.len() > 1 || p.get("target").is_some() || p.get("layer").is_some());
+                // Composite Cut retains Copy's active-layer semantics. A native colour target uses
+                // the same resolved destination for both the copied planes and the cleared samples.
+                let id = if colors.is_some() { crate::commands::layer_param(s, p)? } else { active_id(s)? };
+                crate::commands::check_pixels_unlocked(&s.active().ok_or(EngineError::NoDocument)?.doc, id)?;
+                if let Some(colors) = colors {
+                    let result = crate::channel_clip::copy_colors(s, p, colors)?;
+                    let bg = s.tools.background;
+                    s.edit("Cut Pixels", |doc, _| {
+                        for k in colors.indices() {
+                            crate::channel_cmds::clear_color_channel(doc, id, k, bg)?;
+                        }
+                        Ok(())
+                    })?;
+                    return Ok(result);
+                }
+                // A targeted colour channel cuts that channel only (#2698).
+                if let Some(k) = crate::channel_clip::paste_color_target(s, p) {
+                    return crate::channel_clip::cut(s, id, k);
+                }
+                let r = copy(s, false)?;
                 let bg = s.tools.background;
-                s.edit("Cut Pixels", |doc, _| {
-                    for k in colors.indices() {
-                        crate::channel_cmds::clear_color_channel(doc, id, k, bg)?;
-                    }
-                    Ok(())
-                })?;
-                return Ok(result);
+                s.edit("Cut Pixels", |doc, _| clear_selected(doc, id, bg))?;
+                Ok(r)
             }
-            // A targeted colour channel cuts that channel only (#2698).
-            if let Some(k) = crate::channel_clip::paste_color_target(s, p) {
-                return crate::channel_clip::cut(s, id, k);
-            }
-            let r = copy(s, false)?;
-            let bg = s.tools.background;
-            s.edit("Cut Pixels", |doc, _| clear_selected(doc, id, bg))?;
-            Ok(r)
-        }),
+        ),
         spec!(
             "edit.copy",
             "Copy",
             &["Edit"],
             Some("Cmd+C"),
-            r##"{"target":"mask"? = the targeted mask, copied as grayscale (#2928)} (a targeted colour or alpha channel copies that channel, as grayscale)"##,
+            r##"{"target":"mask"|{"color":i}|{"colors":[i,…]}?=Channels panel target,"layer":id|name?=active (colour targets only)} (a targeted mask, colour or alpha channel copies that channel as grayscale; a colour set copies its selected components)"##,
             can_copy,
             |s, p| {
                 if crate::commands::is_mask_target(p) {

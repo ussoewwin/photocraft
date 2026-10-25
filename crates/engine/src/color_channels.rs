@@ -131,7 +131,63 @@ pub(crate) fn refusal(s: &Session, id: &str, p: &Value) -> Option<String> {
 /// Restore unselected encoded samples, visiting only changed tiles. This preserves signed/HDR
 /// floats and NaN payloads, and never round-trips untouched samples through a colour conversion.
 pub fn restrict_surface(before: &Surface, after: &mut Surface, colors: ColorChannels) -> Result<()> {
-    if before.format() != after.format() {
+    restrict_surface_impl(before, after, colors, None)
+}
+
+/// Write back selected samples within a known document/preview extent, including changed defaults.
+pub fn restrict_surface_in(before: &Surface, after: &mut Surface, colors: ColorChannels, extent: photocraft_geom::Rect) -> Result<()> {
+    restrict_surface_impl(before, after, colors, Some(extent))
+}
+
+fn restrict_surface_impl(before: &Surface, after: &mut Surface, colors: ColorChannels, extent: Option<photocraft_geom::Rect>) -> Result<()> {
+    if before.format() != after.format() || before.default_bytes() != after.default_bytes() {
+        let original = before.format();
+        let warped = after.format();
+        if original.mode == warped.mode && original.sample == warped.sample {
+            // Geometric filters add transparency to their output. A colour-only edit retains
+            // the original layout and copies native selected bytes, without a colour round trip.
+            let bytes = original.sample.bytes();
+            let changed_default = colors.indices().any(|channel| {
+                let offset = channel.saturating_mul(bytes);
+                let range = offset..offset.saturating_add(bytes);
+                before.default_bytes().get(range.clone()) != after.default_bytes().get(range)
+            });
+            let mut coords: BTreeSet<_> = before.tiles().map(|(c, _)| *c).chain(after.tiles().map(|(c, _)| *c)).collect();
+            if changed_default {
+                let area = extent.ok_or_else(|| EngineError::Other("a changed channel default needs a bounded writeback extent".into()))?;
+                if u64::from(area.width()) * u64::from(area.height()) > 268_435_456 {
+                    return Err(EngineError::Other("colour-channel writeback exceeds the materialization limit".into()));
+                }
+                coords.extend(area.tiles());
+            }
+            let mut merged = before.clone();
+            for coord in coords {
+                let source = after.tile(coord);
+                let dest = merged.try_tile_mut(coord).map_err(|e| EngineError::Other(e.to_string()))?;
+                let rect = coord.rect();
+                let width = rect.width() as usize;
+                if width == 0 {
+                    return Err(EngineError::Other("invalid colour-channel tile bounds".into()));
+                }
+                for (i, pixel) in dest.bytes_mut().chunks_exact_mut(original.bytes_per_pixel()).enumerate() {
+                    if extent.is_some_and(|area| !area.contains(rect.x0.saturating_add((i % width) as i32), rect.y0.saturating_add((i / width) as i32))) {
+                        continue;
+                    }
+                    let offset = i.saturating_mul(warped.bytes_per_pixel());
+                    let input = source.and_then(|t| t.bytes().get(offset..offset.saturating_add(warped.bytes_per_pixel()))).unwrap_or(after.default_bytes());
+                    for channel in colors.indices() {
+                        let offset = channel.saturating_mul(bytes);
+                        let range = offset..offset.saturating_add(bytes);
+                        let input = input.get(range.clone()).ok_or_else(|| EngineError::Other("invalid warped colour channel".into()))?;
+                        let output = pixel.get_mut(range).ok_or_else(|| EngineError::Other("invalid destination colour channel".into()))?;
+                        output.copy_from_slice(input);
+                    }
+                }
+            }
+            merged.prune();
+            *after = merged;
+            return Ok(());
+        }
         return Err(EngineError::Other("a colour-channel edit cannot change the pixel format".into()));
     }
     let coords: BTreeSet<_> = after
@@ -318,7 +374,7 @@ pub(crate) fn adjust(
         // Colour adjustments such as Channel Mixer read the original other components.
         let before = surface.clone();
         crate::pixels::adjust_surface(surface, adjustment, selection, surface.format().mode).map_err(EngineError::Other)?;
-        return restrict_surface(&before, surface, colors);
+        return restrict_surface_in(&before, surface, colors, bounds);
     }
     tone::adjust(surface, colors, adjustment, selection, bounds)
 }
@@ -505,6 +561,38 @@ pub(crate) fn tone_adjustment(
 #[cfg(test)]
 mod extraction_tests {
     use super::*;
+    #[test]
+    fn added_warp_alpha_keeps_the_original_layout_and_unselected_nan_payloads() {
+        let format = photocraft_color::PixelFormat::new(photocraft_color::ColorMode::Rgb, photocraft_color::SampleType::F32, false);
+        let payload = f32::from_bits(0x7fc0_1234);
+        let mut before = Surface::new(format);
+        before.write_pixel(0, 0, &[0.2, payload, 0.8]);
+        let mut warped = Surface::new(photocraft_color::PixelFormat { alpha: true, ..format });
+        warped.write_pixel(0, 0, &[0.9, 0.0, 0.1, 0.4]);
+        restrict_surface(&before, &mut warped, ColorChannels::from_indices([0, 2], 3).unwrap()).unwrap();
+        assert_eq!(warped.format(), format);
+        assert_eq!(warped.sample_channel(0, 0, 0), 0.9);
+        assert_eq!(warped.sample_channel(0, 0, 1).to_bits(), payload.to_bits());
+        assert_eq!(warped.sample_channel(0, 0, 2), 0.1);
+    }
+
+    #[test]
+    fn geometric_writeback_materializes_changed_defaults_only_within_a_bounded_extent() {
+        let format = photocraft_color::PixelFormat::new(photocraft_color::ColorMode::Rgb, photocraft_color::SampleType::F32, false);
+        let before = Surface::with_default(format, &[0.3, 0.5, 0.7]);
+        let mut warped = Surface::new(photocraft_color::PixelFormat { alpha: true, ..format });
+        let colors = ColorChannels::from_indices([0, 2], 3).unwrap();
+        let original = warped.clone();
+        assert!(restrict_surface(&before, &mut warped, colors).is_err());
+        assert_eq!(warped, original);
+        assert!(restrict_surface_in(&before, &mut warped, colors, photocraft_geom::Rect::new(0, 0, i32::MAX, i32::MAX)).is_err());
+        assert_eq!(warped, original);
+        restrict_surface_in(&before, &mut warped, colors, photocraft_geom::Rect::new(1, 1, 3, 3)).unwrap();
+        assert_eq!(warped.format(), format);
+        assert_eq!(warped.pixel(2, 2), vec![0.0, 0.5, 0.0]);
+        assert_eq!(warped.pixel(0, 0), vec![0.3, 0.5, 0.7]);
+        assert_eq!(warped.pixel(3, 3), vec![0.3, 0.5, 0.7]);
+    }
     #[test]
     fn region_extraction_copies_only_the_required_tiles() {
         let mut source = Surface::new(photocraft_color::PixelFormat::new(photocraft_color::ColorMode::Rgb, photocraft_color::SampleType::F32, true));

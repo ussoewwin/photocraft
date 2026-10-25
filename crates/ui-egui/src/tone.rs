@@ -18,8 +18,9 @@ const CHANNELS: [(&str, &str); 4] = [("rgb", "RGB"), ("red", "Red"), ("green", "
 static EMPTY: [u32; 256] = [0; 256];
 
 /// 256-bin histograms: the composite then one per channel of the space (RGB: luminosity, R, G, B;
-/// CMYK: composite, C, M, Y, K as channel brightness; Lab: L, a, b). `tag` identifies what they
-/// were computed from (see [`HistSource`]).
+/// CMYK: composite, C, M, Y, K as channel brightness; Lab: L, a, b). Native partial selections
+/// ([`HistSource::Colors`]) always use combined, then native components, including Lab.
+/// `tag` identifies what they were computed from (see [`HistSource`]).
 #[derive(Clone, Debug, Default)]
 pub struct Histograms {
     pub tag: u64,

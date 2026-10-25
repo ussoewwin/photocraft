@@ -100,6 +100,9 @@ pub fn add_point_at(app: &mut PhotocraftApp, ctx: &egui::Context, x: f64, y: f64
     if values.get("pencil").and_then(Value::as_bool) == Some(true) {
         return true;
     }
+    if values.get("target").is_some_and(|target| matches!(target.as_str(), Some("mask" | "quickMask")) || target.get("channel").is_some()) {
+        return true;
+    }
     let Some(mode) = app.session.active().map(|s| s.doc.mode) else { return true };
     if !matches!(mode, photocraft_doc::ColorMode::Rgb | photocraft_doc::ColorMode::Grayscale) {
         app.ui.status = tl!("Unavailable in this color mode").into();
@@ -259,7 +262,7 @@ pub fn reset(app: &PhotocraftApp, ctx: &egui::Context, fields: &mut Map<String, 
         return;
     }
     let kind = fields.get("__adjust").and_then(Value::as_str).unwrap_or_default().to_string();
-    let mode = curve_mode(app, &kind);
+    let mode = curve_mode_for_fields(app, &kind, fields);
     // Color Balance: Photoshop keeps the user's Preserve Luminosity across Reset.
     let preserve = if kind == "colorBalance" { fields.get("preserveLuminosity").cloned() } else { None };
     let Ok(defaults) = photocraft_engine::adjust_params::default_for(&kind, mode) else { return };
@@ -294,7 +297,9 @@ pub fn open(app: &mut PhotocraftApp, command: &str) -> Option<u64> {
     if let Value::Object(p) = photocraft_engine::adjust_params::to_params(&defaults) {
         fields.extend(p);
     }
-    if let Some(colors) = photocraft_engine::color_channels::selected(&app.session) {
+    if app.layer_mask_targeted() {
+        fields.insert("target".into(), json!("mask"));
+    } else if let Some(colors) = photocraft_engine::color_channels::selected(&app.session) {
         fields.insert("target".into(), colors.params());
     }
     Some(app.ui.open_dialog(crate::state::DialogKind::Command, fields))
@@ -369,10 +374,24 @@ fn curve_mode(app: &PhotocraftApp, kind: &str) -> photocraft_doc::ColorMode {
     if kind == "curves" && isolated(app).is_some_and(|c| c.gray.is_some()) { photocraft_doc::ColorMode::Grayscale } else { mode }
 }
 
+/// A dialog keeps its captured space even if the Channels panel changes before Reset or repaint.
+fn curve_mode_for_fields(app: &PhotocraftApp, kind: &str, fields: &Map<String, Value>) -> photocraft_doc::ColorMode {
+    if kind == "curves"
+        && let Some(target) = fields.get("target")
+    {
+        if matches!(target.as_str(), Some("mask" | "quickMask")) || target.get("channel").is_some() {
+            return photocraft_doc::ColorMode::Grayscale;
+        }
+        return app.session.active().map_or(photocraft_doc::ColorMode::Rgb, |st| st.doc.mode);
+    }
+    curve_mode(app, kind)
+}
+
 /// Dialog body: the kind's editor over the fields, then the Preview checkbox.
 pub fn body(app: &mut PhotocraftApp, ui: &mut egui::Ui, fields: &mut Map<String, Value>) {
     let kind = fields.get("__adjust").and_then(Value::as_str).unwrap_or_default().to_string();
-    let mode = curve_mode(app, &kind);
+    let mask = fields.get("target").and_then(Value::as_str) == Some("mask");
+    let mode = curve_mode_for_fields(app, &kind, fields);
     if matches!(kind.as_str(), "levels" | "curves") {
         picker_controls(ui, fields, mode);
         ui.add_space(4.0);
@@ -386,6 +405,8 @@ pub fn body(app: &mut PhotocraftApp, ui: &mut egui::Ui, fields: &mut Map<String,
         .or_else(|| app.session.active().and_then(|s| s.active_layer));
     let isolated_curve = if fields.contains_key("__smartFilter") {
         None
+    } else if mask {
+        app.session.active().and_then(photocraft_engine::channel_cmds::layer_mask_curve_channel)
     } else if fields.contains_key("target") {
         app.session.active().and_then(|st| {
             photocraft_engine::color_channels::explicit(&crate::filter_dialog::params_of(fields), photocraft_engine::channel_cmds::color_count(&st.doc))
@@ -1172,6 +1193,23 @@ mod tests {
     }
 
     #[test]
+    fn captured_mask_curves_ignore_canvas_point_clicks_after_retargeting() {
+        for target in [json!({"channel":"composite"}), json!({"colors":[0,2]})] {
+            for every_channel in [false, true] {
+                let mut app = app_with_image();
+                app.run("layer.layerMask.revealAll", json!({})).unwrap();
+                app.run("channel.target", json!({"colors":[0,2]})).unwrap();
+                app.run("view.layerMask", json!({"mode":"gray"})).unwrap();
+                let id = open(&mut app, "image.adjustments.curves").unwrap();
+                let before = crate::filter_dialog::params_of(&app.ui.dialog_mut(id).unwrap().fields);
+                app.run("channel.target", target.clone()).unwrap();
+                assert!(add_point_at(&mut app, &egui::Context::default(), 8.0, 8.0, every_channel));
+                assert_eq!(crate::filter_dialog::params_of(&app.ui.dialog_mut(id).unwrap().fields), before);
+            }
+        }
+    }
+
+    #[test]
     fn ui_pointer_drives_an_armed_curves_picker() {
         let mut app = app_with_image();
         let id = open(&mut app, "image.adjustments.curves").unwrap();
@@ -1296,6 +1334,29 @@ mod tests {
             assert_eq!(fields[key], combined);
             assert_eq!(fields["lightness"], lightness);
             assert_eq!(fields["target"], json!({"colors":[0,2]}));
+        }
+    }
+    #[test]
+    fn curves_reset_keeps_the_captured_mask_or_native_space_after_retargeting() {
+        for mask in [false, true] {
+            let mut app = app_with_image();
+            app.run("file.new", json!({"width":32,"height":24,"mode":"lab","depth":16})).unwrap();
+            app.run("layer.layerMask.revealAll", json!({})).unwrap();
+            app.run("channel.target", json!({"colors":[0,2]})).unwrap();
+            if mask {
+                app.run("view.layerMask", json!({"mode":"gray"})).unwrap();
+            }
+            let id = open(&mut app, "image.adjustments.curves").unwrap();
+            let mut fields = app.ui.dialog_mut(id).unwrap().fields.clone();
+            let target = fields["target"].clone();
+            if mask {
+                app.run("channel.target", json!({"colors":[0,2]})).unwrap();
+            } else {
+                app.run("view.layerMask", json!({"mode":"gray"})).unwrap();
+            }
+            reset(&app, &egui::Context::default(), &mut fields);
+            assert_eq!(fields["target"], target);
+            assert_eq!(fields.contains_key("a"), !mask, "mask curves stay gray; native curves stay Lab");
         }
     }
 }

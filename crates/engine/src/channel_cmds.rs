@@ -238,6 +238,9 @@ pub fn isolated_curve_channel(st: &DocState) -> Option<IsolatedCurveChannel> {
 /// must give the same Curves dropdown (#5335).
 pub fn isolated_curve_channel_for(st: &DocState, layers_panel_mask: bool) -> Option<IsolatedCurveChannel> {
     let doc = &st.doc;
+    if matches!(st.channel_view.target, ChannelTarget::Color(_)) && (crate::mask_view_cmds::current(st).is_some() || layers_panel_mask) {
+        return layer_mask_curve_channel(st);
+    }
     if let Some(colors) = st.channel_view.color_selection(color_count(doc)) {
         return curve_channel_for_colors(doc, colors);
     }
@@ -287,7 +290,8 @@ pub fn curve_channel_for_colors(doc: &Document, colors: crate::color_channels::C
     })
 }
 
-fn layer_mask_curve_channel(st: &DocState) -> Option<IsolatedCurveChannel> {
+/// The active layer mask's tone descriptor, independent of the selected colour rows.
+pub fn layer_mask_curve_channel(st: &DocState) -> Option<IsolatedCurveChannel> {
     let layer = st.active_layer.and_then(|id| st.doc.layer(id))?;
     layer.mask.as_ref()?;
     let name = format!("{} Mask", layer.name);
@@ -675,7 +679,8 @@ pub(crate) fn target_surface<'a>(doc: &'a mut Document, layer: Option<LayerId>, 
     }
 }
 
-pub(crate) fn read_target_surface<'a>(doc: &'a Document, layer: Option<LayerId>, p: &Value) -> Result<&'a Surface> {
+/// Read the explicitly targeted layer pixels, layer mask, saved channel or Quick Mask.
+pub fn read_target_surface<'a>(doc: &'a Document, layer: Option<LayerId>, p: &Value) -> Result<&'a Surface> {
     match target_of(p) {
         Target::Alpha(i) => {
             let n = doc.channels.len();
@@ -715,7 +720,7 @@ fn edits_mask(id: &str) -> bool {
         || crate::filters::params_for(id, &Value::Null).is_some()
         || id == "edit.fill"
         // Copying a targeted mask (#2928).
-        || id == "edit.copy"
+        || matches!(id, "edit.copy" | "edit.cut" | "edit.clear")
         || crate::fill_key_cmds::IDS.contains(&id)
 }
 
@@ -788,6 +793,7 @@ pub(crate) fn inject_target(s: &Session, id: &str, params: Value) -> Value {
         ChannelTarget::Alpha(i) if i < st.doc.channels.len() => json!({ "channel": i }),
         ChannelTarget::Composite if st.doc.quick_mask.is_some() => json!("quickMask"),
         ChannelTarget::LayerMask => json!("mask"),
+        ChannelTarget::Color(_) if crate::mask_view_cmds::current(st).is_some() => json!("mask"),
         ChannelTarget::Color(_) => match crate::color_channels::selected(s).filter(|c| c.len() > 1) {
             Some(c) => c.params(),
             None => return params,
@@ -827,7 +833,8 @@ pub(crate) fn color_restriction(s: &Session, id: &str, params: &Value) -> Option
 pub(crate) fn restrict_to_color(before: &Document, after: &mut Document, id: LayerId, colors: crate::color_channels::ColorChannels) -> Result<()> {
     let Some(old) = before.layer(id).and_then(Layer::surface) else { return Ok(()) };
     let Some(new) = after.layer_mut(id).and_then(Layer::surface_mut) else { return Ok(()) };
-    crate::color_channels::restrict_surface(old, new, colors)
+    let extent = before.bounds().union(&old.content_bounds()).union(&new.content_bounds());
+    crate::color_channels::restrict_surface_in(old, new, colors, extent)
 }
 
 /// Clear (Delete) with colour channel `k` of layer `id` targeted (#2720): fill the selected area
@@ -1348,11 +1355,13 @@ fn target(s: &mut Session, t: ChannelTarget) {
         match t {
             // Like clicking RGB in Photoshop: the alpha overlays go away with their eyes.
             ChannelTarget::Composite => {
+                v.layer_mask = None;
                 v.color_hidden.clear();
                 v.alpha_visible.clear();
             }
             ChannelTarget::LayerMask | ChannelTarget::VectorMask => v.color_hidden.clear(),
             ChannelTarget::Color(k) => {
+                v.layer_mask = None;
                 v.color_hidden = (0..colors).map(|c| c != k).collect();
                 v.alpha_visible.clear();
             }
