@@ -80,68 +80,75 @@ the timer. Use `--clipboard` for a separate one-pixel paste case: copy and selec
 setup stay outside the timer, while pasting edits the existing target layer.
 
 Measured on 2026-10-25 on an AMD Ryzen 7 9700X (8 cores / 16 threads), Rust 1.99.0,
-release profile with the workspace's thin LTO defaults and eight Rayon workers. The
-base is `6719f1813e84e96129fc31676cc945d51be0e736`; it uses the same fixture,
-command parameters and timing loop. The candidate adds untimed setup options for
-small selections and a separate one-pixel clipboard fixture.
-Retained measurements ran without concurrent Rust compilation or test processes.
-Interrupted runs are discarded and repeated once compilation and tests are idle.
+release profile with thin LTO and eight Rayon workers. The three target modes are
+interleaved within each run. Retained runs had no concurrent Rust compilation or
+engine/UI tests; a process watcher discarded any interrupted measurement.
 
-| Case (milliseconds) | Base composite | New composite | Base single | New single | New RB (p50 / p95) |
+The previous implementation at `15bf0873ba03622e54189e668df20a1403e41d56` was rerun
+using its retained release binary (verified by SHA-256), with the same fixture,
+parameters and timing loop. The original pre-feature baseline at
+`6719f1813e84e96129fc31676cc945d51be0e736` is also retained in the raw data.
+
+| Case (milliseconds) | All channels | Red only | Red + Blue | RB before fusion | RB maximum |
 |---|---:|---:|---:|---:|---:|
-| Invert | 77.04 | 68.08 | 249.48 | 66.25 | 136.00 / 140.01 |
-| Threshold | 93.99 | 76.32 | 275.66 | 87.99 | 178.84 / 186.18 |
-| Levels (gamma 1.4) | 110.99 | 92.31 | 297.75 | 111.08 | 227.30 / 260.00 |
-| Curves (one midpoint) | 98.55 | 77.52 | 271.28 | 86.82 | 172.33 / 183.65 |
-| Gaussian Blur (radius 8) | 211.73 | 204.83 | 323.83 | 339.90 | 313.88 / 325.83 |
-| Brush commit (120 px) | 4.67 | 4.90 | 6.71 | 7.16 | 6.69 / 6.98 |
-| Eraser commit (120 px) | 4.53 | 4.41 | 6.53 | 7.11 | 6.72 / 6.79 |
-| Live brush (50 px extension) | 0.33 | 0.34 | 0.33 | 1.72 | 1.50 / 1.52 |
-| Live eraser (50 px extension) | 0.30 | 0.31 | 0.30 | 1.74 | 1.48 / 1.49 |
+| Invert | 75.23 | 21.78 | 26.37 | 126.81 | 28.98 |
+| Threshold | 94.93 | 24.07 | 29.77 | 174.85 | 31.03 |
+| Levels (gamma 1.4) | 102.88 | 23.44 | 29.06 | 218.91 | 29.52 |
+| Curves (one midpoint) | 91.62 | 22.68 | 28.81 | 173.50 | 32.86 |
+| Gaussian Blur (radius 8) | 184.71 | 320.05 | 288.82 | 298.25 | 293.23 |
+| Brush commit (120 px) | 4.61 | 7.04 | 6.55 | 6.59 | 6.64 |
+| Eraser commit (120 px) | 4.36 | 7.05 | 6.49 | 6.63 | 6.58 |
+| Live brush (50 px extension) | 0.33 | 1.69 | 1.41 | 1.50 | 1.44 |
+| Live eraser (50 px extension) | 0.30 | 1.70 | 1.41 | 1.49 | 1.42 |
 
-All columns are p50 except the last column's additional p95. Baseline single-channel
-live previews did not protect the unselected samples; the new live timings include
-that protection. The full-process peak RSS was 649.8 MiB on the base (two target
-modes) and 684.3 MiB on the candidate (three modes); these are process peaks across
-the complete harness, not isolated per-operation allocation measurements.
+Timings are p50 except the final column, which is the observed maximum of six samples
+(the legacy raw field is named `p95_ms`). R+B tone edits take 1.21–1.27× Red-only
+and are 4.8–7.5× faster than the rerun before fusion. The composite uses its existing
+generic full-colour adjustment path and is an interleaved control.
 
-Single-channel Invert/Levels/Curves are faster than the base because native plane
-edits run by tile in parallel and avoid a redundant full-layer restoration pass.
+Scalar adjustments visit native tiles once for the complete selected set, cloning each
+destination tile once and writing only the selected components. Large integer edits prepare
+exact sample-code tables through the existing adjustment math once per distinct channel
+record; fully selected pixels use encoded lookups. Float and small-selection edits use bounded
+tile buffers to retain HDR formulas and avoid full-image channel extraction. A test-only copy
+of the previous scalar path checks the mode/depth/selection/default matrix byte for byte.
 Filters retain the original native context and restore unselected encoded samples
-after filtering.
-Composite timings are controls; these runs establish no new performance budget or
-readiness percentage.
+after filtering. These runs establish no new performance budget or readiness percentage.
 
-| Case, 16 × 16 selection | RB p50 (ms) | RB p95 (ms) |
+| Case, 16 × 16 selection | RB p50 (ms) | RB maximum (ms) |
 |---|---:|---:|
-| Invert | 1.25 | 1.38 |
-| Threshold | 1.25 | 1.40 |
-| Levels (gamma 1.4) | 1.84 | 1.93 |
-| Curves (one midpoint) | 1.45 | 1.83 |
-| Gaussian Blur (radius 8) | 0.98 | 1.10 |
+| Invert | 0.98 | 1.08 |
+| Threshold | 0.98 | 1.08 |
+| Levels (gamma 1.4) | 1.61 | 2.08 |
+| Curves (one midpoint) | 1.15 | 1.19 |
+| Gaussian Blur (radius 8) | 0.92 | 0.99 |
 
 The small-selection cases use the same 24 MP layer. They measure bounded region work,
 including the filter halo, with selection creation outside the timer.
 
-The separate one-pixel Paste case measured **0.45 ms** for one channel
-and **0.97 ms** for RB (p95 0.45 / 1.00 ms). Copying the pixel and
-selection setup are outside the timer; the paste edits the existing 24 MP layer.
-Destination plane extraction is bounded to the pasted region.
+The separate one-pixel Paste case measured **0.46 ms** for one channel
+and **1.00 ms** for RB. Copy and selection setup are outside the timer;
+the paste edits the existing 24 MP layer. Destination extraction is bounded to the paste.
 
-Raw samples: [base](benchmarks/multi-channel-editing/baseline.json),
+The complete harness peak RSS was 650.0 MiB after fusion and 674.3 MiB
+before fusion. These are process peaks across all three target modes, not per-operation
+allocation measurements.
+
+Raw samples: [original pre-feature base](benchmarks/multi-channel-editing/baseline.json),
+[before-fusion rerun](benchmarks/multi-channel-editing/before-fused-rerun.json),
 [candidate](benchmarks/multi-channel-editing/candidate.json),
 [small selection](benchmarks/multi-channel-editing/candidate-region.json),
 [one-pixel paste](benchmarks/multi-channel-editing/candidate-clipboard.json),
 [environment and binary hashes](benchmarks/multi-channel-editing/environment.json).
+The three `candidate*-before-fused-original.json` files preserve the original feature run.
 
-Validation: 6,467 engine and UI tests passed (38 ignored), including 50 focused engine
+Validation: 6,471 engine and UI tests passed (38 ignored), including 53 focused engine
 regressions. Strict all-target Clippy, formatting, layering,
 wasm, parity generation and the adversarial command panic hunt passed. The complete
 `cargo xtask perf --quick` runner was attempted: its layout fixture fails because
-it tries to convert an already imported Smart Object, and six GPU bevel rows are
-absent with the available adapter setup. These unrelated runner failures are not
+it tries to convert an already imported Smart Object. This unrelated runner failure is not
 reported as a passing full performance gate. The feature-specific benchmark above
-completed successfully. Eleven independent review/fix rounds were completed; the
+completed successfully. Eleven original review/fix rounds and three follow-up reviews were completed; the
 latest review found no actionable issues. Visual captures were rendered offscreen
 and inspected.
 
@@ -161,3 +168,31 @@ for the Curves dropdown capture.
 ![Combined Levels entry and native subset histogram](images/multi-channel-editing/levels.png)
 
 ![Drawing changes Red and Blue; Green stays untouched, and Remove keeps colour-only edits on the current layer](images/multi-channel-editing/drawing.png)
+
+### Public-domain image captures
+
+These captures use Hokusai’s *The Great Wave off Kanagawa*, c. 1830–1832, a public-domain
+work reproduced by the Metropolitan Museum and distributed through
+[Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Tsunami_by_hokusai_19th_century.jpg).
+The unchanged source image, public-domain notice and scripts are adjacent to the captures.
+All channels are visible so the artwork remains in full colour; the highlighted rows are
+the editing set. The open Curves dropdown shows the neutral combined entry and only its
+selected component choices.
+
+Reproduce with the snapshot command above, adding `--open docs/images/multi-channel-editing/great-wave.jpg`
+and using `rgb-script.json`, `cmyk-script.json` or `lab-script.json`. For the dropdown, add
+`--click-at 700,243` for RGB or `--click-at 695,226` for CMYK/Lab.
+
+![RGB: Red and Blue selected, Green protected](images/multi-channel-editing/rgb.png)
+
+![CMYK: Cyan, Magenta and Yellow selected, Black protected](images/multi-channel-editing/cmyk.png)
+
+![Lab: a and b selected, Lightness protected](images/multi-channel-editing/lab.png)
+
+### CodeRabbit findings
+
+The initial review’s Last Filter non-object parameter panic and first single-channel live
+retouch-preview restriction issues are fixed, with regression tests. The proposed extra CMYK
+clipboard inversion is unnecessary: destination extraction and scatter already convert
+between tone and ink. Tests cover implicit/explicit singleton copying into explicit targets
+and normal/Paste Into/Paste Outside paths at 8/16/32-bit depths without adding an inversion.

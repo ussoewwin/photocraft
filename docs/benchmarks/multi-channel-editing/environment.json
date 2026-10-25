@@ -7,11 +7,17 @@
   "base_commit": "6719f1813e84e96129fc31676cc945d51be0e736",
   "baseline_binary_sha256": "103b32f5aeeeef26e7554a1f8287a6b5bbeff32f7400280f4a7d34c3163a0f94",
   "baseline_resources": "elapsed_seconds=14.81 peak_rss_kib=665344",
-  "candidate_binary_sha256": "91568e5215657c1127ab5cb330ebfadb6a1545687607b48c168370a2c5c8dc9c",
-  "candidate_resources": "elapsed_seconds=17.22 peak_rss_kib=700760",
+  "candidate_binary_sha256": "c29daf0495d8e764e2c615f322bde6d8790b58a3a816f8cc6fdce57cec24bc62",
+  "candidate_resources": "elapsed_seconds=10.69 peak_rss_kib=665584",
   "measurement_isolation": "Retained full-image, small-selection and one-pixel clipboard runs had no concurrent Rust compilation or engine/UI test processes. Interrupted runs were discarded and repeated.",
   "baseline_harness_sha256": "d8503bfea031eb9da9689d2676c42f87190f201f12789e391621495ca2a1b289",
   "candidate_harness_sha256": "28f1d433f20a72e97069521362899d0b6d724eed5788cb612eb70e20113d0ec7",
-  "candidate_region_resources": "elapsed_seconds=3.03 peak_rss_kib=442288",
-  "candidate_clipboard_resources": "elapsed_seconds=0.10 peak_rss_kib=213892"
+  "candidate_region_resources": "elapsed_seconds=3.10 peak_rss_kib=438464",
+  "candidate_clipboard_resources": "elapsed_seconds=0.10 peak_rss_kib=214620",
+  "candidate_before_fused_binary_sha256": "91568e5215657c1127ab5cb330ebfadb6a1545687607b48c168370a2c5c8dc9c",
+  "candidate_before_fused_original_resources": "elapsed_seconds=17.22 peak_rss_kib=700760",
+  "candidate_source_commit": "aeff53449221e8b42a628d832abc595c9503a146",
+  "candidate_tone_source_sha256": "da42e686db09ed4e5bf2c19316a6b47261c97185aec83c6bba86831e29e39c6e",
+  "before_fused_rerun_resources": "elapsed_seconds=16.47 peak_rss_kib=690516",
+  "before_fused_commit": "15bf0873ba03622e54189e668df20a1403e41d56"
 }
