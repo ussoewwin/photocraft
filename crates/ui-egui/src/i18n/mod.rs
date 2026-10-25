@@ -235,6 +235,7 @@ impl LangInfo {
         })
     }
 
+    /// Returns the parsed translation catalog, loading and caching it on first use.
     fn catalog(&self) -> &Catalog {
         self.catalog.get_or_init(|| Catalog::parse(&self.text()))
     }
@@ -735,12 +736,14 @@ mod tests {
         assert_eq!(tr_ctx(lang, "navigator", "Unlisted"), "Unlisted");
     }
 
+    /// Verifies Polish plural rule forms across singular, few, and many counts.
     #[test]
     fn polish_plural_rule() {
         let forms: Vec<usize> = [0, 1, 2, 4, 5, 12, 14, 21, 22, 25, 112, 122].into_iter().map(plural_polish).collect();
         assert_eq!(forms, [2, 0, 1, 1, 2, 2, 2, 2, 1, 2, 2, 1]);
     }
 
+    /// Verifies Swedish locale tag resolution and the two integer plural forms.
     #[test]
     fn swedish_resolves_and_pluralises() {
         let sv = Lang::from_code("sv").expect("sv registered");
@@ -751,6 +754,7 @@ mod tests {
         assert_eq!(forms, [1, 0, 1, 1, 1, 1]);
     }
 
+    /// Verifies Czech plural rule forms across singular, few, and other counts.
     #[test]
     fn czech_plural_rule() {
         let forms: Vec<usize> = [0, 1, 2, 3, 4, 5, 11, 12, 21, 22, 100, u64::MAX].into_iter().map(plural_cs).collect();
