@@ -1465,7 +1465,7 @@ fn properties(ui: &mut egui::Ui, w: &mut SelectMaskWorkspace, t: &Tokens) -> Opt
                 let labels: Vec<String> = Mode::ALL.iter().map(|m| format!("{} ({:?})", m.label(), m.key())).collect();
                 let options: Vec<(Mode, &str)> = Mode::ALL.iter().zip(&labels).map(|(m, l)| (*m, l.as_str())).collect();
                 // The labels carry the view's letter, already translated.
-                widgets::dropdown_literal(ui, "sm-view-mode", &mut w.opts.view, &options, 112.0);
+                widgets::dropdown_literal(ui, "sm-view-mode", tl!("View"), &mut w.opts.view, &options, 112.0);
             });
             // Beside the view list, as Photoshop's; long labels are cut rather than widening the
             // panel past its edge (every row below lines up on that edge).
@@ -1492,7 +1492,14 @@ fn properties(ui: &mut egui::Ui, w: &mut SelectMaskWorkspace, t: &Tokens) -> Opt
                 widgets::color_edit_button_srgb(ui, &mut w.opts.overlay_color);
                 ui.add_space(8.0);
                 ui.label(tl!("Indicates"));
-                widgets::dropdown(ui, "sm-indicates", &mut w.opts.indicates_selected, &[(false, tl!("Masked Areas")), (true, tl!("Selected Areas"))], 120.0);
+                widgets::dropdown(
+                    ui,
+                    "sm-indicates",
+                    tl!("Indicates"),
+                    &mut w.opts.indicates_selected,
+                    &[(false, tl!("Masked Areas")), (true, tl!("Selected Areas"))],
+                    120.0,
+                );
             });
         }
     });
@@ -1538,7 +1545,7 @@ fn properties(ui: &mut egui::Ui, w: &mut SelectMaskWorkspace, t: &Tokens) -> Opt
                 .filter(|(o, _)| !w.opts.decontaminate || !matches!(**o, "selection" | "layerMask"))
                 .map(|(o, l)| (o.to_string(), l))
                 .collect();
-            widgets::dropdown(ui, "sm-output-to", &mut w.opts.output, &options, 170.0);
+            widgets::dropdown(ui, "sm-output-to", tl!("Output To"), &mut w.opts.output, &options, 170.0);
         });
     });
     if let Some(e) = w.error.as_ref().or(w.preview.error.as_ref()) {
@@ -1581,7 +1588,7 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
     let mut mods = egui::Modifiers::NONE;
     let mut edit: Option<Value> = None;
     let mut do_reset = false;
-    egui::Area::new(egui::Id::new("select-mask-workspace")).order(egui::Order::Foreground).fixed_pos(screen.min).show(ctx, |ui| {
+    egui::Area::new(egui::Id::unique("select-mask-workspace")).order(egui::Order::Foreground).fixed_pos(screen.min).show(ctx, |ui| {
         let Some(w) = app.distort.select_mask.as_mut() else { return };
         let before = (w.opts.clone(), w.sample_all);
         w.texture_limit = ctx.input(|i| i.max_texture_side);
@@ -1669,7 +1676,7 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
         if w.zoom <= 0.0 {
             w.zoom = ((area.width() - 40.0) / cw.max(1.0)).min((area.height() - 40.0) / chh.max(1.0)).clamp(0.01, 4.0);
         }
-        let resp = ui.interact(area, egui::Id::new("select-mask-view"), Sense::click_and_drag());
+        let resp = ui.interact(area, egui::Id::unique("select-mask-view"), Sense::click_and_drag());
         // Over the image the keys are the workspace's: a panel button clicked last keeps the focus
         // otherwise, and Space (held to pan) would press it again. A number being typed keeps it.
         if resp.hovered()
