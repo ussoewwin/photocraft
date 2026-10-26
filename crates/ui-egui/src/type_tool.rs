@@ -5809,7 +5809,8 @@ mod ime_tests {
         );
         h.input_mut().events = vec![completed(first), egui::Event::Text("Family".into())];
         h.step();
-        assert_eq!(h.state().search, "Family", "the actual font picker keeps its text event");
+        // The field opens holding the current family, so the typed text lands after it.
+        assert_eq!(h.state().search, "Family 00Family", "the actual font picker keeps its text event");
         assert_eq!(layer_text(&h.state().app), before);
         assert_eq!(pending(&h.state().app), None);
         let stock = h.output().platform_output.ime.as_ref().expect("stock output survives finalization");
