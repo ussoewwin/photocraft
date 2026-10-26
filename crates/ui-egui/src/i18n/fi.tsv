@@ -3492,3 +3492,40 @@ cameraRaw	Blending	Sekoitus
 cameraRaw	Darks	Tummat sävyt
 cameraRaw	Lights	Vaaleat sävyt
 cameraRaw	Masking	Maskaus
+	Alt-click a plane to set the clone source	Alt-napsauta perspektiivitasoa asettaaksesi kloonauslähteen
+	Artboards	Piirtoalueet
+	Aspect Ratio	Kuvasuhde
+	Calculating…	Lasketaan…
+	Category	Luokka
+	Click to refresh histogram with uncached data	Napsauta päivittääksesi histogrammin ilman välimuistia
+	Color Table	Väritaulukko
+	Could not write {name}: {error}	Tiedostoa {name} ei voitu kirjoittaa: {error}
+	Count:	Määrä:
+	Dab	Täplä
+	From:	Lähde:
+	Full Document	Koko dokumentti
+	Gamma	Gamma
+	Kept {name}: written by another application	Tiedosto {name} säilytettiin: sen on kirjoittanut toinen ohjelma
+	Level:	Sävytaso:
+	Loose Curl	Löysä kihara
+	Loose Long	Löysä pitkä
+	Loose Medium	Löysä keskipitkä
+	Merged Layers	Yhdistetyt tasot
+	Percentile:	Persentiili:
+	Release Notes	Julkaisutiedot
+	Set the tone sliders from the image	Aseta sävysäätimet kuvan perusteella
+	Settings from {name}	Asetukset tiedostosta {name}
+	Settings from {name}; {count} not supported: {names}	Asetukset tiedostosta {name}; {count} tukematonta: {names}
+	Show Channels in Color	Näytä kanavat värillisinä
+	Show Statistics	Näytä tilastot
+	Source:	Lähde:
+	Stylized dabs from a history state	Tyylitellyt täplät historiatilasta
+	Target	Kohde
+	Tight Curl	Tiukka kihara
+	Tight Long	Tiukka pitkä
+	Tight Medium	Tiukka keskipitkä
+	Tight Short	Tiukka lyhyt
+	Too many clone strokes: apply Vanishing Point first	Liikaa kloonausvetoja: käytä ensin Pakopiste-suodinta
+	Uncached Refresh	Päivitä ilman välimuistia
+	Units	Yksiköt
+	Update and Restart	Päivitä ja käynnistä uudelleen
