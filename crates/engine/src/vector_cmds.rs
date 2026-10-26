@@ -1824,39 +1824,29 @@ pub fn specs() -> Vec<CommandSpec> {
             run: path_to_selection,
             journal: true,
         },
-<<<<<<< HEAD
+
         // Ctrl+Shift+Enter: add the path to the active selection.
-=======
         // ⌘⇧↩ / Ctrl+Shift+Enter adds the path to the selection, ⌘⌥↩ / Ctrl+Alt+Enter subtracts it.
->>>>>>> 49aabe92a (Fix: résolution du conflit de configuration)
         CommandSpec {
             id: "path.addToSelection",
             label: "Add Path to Selection",
             menu: &[],
             shortcut: Some("Cmd+Shift+Enter"),
-<<<<<<< HEAD
             params: r##"{"name":str|"work"|"layer"="work","feather":px=0,"antiAlias":bool=true} (same as path.toSelection with mode "add")"##,
-=======
+
             params: r##"{"name":str|"work"|"layer"="work","feather":px=0,"antiAlias":bool=true} (path.toSelection with mode "add")"##,
->>>>>>> 49aabe92a (Fix: résolution du conflit de configuration)
             enabled: has_doc,
             run: |s, p| path_to_selection_with_mode(s, p, "add"),
             journal: true,
         },
-<<<<<<< HEAD
         // Ctrl+Alt+Enter: subtract the path from the active selection.
-=======
->>>>>>> 49aabe92a (Fix: résolution du conflit de configuration)
         CommandSpec {
             id: "path.subtractFromSelection",
             label: "Subtract Path from Selection",
             menu: &[],
             shortcut: Some("Cmd+Alt+Enter"),
-<<<<<<< HEAD
             params: r##"{"name":str|"work"|"layer"="work","feather":px=0,"antiAlias":bool=true} (same as path.toSelection with mode "subtract")"##,
-=======
             params: r##"{"name":str|"work"|"layer"="work","feather":px=0,"antiAlias":bool=true} (path.toSelection with mode "subtract")"##,
->>>>>>> 49aabe92a (Fix: résolution du conflit de configuration)
             enabled: has_doc,
             run: |s, p| path_to_selection_with_mode(s, p, "subtract"),
             journal: true,
