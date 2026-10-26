@@ -3490,8 +3490,7 @@ fn layer_row(
         let mode = if m.command && on_thumb && doc.is_background(l.id) { "replace" } else { select_mode(m) };
         actions.push(("layer.select".into(), json!({"layer": l.id.0, "mode": mode})));
         crate::smart_ui::deselect(ctx, doc.id);
-        // A thumbnail explicitly selects content or a mask. Selecting an adjustment/fill row
-        // defaults to its mask, but clicking its content thumbnail must leave the mask target.
+        // Adjustment/fill row names target contents; only a mask thumbnail targets its mask.
         let on_mask = mask_rect.zip(pos).is_some_and(|(r, p)| r.expand(2.0).contains(p));
         let on_vector = pos.and_then(|p| masks.hit(p)) == Some(crate::mask_thumbs_ui::MaskKind::Vector);
         // Clicking the layer thumbnail leaves mask view (#196).
@@ -3506,13 +3505,11 @@ fn layer_row(
             // Paths panel selects the layer's path.
             app.ui.selected_path = Some("layer".into());
             actions.push(("ui.vectorMaskTarget".into(), json!(true)));
-        } else if on_mask || (content_less && l.mask.is_some() && !on_thumb) {
-            if on_mask {
-                // The mask thumbnail also switches Properties to the mask (#3369).
-                app.ui.properties_layer = None;
-            }
+        } else if on_mask {
+            // The mask thumbnail also switches Properties to the mask (#3369).
+            app.ui.properties_layer = None;
             actions.push(("ui.maskTarget".into(), json!(true)));
-        } else if on_thumb || !row.primary {
+        } else if on_thumb || content_less || !row.primary {
             actions.push(("ui.maskTarget".into(), json!(false)));
         }
         // ⌥-click the layer thumbnail: fit the layer on screen, as Photoshop does.
