@@ -861,12 +861,12 @@ fn path_operations_menu(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
 
 /// A Path Operations menu row: its icon and label, highlighted when it is the current operation.
 fn path_op_button(ui: &mut egui::Ui, glyph: &str, label: &str, checked: bool) -> egui::Response {
-    let icon = ui.id().with((glyph, "icon"));
+    let icon = egui::IdSalt::new((glyph, "icon"));
     let b = egui::Button::new((egui::Atom::custom(icon, vec2(16.0, 16.0)), label, egui::Atom::grow())).selected(checked).atom_ui(ui);
     if let Some(r) = b.rect(icon) {
         crate::icons::paint(ui, r, glyph, 16.0, Tokens::get(ui.ctx()).icon);
     }
-    b.response.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, ui.is_enabled(), checked, label));
+    b.response.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, ui.is_enabled(), checked, label));
     b.response
 }
 
