@@ -5757,12 +5757,16 @@ mod ime_tests {
                                 photocraft_engine::prefs::FontPreview::Medium,
                                 &[],
                             );
-                            let search = ui.scope_id().with(("font-search", "reset-font"));
-                            state.search = ui.data(|d| d.get_temp::<String>(search)).unwrap_or_default();
-                            let input = search.with("input");
-                            state.search_input = Some(input);
-                            state.search_focused = ui.memory(|m| m.has_focus(input));
-                            state.search_height = ui.data(|d| d.get_temp::<f32>(search.with("height")));
+                            // The font field is its own text input: it takes focus as a click would, and
+                            // its edit state holds what is typed and the measured popup height.
+                            if !ui.memory(|m| m.has_focus(button)) {
+                                ui.memory_mut(|m| m.request_focus(button));
+                            }
+                            let edit = ui.data(|d| d.get_temp::<FontFieldEdit>(button.with("edit")));
+                            state.search = edit.as_ref().map(|e| e.text.clone()).unwrap_or_default();
+                            state.search_input = Some(button);
+                            state.search_focused = ui.memory(|m| m.has_focus(button));
+                            state.search_height = edit.and_then(|e| e.menu_height);
                         });
                     }
                     if state.picker_button {
