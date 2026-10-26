@@ -3490,7 +3490,7 @@ fn layer_row(
         let mode = if m.command && on_thumb && doc.is_background(l.id) { "replace" } else { select_mode(m) };
         actions.push(("layer.select".into(), json!({"layer": l.id.0, "mode": mode})));
         crate::smart_ui::deselect(ctx, doc.id);
-        // Adjustment/fill row names target contents; only a mask thumbnail targets its mask.
+        // Adjustment names target contents; fill rows keep their existing mask default.
         let on_mask = mask_rect.zip(pos).is_some_and(|(r, p)| r.expand(2.0).contains(p));
         let on_vector = pos.and_then(|p| masks.hit(p)) == Some(crate::mask_thumbs_ui::MaskKind::Vector);
         // Clicking the layer thumbnail leaves mask view (#196).
@@ -3499,17 +3499,20 @@ fn layer_row(
             let mask = if v.filter { "filter" } else { "layer" };
             actions.push((photocraft_engine::mask_view_cmds::ID.into(), json!({"layer": l.id.0, "mode": "off", "mask": mask})));
         }
-        let content_less = matches!(l.content, LayerContent::Adjustment(_) | LayerContent::Fill(_));
+        let adjustment = matches!(l.content, LayerContent::Adjustment(_));
+        let fill_mask = matches!(l.content, LayerContent::Fill(_)) && l.mask.is_some();
         if on_vector {
             // The vector mask thumbnail targets the vector mask: the path tools edit it and the
             // Paths panel selects the layer's path.
             app.ui.selected_path = Some("layer".into());
             actions.push(("ui.vectorMaskTarget".into(), json!(true)));
-        } else if on_mask {
-            // The mask thumbnail also switches Properties to the mask (#3369).
-            app.ui.properties_layer = None;
+        } else if on_mask || (fill_mask && !on_thumb) {
+            if on_mask {
+                // The mask thumbnail also switches Properties to the mask (#3369).
+                app.ui.properties_layer = None;
+            }
             actions.push(("ui.maskTarget".into(), json!(true)));
-        } else if on_thumb || content_less || !row.primary {
+        } else if on_thumb || adjustment || !row.primary {
             actions.push(("ui.maskTarget".into(), json!(false)));
         }
         // ⌥-click the layer thumbnail: fit the layer on screen, as Photoshop does.

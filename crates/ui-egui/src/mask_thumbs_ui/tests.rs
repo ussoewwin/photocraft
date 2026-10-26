@@ -804,7 +804,8 @@ fn a_new_adjustment_or_fill_layer_shows_its_settings_until_the_mask_thumbnail_is
         // Clicking the row (not a thumbnail) keeps the settings.
         let row = h.get_by_label(&layer(&h, id).name).rect().center();
         click_with(&mut h, row, Modifiers::NONE);
-        assert!(!h.state().ui.mask_target && !h.state().ui.vector_mask_target);
+        assert_eq!(h.state().ui.mask_target, command.starts_with("layer.newFillLayer."));
+        assert!(!h.state().ui.vector_mask_target);
         assert!(h.query_all_by_label("Density").next().is_none(), "{command}: a row click keeps the settings");
         // The mask thumbnail switches Properties to the mask.
         let r = mask_rect(&h, id, MaskKind::Pixel);
@@ -838,8 +839,8 @@ fn a_new_adjustment_layer_brings_properties_to_the_front() {
 }
 
 #[test]
-fn adjustment_and_fill_names_target_contents_instead_of_masks() {
-    for command in ["layer.newAdjustmentLayer.hueSaturation", "layer.newFillLayer.gradient"] {
+fn adjustment_names_target_contents_instead_of_masks() {
+    for command in ["layer.newAdjustmentLayer.hueSaturation", "layer.newAdjustmentLayer.curves"] {
         for ppp in [1.0, 2.0] {
             let (mut s, _, other) = session();
             s.execute(command, json!({})).unwrap();
