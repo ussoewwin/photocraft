@@ -2445,6 +2445,39 @@ fn blend_if_16_bit_cutoffs_follow_photoshops_steps() {
     assert!(shown(32895, 128, 255) && !shown(32894, 128, 255), "the reporter's RGB16 boundary");
 }
 
+/// #9522: Blend If's Gray is Photoshop's (30 R + 59 G + 11 B) / 100 rounded half down, measured
+/// in Photoshop 2025 with a white layer over one 8-bit backdrop colour and a hard Gray point on
+/// Underlying Layer. Rec. 601 luma hid both of the reporter's colours.
+#[test]
+fn blend_if_gray_follows_photoshops_weights_and_rounding() {
+    let shown = |rgb: [u8; 3], black: u8, white: u8| {
+        let mut d = Document::new("t", Size::new(1, 1), ColorMode::Rgb, SampleType::U8);
+        let c = rgb.map(|v| f32::from(v) / 255.0);
+        d.layers.push(solid_layer("under", Rect::new(0, 0, 1, 1), [c[0], c[1], c[2], 1.0]));
+        let mut l = solid_layer("top", Rect::new(0, 0, 1, 1), [1.0, 1.0, 1.0, 1.0]);
+        l.blend_if.set(0, [FULL, range([black, black], [white, white])]);
+        d.layers.push(l);
+        px(&d, 0, 0)[0] > 0.999 && px(&d, 0, 0)[2] > 0.999
+    };
+    // (colour hidden by a black point at `cut`, the next colour shown), single channels.
+    for (cut, below, at) in [
+        (20, [65, 0, 0], [66, 0, 0]),
+        (25, [81, 0, 0], [82, 0, 0]),
+        (28, [91, 0, 0], [92, 0, 0]),
+        (20, [0, 33, 0], [0, 34, 0]),
+        (28, [0, 46, 0], [0, 47, 0]),
+        (20, [0, 0, 177], [0, 0, 178]),
+        (28, [0, 0, 250], [0, 0, 251]),
+    ] {
+        assert!(!shown(below, cut, 255), "{below:?} hidden by black {cut}");
+        assert!(shown(at, cut, 255), "{at:?} shown by black {cut}");
+    }
+    // The reporter's mixed colours, and the white point's half-down rounding.
+    assert!(shown([123, 126, 151], 128, 255), "127.85 is 128");
+    assert!(shown([120, 129, 149], 0, 128), "128.5 is 128");
+    assert!(!shown([121, 129, 149], 0, 128), "128.8 is 129");
+}
+
 #[test]
 fn blend_if_split_point_fades_like_opacity() {
     // A split black point (Alt-drag) at 50/150 shows a value-100 layer at half strength, which

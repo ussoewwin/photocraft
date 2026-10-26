@@ -1090,7 +1090,9 @@ fn blend_if_weight(this_px: vec4<f32>, under: vec4<f32>) -> f32 {
         if (op.p4.x > 0.5) {
             k = k * bi_weight(0u, s, v.r) * bi_weight(1u, s, v.r);
         } else {
-            let gray = 0.299 * v.r + 0.587 * v.g + 0.114 * v.b;
+            // compose::blend_if_gray: (30 R + 59 G + 11 B) / 100, rounded half down on whole levels.
+            let sum = 30.0 * v.r + 59.0 * v.g + 11.0 * v.b;
+            let gray = select(sum / 100.0, floor((sum + 49.0) / 100.0), all(v == round(v)));
             k = k * bi_weight(0u, s, gray) * bi_weight(1u, s, v.r) * bi_weight(2u, s, v.g) * bi_weight(3u, s, v.b);
         }
         if (k <= 0.0) {
