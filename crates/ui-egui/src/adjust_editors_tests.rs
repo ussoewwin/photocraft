@@ -943,3 +943,17 @@ fn properties_preset_menus_load_every_setting_in_one_step() {
         assert_eq!(h.state().session.active().unwrap().history.past_len(), steps + 1, "{kind}: one step");
     }
 }
+
+/// FredApps on #9282: the menu says these are PhotoCraft's own presets, not Photoshop's presets of
+/// the same names (whose settings differ), so a tutorial's "Increase Contrast 1" isn't mistaken
+/// for this one.
+#[test]
+fn preset_menus_say_they_are_photocrafts_own() {
+    for kind in ["levels", "exposure", "blackWhite", "channelMixer"] {
+        let mut h = app_harness(kind, "rgb", 8);
+        let caption = h.get_by_label("PhotoCraft Preset:");
+        caption.hover();
+        h.run_steps(30);
+        assert!(h.query_by_label_contains("not Photoshop's presets").is_some(), "{kind}: the caption explains the presets are PhotoCraft's own");
+    }
+}

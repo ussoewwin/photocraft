@@ -126,7 +126,11 @@ fn preset_row(ui: &mut egui::Ui, kind: &str, v: &mut Value, cx: &EditorCx) -> Ed
     }
     let mut e = Edit::default();
     ui.horizontal(|ui| {
-        label(ui, tl!("Preset:"));
+        // The collection is PhotoCraft's own (adjust_presets): the caption says so, so a tutorial's
+        // preset of the same name isn't taken for this one.
+        let t = Tokens::get(ui.ctx());
+        ui.label(RichText::new(tl!("PhotoCraft Preset:")).color(t.text_dim).size(12.0))
+            .on_hover_text(tl!("PhotoCraft's own settings for these looks, not Photoshop's presets of the same names."));
         let current = crate::adjust_presets::matching(kind, v, cx.gray).map_or("custom", |p| p.id);
         let mut options: Vec<(&str, &str)> = list.iter().map(|p| (p.id, tl!(p.label))).collect();
         if current == "custom" {
