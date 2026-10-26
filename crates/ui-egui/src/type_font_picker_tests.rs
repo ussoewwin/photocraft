@@ -223,24 +223,24 @@ fn two_fields_keep_their_names_and_queries_independent() {
 #[test]
 fn tab_focus_selects_the_name_and_pasted_unicode_can_be_accepted() {
     let mut h = harness();
-    h.state_mut().families = vec!["Family 00".into(), "日本語 Sans".into()];
+    h.state_mut().families = vec!["Family 00".into(), "Ime Sans".into()];
     h.key_press(Key::Tab);
     h.run();
     assert!(h.get_by_role(Role::TextInput).is_focused());
-    h.event(egui::Event::Paste("日本語 Sans".into()));
+    h.event(egui::Event::Paste("Ime Sans".into()));
     h.run();
-    assert_eq!(h.get_by_role(Role::TextInput).value().as_deref(), Some("日本語 Sans"));
+    assert_eq!(h.get_by_role(Role::TextInput).value().as_deref(), Some("Ime Sans"));
     h.key_press(Key::Enter);
     h.run();
-    assert_eq!(h.state().current, "日本語 Sans");
+    assert_eq!(h.state().current, "Ime Sans");
 }
 
 #[test]
 fn ime_confirmation_does_not_accept_a_font_until_a_separate_enter() {
     let mut h = harness();
-    h.state_mut().families = vec!["Family 00".into(), "日本語 Sans".into()];
+    h.state_mut().families = vec!["Family 00".into(), "Ime Sans".into()];
     open(&mut h);
-    h.event(egui::Event::Ime(egui::ImeEvent::Preedit { text: "日本語 Sans".into(), active_range_chars: None }));
+    h.event(egui::Event::Ime(egui::ImeEvent::Preedit { text: "Ime Sans".into(), active_range_chars: None }));
     h.run();
     h.key_press(Key::ArrowDown);
     h.run();
@@ -253,11 +253,11 @@ fn ime_confirmation_does_not_accept_a_font_until_a_separate_enter() {
     assert_eq!(h.state().current, "Family 00", "IME Enter only confirms composition");
     assert!(popup_rect(&h).is_some());
     assert!(h.get_by_role(Role::TextInput).is_focused());
-    h.event(egui::Event::Ime(egui::ImeEvent::Commit("日本語 Sans".into())));
+    h.event(egui::Event::Ime(egui::ImeEvent::Commit("Ime Sans".into())));
     h.run();
     h.key_press(Key::Enter);
     h.run();
-    assert_eq!(h.state().current, "日本語 Sans");
+    assert_eq!(h.state().current, "Ime Sans");
     assert!(popup_rect(&h).is_none());
 }
 
