@@ -865,6 +865,12 @@ fn adjustment_and_fill_names_target_contents_instead_of_masks() {
             click_with(&mut h, name, Modifiers::NONE);
             assert_eq!(h.state().session.active().unwrap().active_layer.unwrap().0, id);
             assert!(!h.state().ui.mask_target && !h.state().ui.vector_mask_target, "{command} @{ppp}x from another layer");
+            assert_eq!(crate::canvas::paint_target(h.state()), json!("mask"));
+            let content = layer(&h, id).content;
+            h.state_mut().run("edit.fill", json!({"contents": "black"})).unwrap();
+            assert_eq!(layer(&h, id).content, content, "filling must preserve the adjustment or fill content");
+            assert_eq!(layer(&h, id).mask.unwrap().surface.sample_channel(50, 50, 0), 0.0, "Fill edits the mask");
+            assert!(!h.state().ui.mask_target && !h.state().ui.vector_mask_target, "painting leaves the content thumbnail selected");
         }
     }
 }
