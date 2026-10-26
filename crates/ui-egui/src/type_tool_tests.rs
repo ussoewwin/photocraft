@@ -2094,10 +2094,7 @@ mod multi_layer_formatting {
         };
         let mut h = controls(app, false);
         let shown = |h: &Harness<'static, PhotocraftApp>| {
-            (
-                h.get_by_role_and_label(Role::TextInput, "Font").value().unwrap_or_default(),
-                h.get_all_by_role(Role::ComboBox).find(|n| ["Regular", "Medium"].contains(&n.value().as_deref().unwrap_or_default())).and_then(|n| n.value()),
-            )
+            (h.get_all_by_role(Role::TextInput).next().and_then(|n| n.value()).unwrap_or_default(), h.get_by_role_and_label(Role::ComboBox, "Style").value())
         };
         let steps = super::history_len(&h);
         let (inter, mono) = (("Inter".to_string(), Some("Medium".to_string())), ("JetBrains Mono".to_string(), Some("Regular".to_string())));
