@@ -2058,11 +2058,11 @@ mod web_playback_tests {
         fields.insert("format".into(), json!("webp"));
         assert_eq!(fields["lossless"], false);
         let mut h = harness(app, fields);
-        assert!(h.query_by_label("Quality").is_some());
+        assert!(h.query_all_by_label("Quality").next().is_some());
         h.get_by_label("Lossless").click();
         h.run_steps(2);
         assert_eq!(h.state().1["lossless"], true);
-        assert!(h.query_by_label("Quality").is_none(), "lossless has no quality");
+        assert!(h.query_all_by_label("Quality").next().is_none(), "lossless has no quality");
 
         let v = variants(&json!({"format": "webp", "quality": 80}));
         assert_eq!((v[1]["format"].as_str(), v[1]["quality"].as_f64(), v[2]["quality"].as_f64()), (Some("webp"), Some(40.0), Some(20.0)));
