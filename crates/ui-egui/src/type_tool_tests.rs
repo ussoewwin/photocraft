@@ -2103,10 +2103,11 @@ mod multi_layer_formatting {
             h.run_steps(4);
             assert_eq!(&shown(&h), want, "selection {anchor}..{caret}");
         }
-        // Ending the edit keeps the first-run rule: the layer is still selected, Inter Medium leads.
+        // Ending the edit keeps the whole-layer rule: the layer is still selected, its style is the
+        // first run's (Medium) and, the runs using two families, the family field is blank.
         h.state_mut().ui.text_edit = None;
         h.run_steps(4);
-        assert_eq!(shown(&h), inter, "no edit: the first run");
+        assert_eq!(shown(&h), (String::new(), inter.1.clone()), "no edit: first run's style, mixed family blank");
         assert_eq!(super::history_len(&h), steps, "displaying the controls adds no history");
         // Control: no type target shows the tool defaults.
         h.state_mut().run("layer.new.layer", json!({})).unwrap();
