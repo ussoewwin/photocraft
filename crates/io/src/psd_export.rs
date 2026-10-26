@@ -1908,7 +1908,9 @@ fn document_to_psd_nested(doc: &Document, opts: &PsdExportOptions, depth: u32, c
     let txt2 = (previous.is_some() || photocraft_text::psd::needs_txt2(&text_layers))
         .then(|| photocraft_text::psd::build_txt2_at(&text_layers, previous.as_deref(), ex.dpi));
     for (sig, key, data) in preserved {
-        if txt2.is_some() && key == *b"Txt2" {
+        // With no type layers left the opened file's `Txt2` describes text that is gone (fonts and
+        // layout caches, often most of the file): Photoshop drops it, and so does the save (#9563).
+        if key == *b"Txt2" && (txt2.is_some() || text_layers.is_empty()) {
             continue;
         }
         // A kept layer block (one the import could not read, #2700) describes layers the
@@ -2224,6 +2226,21 @@ mod tests {
         doc.metadata.psd_global_blocks = vec![(*b"8BIM", *b"Patt", std::sync::Arc::new(Vec::new()))];
         let saved = PsdFile::from_bytes(&document_to_psd(&doc).to_bytes().unwrap()).unwrap();
         assert!(matches!(saved.layer_info_placement, LayerInfoPlacement::GlobalBlock { index: 0, .. }));
+    }
+
+    /// #9563: a `Txt2` kept from the opened file is dropped once no type layer is left (Photoshop
+    /// drops it too); with a type layer the block is still written.
+    #[test]
+    fn a_kept_txt2_goes_with_the_last_type_layer() {
+        let mut doc = Document::new("t", photocraft_geom::Size::new(8, 6), ColorMode::Rgb, SampleType::U8);
+        doc.layers.push(Layer::new("Layer 1", LayerContent::Raster(Surface::new(doc.pixel_format()))));
+        doc.metadata.psd_global_blocks = vec![(*b"8BIM", *b"Txt2", std::sync::Arc::new(b"<< /0 << /1 (stale) >> >>".to_vec()))];
+        let file = document_to_psd(&doc);
+        assert!(!file.global_blocks.iter().any(|b| b.key == *b"Txt2"), "no type layers: no Txt2");
+
+        doc.layers.push(Layer::new("T", LayerContent::Text(photocraft_doc::TextLayer::default())));
+        let file = document_to_psd(&doc);
+        assert!(file.global_blocks.iter().any(|b| b.key == *b"Txt2"), "a type layer keeps its Txt2");
     }
 
     /// A merged-transparency marker kept from the opened file describes that file's composite.
