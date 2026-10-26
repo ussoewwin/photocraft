@@ -1,8 +1,8 @@
 use super::*;
 
 #[test]
-fn system_title_bar_defaults_by_platform_and_preserves_saved_choices() {
-    let default = cfg!(target_os = "linux");
+fn system_title_bar_defaults_to_integrated_and_preserves_saved_choices() {
+    let default = false;
     assert_eq!(Interface::default().system_title_bar, default);
     for saved in [json!({}), json!({"interface": {}})] {
         let prefs: Preferences = serde_json::from_value(saved).unwrap();
