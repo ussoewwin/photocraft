@@ -2874,7 +2874,7 @@ pub(crate) fn family_picker_in(
     let arrow_rect =
         egui::Rect::from_min_max(egui::pos2(rect.right() - crate::widgets::POPUP_ARROW_W - 2.0, rect.top() + 2.0), rect.max - egui::vec2(2.0, 2.0));
     let arrow = ui.interact(arrow_rect, field.with("arrow"), egui::Sense::click());
-    arrow.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), tl!("Font")));
+    arrow.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!("Font")));
     crate::widgets::chevron_icon(ui, arrow_rect, ui.style().interact(&arrow), was_open);
     // The arrow owns press-drag-release; dragging in the name remains normal text selection.
     // Its menu is anchored to the full control and keeps the existing stable popup id.
