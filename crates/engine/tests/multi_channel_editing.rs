@@ -90,6 +90,7 @@ fn adjustments_filters_and_drawing_preserve_other_encoded_components() {
         ("paint.colorReplacement", json!({"points":[[8,8],[22,12]],"size":9,"tolerance":100,"mode":"luminosity","color":"#ffffff"})),
         ("paint.cloneStamp", json!({"points":[[8,8],[22,12]],"size":9,"source":[2,2]})),
         ("paint.historyBrush", json!({"points":[[8,8],[22,12]],"size":9})),
+        ("paint.artHistoryBrush", json!({"points":[[8,8],[22,12]],"size":9,"tolerance":0})),
         ("paint.mixerBrush", json!({"points":[[8,8],[22,12]],"size":9,"color":"#ffffff"})),
     ];
     for mode in ["rgb", "cmyk", "lab"] {
@@ -164,6 +165,42 @@ fn live_brush_and_eraser_match_commit_at_all_native_depths() {
                     surface(&s).tile_count()
                 );
             }
+        }
+    }
+}
+
+#[test]
+fn live_mixer_captures_selected_components_and_matches_commit_and_replay() {
+    use photocraft_engine::brush_cmds::mixer_live::LiveMixer;
+    use photocraft_engine::paint::StrokePoint;
+
+    for mode in ["rgb", "cmyk", "lab"] {
+        for depth in [8, 16, 32] {
+            let mut s = setup(mode, depth);
+            subset(&mut s);
+            let before = surface(&s);
+            let params = json!({"points":[[6,7,1]],"size":9,"color":"#ffffff","seed":42,"sampleAllLayers":true});
+            let mut live = LiveMixer::begin(&s, &params).unwrap();
+            let id = s.active().unwrap().active_layer.unwrap();
+            let first = live.doc.layer(id).unwrap().surface().unwrap();
+            unchanged(&before, first);
+            assert_ne!(&before, first, "the initial dab paints {mode} {depth}");
+            live.push(&[StrokePoint::new(23.0, 15.0, 0.7)]).unwrap();
+            let shown = live.doc.layer(id).unwrap().surface().unwrap().clone();
+            unchanged(&before, &shown);
+            // The in-flight stroke keeps its original target even if the panel changes.
+            s.execute("channel.target", json!({"channel":"composite"})).unwrap();
+            let params = live.prepare_commit(&mut s).unwrap();
+            assert_eq!(params["target"], json!({"colors":[0,2]}));
+            assert_eq!(s.execute("paint.mixerBrush", params.clone()).unwrap()["fromLive"], true);
+            assert_eq!(surface(&s), shown, "displayed pixels are committed {mode} {depth}");
+            s.execute("edit.undo", json!({})).unwrap();
+            assert_eq!(surface(&s), before);
+            s.execute("edit.redo", json!({})).unwrap();
+            assert_eq!(surface(&s), shown);
+            let mut replay = setup(mode, depth);
+            replay.execute("paint.mixerBrush", params).unwrap();
+            assert_eq!(surface(&replay), shown, "replay matches {mode} {depth}");
         }
     }
 }

@@ -67,6 +67,13 @@ choices, captured drawing targets and guide/path interaction. A real pointer reg
 checks normal clicks, Shift-clicks and independent eye overrides across RGB, CMYK and Lab,
 including visibility persistence through an edit and the return to composite selection.
 
+The 2026-10-26 main refresh integrates egui 0.37, the rebuilt Histogram panel,
+live Mixer Brush and smart-filter mask painting. Additional regressions cover
+selected-component Mixer previews, captured targets, exact commit/replay and undo
+across RGB/CMYK/Lab at all three depths, plus filter-mask Cut/Clear and dialog
+capture. The Art History Brush joins the drawing preservation matrix. The fused
+tone kernel is unchanged; the measurements below retain their original date.
+
 The release benchmark is `crates/engine/examples/multi_channel_bench.rs`. It uses a
 6000 × 4000 synthetic RGB16 raster, one warmup and six measured repetitions per case,
 with target modes interleaved. Document setup is outside the timed interval; command

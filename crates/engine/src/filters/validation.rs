@@ -161,7 +161,7 @@ pub(crate) fn validate_params(id: &str, params: &Value) -> Result<()> {
                 "layer" => (value.as_u64().is_some() || value.is_string(), "an unsigned layer id or layer name".into()),
                 "coalesce" => (value.is_string(), "a string".into()),
                 "target" => (
-                    value.as_str().is_some_and(|s| matches!(s, "pixels" | "mask" | "quickMask"))
+                    value.as_str().is_some_and(|s| matches!(s, "pixels" | "mask" | "filterMask" | "quickMask"))
                         || value.as_object().is_some_and(|o| {
                             o.len() == 1
                                 && (o.get("channel").and_then(Value::as_u64).is_some()
@@ -170,7 +170,7 @@ pub(crate) fn validate_params(id: &str, params: &Value) -> Result<()> {
                                         .and_then(Value::as_array)
                                         .is_some_and(|a| !a.is_empty() && a.len() <= 64 && a.iter().all(|v| v.as_u64().is_some())))
                         }),
-                    "pixels, mask, quickMask or {\"channel\":index}".into(),
+                    "pixels, mask, filterMask, quickMask, {\"channel\":index}, {\"color\":index} or {\"colors\":[indices]}".into(),
                 ),
                 _ => return Err(bad(format!("unknown parameter `{key}`"))),
             }

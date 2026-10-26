@@ -492,7 +492,9 @@ pub fn open(app: &mut PhotocraftApp, command: &str) -> Option<u64> {
     restore_remembered(app, command, spec.params, &mut fields);
     apply_command_defaults(app, command, &mut fields);
     if photocraft_engine::channel_cmds::follows_target(command) {
-        if app.layer_mask_targeted() {
+        if app.filter_mask_targeted() && photocraft_engine::channel_cmds::follows_filter_mask(command) {
+            fields.insert("target".into(), json!("filterMask"));
+        } else if app.layer_mask_targeted() {
             fields.insert("target".into(), json!("mask"));
         } else if let Some(colors) = photocraft_engine::color_channels::selected(&app.session) {
             fields.insert("target".into(), colors.params());
@@ -588,7 +590,9 @@ pub fn open_with_spec(app: &mut PhotocraftApp, command: &str, label: &str, spec:
         fields.insert(p.key, v);
     }
     if !fields.contains_key("target") && !fields.contains_key("__smartFilter") {
-        if photocraft_engine::channel_cmds::follows_target(command) && app.layer_mask_targeted() {
+        if photocraft_engine::channel_cmds::follows_filter_mask(command) && app.filter_mask_targeted() {
+            fields.insert("target".into(), json!("filterMask"));
+        } else if photocraft_engine::channel_cmds::follows_target(command) && app.layer_mask_targeted() {
             fields.insert("target".into(), json!("mask"));
         } else if let Some(colors) = photocraft_engine::color_channels::selected(&app.session).filter(|c| c.len() > 1) {
             fields.insert("target".into(), colors.params());
@@ -843,9 +847,10 @@ pub fn body(ui: &mut egui::Ui, f: &mut Map<String, Value>) {
                         // Keep one numeric field for direct entry and one log-scaled slider for
                         // wide ranges. slider_row would add a second, linear slider (#146).
                         ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new(label(&p.key)).color(t.text_dim));
+                            let name = label(&p.key);
+                            ui.label(egui::RichText::new(&name).color(t.text_dim));
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                crate::widgets::value_field(ui, &mut v, min..=max, unit, 74.0);
+                                crate::widgets::value_field(ui, &mut v, min..=max, unit, 74.0).accessible_name(name);
                             });
                         });
                         let mut lv = v.clamp(min, max).ln();
@@ -905,7 +910,7 @@ pub fn body(ui: &mut egui::Ui, f: &mut Map<String, Value>) {
                     if lists_installed && !opts.iter().any(|(v, _)| *v == cur) {
                         opts.push((cur.clone(), stem.as_str()));
                     }
-                    crate::widgets::dropdown(ui, &format!("flt-{cmd}-{}", p.key), &mut cur, &opts, 170.0);
+                    crate::widgets::dropdown(ui, &format!("flt-{cmd}-{}", p.key), &label(&p.key), &mut cur, &opts, 170.0);
                     if let Some(i) = cur.strip_prefix("channel:").filter(|_| depth).and_then(|i| i.parse::<usize>().ok()) {
                         f.insert("depthChannel".into(), json!(i));
                         cur = "channel".into();
@@ -923,8 +928,8 @@ pub fn body(ui: &mut egui::Ui, f: &mut Map<String, Value>) {
             Kind::Text => {
                 let mut v = f.get(&p.key).and_then(Value::as_str).unwrap_or_default().to_string();
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new(label(&p.key)).color(t.text_dim));
-                    ui.add(egui::TextEdit::singleline(&mut v).desired_width(200.0));
+                    let lp = ui.label(egui::RichText::new(label(&p.key)).color(t.text_dim));
+                    ui.add(egui::TextEdit::singleline(&mut v).desired_width(200.0)).labelled_by(lp.id);
                     // Install Plug-in…: pick the .wasm file instead of typing its path (#7531).
                     if cmd == "plugin.install" && p.key == "path" && crate::widgets::secondary_button(ui, tl!("Browse…"), 0.0).clicked() {
                         f.insert(crate::dialogs::BROWSE_FIELD.into(), json!(p.key));
@@ -945,7 +950,7 @@ pub fn body(ui: &mut egui::Ui, f: &mut Map<String, Value>) {
                 opts.extend(names.iter().enumerate().map(|(i, n)| (i.to_string(), n.as_str())));
                 ui.horizontal(|ui| {
                     ui.label(egui::RichText::new(label(&p.key)).color(t.text_dim));
-                    crate::widgets::dropdown(ui, &format!("flt-{cmd}-{}", p.key), &mut sel, &opts, 170.0);
+                    crate::widgets::dropdown(ui, &format!("flt-{cmd}-{}", p.key), &label(&p.key), &mut sel, &opts, 170.0);
                 });
                 match sel.parse::<i64>() {
                     Ok(i) if i >= 0 => f.insert(p.key, json!(i)),
@@ -960,7 +965,7 @@ pub fn body(ui: &mut egui::Ui, f: &mut Map<String, Value>) {
                 ui.label(egui::RichText::new(label(&p.key)).color(t.text_dim));
                 egui::Grid::new(format!("flt-grid-{cmd}-{}", p.key)).spacing([4.0, 4.0]).show(ui, |ui| {
                     for (i, v) in vals.iter_mut().enumerate() {
-                        crate::widgets::value_field(ui, v, -999.0..=999.0, "", 44.0);
+                        crate::widgets::value_field(ui, v, -999.0..=999.0, "", 44.0).accessible_name(format!("{} {}", label(&p.key), i + 1));
                         if (i + 1) % side == 0 {
                             ui.end_row();
                         }
@@ -1005,7 +1010,7 @@ pub fn body(ui: &mut egui::Ui, f: &mut Map<String, Value>) {
                 let mut v = f.get(&p.key).and_then(Value::as_f64).unwrap_or(default as f64) as f32;
                 ui.horizontal(|ui| {
                     ui.label(egui::RichText::new(label(&p.key)).color(t.text_dim));
-                    crate::widgets::value_field(ui, &mut v, -30000.0..=30000.0, "", 80.0);
+                    crate::widgets::value_field(ui, &mut v, -30000.0..=30000.0, "", 80.0).accessible_name(label(&p.key));
                     // A seed gets a fresh random value in one click (#5710): Clouds, Add Noise,
                     // Fibers… then render a new pattern, as each run of Photoshop's does.
                     if p.key == "seed" && ui.button(tl!("Random")).clicked() {
@@ -2886,6 +2891,30 @@ mod tests {
 #[cfg(test)]
 mod multi_channel_dialog_tests {
     use super::*;
+    #[test]
+    fn filter_mask_dialog_keeps_its_target_when_color_channels_change() {
+        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width":32,"height":24,"mode":"lab","depth":16})).unwrap();
+        app.run("layer.smartObjects.convertToSmartObject", json!({})).unwrap();
+        app.run("filter.blur.gaussianBlur", json!({"radius":2})).unwrap();
+        app.run("paint.stroke", json!({"points":[[8,0],[8,23]],"size":8,"hardness":1,"color":"#000000","target":"filterMask"})).unwrap();
+        app.run("channel.target", json!({"colors":[0,2]})).unwrap();
+        app.run("view.layerMask", json!({"mode":"gray","mask":"filter"})).unwrap();
+        let command = "filter.blur.gaussianBlur";
+        let id = open(&mut app, command).unwrap();
+        let params = params_of(&app.ui.dialog_mut(id).unwrap().fields);
+        assert_eq!(params["target"], "filterMask");
+        app.run("channel.target", json!({"channel":"composite"})).unwrap();
+        let st = app.session.active().unwrap();
+        let layer = st.active_layer.unwrap();
+        let preview = preview_document(&st.doc, Some(layer), command, &params, 1).unwrap();
+        crate::dialogs::confirm(&mut app, id).unwrap();
+        let mask = |doc: &Document| match &doc.layer(layer).unwrap().content {
+            photocraft_doc::LayerContent::Smart(sm) => sm.filter_mask.clone(),
+            _ => panic!("expected a smart object"),
+        };
+        assert_eq!(mask(&app.session.active().unwrap().doc), mask(&preview));
+    }
     #[test]
     fn mask_view_dialogs_capture_the_mask_for_preview_and_confirmation() {
         for mode in ["rgb", "cmyk", "lab"] {

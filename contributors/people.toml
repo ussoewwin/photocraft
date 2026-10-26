@@ -270,6 +270,9 @@ real_name = "Vlad Grankovsky"
 display_name = "Vlad Grankovsky"
 sync_github_name = false
 
+[people.WebWork-rrs]
+display_name = "Ratul Paul"
+
 [people.softwaregames1]
 sync_github_name = true
 
@@ -280,3 +283,7 @@ sync_github_name = false
 [people.erenova]
 display_name = "Erenova"
 sync_github_name = false
+
+[people.jasallen]
+real_name = "Jason DeBoever"
+sync_github_name = true

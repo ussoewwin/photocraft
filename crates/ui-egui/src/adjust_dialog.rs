@@ -100,7 +100,7 @@ pub fn add_point_at(app: &mut PhotocraftApp, ctx: &egui::Context, x: f64, y: f64
     if values.get("pencil").and_then(Value::as_bool) == Some(true) {
         return true;
     }
-    if values.get("target").is_some_and(|target| matches!(target.as_str(), Some("mask" | "quickMask")) || target.get("channel").is_some()) {
+    if values.get("target").is_some_and(|target| matches!(target.as_str(), Some("mask" | "filterMask" | "quickMask")) || target.get("channel").is_some()) {
         return true;
     }
     let Some(mode) = app.session.active().map(|s| s.doc.mode) else { return true };
@@ -200,7 +200,7 @@ pub(crate) fn picker_button(ui: &mut egui::Ui, selected: bool, enabled: bool, to
     let tokens = crate::theme::Tokens::get(ui.ctx());
     ui.painter().circle_filled(response.rect.right_bottom() - egui::vec2(5.5, 5.5), 3.5, color);
     ui.painter().circle_stroke(response.rect.right_bottom() - egui::vec2(5.5, 5.5), 3.5, egui::Stroke::new(1.0, tokens.field_border));
-    response.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, enabled, selected, tooltip));
+    response.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, enabled, selected, tooltip));
     response
 }
 
@@ -247,7 +247,7 @@ pub fn owns(fields: &Map<String, Value>) -> bool {
 
 /// Root of the dialog editor's view state in egui memory.
 fn dialog_mem(kind: &str) -> egui::Id {
-    egui::Id::new(("adjust-dialog", kind))
+    egui::Id::unique(("adjust-dialog", kind))
 }
 
 /// Whether holding Alt turns Cancel into Reset for this adjustment dialog (every kind).
@@ -297,7 +297,9 @@ pub fn open(app: &mut PhotocraftApp, command: &str) -> Option<u64> {
     if let Value::Object(p) = photocraft_engine::adjust_params::to_params(&defaults) {
         fields.extend(p);
     }
-    if app.layer_mask_targeted() {
+    if app.filter_mask_targeted() && photocraft_engine::channel_cmds::follows_filter_mask(command) {
+        fields.insert("target".into(), json!("filterMask"));
+    } else if app.layer_mask_targeted() {
         fields.insert("target".into(), json!("mask"));
     } else if let Some(colors) = photocraft_engine::color_channels::selected(&app.session) {
         fields.insert("target".into(), colors.params());
@@ -360,10 +362,14 @@ pub(crate) fn remember(app: &mut PhotocraftApp, fields: &Map<String, Value>) {
 }
 
 /// The Curves dialog's single-channel target: the Channels panel's, plus the Layers panel's mask
-/// selection — both ways of selecting a mask must give the same dropdown (#5335).
+/// selection — both ways of selecting a mask must give the same dropdown (#5335). A targeted
+/// filter mask is a gray plane too (FILE-215-3).
 fn isolated(app: &PhotocraftApp) -> Option<photocraft_engine::channel_cmds::IsolatedCurveChannel> {
-    let mask = app.layer_mask_targeted();
-    app.session.active().and_then(|st| photocraft_engine::channel_cmds::isolated_curve_channel_for(st, mask))
+    let st = app.session.active()?;
+    if app.filter_mask_targeted() {
+        return photocraft_engine::channel_cmds::filter_mask_curve_channel(st);
+    }
+    photocraft_engine::channel_cmds::isolated_curve_channel_for(st, app.layer_mask_targeted())
 }
 
 /// The colour mode the Levels/Curves dialog seeds and parses in: a mask, saved channel or
@@ -379,7 +385,7 @@ fn curve_mode_for_fields(app: &PhotocraftApp, kind: &str, fields: &Map<String, V
     if kind == "curves"
         && let Some(target) = fields.get("target")
     {
-        if matches!(target.as_str(), Some("mask" | "quickMask")) || target.get("channel").is_some() {
+        if matches!(target.as_str(), Some("mask" | "filterMask" | "quickMask")) || target.get("channel").is_some() {
             return photocraft_doc::ColorMode::Grayscale;
         }
         return app.session.active().map_or(photocraft_doc::ColorMode::Rgb, |st| st.doc.mode);
@@ -391,6 +397,7 @@ fn curve_mode_for_fields(app: &PhotocraftApp, kind: &str, fields: &Map<String, V
 pub fn body(app: &mut PhotocraftApp, ui: &mut egui::Ui, fields: &mut Map<String, Value>) {
     let kind = fields.get("__adjust").and_then(Value::as_str).unwrap_or_default().to_string();
     let mask = fields.get("target").and_then(Value::as_str) == Some("mask");
+    let filter_mask = fields.get("target").and_then(Value::as_str) == Some("filterMask");
     let mode = curve_mode_for_fields(app, &kind, fields);
     if matches!(kind.as_str(), "levels" | "curves") {
         picker_controls(ui, fields, mode);
@@ -405,6 +412,8 @@ pub fn body(app: &mut PhotocraftApp, ui: &mut egui::Ui, fields: &mut Map<String,
         .or_else(|| app.session.active().and_then(|s| s.active_layer));
     let isolated_curve = if fields.contains_key("__smartFilter") {
         None
+    } else if filter_mask {
+        app.session.active().and_then(photocraft_engine::channel_cmds::filter_mask_curve_channel)
     } else if mask {
         app.session.active().and_then(photocraft_engine::channel_cmds::layer_mask_curve_channel)
     } else if fields.contains_key("target") {
@@ -606,16 +615,26 @@ mod tests {
     /// shows Midtones, keeps Preserve Luminosity and leaves the dialog open.
     #[test]
     fn color_balance_dialog_gestures_match_photoshop() {
-        use egui_kittest::kittest::Queryable;
+        use egui_kittest::kittest::{NodeT, Queryable};
         let (mut h, id) = color_balance_dialog();
-        let label = h.query_all_by_label("Cyan  ·  Red").last().map(|n| n.rect()).expect("Cyan · Red row");
+        // The slider row's caption, not the field or slider it names.
+        let label = h
+            .query_all(egui_kittest::kittest::by().label("Cyan  ·  Red").include_labels())
+            .find(|n| n.accesskit_node().role() == egui::accesskit::Role::Label)
+            .map(|n| n.rect())
+            .expect("Cyan · Red row");
         let at = egui::pos2(label.left() + 60.0, label.bottom() + 14.0);
         let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::ALT };
         input(&mut h, egui::Modifiers::ALT, &[egui::Event::PointerMoved(at), press(true), press(false), press(true), press(false)]);
         assert_eq!(field(&h, id, "midtones"), json!([0.0, -30.0, 20.0]), "Alt+double-click zeroes the slider");
         assert_eq!(field(&h, id, "shadows"), json!([10, 0, 0]), "other tones untouched");
-        let wheel =
-            |n: f32, m| egui::Event::MouseWheel { unit: egui::MouseWheelUnit::Line, delta: egui::vec2(0.0, n), phase: egui::TouchPhase::Move, modifiers: m };
+        let wheel = |n: f32, m| egui::Event::MouseWheel {
+            source: egui::MouseWheelSource::Unknown,
+            unit: egui::MouseWheelUnit::Line,
+            delta: egui::vec2(0.0, n),
+            phase: egui::TouchPhase::Move,
+            modifiers: m,
+        };
         input(&mut h, egui::Modifiers::NONE, &[egui::Event::PointerMoved(at), wheel(3.0, egui::Modifiers::NONE)]);
         assert_eq!(field(&h, id, "midtones")[0], json!(3.0), "3 notches up");
         input(&mut h, egui::Modifiers::SHIFT, &[egui::Event::PointerMoved(at), wheel(2.0, egui::Modifiers::SHIFT)]);
@@ -625,7 +644,7 @@ mod tests {
         // Alt turns Cancel into Reset.
         assert!(h.query_by_label("Cancel").is_some() && h.query_by_label("Reset").is_none());
         h.state_mut().ui.dialog_mut(id).unwrap().fields.insert("highlights".into(), json!([5, 5, 5]));
-        let tone = egui::Id::new(("adjust-dialog", "colorBalance")).with("cb-tone");
+        let tone = egui::Id::unique(("adjust-dialog", "colorBalance")).with("cb-tone");
         h.ctx.data_mut(|d| d.insert_temp(tone, 2usize));
         h.event(egui::Event::ModifiersChanged(egui::Modifiers::ALT));
         h.run_steps(2);
@@ -703,13 +722,15 @@ mod tests {
                     PhotocraftApp::setup_context(&h.ctx, theme);
                     let id = open(h.state_mut(), "image.adjustments.curves").unwrap();
                     h.run_steps(4);
-                    let window = h.ctx.memory(|m| m.area_rect(egui::Id::new(("dialog", id)))).unwrap();
+                    let window = h.ctx.memory(|m| m.area_rect(egui::Id::unique(("dialog", id)))).unwrap();
                     let graph = h.ctx.data(|d| d.get_temp::<egui::Rect>(dialog_mem("curves").with("curves-graph"))).unwrap();
                     assert!(window.right() - graph.right() < 40.0, "blank right column: window {window:?}, graph {graph:?}");
                     assert!(graph.width() > 270.0, "keep the graph usable: {graph:?}");
                     assert!(window.contains_rect(graph));
                     for label in ["Channel:", "Input:", "Output:", "Preview", "OK", "Cancel"] {
-                        assert!(window.contains_rect(h.get_by_label(crate::i18n::t(label)).rect()), "{label} inside the window");
+                        // A caption and the field it names share the label; any of them is the control.
+                        let node = h.query_all_by_label(crate::i18n::t(label)).next().unwrap_or_else(|| panic!("{label} in the dialog"));
+                        assert!(window.contains_rect(node.rect()), "{label} inside the window");
                     }
                 }
             }
@@ -723,7 +744,7 @@ mod tests {
         let mut h = Harness::builder().with_size(egui::vec2(1600.0, 1100.0)).build_ui_state(|ui, app| crate::dialogs::show(app, ui.ctx()), app_with_image());
         PhotocraftApp::setup_context(&h.ctx, Default::default());
         let graph = |h: &Harness<'_, PhotocraftApp>| h.ctx.data(|d| d.get_temp::<egui::Rect>(dialog_mem("curves").with("curves-graph"))).unwrap();
-        let window = |h: &Harness<'_, PhotocraftApp>, id: u64| h.ctx.memory(|m| m.area_rect(egui::Id::new(("dialog", id)))).unwrap();
+        let window = |h: &Harness<'_, PhotocraftApp>, id: u64| h.ctx.memory(|m| m.area_rect(egui::Id::unique(("dialog", id)))).unwrap();
         let id = open(h.state_mut(), "image.adjustments.curves").unwrap();
         h.run_steps(4);
         let (opened, small) = (window(&h, id), graph(&h));
@@ -746,7 +767,9 @@ mod tests {
         assert!((big.width() - big.height()).abs() < 1.0, "still square: {big:?}");
         assert!(wide.contains_rect(big) && wide.right() - big.right() < 40.0, "no blank column: window {wide:?}, graph {big:?}");
         for label in ["Channel:", "Input:", "Output:", "Preview", "OK", "Cancel"] {
-            assert!(wide.contains_rect(h.get_by_label(crate::i18n::t(label)).rect()), "{label} inside the window");
+            for node in h.get_all_by_label(crate::i18n::t(label)) {
+                assert!(wide.contains_rect(node.rect()), "{label} label and control stay inside the window");
+            }
         }
         // Cancel, open again: the size it was left at.
         h.get_by_label("Cancel").click();
@@ -763,16 +786,16 @@ mod tests {
     fn curves_graph_never_pushes_the_dialog_off_a_short_window() {
         let mut h = Harness::builder().with_size(egui::vec2(1600.0, 700.0)).build_ui_state(|ui, app| crate::dialogs::show(app, ui.ctx()), app_with_image());
         PhotocraftApp::setup_context(&h.ctx, Default::default());
-        h.ctx.data_mut(|m| m.insert_persisted(egui::Id::new(("dialog-place", "image.adjustments.curves")).with("size"), egui::vec2(1200.0, 1200.0)));
+        h.ctx.data_mut(|m| m.insert_persisted(egui::Id::unique(("dialog-place", "image.adjustments.curves")).with("size"), egui::vec2(1200.0, 1200.0)));
         let id = open(h.state_mut(), "image.adjustments.curves").unwrap();
         h.run_steps(5);
         let graph = h.ctx.data(|d| d.get_temp::<egui::Rect>(dialog_mem("curves").with("curves-graph"))).unwrap();
-        let window = h.ctx.memory(|m| m.area_rect(egui::Id::new(("dialog", id)))).unwrap();
+        let window = h.ctx.memory(|m| m.area_rect(egui::Id::unique(("dialog", id)))).unwrap();
         assert!(graph.height() <= 700.0 - 360.0, "{graph:?}");
         assert!(window.height() <= 700.0, "{window:?}");
         assert!(window.contains_rect(h.get_by_label("OK").rect()));
         // The size the window squeezed it to is not remembered: a larger window gets 1200 again.
-        let kept = h.ctx.data_mut(|m| m.get_persisted::<egui::Vec2>(egui::Id::new(("dialog-place", "image.adjustments.curves")).with("size")));
+        let kept = h.ctx.data_mut(|m| m.get_persisted::<egui::Vec2>(egui::Id::unique(("dialog-place", "image.adjustments.curves")).with("size")));
         assert_eq!(kept, Some(egui::vec2(1200.0, 1200.0)));
         // Dragged far wider, the dialog stops where the graph stops: no blank column.
         let corner = window.max - egui::vec2(12.0, 12.0);
@@ -790,7 +813,7 @@ mod tests {
         });
         h.run_steps(5);
         let graph = h.ctx.data(|d| d.get_temp::<egui::Rect>(dialog_mem("curves").with("curves-graph"))).unwrap();
-        let window = h.ctx.memory(|m| m.area_rect(egui::Id::new(("dialog", id)))).unwrap();
+        let window = h.ctx.memory(|m| m.area_rect(egui::Id::unique(("dialog", id)))).unwrap();
         assert!(window.right() - graph.right() < 40.0, "no blank column: window {window:?}, graph {graph:?}");
     }
 
@@ -851,7 +874,7 @@ mod tests {
         fields.insert("pencil".into(), json!(true));
         fields.insert("points".into(), json!((0..256).collect::<Vec<_>>()));
         h.run_steps(4);
-        let graph = h.ctx.data(|d| d.get_temp::<egui::Rect>(egui::Id::new(("adjust-dialog", "curves")).with("curves-graph"))).unwrap();
+        let graph = h.ctx.data(|d| d.get_temp::<egui::Rect>(egui::Id::unique(("adjust-dialog", "curves")).with("curves-graph"))).unwrap();
         let at = |i: f32, o: f32| egui::pos2(graph.left() + i / 255.0 * graph.width(), graph.bottom() - o / 255.0 * graph.height());
         h.hover_at(at(64.0, 200.0));
         h.run_steps(1);
@@ -881,7 +904,7 @@ mod tests {
             let id = open(h.state_mut(), "image.adjustments.curves").unwrap();
             h.state_mut().ui.dialog_mut(id).unwrap().fields.insert("points".into(), json!([[0, 0], [128, 128], [255, 255]]));
             h.run_steps(4);
-            let graph = h.ctx.data(|d| d.get_temp::<egui::Rect>(egui::Id::new(("adjust-dialog", "curves")).with("curves-graph"))).unwrap();
+            let graph = h.ctx.data(|d| d.get_temp::<egui::Rect>(egui::Id::unique(("adjust-dialog", "curves")).with("curves-graph"))).unwrap();
             let a = egui::pos2(graph.left() + 128.0 / 255.0 * graph.width(), graph.bottom() - 128.0 / 255.0 * graph.height());
             h.hover_at(a);
             h.run_steps(1);
@@ -1358,5 +1381,59 @@ mod tests {
             assert_eq!(fields["target"], target);
             assert_eq!(fields.contains_key("a"), !mask, "mask curves stay gray; native curves stay Lab");
         }
+    }
+
+    /// FILE-215-3: Curves on a targeted filter mask edits a gray plane, and its histogram is the
+    /// filter mask's, not the smart object's colours.
+    #[test]
+    fn curves_on_a_targeted_filter_mask_is_a_gray_plane() {
+        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", json!({"width": 32, "height": 32})).unwrap();
+        app.run("layer.new.layer", json!({})).unwrap();
+        app.run("edit.fill", json!({"contents": "color", "color": "#ff0000"})).unwrap();
+        app.run("layer.smartObjects.convertToSmartObject", json!({})).unwrap();
+        app.run("filter.blur.gaussianBlur", json!({"radius": 2})).unwrap();
+        let id = app.session.active().unwrap().active_layer.unwrap();
+        app.select_filter_mask_target(Some(id.0));
+        assert!(app.filter_mask_targeted());
+        let c = isolated(&app).expect("a gray target");
+        assert_eq!(c.gray, Some(photocraft_engine::channel_cmds::GraySurface::FilterMask));
+        // Its histogram counts the filter mask's levels: half black after a stroke.
+        app.run("paint.stroke", json!({"points": [[8, 0], [8, 31]], "size": 16, "hardness": 1, "color": "#000000", "target": "filterMask"})).unwrap();
+        let surface = photocraft_engine::channel_cmds::GraySurface::FilterMask;
+        let st = app.session.active().unwrap();
+        let h = tone::compute_histograms(&st.doc, HistSource::Channel { layer: id, surface }, photocraft_doc::adjust::ToneSpace::Rgb);
+        assert!(h.ch[0][0] > 0 && h.ch[0][255] > 0, "black and white levels");
+        assert_eq!(curve_mode(&app, "curves"), photocraft_doc::ColorMode::Grayscale);
+    }
+
+    #[test]
+    fn captured_filter_mask_curves_stay_gray_after_selecting_native_channels() {
+        let mut app = app_with_image();
+        app.run("file.new", json!({"width":32,"height":24,"mode":"lab","depth":16})).unwrap();
+        app.run("layer.new.layer", json!({})).unwrap();
+        app.run("edit.fill", json!({"contents":"white"})).unwrap();
+        app.run("layer.smartObjects.convertToSmartObject", json!({})).unwrap();
+        app.run("filter.blur.gaussianBlur", json!({"radius":2})).unwrap();
+        let layer = app.session.active().unwrap().active_layer.unwrap();
+        app.run("layer.layerMask.revealAll", json!({})).unwrap();
+        app.run("paint.stroke", json!({"points":[[8,8]],"size":8,"color":"#000000","target":"filterMask"})).unwrap();
+        app.run("channel.target", json!({"colors":[0,2]})).unwrap();
+        app.run("view.layerMask", json!({"mode":"gray","mask":"filter"})).unwrap();
+        assert_eq!(crate::canvas::paint_target(&app), json!("filterMask"));
+        assert!(app.filter_mask_targeted());
+        assert!(!app.layer_mask_targeted());
+        assert_eq!(app.ui.filter_mask_target, Some(layer.0));
+        let id = open(&mut app, "image.adjustments.curves").unwrap();
+        let mut fields = app.ui.dialog_mut(id).unwrap().fields.clone();
+        assert_eq!(fields["target"], json!("filterMask"));
+        app.run("channel.target", json!({"colors":[0,2]})).unwrap();
+        assert_eq!(curve_mode_for_fields(&app, "curves", &fields), photocraft_doc::ColorMode::Grayscale);
+        reset(&app, &egui::Context::default(), &mut fields);
+        assert_eq!(fields["target"], json!("filterMask"));
+        assert!(!fields.contains_key("a"));
+        let before = crate::filter_dialog::params_of(&app.ui.dialog_mut(id).unwrap().fields);
+        assert!(add_point_at(&mut app, &egui::Context::default(), 8.0, 8.0, false));
+        assert_eq!(crate::filter_dialog::params_of(&app.ui.dialog_mut(id).unwrap().fields), before);
     }
 }
