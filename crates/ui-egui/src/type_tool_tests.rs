@@ -2066,6 +2066,59 @@ mod multi_layer_formatting {
         assert_ne!(text(h.state(), ids[2]).antialias, AntiAlias::Sharp);
     }
 
+    /// The family field and the style menu describe the selected run, not the layer's first run
+    /// (#9024), whichever way the selection was made; without a selection the first run shows, and
+    /// without a type target the tool defaults. Showing them never adds history. "Mé Regular" has
+    /// a two-byte `é`, so a byte offset taken for a character offset picks the wrong run.
+    #[test]
+    fn options_bar_font_and_style_follow_the_selected_run() {
+        let mut app = new_app();
+        let id = LayerId(
+            app.run("type.create", json!({"text": "Mé Regular", "font": "Inter", "fontStyle": "Medium", "size": 20, "x": 300, "y": 420})).unwrap()["layer"]
+                .as_u64()
+                .unwrap(),
+        );
+        app.run("type.setStyle", json!({"layer": id.0, "range": [3, 10], "font": "JetBrains Mono", "fontStyle": "Regular"})).unwrap();
+        assert_eq!((style(&app, id, 0).font_family.as_str(), style(&app, id, 5).font_family.as_str()), ("Inter", "JetBrains Mono"));
+        let edit = |anchor: usize, caret: usize| crate::state::TextEdit {
+            layer: id.0,
+            document: None,
+            caret,
+            anchor,
+            session: "s".into(),
+            created: false,
+            mask: false,
+            dragging: false,
+            resize: None,
+            preedit: None,
+        };
+        let mut h = controls(app, false);
+        let shown = |h: &Harness<'static, PhotocraftApp>| {
+            (
+                h.get_by_role_and_label(Role::TextInput, "Font").value().unwrap_or_default(),
+                h.get_all_by_role(Role::ComboBox).find(|n| ["Regular", "Medium"].contains(&n.value().as_deref().unwrap_or_default())).and_then(|n| n.value()),
+            )
+        };
+        let steps = super::history_len(&h);
+        let (inter, mono) = (("Inter".to_string(), Some("Medium".to_string())), ("JetBrains Mono".to_string(), Some("Regular".to_string())));
+        for (anchor, caret, want) in [(3, 10, &mono), (10, 3, &mono), (0, 2, &inter), (2, 0, &inter)] {
+            h.state_mut().ui.text_edit = Some(edit(anchor, caret));
+            h.run_steps(4);
+            assert_eq!(&shown(&h), want, "selection {anchor}..{caret}");
+        }
+        // Ending the edit keeps the first-run rule: the layer is still selected, Inter Medium leads.
+        h.state_mut().ui.text_edit = None;
+        h.run_steps(4);
+        assert_eq!(shown(&h), inter, "no edit: the first run");
+        assert_eq!(super::history_len(&h), steps, "displaying the controls adds no history");
+        // Control: no type target shows the tool defaults.
+        h.state_mut().run("layer.new.layer", json!({})).unwrap();
+        h.state_mut().ui.tool_options.type_font = "JetBrains Mono".into();
+        h.state_mut().ui.tool_options.type_style = "Regular".into();
+        h.run_steps(4);
+        assert_eq!(shown(&h), mono, "no type target: the tool defaults");
+    }
+
     /// Other engines registering fonts and the served catalog growing (tests running in parallel)
     /// used to move the key of the font menu's preview cache, so its samples re-rendered and asked
     /// for a repaint every pass and `Harness::run` never settled (a flaky `exceeded max_steps`).
