@@ -86,7 +86,7 @@ fn names(h: &Harness<'static, PhotocraftApp>) -> Vec<String> {
 
 /// Type into the actual Levels gamma control and blur it to commit the value.
 fn edit_gamma(h: &mut Harness<'static, PhotocraftApp>, gamma: &str) {
-    h.query_all_by_role(egui::accesskit::Role::SpinButton).nth(1).unwrap().click();
+    h.get_by_label("Gamma").click();
     h.run_steps(2);
     h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
     h.run_steps(1);
@@ -602,5 +602,87 @@ fn last_tone_settings_on_grayscale_pixels_drop_hidden_colour_records() {
             assert_eq!(fields["points"], json!([[0.0, 255.0], [255.0, 0.0]]));
         }
         dialogs::cancel(h.state_mut(), id).unwrap();
+    }
+}
+
+/// Build a filtered smart object with a selected filter mask, optionally still the implicit reveal-all mask.
+fn filter_mask_fixture(mode: ColorMode, depth: SampleType, stored: bool) -> PhotocraftApp {
+    let mut app = fixture(mode, depth, ChannelTarget::Color(0));
+    app.session.active_mut().unwrap().channel_view.target = ChannelTarget::Composite;
+    app.run("layer.smartObjects.convertToSmartObject", json!({})).unwrap();
+    app.run("filter.blur.gaussianBlur", json!({"radius":1})).unwrap();
+    let id = app.session.active().unwrap().active_layer.unwrap();
+    if stored {
+        app.run("edit.fill", json!({"target":"filterMask","contents":"color","color":"#404040"})).unwrap();
+    }
+    app.ui.filter_mask_target = Some(id.0);
+    app
+}
+
+/// New upstream filter masks use the same scalar controls, picker and preserved targeting in every document space.
+#[test]
+fn filter_mask_tone_dialogs_preserve_the_target_and_sample_its_own_levels() {
+    for mode in GRAY_TARGET_MODES {
+        for depth in DEPTHS {
+            for kind in ["levels", "curves"] {
+                for stored in [false, true] {
+                    let app = filter_mask_fixture(mode, depth, stored);
+                    let st = app.session.active().unwrap();
+                    let layer = st.active_layer.unwrap();
+                    let expected_name = format!("{} Filter Mask", st.doc.layer(layer).unwrap().name);
+                    let before = st.doc.clone();
+                    let mut h = open(app, kind);
+                    assert_eq!(names(&h), [expected_name], "{mode:?} {depth:?} {kind}");
+                    assert_eq!(params(&h)["target"], "filterMask");
+                    let id = h.state().ui.dialogs.last().unwrap().id;
+                    h.state_mut().ui.dialog_mut(id).unwrap().fields.insert("__curvePicker".into(), json!("white"));
+                    assert!(adjust_dialog::sample_at(h.state_mut(), 8.0, 8.0));
+                    assert!(
+                        h.state().ui.dialogs.last().unwrap().fields.contains_key("__curvePickerBase"),
+                        "the picker succeeds on {mode:?} {depth:?} stored={stored}: {}",
+                        h.state().ui.status
+                    );
+                    assert!(std::sync::Arc::ptr_eq(&before, &h.state().session.active().unwrap().doc), "sampling is read-only");
+                    assert_eq!(params(&h)["target"], "filterMask");
+                    if kind == "levels" {
+                        let expected = if stored { 64.0 } else { 255.0 };
+                        assert!((params(&h)["inWhite"].as_f64().unwrap() - expected).abs() < 1.0);
+                    }
+                    dialogs::confirm(h.state_mut(), id).unwrap();
+                    let after = &h.state().session.active().unwrap().doc;
+                    let LayerContent::Smart(old) = &before.layer(layer).unwrap().content else { panic!("smart fixture") };
+                    let LayerContent::Smart(new) = &after.layer(layer).unwrap().content else { panic!("smart result") };
+                    assert_eq!(new.smart_filters, old.smart_filters, "the adjustment edits the mask rather than adding a filter");
+                    assert_eq!(new.source, old.source);
+                    assert_eq!(after.channels, before.channels);
+                    assert_eq!(after.layer(layer).unwrap().mask, before.layer(layer).unwrap().mask);
+                    assert!(new.filter_mask.as_ref().unwrap().surface.sample_channel(8, 8, 0) > 0.99);
+                }
+            }
+        }
+    }
+}
+
+/// A recorded alpha address takes precedence over the currently selected filter mask.
+#[test]
+fn action_alpha_target_overrides_the_filter_mask_panel_target() {
+    for mode in MODES {
+        for kind in ["levels", "curves"] {
+            let mut app = filter_mask_fixture(mode, SampleType::U8, false);
+            let before = app.session.active().unwrap().doc.clone();
+            let values = if kind == "levels" { json!({"target":{"channel":0},"gamma":2}) } else { json!({"target":{"channel":0},"points":[[0,255],[255,0]]}) };
+            let mut action = photocraft_engine::actions_cmds::Action::new("Alpha over filter mask", vec![(format!("image.adjustments.{kind}"), values)]);
+            action.dialogs.insert(0);
+            app.session.actions.list.push(action);
+            let mut h = harness(app);
+            h.state_mut().run("actions.play", json!({"action":"Alpha over filter mask"})).unwrap();
+            h.run_steps(4);
+            assert_eq!(names(&h), ["Saved sky"]);
+            assert_eq!(params(&h)["target"], json!({"channel":0}));
+            let id = h.state().ui.dialogs.last().unwrap().id;
+            dialogs::confirm(h.state_mut(), id).unwrap();
+            assert!(value(h.state(), ChannelTarget::Alpha(0)) > 0.4);
+            assert_eq!(h.state().session.active().unwrap().doc.layers, before.layers);
+        }
     }
 }

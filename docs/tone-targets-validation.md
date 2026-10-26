@@ -54,6 +54,21 @@ Validation on Linux with `PHOTOCRAFT_FULL_SWEEP=1`:
 
 Logs, failure reproductions, review notes and current captures are retained locally in `plan/merge-main-20261024/` (gitignored). Windows and macOS were not tested locally.
 
+## Main integration and review (2026-10-26)
+
+Current main integrated: `59cb4c49b` (PhotoCraft 0.16.0 / egui 0.37). The target-resolver conflict now preserves explicit Action targets and captured Smart Filter defaults while adopting upstream Smart Filter mask targeting. The shared scalar discriminator includes filter masks. Black/white pickers read an untouched implicit Reveal All mask without creating or modifying it; its histogram counts the constant white samples without scanning pixels, using the same interval as a stored mask. Existing gray-surface pixel scanning is unchanged. The Levels field interaction now uses egui 0.37's accessible Gamma label.
+
+Two new regression functions cover 48 filter-mask cases across RGB/Gray/CMYK/Lab, U8/U16/F32, Levels/Curves and stored/implicit masks, plus six explicit-alpha Action precedence cases. They check the actual target name, sampling without document mutation, recorded target persistence, mask-only commit and preservation of source pixels, filter stacks and other planes. The captured Smart Filter reopening matrix now also includes a selected filter mask (36 cases total). The implicit histogram regression matches a stored Reveal All at 32 × 32, 6000 × 4000 and uneven 6001 × 4003 dimensions. This PR now introduces 29 regression functions plus expanded existing checks.
+
+Validation on Linux:
+
+- Full engine/UI `cargo test` with `PHOTOCRAFT_FULL_SWEEP=1`: **6,751 passed, 0 failed, 38 normally ignored**, including doctest builds. Native tests used CI's exact `craft-fonts` revision `b076417b5880bd4154bd22f00695b1d28c6bea83` with `CRAFT_FONTS_REQUIRED=1`. The initial no-font run's egui missing-glyph failures were resolved by that documented CI input; no font files or weakened assertions are included in this PR.
+- The ignored full-registry adversarial command test passed separately. Strict engine/UI all-target Clippy (`-D warnings`), formatting, layering and wasm passed. `cargo xtask test-corpus --changed` correctly skipped because no corpus-critical paths differ from integrated main.
+- Fresh offscreen Levels/Curves captures for last-used settings on `Saved sky` and explicitly targeted `Sky Filter Mask` were inspected. Names, neutral controls, previews, implicit-white histograms and the egui 0.37 layout agree with the targets. The final scoped integration review found no further actionable bugs.
+- The broader workspace and generic quick-performance attempts above remain dated to 2026-10-24 and were not repeated for this merge. The historical 24 MP comparison below is unchanged; no fresh before/after latency result is claimed for this integration. Windows and macOS were not tested locally.
+
+Logs, the CI font input, review notes, scripts and current captures are retained locally in `plan/merge-main-20261026/` (gitignored).
+
 ## 24 MP release comparison
 
 Dense synthetic 6000 × 4000 RGB8 raster layer, raster mask, saved alpha channel and Quick Mask, each filled with 25% gray. The central selection is a 3000 × 2000 rectangle at 0.5 coverage. Proxy factor 4 (1500 × 1000). AMD Ryzen 7 9700X, 16 logical CPUs, Ubuntu 26.04.1, Rust 1.99.0, default optimized release profile (thin LTO).

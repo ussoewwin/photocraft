@@ -193,7 +193,7 @@ fn tone_filter_editor_ignores_current_channel_target() {
     use photocraft_engine::{adjust_params, channel_cmds::ChannelTarget};
     for mode in ["rgb", "lab", "cmyk"] {
         for kind in ["levels", "curves"] {
-            for view in 0..5 {
+            for view in 0..6 {
                 let (mut app, layer) = app(8, mode);
                 let command = format!("image.adjustments.{kind}");
                 let color_mode = app.session.active().unwrap().doc.mode;
@@ -227,6 +227,7 @@ fn tone_filter_editor_ignores_current_channel_target() {
                     _ => ChannelTarget::Composite,
                 };
                 app.ui.mask_target = view == 3;
+                app.ui.filter_mask_target = (view == 5).then_some(layer.0);
                 let before = app.session.active().unwrap().doc.clone();
                 let filters = smart(&app, layer).clone();
                 let mut h = Harness::builder().with_size(vec2(1200.0, 900.0)).build_ui_state(|ui, app| crate::dialogs::show(app, ui.ctx()), app);
