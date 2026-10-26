@@ -2175,9 +2175,9 @@ pub(crate) fn commit_shortcut(app: &mut PhotocraftApp, ctx: &egui::Context) -> b
         let families = families();
         let labels: Option<Arc<HashMap<String, String>>> = ctx.data(|d| d.get_temp(font_labels_id()));
         let (rows, _) = font_menu_rows(&families, labels.as_deref(), &edit.query, &edit.recents);
-        let exact = edit.text.to_lowercase();
-        let family =
-            rows.iter().find(|(f, shown)| f.to_lowercase() == exact || shown.to_lowercase() == exact).or_else(|| rows.first()).map(|(f, _)| (*f).clone());
+        let selected =
+            edit.row.filter(|&i| rows.get(i).is_some_and(|(f, _)| **f == edit.current)).or_else(|| rows.iter().position(|(f, _)| **f == edit.current));
+        let family = accept_row(&rows, &edit.text, selected).and_then(|i| rows.get(i)).map(|(f, _)| (*f).clone());
         if let Some(family) = family {
             photocraft_text::served::request(&family);
             app.note_recent_font(&family);
@@ -2789,6 +2789,13 @@ fn font_picker_in(
     family_picker_in(ui, "type-font", current, width, families, preview, recents)
 }
 
+/// The row Enter and ⌘/Ctrl+Enter apply to a pending family query: a full name wins over a
+/// substring match (including localized family names), then the highlighted row, then the first.
+fn accept_row(rows: &[(&String, &str)], text: &str, selected: Option<usize>) -> Option<usize> {
+    let exact = text.to_lowercase();
+    rows.iter().position(|(f, shown)| f.to_lowercase() == exact || shown.to_lowercase() == exact).or(selected).or_else(|| (!rows.is_empty()).then_some(0))
+}
+
 /// Transient input belongs to one field, independently of the applied family and its peers.
 #[derive(Clone)]
 struct FontFieldEdit {
@@ -2952,12 +2959,7 @@ pub(crate) fn family_picker_in(
         }
         if enter && !edit.text.trim().is_empty() {
             // A full name wins over a substring match (including localized family names).
-            let exact = edit.text.to_lowercase();
-            let accept = rows
-                .iter()
-                .position(|(f, shown)| f.to_lowercase() == exact || shown.to_lowercase() == exact)
-                .or(selected)
-                .or_else(|| (!rows.is_empty()).then_some(0));
+            let accept = accept_row(&rows, &edit.text, selected);
             if let Some((f, _)) = accept.and_then(|i| rows.get(i)) {
                 // Acceptance is an application to the selected characters, even when a
                 // mixed selection's representative already has this family (as row clicks do).

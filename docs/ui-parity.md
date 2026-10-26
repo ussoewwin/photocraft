@@ -312,7 +312,6 @@ Paragraph; the rest open as in-app floating windows.
 | 2026-10-15 | minor | Color panel: Photoshop's panel-menu modes, colour ramp and copy commands; the theme no longer picks the panel's layout (UI-217-17 done, #2569, #6000) |
 | 2026-10-23 | minor | ⌥ + an adjustment's shortcut (⌥⌘L Levels, ⌥⌘M Curves) opens its dialog at the settings of its last OK, as in Photoshop (#8900); no percentage changed |
 | 2026-10-25 | minor | Shared font-family fields support direct name editing and search, with full-name selection on entry, explicit acceptance and cancellation, plus a compact no-match result (#9338); no percentage changed |
-
 | 2026-10-25 | minor | RC2 follow-up: selection-aware font family/style display, explicit keyboard application to mixed selections, pending caret fonts for typing/paste/IME, and Ctrl/Cmd+Enter from focused Type fields (`type_font_commit_tests.rs`); no percentage changed |
 | 2026-10-14 | minor | ⇧⌥ + letter blend mode keys for the painting tool or every selected layer; ⇧+ / ⇧− now step every selected layer and include Clear for Brush and Pencil |
 | 2026-10-15 | minor | ⇧⌥ blend mode letters work while a Free Transform box is open, without picking a tool |

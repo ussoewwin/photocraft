@@ -353,6 +353,31 @@ fn returning_focus_to_the_same_canvas_caret_keeps_the_chosen_typing_font() {
 }
 
 #[test]
+fn commit_shortcut_resolves_a_pending_query_like_enter() {
+    // "n" matches several families, and the current one is not the first row, so a fallback to
+    // the first row would apply a family the menu never highlighted.
+    let query = "n";
+    let all = super::families();
+    let (rows, _) = super::font_menu_rows(&all, None, query, &[]);
+    assert!(rows.first().is_some_and(|(f, _)| f.as_str() != FONTS[1]), "the test needs a first row other than the current family");
+    assert!(rows.iter().any(|(f, _)| f.as_str() == FONTS[1]));
+    for accept in ["enter", "shortcut"] {
+        let (mut h, id) = fixture(false, 1, false, "abcdef");
+        select(&mut h, [2, 4]);
+        h.run();
+        choose(&mut h, query, "query");
+        if accept == "enter" {
+            h.key_press(Key::Enter);
+            h.run();
+        } else {
+            commit(&mut h, "shortcut-focused");
+            assert!(h.state().app.ui.text_edit.is_none(), "the shortcut still commits");
+        }
+        assert_eq!(families(&saved(&h, id)), vec![FONTS[1]; 6], "{accept} keeps the highlighted current family");
+    }
+}
+
+#[test]
 fn commit_does_not_accept_an_invalid_font_or_interrupt_ime() {
     for (character, query) in [(false, "no such font zzz"), (true, "no such font zzz"), (false, " "), (true, " ")] {
         let (mut h, id) = fixture(false, 0, character, "abcdef");
