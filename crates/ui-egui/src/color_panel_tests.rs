@@ -500,3 +500,23 @@ fn every_slider_mode_recolours_the_selected_shape() {
         assert_eq!(shape_fill(h.state()), [255, 255, 255], "{mode:?}");
     }
 }
+
+/// #9592: the Color panel's options survive a restart (they ride in the preferences), as in
+/// Photoshop; preferences without them keep the defaults.
+#[test]
+fn color_panel_options_survive_a_restart() {
+    let mut first = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+    first.ui.color_panel.mode = ColorPanelMode::HsbSliders;
+    first.ui.color_panel.ramp = ColorRamp::GrayscaleRamp;
+    crate::color_panel_ui::persist(&mut first);
+    let saved = first.session.prefs().clone();
+
+    let mut next = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+    next.session.prefs.edit(|p| *p = saved);
+    crate::color_panel_ui::restore(&mut next);
+    assert_eq!((next.ui.color_panel.mode, next.ui.color_panel.ramp), (ColorPanelMode::HsbSliders, ColorRamp::GrayscaleRamp));
+
+    let mut fresh = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+    crate::color_panel_ui::restore(&mut fresh);
+    assert_eq!(fresh.ui.color_panel.mode, ColorPanelMode::HueCube, "no saved options: the default");
+}
