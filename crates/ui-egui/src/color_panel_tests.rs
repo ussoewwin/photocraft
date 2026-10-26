@@ -520,3 +520,26 @@ fn color_panel_options_survive_a_restart() {
     crate::color_panel_ui::restore(&mut fresh);
     assert_eq!(fresh.ui.color_panel.mode, ColorPanelMode::HueCube, "no saved options: the default");
 }
+
+/// CodeRabbit on #9606: a preference change made outside the panel (`prefs.set`, a reset) is kept.
+/// The next frame takes it into the live panel instead of writing the panel's old options back.
+#[test]
+fn an_outside_preference_change_reaches_the_live_panel() {
+    let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+    app.ui.color_panel.mode = ColorPanelMode::HsbSliders;
+    crate::color_panel_ui::persist(&mut app);
+    // As prefs.set or a reset to defaults would: the stored options change under the panel.
+    let mut other = app.ui.color_panel;
+    other.mode = ColorPanelMode::GrayscaleSlider;
+    app.session.prefs.edit(|p| p.color_panel = serde_json::to_value(other).unwrap());
+    crate::color_panel_ui::persist(&mut app);
+    assert_eq!(app.ui.color_panel.mode, ColorPanelMode::GrayscaleSlider, "the live panel follows the preference");
+    let stored: crate::state::ColorPanelState = serde_json::from_value(app.session.prefs().color_panel.clone()).unwrap();
+    assert_eq!(stored.mode, ColorPanelMode::GrayscaleSlider, "and the preference isn't overwritten");
+    // A reset to defaults clears the stored options: the panel goes back to its defaults too.
+    app.session.prefs.edit(|p| p.color_panel = serde_json::Value::Null);
+    crate::color_panel_ui::persist(&mut app);
+    assert_eq!(app.ui.color_panel.mode, ColorPanelMode::HueCube, "reset: the default mode");
+    crate::color_panel_ui::persist(&mut app);
+    assert_eq!(app.ui.color_panel.mode, ColorPanelMode::HueCube, "and it stays reset");
+}
