@@ -4730,6 +4730,9 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
         });
         if panning {
             // The fist set with the pan above stays (#2196).
+        } else if crate::tool_cursor::pointer_elsewhere(&ctx, &crate::panel_docking::native_viewports(app, &ctx)) {
+            // The pointer is over a floating panel's own window; this window's last position of
+            // it is stale, so no tool cursor or brush outline is painted at it.
         } else if let Some((vertical, _)) = guide_hover {
             ui.ctx().set_cursor_icon(crate::rulers::guide_cursor(&xf, vertical));
         } else if let Some(p) = response.hover_pos()
@@ -8882,9 +8885,7 @@ mod tests {
     }
 
     /// The held drag shows true mixed paint while Alt sampling remains separate from painting.
-
     #[test]
-
     fn mixer_drag_shows_actual_mixed_paint_before_release_and_alt_never_paints() {
         let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), Default::default());
         app.run("file.new", json!({"width":120,"height":60,"background":"#00ff00"})).unwrap();
@@ -8923,9 +8924,7 @@ mod tests {
     }
 
     /// Release incorporates its final endpoint and deferred samples in both live and fallback paths.
-
     #[test]
-
     fn mixer_release_includes_a_new_endpoint_and_deferred_frame_samples() {
         for (deferred, failed) in [(false, false), (true, false), (false, true)] {
             let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), Default::default());
@@ -8989,9 +8988,7 @@ mod tests {
     }
 
     /// Escape and tool changes cancel both ordinary previews and failed-preview fallback gestures.
-
     #[test]
-
     fn mixer_escape_and_tool_switch_cancel_without_an_edit() {
         for mode in 0..4 {
             let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), Default::default());
@@ -9059,9 +9056,7 @@ mod tests {
 
     /// A tip above the live preview's 1024 px paints on release, as main and Photoshop paint it
     /// up to 5000 px; a stroke that can't paint at all is still refused on press.
-
     #[test]
-
     fn mixer_drag_above_the_preview_size_paints_on_release() {
         for locked in [false, true] {
             let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), Default::default());
@@ -9089,9 +9084,7 @@ mod tests {
     }
 
     /// ⌥ with a held temporary tool (macOS ⌘ = Move) is that tool's, not a Mixer Brush paint load.
-
     #[test]
-
     fn mixer_alt_with_a_held_temporary_tool_does_not_load_paint() {
         let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), Default::default());
         app.run("file.new", json!({"width":120,"height":60,"background":"#00ff00"})).unwrap();
