@@ -246,9 +246,9 @@ Paragraph; the rest open as in-app floating windows.
 
 | Date | Change | Summary |
 |---|---|---|
-| 2026-10-24 | minor | Levels, Exposure, Black & White and Channel Mixer gain a Preset menu (Custom after an edit) in the dialog and Properties, with the preset names Photoshop uses. The settings are PhotoCraft's own, designed for each look, not Photoshop's preset data (#9263, #9265, #9268, #9270). Scores unchanged. |
 | 2026-10-25 | minor | Every preference takes effect: 12 of 178 do nothing, the scorecard's count (it still said 46 of 149) |
 | 2026-10-25 | minor | Art History Brush is in the History group of the Y flyout (partial, TOOL-213-20, #1610) |
+| 2026-10-24 | minor | Levels, Exposure, Black & White and Channel Mixer gain a Preset menu (Custom after an edit) in the dialog and Properties, with the preset names Photoshop uses. The settings are PhotoCraft's own, designed for each look, not Photoshop's preset data (#9263, #9265, #9268, #9270). Scores unchanged. |
 | 2026-10-24 | minor | Swatches: a click recolours the selected type layers and shape fills whatever the tool, as Photoshop 2025 does (measured with the Move and Brush tools); the Color panel still recolours them only with a Type, shape or Pen tool (#9238). Scores unchanged. |
 | 2026-10-24 | minor | Type options bar: the alignment and paragraph-direction buttons show the edited or selected type layer's paragraph instead of the tool defaults, as Photoshop's bar does. Scores unchanged. |
 | 2026-10-24 | minor | Font menus (options bar, Character panel): the current family is marked in the recent group when it is a recent one, and the menu opens showing it, as Photoshop's does, scrolled to the marked row when it sits below the fold; the arrows walk on from the marked row (#9160). Scores unchanged. |
