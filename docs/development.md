@@ -36,7 +36,7 @@ building locally; the downloaded app is still subject to Windows application-con
 
 ## Build and run
 
-On Linux, **System Title Bar** is enabled by default. GNOME/Wayland uses winit's font-free Adwaita controls; X11 uses the window manager's frame. Saved choices still override the default, and other platforms keep their existing defaults. Changes in Preferences apply at the next launch.
+On Linux, PhotoCraft keeps its integrated client-side decorated title bar by default (#4439), including desktop-matched buttons. Enabling **System Title Bar** in Preferences switches to the system frame at the next launch: on GNOME/Wayland, winit provides font-free Adwaita controls; on X11, the window manager supplies the frame. Explicit saved choices are respected and Windows/macOS defaults are unchanged.
 
 ```sh
 cargo run --release -p photocraft -- path/to/image.psd      # desktop app
