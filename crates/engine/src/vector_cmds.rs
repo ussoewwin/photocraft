@@ -1934,8 +1934,6 @@ pub fn specs() -> Vec<CommandSpec> {
             label: "Add Path to Selection",
             menu: &[],
             shortcut: Some("Cmd+Shift+Enter"),
-            params: r##"{"name":str|"work"|"layer"="work","feather":px=0,"antiAlias":bool=true} (same as path.toSelection with mode "add")"##,
-
             params: r##"{"name":str|"work"|"layer"="work","feather":px=0,"antiAlias":bool=true} (path.toSelection with mode "add")"##,
             enabled: has_doc,
             run: |s, p| path_to_selection_with_mode(s, p, "add"),
@@ -1947,7 +1945,6 @@ pub fn specs() -> Vec<CommandSpec> {
             label: "Subtract Path from Selection",
             menu: &[],
             shortcut: Some("Cmd+Alt+Enter"),
-            params: r##"{"name":str|"work"|"layer"="work","feather":px=0,"antiAlias":bool=true} (same as path.toSelection with mode "subtract")"##,
             params: r##"{"name":str|"work"|"layer"="work","feather":px=0,"antiAlias":bool=true} (path.toSelection with mode "subtract")"##,
             enabled: has_doc,
             run: |s, p| path_to_selection_with_mode(s, p, "subtract"),
