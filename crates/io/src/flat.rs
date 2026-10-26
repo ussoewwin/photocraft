@@ -231,29 +231,34 @@ pub fn tga_alpha_channel_to_transparency(doc: &mut Document) {
 /// [`crate::memory`]).
 pub fn import_tiff_page(name: &str, bytes: &[u8], page: Option<usize>) -> Result<ImportResult, IoError> {
     let bands = codecs::TiffBands::open(bytes, page, &codecs::Limits::banded())?;
-    if bands.meta.photoshop_layers.as_deref().is_some_and(|l| !l.is_empty()) {
-        // Its copy of the layer data is not kept through the whole-image decode.
+    // A page with layers or extra samples (alpha and spot channels) is decoded whole: the layers
+    // and channels are built from the full image. Only one copy of the layer data is kept through
+    // that decode.
+    if bands.meta.photoshop_layers.as_deref().is_some_and(|l| !l.is_empty()) || bands.extra_samples() > 0 {
         drop(bands);
-        return import_layered_tiff(name, bytes, page);
+        return import_tiff_whole(name, bytes, page);
     }
     tiff_to_document(name, bands.upright())
 }
 
-/// A layered TIFF, decoded whole: its layers are built from the composite.
-fn import_layered_tiff(name: &str, bytes: &[u8], page: Option<usize>) -> Result<ImportResult, IoError> {
-    // The orientation is ignored: rotating the composite but not the layers would misalign them,
-    // so a layered TIFF keeps its stored orientation.
+/// A layered TIFF, or a flat one with extra samples, decoded whole: the layers are built from the
+/// composite, the channels from the extra samples.
+fn import_tiff_whole(name: &str, bytes: &[u8], page: Option<usize>) -> Result<ImportResult, IoError> {
+    // The orientation is applied after the layer check: rotating the composite but not the
+    // layers would misalign them, so a layered TIFF keeps its stored orientation.
     let keep = codecs::DecodeOptions { keep_orientation: true, ..Default::default() };
     let (img, orientation) = match page {
         None => (codecs::decode_with(bytes, &keep)?, codecs::tiff_orientation(bytes)),
         Some(p) => (codecs::decode_tiff_page(bytes, p, &keep)?, codecs::tiff_page_orientation(bytes, p)),
     };
-    let layers = img.meta.photoshop_layers.as_deref().unwrap_or_default();
-    let mut r = crate::tiff_layers::import_layered(name, &img, layers)?;
-    if orientation != 1 {
-        r.warnings.push("the TIFF's orientation tag was ignored so the layers stay aligned with the image".to_string());
+    if let Some(layers) = img.meta.photoshop_layers.as_deref().filter(|l| !l.is_empty()) {
+        let mut r = crate::tiff_layers::import_layered(name, &img, layers)?;
+        if orientation != 1 {
+            r.warnings.push("the TIFF's orientation tag was ignored so the layers stay aligned with the image".to_string());
+        }
+        return Ok(r);
     }
-    Ok(r)
+    image_to_document(name, &img.oriented(orientation)?)
 }
 
 /// A flat TIFF page as a single-layer document, decoded a group of rows at a time into the
@@ -340,7 +345,9 @@ pub(crate) fn image_to_document(name: &str, img: &Image) -> Result<ImportResult,
     warnings.extend(f.warning.clone());
     let mut s = image_surface(img, f.layout, f.sample)?;
     s.prune();
-    Ok(single_layer_document(name, img.dimensions(), f, img.layout().has_alpha(), s, img.icc.clone(), img.meta.clone(), warnings))
+    let mut r = single_layer_document(name, img.dimensions(), f, img.layout().has_alpha(), s, img.icc.clone(), img.meta.clone(), warnings);
+    r.warnings.extend(crate::tiff_layers::channels_from_extras(&mut r.document, img));
+    Ok(r)
 }
 
 /// The document of one layer holding `s`, with the image's profile and metadata.
@@ -756,6 +763,12 @@ pub(crate) fn export_flat_with(doc: &Document, format: Format, opts: &ExportOpti
     if format == Format::Tga {
         img = tga_image(doc, img, opts.tga_bits, &mut warnings)?;
     }
+    if format == Format::Dds {
+        img = dds_image(doc, img, &mut warnings)?;
+    }
+    if format == Format::Tiff {
+        warnings.extend(crate::tiff_layers::stamp_flat_channels(doc, &mut img));
+    }
     encode_image(&img, format, opts, warnings)
 }
 
@@ -794,7 +807,7 @@ fn tga_image(doc: &Document, img: Image, bits: Option<TgaBits>, warnings: &mut V
             warnings.push("transparency composited over white; a 24-bit Targa has no alpha".into());
             matte_over_white(&img)
         }
-        (TgaBits::Bits32, [channel]) => tga_with_alpha_channel(doc, img, channel, warnings),
+        (TgaBits::Bits32, [channel]) => with_alpha_channel(doc, img, channel, "Targa", warnings),
         (TgaBits::Bits32, alphas) => {
             if !alphas.is_empty() {
                 warnings.push("Targa holds one alpha channel; with several, none was written (as in Photoshop)".into());
@@ -807,11 +820,32 @@ fn tga_image(doc: &Document, img: Image, bits: Option<TgaBits>, warnings: &mut V
     }
 }
 
-/// A 32-bit Targa's image: the colours (composited over white where the layers are transparent)
-/// and `channel`'s values as the alpha.
-fn tga_with_alpha_channel(doc: &Document, img: Image, channel: &AlphaChannel, warnings: &mut Vec<String>) -> Result<Image, IoError> {
+/// The image a DDS texture holds (#8563): as with a 32-bit Targa, the document's alpha channel
+/// becomes the texture's alpha when it has exactly one (spot channels don't count), the colours
+/// composited over white where the layers are transparent; BC1 keeps it as on/off, BC2 and BC3
+/// in full. With none, the layers' transparency is the alpha as before; with several, none of
+/// them is written. Grayscale textures keep their transparency.
+fn dds_image(doc: &Document, img: Image, warnings: &mut Vec<String>) -> Result<Image, IoError> {
+    let alphas: Vec<&AlphaChannel> = doc.channels.iter().filter(|c| c.spot.is_none()).collect();
+    match alphas.as_slice() {
+        [] => Ok(img),
+        [channel] if img.layout().is_rgb() => with_alpha_channel(doc, img, channel, "texture", warnings),
+        [_] => {
+            warnings.push("a grayscale DDS keeps the layers' transparency; the alpha channel was not saved".into());
+            Ok(img)
+        }
+        _ => {
+            warnings.push("a DDS texture holds one alpha channel; with several, none was written".into());
+            Ok(img)
+        }
+    }
+}
+
+/// A 32-bit Targa's or a texture's image: the colours (composited over white where the layers are
+/// transparent) and `channel`'s values as the alpha. `what` names the file in the warning.
+fn with_alpha_channel(doc: &Document, img: Image, channel: &AlphaChannel, what: &str, warnings: &mut Vec<String>) -> Result<Image, IoError> {
     let img = if img.layout().has_alpha() {
-        warnings.push("transparency composited over white; the alpha channel is the Targa's alpha".into());
+        warnings.push(format!("transparency composited over white; the alpha channel is the {what}'s alpha"));
         matte_over_white(&img)?
     } else {
         img
