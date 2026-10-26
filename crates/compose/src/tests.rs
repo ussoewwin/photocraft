@@ -2471,6 +2471,24 @@ fn blend_if_on_adjustment_and_clipped_layers() {
     assert!(close4(px(&d, 6, 1), [0.0, 1.0, 0.0, 1.0]));
 }
 
+/// #9542: an adjustment layer's "This Layer" range judges its result at full strength, before
+/// Opacity mixes it in. Photoshop: Invert at 40% over (64, 128, 192) with Red / This Layer black
+/// at 150 keeps the effect, (115, 128, 140), as Invert's red (191) passes 150; with white at 150
+/// it drops it. Judged after Opacity (red 115) the two came out the other way round.
+#[test]
+fn adjustment_blend_if_judges_the_result_before_opacity() {
+    for (black, white, want) in [(150u8, 255u8, [115, 128, 140]), (0, 150, [64, 128, 192])] {
+        let mut d = Document::with_background("bi", Size::new(1, 1), ColorMode::Rgb, SampleType::U8, Color::WHITE);
+        d.layers.push(solid_layer("base", Rect::new(0, 0, 1, 1), [64.0 / 255.0, 128.0 / 255.0, 192.0 / 255.0, 1.0]));
+        let mut inv = Layer::new("invert", LayerContent::Adjustment(Adjustment::Invert));
+        inv.opacity = 0.4;
+        inv.blend_if.set(1, [range([black, black], [white, white]), FULL]);
+        d.layers.push(inv);
+        let got: Vec<i32> = px(&d, 0, 0)[..3].iter().map(|v| (v * 255.0).round() as i32).collect();
+        assert!(got.iter().zip(want).all(|(g, w)| (g - w).abs() <= 1), "black {black} white {white}: {got:?} vs Photoshop {want:?}");
+    }
+}
+
 #[test]
 fn blend_if_modes() {
     // Grayscale documents: the single channel's entry (or the gray entry) applies.

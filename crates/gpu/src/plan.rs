@@ -410,7 +410,8 @@ pub const F_QUANT: u32 = 32768;
 /// `Lerp` as A + (B − C) premultiplied (layers clipped to pass-through groups).
 pub const F_ADD_DIFF: u32 = 16384;
 /// `Lerp`: B mixed back towards A (the backdrop) by the layer's Blend If weight
-/// (`compose::apply_blend_if`), from C ("This Layer", or B itself for an adjustment layer, `p4.y`)
+/// (`compose::apply_blend_if`), from C ("This Layer": an adjustment layer's unmixed result; B when
+/// `p4.y` is set)
 /// and A ("Underlying Layer"). The ranges are packed in `p0..p3` (`blend_if_params`); `p4.x` marks
 /// a one-channel document.
 pub const F_BLEND_IF: u32 = 524288;
@@ -563,13 +564,17 @@ impl<'a> Planner<'a> {
 
     /// `compose::apply_blend_if`: `after` (the backdrop with `layer` drawn) mixed back towards
     /// `before` (the backdrop without it) where the layer's Blend If ranges hide it. "This Layer"
-    /// is the layer's own content with its masks; an adjustment layer is judged by its result.
-    /// Consumes both slots.
+    /// is the layer's own content with its masks; an adjustment layer is judged by its result at
+    /// full strength, before Opacity and its mask (#9542). Consumes both slots.
     fn blend_if(&mut self, layer: &'a Layer, before: Slot, after: Slot) -> Result<Slot, Unsupported> {
-        let own = match layer.content {
-            LayerContent::Adjustment(_) => None,
-            _ => Some(self.content(layer)?),
+        let own = match &layer.content {
+            LayerContent::Adjustment(adj) => {
+                let b = self.retain(before);
+                self.adjust(adj, b)?
+            }
+            _ => self.content(layer)?,
         };
+        let own = Some(own);
         let mut p = Pass::new(Kernel::Lerp, 0);
         p.a = Some(before);
         p.b = Some(after);

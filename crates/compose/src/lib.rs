@@ -1808,13 +1808,18 @@ thread_local! {
 /// Mixing premultiplied colour by `k` equals compositing the layer at `k` × its alpha, since
 /// every blend mode's source-over result is linear in the source alpha.
 fn apply_blend_if(layer: &Layer, before: &Buffer, out: &mut Buffer, cx: &Ctx) {
-    // "This Layer" is the layer's own colour; adjustment layers (no content of their own) are
-    // judged by their result. So are groups nested deeper than `MAX_BLEND_IF_GROUP_DEPTH` Blend
-    // Ifs: a group's own colour re-composites its children, which doubles the work at every
-    // level of Blend If groups inside one another.
+    // "This Layer" is the layer's own colour. An adjustment layer (no content of its own) is
+    // judged by its result at full strength, before Opacity and its mask mix it in, as Photoshop
+    // does (#9542). Groups nested deeper than `MAX_BLEND_IF_GROUP_DEPTH` Blend Ifs are judged by
+    // the composite: a group's own colour re-composites its children, which doubles the work at
+    // every level of Blend If groups inside one another.
     let is_group = matches!(layer.content, LayerContent::Group(_));
     let nested = BLEND_IF_GROUPS.with(std::cell::Cell::get);
-    let own = if matches!(layer.content, LayerContent::Adjustment(_)) || (is_group && nested >= MAX_BLEND_IF_GROUP_DEPTH) {
+    let own = if let LayerContent::Adjustment(adj) = &layer.content {
+        let mut result = before.clone();
+        cx.apply_adjustment(adj, &mut result);
+        Some(result)
+    } else if is_group && nested >= MAX_BLEND_IF_GROUP_DEPTH {
         None
     } else {
         BLEND_IF_GROUPS.with(|d| d.set(nested + u32::from(is_group)));
