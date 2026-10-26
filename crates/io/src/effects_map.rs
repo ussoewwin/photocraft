@@ -142,7 +142,8 @@ fn psd_contour_points(points: &[CurvePoint]) -> Vec<usize> {
             let (Some(pa), Some(pb)) = (points.get(a), points.get(b)) else { continue };
             let span = pb.input - pa.input;
             for (i, p) in points.iter().enumerate().take(b).skip(a + 1) {
-                let t = if span.abs() > f32::EPSILON { (p.input - pa.input) / span } else { 0.0 };
+                // Only equal inputs (a vertical step) have no span: inputs a few ulps apart still do.
+                let t = if span != 0.0 && span.is_finite() { (p.input - pa.input) / span } else { 0.0 };
                 let off = (p.output - (pa.output + t * (pb.output - pa.output))).abs();
                 if off.is_finite() && farthest.is_none_or(|(f, _)| off > f) {
                     farthest = Some((off, i));
@@ -1056,5 +1057,24 @@ mod tests {
             }
             other => panic!("{other:?}"),
         }
+    }
+
+    /// CodeRabbit on #9590: inputs closer than `f32::EPSILON` but distinct are still a span. A point
+    /// on the straight line between two such inputs isn't mistaken for a bend and kept in place of a
+    /// genuine one.
+    #[test]
+    fn a_point_on_a_tiny_straight_span_is_not_a_bend() {
+        let p = |input: f32, output: f32| CurvePoint { input, output };
+        // Three distinct inputs a few ulps apart near 0.5, on a straight rise from 0 to 1.
+        let (a, b) = (0.5_f32, f32::from_bits(0.5_f32.to_bits() + 2));
+        let mid = f32::from_bits(0.5_f32.to_bits() + 1);
+        let mut points = vec![p(0.0, 0.0), p(0.2, 0.0)];
+        points.extend([p(a, 0.0), p(mid, 0.5), p(b, 1.0)]);
+        // Fourteen gentle bends after it, each one a real (if small) peak.
+        points.extend((0..14).map(|k| p(0.55 + k as f32 * 0.03, if k % 2 == 0 { 1.0 } else { 0.9 })));
+        points.push(p(1.0, 1.0));
+        let kept = psd_contour_points(&points);
+        assert_eq!(kept.len(), 16);
+        assert!(!kept.contains(&3), "the point on the tiny straight span was kept over a real bend: {kept:?}");
     }
 }
