@@ -133,7 +133,7 @@ fn preset_row(ui: &mut egui::Ui, kind: &str, v: &mut Value, cx: &EditorCx) -> Ed
             options.push(("custom", tl!("Custom")));
         }
         let mut picked = current;
-        if widgets::dropdown(ui, &format!("{kind}-preset"), &mut picked, &options, ui.available_width().min(220.0))
+        if widgets::dropdown(ui, &format!("{kind}-preset"), tl!("Preset"), &mut picked, &options, ui.available_width().min(220.0))
             && picked != current
             && let Some(settings) = list.iter().find(|p| p.id == picked).and_then(|p| crate::adjust_presets::settings(kind, p, cx.gray))
         {
