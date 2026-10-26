@@ -2471,6 +2471,25 @@ fn blend_if_on_adjustment_and_clipped_layers() {
     assert!(close4(px(&d, 6, 1), [0.0, 1.0, 0.0, 1.0]));
 }
 
+/// #9554: a Pass Through group with Blend If renders isolated, as Photoshop does: an Invert inside
+/// it leaves the layer beneath alone. Photoshop: (64, 128, 192) under such a group with Red ›
+/// Underlying Layer white at 110 stays (64, 128, 192); without the Blend If it is inverted.
+#[test]
+fn pass_through_group_with_blend_if_is_isolated() {
+    for (gated, want) in [(true, [64, 128, 192]), (false, [191, 127, 63])] {
+        let mut d = Document::with_background("pt", Size::new(1, 1), ColorMode::Rgb, SampleType::U8, Color::WHITE);
+        d.layers.push(solid_layer("base", Rect::new(0, 0, 1, 1), [64.0 / 255.0, 128.0 / 255.0, 192.0 / 255.0, 1.0]));
+        let mut g = Layer::group("group", vec![Layer::new("invert", LayerContent::Adjustment(Adjustment::Invert))]);
+        g.blend = BlendMode::PassThrough;
+        if gated {
+            g.blend_if.set(1, [FULL, range([0, 0], [110, 110])]);
+        }
+        d.layers.push(g);
+        let got: Vec<i32> = px(&d, 0, 0)[..3].iter().map(|v| (v * 255.0).round() as i32).collect();
+        assert!(got.iter().zip(want).all(|(g, w)| (g - w).abs() <= 1), "Blend If {gated}: {got:?} vs Photoshop {want:?}");
+    }
+}
+
 #[test]
 fn blend_if_modes() {
     // Grayscale documents: the single channel's entry (or the gray entry) applies.

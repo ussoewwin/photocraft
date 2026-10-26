@@ -1951,6 +1951,8 @@ fn composite_layer_plain(layer: &Layer, clipped: &[Layer], backdrop: &mut Buffer
     // is the base of a clipping group and holds an adjustment layer (psd-tools
     // passthrough_clipping_mask_adjustment: an Exposure inside leaves the layers beneath alone),
     // while such a group's blend modes still reach the backdrop (passthrough_clipping_mask_blendmode).
+    // A group with Blend If renders isolated too: an adjustment inside it no longer changes the
+    // layers beneath (#9554).
     let clip_base_adjusts = clipped.iter().any(|c| c.visible)
         && matches!(&layer.content, LayerContent::Group(g) if g.children.iter().any(|c| c.visible && matches!(c.content, LayerContent::Adjustment(_))));
     if let LayerContent::Group(g) = &layer.content
@@ -1958,6 +1960,7 @@ fn composite_layer_plain(layer: &Layer, clipped: &[Layer], backdrop: &mut Buffer
         && layer.fill_opacity >= 1.0
         && !effects::has_effects(layer)
         && !clip_base_adjusts
+        && !blend_if_active(layer, cx.mode)
     {
         let needs_mix = opacity < 1.0 || layer.mask.is_some() || layer.vector_mask.is_some();
         let has_clipped = clipped.iter().any(|c| c.visible);
