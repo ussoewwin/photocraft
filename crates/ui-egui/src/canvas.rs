@@ -1469,6 +1469,9 @@ pub(crate) fn display_doc(app: &mut PhotocraftApp, idx: usize) -> (std::sync::Ar
     if let Some(shown) = crate::type_panels_ui::color_picker::display_doc(app, idx) {
         return shown;
     }
+    if let Some(shown) = crate::color_picker_preview::display_doc(app, idx) {
+        return shown;
+    }
     if let Some(shown) = crate::solid_fill_ui::display_doc(app, idx) {
         return shown;
     }
@@ -2051,6 +2054,13 @@ pub(crate) fn damage_since(app: &PhotocraftApp, idx: usize, seen: (u64, u64), no
     if seen.0 == now.0
         && let Some(st) = app.session.documents().get(idx)
         && let Some(r) = crate::blend_preview::damage(app, st.doc.id, now.0, seen.1 ^ display_key, now.1)
+    {
+        return Some(if r.is_empty() { r } else { r.inflate(effect_reach(&st.doc.layers)) });
+    }
+    // Between colours under a text or stop Color Picker (and the document): the target layers' bounds.
+    if seen.0 == now.0
+        && let Some(st) = app.session.documents().get(idx)
+        && let Some(r) = crate::color_picker_preview::damage(app, st.doc.id, now.0, seen.1 ^ display_key, now.1)
     {
         return Some(if r.is_empty() { r } else { r.inflate(effect_reach(&st.doc.layers)) });
     }

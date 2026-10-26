@@ -238,6 +238,7 @@ mod tile_overlay;
 mod timeline_ui;
 mod titlebar;
 pub use titlebar::{Caption, CaptionFamily, CaptionIcon, CaptionIcons, CaptionStyle, RenderIconFn};
+mod color_picker_preview;
 pub mod tone;
 mod tool_cursor;
 pub mod tool_feedback;
@@ -968,6 +969,8 @@ pub struct PhotocraftApp {
     pub(crate) type_transform_preview: Option<type_transform::Preview>,
     /// A font hovered in the Type tool's font picker, shown live (`type_font_preview`).
     pub(crate) type_font_preview: Option<type_font_preview::TypeFontPreview>,
+    /// The colour under a text or gradient stop Color Picker, shown live before OK (`color_picker_preview`).
+    pub(crate) color_picker_preview: Option<color_picker_preview::Preview>,
     /// Channel thumbnails for one document snapshot; view-only revisions reuse their pixels.
     channel_thumbs: Option<(DocId, std::sync::Weak<Document>, bool, Vec<egui::TextureHandle>)>,
     /// Channels panel overlays / channel views drawn over the canvas, per document id.
@@ -1161,6 +1164,7 @@ impl PhotocraftApp {
             type_clicks: None,
             type_transform_preview: None,
             type_font_preview: None,
+            color_picker_preview: None,
             guide_drag: None,
             layer_box: None,
             crop: Default::default(),
