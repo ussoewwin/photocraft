@@ -9,6 +9,21 @@ mod fixture;
 use fixture::{polygon_csh, triangle_csh};
 
 #[test]
+fn csh_import_stores_the_display_form_of_a_localization_key() {
+    let bytes = fixture::named_polygon_csh("$$$/Presets/Shapes/Tiger=Tiger", &[&[(0.25, 0.25), (0.75, 0.25), (0.5, 0.75)]]);
+    let blank = fixture::named_polygon_csh("$$$/Presets/Shapes/Blank=   ", &[&[(0.25, 0.25), (0.75, 0.25), (0.5, 0.75)]]);
+    let mut session = Session::new();
+    let result = session.execute("shape.presets.importCsh", json!({"data": photocraft_paint::tile::b64_encode(&bytes), "group": "Localized CSH"})).unwrap();
+    assert_eq!(result["group"], "Localized CSH");
+    assert_eq!(result["names"], json!(["Tiger"]));
+    assert_eq!(session.presets.shapes.iter().find(|g| g.name == "Localized CSH").unwrap().items[0].name, "Tiger");
+    let again = session.execute("shape.presets.importCsh", json!({"data": photocraft_paint::tile::b64_encode(&bytes), "group": "Localized CSH"})).unwrap();
+    assert_eq!(again["names"], json!(["Tiger 2"]));
+    let blanked = session.execute("shape.presets.importCsh", json!({"data": photocraft_paint::tile::b64_encode(&blank)})).unwrap();
+    assert_eq!(blanked["names"], json!(["Shape"]));
+}
+
+#[test]
 fn csh_import_makes_an_original_shape_available_without_a_document() {
     let bytes = triangle_csh();
     if let Some(path) = std::env::var_os("PHOTOCRAFT_CSH_FIXTURE") {

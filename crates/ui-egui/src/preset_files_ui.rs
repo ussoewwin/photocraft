@@ -130,14 +130,21 @@ pub fn open(app: &mut PhotocraftApp, name: &str, bytes: &[u8]) -> Option<Result<
         let n = r.get("count").and_then(Value::as_u64).unwrap_or(0);
         let warnings: Vec<String> = r.get("warnings").and_then(|w| serde_json::from_value(w.clone()).ok()).unwrap_or_default();
         app.ui.status_error = false;
-        let (one, other) = match what {
-            "brushes" => ("Imported {n} brush from {file}", "Imported {n} brushes from {file}"),
-            "styles" => ("Imported {n} style from {file}", "Imported {n} styles from {file}"),
-            "patterns" => ("Imported {n} pattern from {file}", "Imported {n} patterns from {file}"),
-            "shapes" => ("Imported {n} shape from {file}", "Imported {n} shapes from {file}"),
-            _ => ("Imported {n} gradient from {file}", "Imported {n} gradients from {file}"),
+        // Shape import may suffix the group when that name is taken. Report the group that
+        // was stored, which the background job path already does.
+        let reported_group = r.get("group").and_then(Value::as_str).filter(|g| !g.is_empty());
+        let (one, other, slot, shown) = if what == "shapes" {
+            ("Imported {n} shape from {group}", "Imported {n} shapes from {group}", "group", reported_group.unwrap_or(stem.as_str()))
+        } else {
+            let (one, other) = match what {
+                "brushes" => ("Imported {n} brush from {file}", "Imported {n} brushes from {file}"),
+                "styles" => ("Imported {n} style from {file}", "Imported {n} styles from {file}"),
+                "patterns" => ("Imported {n} pattern from {file}", "Imported {n} patterns from {file}"),
+                _ => ("Imported {n} gradient from {file}", "Imported {n} gradients from {file}"),
+            };
+            (one, other, "file", stem.as_str())
         };
-        let imported = crate::i18n::fmt(&crate::i18n::trn(crate::i18n::current(), n, one, other), &[("file", &stem)]);
+        let imported = crate::i18n::fmt(&crate::i18n::trn(crate::i18n::current(), n, one, other), &[(slot, shown)]);
         app.ui.status = match warnings.first() {
             Some(warning) => {
                 let template = "{message} (notes: {n}; {warning})";
@@ -192,6 +199,10 @@ mod tests {
         let imported = app.session.presets.shapes.iter().find(|g| g.name == "Original").unwrap();
         assert_eq!(imported.items.len(), 1);
         assert_eq!(imported.items[0].name, "Triangle");
+        assert_eq!(app.ui.status, "Imported 1 shape from Original");
+        open(&mut app, "Original.CSH", &csh_fixture::triangle_csh()).unwrap().unwrap();
+        assert_eq!(app.ui.status, "Imported 1 shape from Original 1");
+        assert!(app.session.presets.shapes.iter().any(|g| g.name == "Original 1"));
     }
 
     #[test]

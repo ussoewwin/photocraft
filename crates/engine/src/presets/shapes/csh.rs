@@ -55,7 +55,10 @@ fn import(s: &mut Session, p: &Value) -> Result<Value> {
                     return Err(bad(CMD, format!("shape {:?} has no path", shape.name)));
                 }
                 let path = fit(&path, [0.0, 0.0, 100.0, 100.0], true);
-                let name = if shape.name.trim().is_empty() { "Shape".to_owned() } else { shape.name };
+                // Photoshop stores some preset names as `$$$/…/Key=Shown`. The Shapes panel
+                // renders the stored name, so keep the text after `=`.
+                let shown = photocraft_doc::pattern::display_name(&shape.name);
+                let name = if shown.trim().is_empty() { "Shape".to_owned() } else { shown.to_owned() };
                 items.push(ShapePreset { name, path });
             }
             let group = group.unwrap_or_else(|| if stem.is_empty() { "Imported Shapes".into() } else { stem });

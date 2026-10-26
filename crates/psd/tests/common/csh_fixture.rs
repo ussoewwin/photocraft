@@ -3,10 +3,14 @@ pub fn triangle_csh() -> Vec<u8> {
 }
 
 pub fn polygon_csh(polygons: &[&[(f64, f64)]]) -> Vec<u8> {
+    named_polygon_csh("Triangle", polygons)
+}
+
+pub fn named_polygon_csh(label: &str, polygons: &[&[(f64, f64)]]) -> Vec<u8> {
     let mut out = b"cush".to_vec();
     out.extend_from_slice(&2u32.to_be_bytes());
     out.extend_from_slice(&1u32.to_be_bytes());
-    let name: Vec<u16> = "Triangle".encode_utf16().chain(std::iter::once(0)).collect();
+    let name: Vec<u16> = label.encode_utf16().chain(std::iter::once(0)).collect();
     out.extend_from_slice(&(name.len() as u32).to_be_bytes());
     for unit in &name {
         out.extend_from_slice(&unit.to_be_bytes());
