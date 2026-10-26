@@ -543,10 +543,14 @@ pub fn read_display_server(path: Option<&Path>) -> photocraft_engine::prefs::Lin
 }
 
 /// Preferences › Performance › Graphics Adapter (`performance.gpuAdapter`), read before the window
-/// opens; empty (automatic) when the file or value is missing.
+/// opens; empty (automatic) when the file or value is missing or the section doesn't parse, as
+/// [`read_display_server`] reads its section.
 pub fn read_gpu_adapter(path: Option<&Path>) -> String {
     let v: Value = path.and_then(|p| std::fs::read_to_string(p).ok()).and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(Value::Null);
-    v.get("performance").and_then(|p| p.get("gpuAdapter")).and_then(Value::as_str).unwrap_or("").chars().take(256).collect()
+    v.get("performance")
+        .and_then(|p| serde_json::from_value::<photocraft_engine::prefs::Performance>(p.clone()).ok())
+        .map(|performance| performance.gpu_adapter.chars().take(256).collect())
+        .unwrap_or_default()
 }
 
 /// Preferences › Performance › Low-Latency Drawing (`performance.lowLatencyDrawing`, off unless
