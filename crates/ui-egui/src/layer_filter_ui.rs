@@ -97,18 +97,23 @@ pub fn board_rows(doc: &Document, selection: &[LayerId]) -> HashSet<LayerId> {
             add(c, rows);
         }
     }
-    let mut boards = Vec::new();
-    for &id in selection {
-        let Some(board) = doc.artboard_of(id) else { return HashSet::new() };
-        if !boards.contains(&board) {
-            boards.push(board);
+    let selected: HashSet<LayerId> = selection.iter().copied().collect();
+    if selected.is_empty() {
+        return HashSet::new();
+    }
+    // Artboards are top-level groups ([`Document::artboard_of`]): each one's layers are walked once.
+    let (mut rows, mut held) = (HashSet::new(), 0);
+    for board in doc.layers.iter().filter(|l| l.artboard().is_some()) {
+        let mut inside = HashSet::new();
+        add(board, &mut inside);
+        let n = selected.iter().filter(|id| inside.contains(id)).count();
+        if n > 0 {
+            held += n;
+            rows.extend(inside);
         }
     }
-    let mut rows = HashSet::new();
-    for board in boards {
-        if let Some(l) = doc.layer(board) {
-            add(l, &mut rows);
-        }
+    if held < selected.len() {
+        return HashSet::new();
     }
     rows
 }
