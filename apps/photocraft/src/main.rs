@@ -83,8 +83,8 @@ const APP_ID: &str = "ai.storyteller.photocraft";
 /// system traffic lights over the integrated title strip.
 const CUSTOM_TITLEBAR: bool = !cfg!(target_os = "macos");
 
-/// Whether this start draws its own title bar. Linux defaults to the system frame; Windows
-/// defaults to the in-app title bar. Saved preferences override those defaults (#1271, #1316).
+/// Whether this start draws its own title bar. Linux and Windows default to the integrated
+/// title bar, with optional system decorations selected by saved preferences (#1271, #1316).
 fn custom_titlebar(prefs_file: Option<&std::path::Path>) -> bool {
     let prefs: photocraft_engine::prefs::Preferences =
         prefs_file.and_then(|p| std::fs::read_to_string(p).ok()).and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
@@ -829,7 +829,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("pc-titlebar-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let file = dir.join("prefs.json");
-        let default_custom = super::CUSTOM_TITLEBAR && !cfg!(target_os = "linux");
+        let default_custom = super::CUSTOM_TITLEBAR;
         assert_eq!(super::custom_titlebar(None), default_custom, "no preferences file: the platform default");
         std::fs::write(&file, "not json").unwrap();
         assert_eq!(super::custom_titlebar(Some(&file)), default_custom, "an unreadable file: the platform default");
