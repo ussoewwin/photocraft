@@ -864,6 +864,7 @@ mod tests {
                     smart_filters: vec![],
                     cache: Some(cache),
                     psd_raw: None,
+                    vector_preview: None,
                     filters_enabled: true,
                     filter_mask: None,
                     warp: None,

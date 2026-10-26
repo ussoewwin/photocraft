@@ -9,7 +9,7 @@
 
 use egui::{Align2, FontId, Galley, Painter, Pos2, Rect, Sense, Shape, Stroke, pos2, vec2};
 use photocraft_color::BlendMode;
-use photocraft_doc::Layer;
+use photocraft_doc::{Adjustment, Layer, LayerContent};
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -30,6 +30,8 @@ pub const MIN_NAME_W: f32 = 64.0;
 /// A right-hand row indicator.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Indicator {
+    /// An adjustment PhotoCraft keeps as imported but cannot render (#6541).
+    Unsupported,
     Lock,
     FxTriangle,
     Fx,
@@ -71,9 +73,21 @@ pub fn layout(row: Rect, name_left: f32, items: &[(Indicator, f32)]) -> (Vec<(In
     (out, name_right)
 }
 
+/// The PSD key of the adjustment `l` holds when PhotoCraft keeps it as imported but cannot
+/// render it.
+pub fn unsupported_key(l: &Layer) -> Option<&str> {
+    match &l.content {
+        LayerContent::Adjustment(Adjustment::Unsupported { psd_key, .. }) => Some(psd_key),
+        _ => None,
+    }
+}
+
 /// Width the always-shown indicators of `l` take at the row's right (blend label excluded).
 pub fn reserved_width(l: &Layer) -> f32 {
     let mut w = RIGHT_PAD;
+    if unsupported_key(l).is_some() {
+        w += ICON_W + GAP;
+    }
     if l.locks.any() {
         w += ICON_W + GAP;
     }
@@ -145,6 +159,10 @@ pub fn indicators(
     let fx_galley = has_fx.then(|| painter.layout_no_wrap("fx".into(), fx_font, t.text_dim));
     let blend_galley = show_blend.then(|| painter.layout_no_wrap(tl!(l.blend.label()).into(), blend_font, t.text_faint));
     let mut items = Vec::new();
+    let unsupported = unsupported_key(l);
+    if unsupported.is_some() {
+        items.push((Indicator::Unsupported, ICON_W));
+    }
     if locked {
         items.push((Indicator::Lock, ICON_W));
     }
@@ -168,6 +186,12 @@ pub fn indicators(
     let cy = row.center().y;
     for &(kind, r) in &rects {
         match kind {
+            Indicator::Unsupported => {
+                icons::paint(ui, Rect::from_center_size(r.center(), vec2(ICON_W, ICON_W)), "triangle-alert", 12.0, t.warning);
+                let key = unsupported.unwrap_or_default();
+                let tip = crate::i18n::fmt(tl!("Not rendered: this adjustment ({key}) is kept as imported."), &[("key", key)]);
+                ui.interact(r, ui.scope_id().with(("row-unsupported", l.id.0)), Sense::hover()).on_hover_text(tip);
+            }
             Indicator::Lock => icons::paint(ui, Rect::from_center_size(r.center(), vec2(ICON_W, ICON_W)), "lock", 12.0, t.text_faint),
             Indicator::Link => icons::paint(ui, Rect::from_center_size(r.center(), vec2(ICON_W, ICON_W)), "link-2", 12.0, t.text_faint),
             Indicator::Fx => {
@@ -183,10 +207,10 @@ pub fn indicators(
             Indicator::SmartFilters => {
                 let enabled = matches!(&l.content, photocraft_doc::LayerContent::Smart(sm) if sm.filters_enabled);
                 crate::smart_ui::paint_badge(painter, r.center(), if enabled { t.icon } else { t.text_faint });
-                ui.interact(r, ui.id().with(("smart-filters-badge", l.id.0)), Sense::hover()).on_hover_text(tl!("Smart Filters"));
+                ui.interact(r, ui.scope_id().with(("smart-filters-badge", l.id.0)), Sense::hover()).on_hover_text(tl!("Smart Filters"));
             }
             Indicator::FxTriangle => {
-                let resp = ui.interact(r, ui.id().with(("fx-disclosure", l.id.0)), Sense::click());
+                let resp = ui.interact(r, ui.scope_id().with(("fx-disclosure", l.id.0)), Sense::click());
                 paint_triangle(painter, r.center(), fx_open, if resp.hovered() { t.text } else { t.icon });
                 if resp.clicked() {
                     clicked = true;
@@ -204,7 +228,7 @@ pub fn indicators(
                     tl!("Show the layer's effects  ({key}-click: all layers)")
                 };
                 let resp = resp.on_hover_text(crate::i18n::fmt(tip, &[("key", &crate::shortcuts::pretty("Alt"))]));
-                resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, format!("{verb} effects {name}")));
+                resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, format!("{verb} effects {name}")));
             }
         }
     }
@@ -304,7 +328,7 @@ pub fn panel_menu(app: &mut crate::PhotocraftApp, ui: &mut egui::Ui) {
 }
 
 fn rects_id() -> egui::Id {
-    egui::Id::new("layer-row-rects")
+    egui::Id::unique("layer-row-rects")
 }
 
 /// Start a frame's record (the Layers panel calls it before drawing its rows).
@@ -346,7 +370,7 @@ impl Rename {
 }
 
 fn rename_id() -> egui::Id {
-    egui::Id::new("layer-rename")
+    egui::Id::unique("layer-rename")
 }
 
 /// The rename in progress, if any.
@@ -395,7 +419,7 @@ pub fn end_rename(ctx: &egui::Context, commit: bool) -> Option<(String, Value)> 
 
 /// Where Tab or ⇧Tab sends a rename: the layer it left and whether the next one is above.
 fn next_rename_id() -> egui::Id {
-    egui::Id::new("layer-rename-next")
+    egui::Id::unique("layer-rename-next")
 }
 
 /// The rename that Tab (`up` false) or ⇧Tab (`up` true) just left on `layer`, for the Layers panel
@@ -410,8 +434,8 @@ pub fn take_next_rename(ctx: &egui::Context) -> Option<(u64, bool)> {
 pub fn rename_field(ui: &mut egui::Ui, layer: u64, rect: Rect) -> Option<(String, Value)> {
     let ctx = ui.ctx().clone();
     let mut r = rename(&ctx).filter(|r| r.layer == layer)?;
-    let id = egui::Id::new(("layer-rename-field", layer));
-    let te = ui.put(rect, egui::TextEdit::singleline(&mut r.text).id(id).font(FontId::proportional(12.5)));
+    let id = egui::Id::unique(("layer-rename-field", layer));
+    let te = ui.put(rect, egui::TextEdit::singleline(&mut r.text).id(id).font(FontId::proportional(12.5))).accessible_name(tl!("Name"));
     r.pass = ctx.cumulative_pass_nr();
     if !r.focused {
         te.request_focus();

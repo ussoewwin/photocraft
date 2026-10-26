@@ -39,7 +39,7 @@ struct Pending {
 struct Editing {
     target: Target,
     session: Box<dyn ExternalSvgSession>,
-    saved: Option<Vec<u8>>,
+    saved: Option<crate::ExternalVectorSave>,
 }
 
 #[derive(Default)]
@@ -50,15 +50,18 @@ pub(crate) struct State {
 }
 
 impl State {
+    /// True while the editor-choice dialog awaits OK or Cancel.
     pub(crate) fn modal_open(&self) -> bool {
         self.pending.is_some()
     }
 }
 
+/// Translate dialog and status text in the `smartSvg` context.
 fn tr(source: &str) -> &str {
     crate::i18n::tr_ctx(crate::i18n::current(), "smartSvg", source)
 }
 
+/// Surface a non-fatal editing or sync failure in the status bar; the document is unchanged.
 fn report(app: &mut PhotocraftApp, error: String) {
     app.ui.status = error;
     app.ui.status_error = true;
@@ -128,10 +131,13 @@ pub(crate) fn intercept(app: &mut PhotocraftApp, id: &str, params: &Value) -> Op
     Some(result)
 }
 
+/// Saves apply only while the target's document is active, never by switching documents.
 fn same_target(app: &PhotocraftApp, target: &Target) -> bool {
     app.session.active().is_some_and(|st| st.doc.id == target.doc)
 }
 
+/// The update command must be enabled and no layer sharing these contents (every placed
+/// instance changes together) may be fully or pixel locked.
 fn writable_target(app: &PhotocraftApp, target: &Target) -> bool {
     let Some(st) = app.session.active().filter(|st| st.doc.id == target.doc) else { return false };
     if !app.session.is_enabled_with("layer.smartObjects.updateSvg", &json!({"document":target.doc.0,"layer":target.layer.0})) {
@@ -147,6 +153,9 @@ fn writable_target(app: &PhotocraftApp, target: &Target) -> bool {
         })
 }
 
+/// Act on the dialog's choice after re-exporting to confirm the fingerprint and contents id
+/// still match: run the internal editor, or start (or replace) one external session per
+/// shared contents, at most [`MAX_SESSIONS`]. Errors leave the document unchanged.
 fn confirm(app: &mut PhotocraftApp) -> Result<Value, String> {
     let Some(pending) = app.smart_svg.pending.take() else { return Ok(json!({"cancelled": true})) };
     if !safe_to_apply(app) {
@@ -189,12 +198,20 @@ fn confirm(app: &mut PhotocraftApp) -> Result<Value, String> {
     }
     let mut target = pending.target;
     target.svg = Arc::default();
+    let target_is_native = target.extension != "svg";
     app.smart_svg.editing.push(Editing { target, session, saved: None });
-    app.ui.status = tr("SVG editor opened. Save the SVG to update this Smart Object.").into();
+    app.ui.status = tr(if target_is_native {
+        "Vector editor opened. Save the original-format file to update this Smart Object."
+    } else {
+        "SVG editor opened. Save the SVG to update this Smart Object."
+    })
+    .into();
     app.ui.status_error = false;
     Ok(json!({"externalEditor": true}))
 }
 
+/// Ask the user for one local executable; the answer applies only if the same pending target
+/// is still open. Executable validation happens when the session starts.
 fn choose_program(app: &mut PhotocraftApp) -> Result<Value, String> {
     let pending = app.smart_svg.pending.as_ref().ok_or("The SVG editor choice was cancelled")?;
     let doc = pending.target.doc;
@@ -228,6 +245,8 @@ fn choose_program(app: &mut PhotocraftApp) -> Result<Value, String> {
     )
 }
 
+/// Draw the editor-choice dialog while a choice is pending. The internal editor is offered
+/// only for SVG; "Stop syncing" ends a running session for the same contents.
 pub(crate) fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
     let file_dialog_open = app.file_dialog_open();
     let can_pick = app.services.file_dialog.is_some() && !file_dialog_open;
@@ -237,16 +256,25 @@ pub(crate) fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
     let mut choose = false;
     let mut stop = false;
     let running = app.smart_svg.editing.iter().any(|edit| edit.target.doc == pending.target.doc && edit.target.contents_id == pending.target.contents_id);
-    let modal = egui::Modal::new(egui::Id::new("smart-svg-editor")).show(ctx, |ui| {
+    let modal = egui::Modal::new(egui::Id::unique("smart-svg-editor")).show(ctx, |ui| {
         let tokens = crate::theme::Tokens::get(ctx);
         ui.set_max_width(470.0);
-        ui.label(egui::RichText::new(tr("Edit SVG Smart Object")).font(crate::theme::semibold(15.0)));
+        ui.label(
+            egui::RichText::new(tr(if pending.target.extension == "svg" { "Edit SVG Smart Object" } else { "Edit Vector Smart Object" }))
+                .font(crate::theme::semibold(15.0)),
+        );
         ui.add_space(4.0);
         crate::widgets::hairline(ui);
         ui.add_space(8.0);
-        ui.label(tr("Choose the application used to edit this SVG:"));
+        ui.label(tr(if pending.target.extension == "svg" {
+            "Choose the application used to edit this SVG:"
+        } else {
+            "Choose the application used to edit this vector:"
+        }));
         if pending.target.extension != "svg" {
-            ui.label(tr("AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded source; format-specific features may change."));
+            ui.label(tr(
+                "AI/PDF/EPS files keep their original format. Unsupported features may change when saved. Original contents remain available through Undo.",
+            ));
         }
         for (choice, label) in [
             (Editor::VectorCraft, "VectorCraft"),
@@ -257,7 +285,7 @@ pub(crate) fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
             if choice == Editor::Illustrator && !cfg!(windows) {
                 continue;
             }
-            let available = pending.target.extension == "svg" || matches!(choice, Editor::VectorCraft | Editor::Program);
+            let available = pending.target.extension == "svg" || choice != Editor::Internal;
             ui.add_enabled_ui(available, |ui| ui.radio_value(&mut pending.editor, choice, tr(label)));
         }
         if pending.editor == Editor::Program {
@@ -268,7 +296,15 @@ pub(crate) fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
             choose = ui.add_enabled(can_pick, egui::Button::new(tr("Choose executable…"))).clicked();
         }
         ui.add_space(8.0);
-        ui.label(egui::RichText::new(tr("Save to the opened SVG file. Each saved change becomes one undo step in PhotoCraft.")).small().color(tokens.text_dim));
+        ui.label(
+            egui::RichText::new(tr(if pending.target.extension == "svg" {
+                "Save to the opened SVG file. Each saved change becomes one undo step in PhotoCraft."
+            } else {
+                "Save to the opened original-format file. Each saved change becomes one undo step in PhotoCraft."
+            }))
+            .small()
+            .color(tokens.text_dim),
+        );
         ui.label(egui::RichText::new(tr("Updates wait while another document or an editing dialog is active.")).small().color(tokens.text_dim));
         if running {
             stop = ui.button(tr("Stop syncing this Smart Object")).clicked();
@@ -306,6 +342,8 @@ pub(crate) fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
     }
 }
 
+/// True only when no save, dialog, mask/channel target, transform, preview or drag is in
+/// progress, so an external save cannot land in the middle of another edit.
 fn safe_to_apply(app: &PhotocraftApp) -> bool {
     !app.automation_input
         && !app.saving()
@@ -335,6 +373,7 @@ fn safe_to_apply(app: &PhotocraftApp) -> bool {
         && app.ui.direct_selection.drag.is_none()
         && app.ui.corner_radius.is_none()
         && !app.distort.active()
+        && crate::distort_ui::modal_workspace(app).is_none()
         && app.wide_angle.is_none()
         && app.color_range.is_none()
         && app.text_style_preview.is_none()
@@ -379,9 +418,11 @@ pub(crate) fn poll(app: &mut PhotocraftApp, ctx: &egui::Context) {
         if !exists {
             continue;
         }
-        if let Some(result) = edit.session.poll() {
+        if let Some(result) = edit.session.poll_vector() {
             match result {
-                Ok(bytes) if bytes.len() <= MAX_SVG_BYTES => edit.saved = Some(bytes),
+                Ok(saved) if saved.bytes.len() <= MAX_SVG_BYTES && saved.preview_svg.as_ref().is_none_or(|svg| svg.len() <= MAX_SVG_BYTES) => {
+                    edit.saved = Some(saved)
+                }
                 Ok(_) => report(app, "The SVG exceeds the 16 MiB editor limit; save a smaller SVG to retry".into()),
                 Err(error) => report(app, error),
             }
@@ -399,16 +440,27 @@ pub(crate) fn poll(app: &mut PhotocraftApp, ctx: &egui::Context) {
             && writable_target(app, &edit.target)
             && let Some(bytes) = edit.saved.take()
         {
-            let svg = match String::from_utf8(bytes) {
-                Ok(svg) => svg,
-                Err(_) => {
-                    report(app, "The saved SVG is not UTF-8; save a valid SVG to retry".into());
+            let native = edit.target.extension != "svg";
+            let preview = if native { bytes.preview_svg } else { Some(bytes.bytes.clone()) };
+            let svg = match preview.and_then(|svg| String::from_utf8(svg).ok()) {
+                Some(svg) => svg,
+                None => {
+                    report(app, "The saved vector has no valid display preview; save again to retry".into());
                     app.smart_svg.editing.push(edit);
                     continue;
                 }
             };
-            let params = json!({"document": edit.target.doc.0, "layer": edit.target.layer.0, "svg": svg, "fingerprint": edit.target.fingerprint, "contentsId": edit.target.contents_id});
-            match app.run("layer.smartObjects.updateSvg", params) {
+            let mut params = json!({"document": edit.target.doc.0, "layer": edit.target.layer.0, "fingerprint": edit.target.fingerprint, "contentsId": edit.target.contents_id});
+            let command = if native {
+                params["previewSvg"] = json!(svg);
+                params["sourceBase64"] = json!(base64::engine::general_purpose::STANDARD.encode(&bytes.bytes));
+                params["extension"] = json!(edit.target.extension);
+                "layer.smartObjects.updateVectorSource"
+            } else {
+                params["svg"] = json!(svg);
+                "layer.smartObjects.updateSvg"
+            };
+            match app.run(command, params) {
                 Ok(result) => {
                     if let Some(fingerprint) = result.get("fingerprint").filter(|v| !v.is_null()) {
                         edit.target.fingerprint = fingerprint.clone();
@@ -419,7 +471,15 @@ pub(crate) fn poll(app: &mut PhotocraftApp, ctx: &egui::Context) {
                 }
                 Err(error) => {
                     let stale = error.contains("contents changed") || error.contains("conflicting contents");
-                    report(app, if stale { format!("SVG syncing stopped: {error}") } else { format!("SVG update failed; save again to retry: {error}") });
+                    let kind = if native { "Vector" } else { "SVG" };
+                    report(
+                        app,
+                        if stale {
+                            format!("{kind} syncing stopped: {error}")
+                        } else {
+                            format!("{kind} update failed; change the working file and save to retry: {error}")
+                        },
+                    );
                     if stale {
                         continue;
                     }

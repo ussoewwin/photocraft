@@ -13,13 +13,18 @@ use crate::{EngineError, Result, Session};
 
 const EXPORT: &str = "layer.smartObjects.exportSvg";
 const UPDATE: &str = "layer.smartObjects.updateSvg";
+const UPDATE_VECTOR: &str = "layer.smartObjects.updateVectorSource";
 pub const MAX_VECTOR_SOURCE_BYTES: usize = 16 << 20;
 const MAX_PIXELS: u64 = 24_000_000;
+const MAX_FRAME_XML_BYTES: usize = 64 << 20;
 
+/// A `BadParams` error attributed to command `cmd`.
 fn bad(cmd: &str, msg: impl Into<String>) -> EngineError {
     EngineError::BadParams { cmd: cmd.into(), msg: msg.into() }
 }
 
+/// Read the `layer` param from an object; when it is absent, updates (`required`) fail
+/// rather than falling back to the active layer.
 fn layer(s: &Session, p: &Value, cmd: &str, required: bool) -> Result<LayerId> {
     if !p.is_object() {
         return Err(bad(cmd, "parameters must be an object"));
@@ -31,6 +36,7 @@ fn layer(s: &Session, p: &Value, cmd: &str, required: bool) -> Result<LayerId> {
     }
 }
 
+/// Borrow the smart object on layer `id`; errors if the layer is missing or not a smart object.
 fn smart(doc: &Document, id: LayerId) -> Result<&SmartObject> {
     match &doc.layer(id).ok_or(EngineError::NoLayer(id))?.content {
         LayerContent::Smart(sm) => Ok(sm),
@@ -72,11 +78,44 @@ fn source_extension(bytes: &[u8]) -> Option<&'static str> {
 
 /// Recover the bounded original PSD source-pixel frame for the conversion viewport.
 fn source_size(sm: &SmartObject) -> Option<(f64, f64)> {
+    source_size_with(sm, preview_frame)
+}
+
+#[cfg(test)]
+thread_local! { static PREVIEW_FRAME_CHECKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) }; }
+
+/// Reading source geometry never rasterizes an old preview or decodes its embedded images.
+fn preview_frame(preview: &photocraft_doc::VectorPreview, source: &[u8]) -> Option<(f64, f64)> {
+    if source.len() > MAX_VECTOR_SOURCE_BYTES || !photocraft_io::vector_preview::is_native_source(source) {
+        return None;
+    }
+    preview_frame_hash(preview, *blake3::hash(source).as_bytes())
+}
+
+/// Read the frame recorded in preview metadata, accepted only for `source_hash`; the caller
+/// supplies a digest it has verified against the actual source bytes.
+fn preview_frame_hash(preview: &photocraft_doc::VectorPreview, source_hash: [u8; 32]) -> Option<(f64, f64)> {
+    #[cfg(test)]
+    PREVIEW_FRAME_CHECKS.with(|count| count.set(count.get() + 1));
+    photocraft_io::vector_preview::frame_metadata(preview, source_hash)
+}
+
+/// Prefer the embedded source's preview frame via `frame`, else the PSD placed descriptor's
+/// stored size, rejected when non-finite or over 16384 px per side or [`MAX_PIXELS`].
+fn source_size_with(sm: &SmartObject, frame: impl FnOnce(&photocraft_doc::VectorPreview, &[u8]) -> Option<(f64, f64)>) -> Option<(f64, f64)> {
+    if let SmartSource::Embedded { bytes, .. } = &sm.source
+        && let Some(preview) = sm.vector_preview.as_ref()
+        && let Some(frame) = frame(preview, bytes)
+    {
+        return Some(frame);
+    }
     let placed = photocraft_io::smart_map::parse_sold(sm.psd_raw.as_ref()?.as_slice())?;
     photocraft_io::smart_map::stored_size(&placed.descriptor)
         .filter(|(w, h)| w.is_finite() && h.is_finite() && *w <= 16384.0 && *h <= 16384.0 && w * h <= MAX_PIXELS as f64)
 }
 
+/// Shared by all three commands: needs an active document with no background job and the
+/// layer composite (not a mask, quick mask or single channel) as the edit target.
 fn enabled(s: &Session) -> std::result::Result<(), String> {
     let state = s.active().ok_or("no document open")?;
     if s.job_on(state.doc.id).is_some() {
@@ -92,6 +131,9 @@ fn enabled(s: &Session) -> std::result::Result<(), String> {
     Ok(())
 }
 
+/// Return every layer sharing `id`'s contents, which change together. Errors if those contents
+/// are open in the internal editor, any instance is fully or pixel locked, or any instance
+/// lacks valid embedded vector bytes.
 fn check_instances(s: &Session, id: LayerId) -> Result<Vec<LayerId>> {
     let doc = &s.active().ok_or(EngineError::NoDocument)?.doc;
     let contents = smart(doc, id)?.contents_id;
@@ -121,10 +163,11 @@ fn export(s: &mut Session, p: &Value) -> Result<Value> {
     if extension != "svg" && name.to_ascii_lowercase().ends_with(".ai") {
         extension = "ai";
     }
-    if extension != "svg" && sm.psd_raw.is_some() && source_size(sm).is_none() {
+    let frame = source_size(sm);
+    if extension != "svg" && sm.psd_raw.is_some() && frame.is_none() {
         return Err(bad(EXPORT, "the embedded vector has no supported PSD source-pixel frame"));
     }
-    let mut result = json!({"document":doc.id.0,"fingerprint":blake3::hash(bytes).to_hex().to_string(),"contentsId":sm.contents_id.0,"extension":extension,"sourceSize":source_size(sm)});
+    let mut result = json!({"document":doc.id.0,"fingerprint":blake3::hash(bytes).to_hex().to_string(),"contentsId":sm.contents_id.0,"extension":extension,"sourceSize":frame});
     if extension == "svg" {
         result["svg"] = json!(std::str::from_utf8(bytes).map_err(|_| bad(EXPORT, "SVG contents must be UTF-8"))?);
     } else {
@@ -179,12 +222,28 @@ fn placed_bounds(sm: &SmartObject, size: Size) -> Result<Rect> {
 
 /// Validate identity and rendering limits before one undoable shared-content replacement.
 fn update(s: &mut Session, p: &Value) -> Result<Value> {
+    update_contents(s, p, false)
+}
+
+/// Native bytes and their bounded display preview are committed in the same transaction.
+fn update_vector(s: &mut Session, p: &Value) -> Result<Value> {
+    update_contents(s, p, true)
+}
+
+/// Shared SVG (`native == false`) and AI/PDF/EPS save-back with the default frame-metadata budget.
+fn update_contents(s: &mut Session, p: &Value, native: bool) -> Result<Value> {
+    update_contents_with_frame_budget(s, p, native, MAX_FRAME_XML_BYTES)
+}
+
+/// Bound metadata parsing separately from the destination render budget. The explicit budget
+/// also lets tests exercise exhaustion with small authored fixtures.
+fn update_contents_with_frame_budget(s: &mut Session, p: &Value, native: bool, frame_xml_bytes: usize) -> Result<Value> {
     let id = layer(s, p, UPDATE, true)?;
     let document = p.get("document").and_then(Value::as_u64).ok_or_else(|| bad(UPDATE, "`document` must be an integer document id"))?;
     if s.active().map(|state| state.doc.id.0) != Some(document) {
         return Err(bad(UPDATE, "the smart object's parent document is no longer active"));
     }
-    let svg = p.get("svg").and_then(Value::as_str).ok_or_else(|| bad(UPDATE, "`svg` must be an SVG string"))?;
+    let svg = p.get(if native { "previewSvg" } else { "svg" }).and_then(Value::as_str).ok_or_else(|| bad(UPDATE, "`svg` must be an SVG string"))?;
     let expected = p
         .get("fingerprint")
         .and_then(Value::as_str)
@@ -195,16 +254,49 @@ fn update(s: &mut Session, p: &Value) -> Result<Value> {
     let doc = &s.active().ok_or(EngineError::NoDocument)?.doc;
     let target = smart(doc, id)?;
     let (name, original) = embedded(doc, target)?;
-    if target.contents_id != contents || !blake3::hash(original).to_hex().as_str().eq_ignore_ascii_case(expected) {
+    let original_hash = blake3::hash(original);
+    if target.contents_id != contents || !original_hash.to_hex().as_str().eq_ignore_ascii_case(expected) {
         return Err(bad(UPDATE, "smart-object contents changed since external editing started"));
     }
     for instance in &ids {
         let (_, bytes) = embedded(doc, smart(doc, *instance)?)?;
-        if !blake3::hash(bytes).to_hex().as_str().eq_ignore_ascii_case(expected) {
+        // Shared instances normally borrow the same immutable payload. Its fingerprint was
+        // checked above; don't re-hash a large source once per layer.
+        let matches = (bytes.len() == original.len() && std::ptr::eq(bytes.as_ptr(), original.as_ptr()))
+            || blake3::hash(bytes).to_hex().as_str().eq_ignore_ascii_case(expected);
+        if !matches {
             return Err(bad(UPDATE, "shared smart-object instances have conflicting contents"));
         }
     }
-    if original == svg.as_bytes() {
+    let replacement_bytes = if native {
+        if !photocraft_io::vector_preview::is_native_source(original) {
+            return Err(bad(UPDATE_VECTOR, "the original source is not AI, PDF or EPS"));
+        }
+        let extension = p.get("extension").and_then(Value::as_str).ok_or_else(|| bad(UPDATE_VECTOR, "missing source extension"))?;
+        let original_extension = if name.to_ascii_lowercase().ends_with(".ai") { "ai" } else { source_extension(original).unwrap_or("") };
+        if extension != original_extension || !matches!(extension, "ai" | "pdf" | "eps") {
+            return Err(bad(UPDATE_VECTOR, "save-back must keep the original vector format"));
+        }
+        let encoded = p.get("sourceBase64").and_then(Value::as_str).ok_or_else(|| bad(UPDATE_VECTOR, "missing native source bytes"))?;
+        if encoded.len() > MAX_VECTOR_SOURCE_BYTES.div_ceil(3) * 4 {
+            return Err(bad(UPDATE_VECTOR, "native source exceeds 16 MiB"));
+        }
+        let bytes = base64::engine::general_purpose::STANDARD.decode(encoded).map_err(|_| bad(UPDATE_VECTOR, "invalid native source encoding"))?;
+        validate_source(&bytes)?;
+        let family = source_extension(&bytes);
+        if !match extension {
+            "pdf" => family == Some("pdf"),
+            "eps" => family == Some("eps"),
+            "ai" => matches!(family, Some("pdf" | "eps")),
+            _ => false,
+        } {
+            return Err(bad(UPDATE_VECTOR, "saved bytes do not match the original vector format"));
+        }
+        bytes
+    } else {
+        svg.as_bytes().to_vec()
+    };
+    if original == replacement_bytes {
         return Ok(json!({"layer":id.0,"contentsId":contents.0,"fingerprint":expected,"updated":false}));
     }
     // Persisted smart filters are executable input too. A source replacement replays them
@@ -226,16 +318,50 @@ fn update(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // Save-back can intentionally remove the last drawable object. The bounded importer
     // accepts an empty drawing so deleting the final object preserves transparency.
-    let imported = photocraft_io::svg::import_svg_bounded(&name, svg.as_bytes(), MAX_PIXELS)
+    let (imported, _) = photocraft_io::svg::import_svg_bounded_with_work(&name, svg.as_bytes(), 4 * MAX_PIXELS)
         .map_err(|error| bad(UPDATE, format!("can't import edited SVG contents: {error}")))?;
     let size = imported.document.size;
+    if native {
+        // Shared instances normally borrow one immutable source and preview allocation. The
+        // check is pure in those bytes and the claimed hash, so run it once per identity while
+        // `doc` stays borrowed (no allocation can be freed and reused). Every instance's own
+        // frame, including a differing PSD fallback, is still compared.
+        let mut frames = std::collections::HashMap::new();
+        let mut remaining_xml = frame_xml_bytes;
+        let mut exhausted = false;
+        for instance in &ids {
+            let frame = source_size_with(smart(doc, *instance)?, |preview, bytes| {
+                let key = (bytes.as_ptr() as usize, bytes.len(), preview.svg.as_ptr() as usize, preview.svg.len(), preview.source_hash);
+                *frames.entry(key).or_insert_with(|| {
+                    let Some(remaining) = remaining_xml.checked_sub(preview.svg.len()) else {
+                        exhausted = true;
+                        return None;
+                    };
+                    remaining_xml = remaining;
+                    // Every shared source was compared with these actual bytes above. Reuse
+                    // their verified digest, not the preview's untrusted claimed digest.
+                    preview_frame_hash(preview, *original_hash.as_bytes())
+                })
+            });
+            if exhausted {
+                return Err(bad(UPDATE_VECTOR, "original vector preview metadata exceeds the 64 MiB validation budget"));
+            }
+            if let Some((w, h)) = frame
+                && (f64::from(size.width) != f64::from((w as f32).max(1.0).round()) || f64::from(size.height) != f64::from((h as f32).max(1.0).round()))
+            {
+                return Err(bad(UPDATE_VECTOR, "the saved preview must keep the original source-pixel frame"));
+            }
+        }
+    }
     if size.area() > MAX_PIXELS {
         return Err(bad(UPDATE, "SVG contents exceed the 24 million pixel limit"));
     }
     let source = SmartSource::Embedded {
-        file_name: if photocraft_io::svg::is_svg(original) { name } else { "Artwork.svg".into() },
-        bytes: Arc::new(svg.as_bytes().to_vec()),
+        file_name: if native || photocraft_io::svg::is_svg(original) { name } else { "Artwork.svg".into() },
+        bytes: Arc::new(replacement_bytes.clone()),
     };
+    let vector_preview =
+        native.then(|| photocraft_doc::VectorPreview { source_hash: *blake3::hash(&replacement_bytes).as_bytes(), svg: Arc::new(svg.as_bytes().to_vec()) });
     let mut replacements: Vec<Layer> = Vec::with_capacity(ids.len());
     let mut pixels = 0u64;
     for instance in ids {
@@ -248,25 +374,42 @@ fn update(s: &mut Session, p: &Value) -> Result<Value> {
             return Err(bad(UPDATE, "SVG placement caches exceed the 24 million pixel limit"));
         }
         sm.source = source.clone();
+        sm.vector_preview = vector_preview.clone();
         replacements.push(replacement);
     }
     // Finish every fallible render before committing any document state.
     for replacement in &mut replacements {
-        if !crate::smart_cmds::refresh_layer(doc, replacement)? {
+        if let Some(preview) = vector_preview.as_ref() {
+            // This exact SVG was fully validated above. Render only a disposable display
+            // clone, avoiding a full native-payload hash for every shared instance. Only its
+            // cache is copied back: committed sources, previews and placement stay native.
+            let mut display = replacement.clone();
+            let LayerContent::Smart(sm) = &mut display.content else { return Err(EngineError::NoLayer(display.id)) };
+            sm.source = SmartSource::Embedded { file_name: "Artwork.svg".into(), bytes: preview.svg.clone() };
+            sm.vector_preview = None;
+            if !crate::smart_cmds::refresh_layer(doc, &mut display)? {
+                return Err(bad(UPDATE, "SVG contents could not be rendered"));
+            }
+            let LayerContent::Smart(rendered) = display.content else { return Err(EngineError::NoLayer(display.id)) };
+            let LayerContent::Smart(sm) = &mut replacement.content else { return Err(EngineError::NoLayer(replacement.id)) };
+            sm.cache = rendered.cache;
+        } else if !crate::smart_cmds::refresh_layer(doc, replacement)? {
             return Err(bad(UPDATE, "SVG contents could not be rendered"));
         }
         crate::smart_cmds::detach_psd(replacement);
     }
-    s.edit("Update SVG Contents", |doc, _| {
+    s.edit(if native { "Update Vector Contents" } else { "Update SVG Contents" }, |doc, _| {
         for replacement in replacements {
             let id = replacement.id;
             *doc.layer_mut(id).ok_or(EngineError::NoLayer(id))? = replacement;
         }
         Ok(())
     })?;
-    Ok(json!({"layer":id.0,"contentsId":contents.0,"fingerprint":blake3::hash(svg.as_bytes()).to_hex().to_string(),"updated":true}))
+    Ok(json!({"layer":id.0,"contentsId":contents.0,"fingerprint":blake3::hash(&replacement_bytes).to_hex().to_string(),"updated":true}))
 }
 
+/// Menu-less export/update commands the shell uses for external editor save-back; none is
+/// journaled.
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         CommandSpec {
@@ -280,6 +423,16 @@ pub fn specs() -> Vec<CommandSpec> {
             journal: false,
         },
         CommandSpec {
+            id: UPDATE_VECTOR,
+            label: "Update Vector Contents",
+            menu: &[],
+            shortcut: None,
+            params: r#"{"document":id,"layer":id,"sourceBase64":"native bytes","extension":"ai|pdf|eps","previewSvg":"bounded display SVG","fingerprint":"original BLAKE3 hex","contentsId":id}"#,
+            enabled,
+            run: update_vector,
+            journal: false,
+        },
+        CommandSpec {
             id: UPDATE,
             label: "Update SVG Contents",
             menu: &[],
@@ -287,7 +440,7 @@ pub fn specs() -> Vec<CommandSpec> {
             params: r#"{"document":id,"layer":id,"svg":"<svg …>","fingerprint":"original BLAKE3 hex","contentsId":id} → {layer,contentsId,fingerprint,updated}"#,
             enabled,
             run: update,
-            journal: true,
+            journal: false,
         },
     ]
 }

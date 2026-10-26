@@ -20,6 +20,16 @@ impl ExternalSvgSession for TestSession {
     }
 }
 
+struct NativeTestSession(Saves);
+impl ExternalSvgSession for NativeTestSession {
+    fn poll(&mut self) -> Option<Result<Vec<u8>, String>> {
+        self.0.borrow_mut().pop_front()
+    }
+    fn poll_vector(&mut self) -> Option<Result<crate::ExternalVectorSave, String>> {
+        self.poll().map(|r| r.map(|bytes| crate::ExternalVectorSave { bytes, preview_svg: Some(SVG.as_bytes().to_vec()) }))
+    }
+}
+
 fn fixture() -> (PhotocraftApp, Saves, Calls) {
     let saves = Saves::default();
     let calls = Calls::default();
@@ -584,17 +594,17 @@ fn embedded_ai_link_table_handoff_preserves_source_until_saved_and_undo_restores
         assert_eq!(editor, ExternalSvgEditor::VectorCraft);
         assert_eq!(*source.bytes, original);
         assert_eq!(source.extension, "ai");
-        Ok(Box::new(TestSession(queue.clone())))
+        Ok(Box::new(NativeTestSession(queue.clone())))
     }));
     open(&mut app);
     assert!(calls.borrow().is_empty());
     confirm(&mut app).unwrap();
     assert_eq!(app.session.active().unwrap().doc, before);
-    saves.borrow_mut().push_back(Ok(SVG.as_bytes().to_vec()));
+    saves.borrow_mut().push_back(Ok(b"%PDF-1.6\nedited native AI".to_vec()));
     poll(&mut app, &egui::Context::default());
     let layer = app.session.active().unwrap().doc.layer(id).unwrap();
     assert!(
-        matches!(&layer.content,LayerContent::Smart(sm) if matches!(&sm.source,SmartSource::Embedded {file_name,bytes} if file_name=="Artwork.svg" && bytes.as_slice()==SVG.as_bytes()))
+        matches!(&layer.content,LayerContent::Smart(sm) if matches!(&sm.source,SmartSource::Embedded {file_name,bytes} if file_name=="Logo.ai" && bytes.as_slice()==b"%PDF-1.6\nedited native AI"))
     );
     assert!(app.session.undo());
     assert_eq!(app.session.active().unwrap().doc, before);
@@ -627,6 +637,31 @@ fn capture_embedded_vector_conversion_prompt() {
     );
     harness.run_steps(5);
     harness.render().unwrap().save(directory.join("photocraft-embedded-vector-editor-en.png")).unwrap();
+}
+
+/// Filter Gallery owns a document preview even though `distort.active()` excludes it.
+#[test]
+fn saved_changes_wait_for_filter_gallery_and_resume_after_cancel() {
+    let (mut app, saves, _) = fixture();
+    open(&mut app);
+    confirm(&mut app).unwrap();
+    crate::gallery_ui::open(&mut app).unwrap();
+    assert!(app.distort.gallery.is_some());
+    assert!(!app.distort.active());
+    let before = app.session.active().unwrap().doc.clone();
+    let changed = SVG.replace("red", "blue");
+    saves.borrow_mut().push_back(Ok(changed.as_bytes().to_vec()));
+    let ctx = egui::Context::default();
+    poll(&mut app, &ctx);
+    assert_eq!(app.session.active().unwrap().doc, before);
+    assert!(app.smart_svg.editing.first().unwrap().saved.is_some());
+    crate::gallery_ui::control(&mut app, &json!({"cancel":true})).unwrap();
+    poll(&mut app, &ctx);
+    assert!(app.smart_svg.editing.first().unwrap().saved.is_none());
+    let state = app.session.active().unwrap();
+    let LayerContent::Smart(smart) = &state.doc.layer(state.active_layer.unwrap()).unwrap().content else { panic!("smart object") };
+    let photocraft_doc::SmartSource::Embedded { bytes, .. } = &smart.source else { panic!("embedded") };
+    assert_eq!(bytes.as_slice(), changed.as_bytes());
 }
 
 #[test]

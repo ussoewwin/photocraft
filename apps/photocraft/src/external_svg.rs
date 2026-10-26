@@ -3,7 +3,7 @@
 //! The owned temporary SVG is watched off the UI thread. Closing the PhotoCraft session stops
 //! watching and removes its temporary directory; it does not terminate the external editor.
 
-use photocraft_ui_egui::{ExternalSvgEditor, ExternalSvgSession};
+use photocraft_ui_egui::{ExternalSvgEditor, ExternalSvgSession, ExternalVectorSave};
 
 /// Start an explicit native editor session; artwork cannot supply executable paths.
 pub(crate) fn open(editor: ExternalSvgEditor, source: photocraft_ui_egui::ExternalVectorSource) -> Result<Box<dyn ExternalSvgSession>, String> {
@@ -34,7 +34,17 @@ mod native {
         let portal = matches!(&editor, ExternalSvgEditor::VectorCraft);
         #[cfg(not(target_os = "linux"))]
         let portal = false;
+        let vectorcraft = matches!(&editor, ExternalSvgEditor::VectorCraft);
         let executable = if portal && source.extension == "svg" { None } else { Some(resolve_editor(editor)?) };
+        // Display conversion is always performed by VectorCraft's CLI, even when the user
+        // chooses a different interactive editor. Explicit VectorCraft builds keep their matching CLI.
+        let converter = if source.extension == "svg" {
+            None
+        } else if vectorcraft {
+            executable.clone()
+        } else {
+            Some(resolve_converter(executable.as_deref())?)
+        };
         if source.bytes.is_empty() || source.bytes.len() > MAX_BYTES || !matches!(source.extension.as_str(), "svg" | "pdf" | "ai" | "eps") {
             return Err("Unsupported embedded vector source or source exceeds 16 MiB".into());
         }
@@ -45,7 +55,7 @@ mod native {
         thread::Builder::new()
             .name("photocraft-vector-editor".into())
             .spawn(move || {
-                let prepared = match executable.as_deref() {
+                let prepared = match converter.as_deref() {
                     Some(executable) => super::vector_conversion::prepare(executable, &source, &stopped),
                     None => OwnedSvg::create(&source.bytes).map(|owned| (owned, source.bytes.as_ref().clone())),
                 };
@@ -57,16 +67,18 @@ mod native {
                         #[cfg(target_os = "linux")]
                         if portal {
                             match super::portal::open(&owned, &stopped) {
-                                Ok(()) => watch(owned, initial, None, stopped, send, POLL_INTERVAL, SAVE_SETTLE),
+                                Ok(()) => watch(owned, initial, None, stopped, send, (POLL_INTERVAL, SAVE_SETTLE), converter.as_deref().map(|e| (e, &source))),
                                 Err(error) => {
                                     let _ = send.try_send(Err(error));
                                 }
                             }
                             return;
                         }
-                        if let Some(executable) = executable {
+                        if let Some(executable) = executable.as_ref() {
                             match std::process::Command::new(executable).arg(&owned.file).spawn() {
-                                Ok(child) => watch(owned, initial, Some(child), stopped, send, POLL_INTERVAL, SAVE_SETTLE),
+                                Ok(child) => {
+                                    watch(owned, initial, Some(child), stopped, send, (POLL_INTERVAL, SAVE_SETTLE), converter.as_deref().map(|e| (e, &source)))
+                                }
                                 Err(error) => {
                                     let _ = send.try_send(Err(format!("Could not open the vector editor: {error}")));
                                 }
@@ -80,6 +92,20 @@ mod native {
             })
             .map_err(|e| format!("Cannot start vector editor session: {e}"))?;
         Ok(Box::new(Session { stop, updates, finished: false }))
+    }
+
+    /// An explicit VectorCraft build may carry its own CLI. Other editors use the known
+    /// VectorCraft installation; document metadata never participates in discovery.
+    fn resolve_converter(selected: Option<&Path>) -> Result<PathBuf, String> {
+        let name = if cfg!(windows) { "vectorcraft-cli.exe" } else { "vectorcraft-cli" };
+        if let Some(editor) = selected
+            && let Some(directory) = editor.parent()
+            && std::fs::symlink_metadata(directory.join(name)).is_ok_and(|m| m.is_file() && !m.file_type().is_symlink())
+        {
+            return Ok(editor.to_path_buf());
+        }
+        resolve_editor(ExternalSvgEditor::VectorCraft)
+            .map_err(|_| "AI/PDF/EPS editing also needs an installed VectorCraft CLI to validate display previews".into())
     }
 
     /// Discover only known installations or an explicitly chosen executable.
@@ -119,6 +145,8 @@ mod native {
         Ok(path)
     }
 
+    /// Probe only fixed Program Files / LocalAppData install locations (one Adobe directory
+    /// level, at most 64 entries) or validate an explicitly chosen executable.
     #[cfg(windows)]
     fn resolve_editor(editor: ExternalSvgEditor) -> Result<PathBuf, String> {
         match editor {
@@ -162,6 +190,8 @@ mod native {
         }
     }
 
+    /// Require an absolute `.exe` that is a regular file, not a link or reparse point, and
+    /// return its canonical path; scripts and command lines are rejected.
     #[cfg(windows)]
     fn validate_executable(path: &Path) -> Result<PathBuf, String> {
         if !path.is_absolute() || !path.extension().and_then(|ext| ext.to_str()).is_some_and(|ext| ext.eq_ignore_ascii_case("exe")) {
@@ -181,6 +211,14 @@ mod native {
     impl OwnedSvg {
         /// Create a private working file from bounded source bytes.
         pub(super) fn create(svg: &[u8]) -> Result<Self, String> {
+            Self::create_format(svg, "svg")
+        }
+
+        /// Whitelisted extensions preserve the format; artwork cannot select a path.
+        pub(super) fn create_format(svg: &[u8], extension: &str) -> Result<Self, String> {
+            if !matches!(extension, "svg" | "ai" | "pdf" | "eps") {
+                return Err("Unsupported vector working-copy format".into());
+            }
             if svg.is_empty() || svg.len() > MAX_BYTES {
                 return Err("The SVG must contain between 1 byte and 16 MiB".into());
             }
@@ -208,7 +246,7 @@ mod native {
             }
             .map_err(|e| format!("Cannot create the SVG editing directory: {e}"))?;
             let root = directory.path().canonicalize().map_err(|e| format!("Cannot resolve the SVG editing directory: {e}"))?;
-            let file = root.join("Artwork.svg");
+            let file = root.join(format!("Artwork.{extension}"));
             let mut output = OpenOptions::new().write(true).create_new(true).open(&file).map_err(|e| format!("Cannot create the SVG editing file: {e}"))?;
             output.write_all(svg).and_then(|()| output.sync_all()).map_err(|e| format!("Cannot write the SVG editing file: {e}"))?;
             Ok(Self { directory, root, file })
@@ -269,6 +307,7 @@ mod native {
         }
 
         /// Write normalized SVG through a checked, no-follow handle before editor launch.
+        #[cfg(test)]
         pub(super) fn overwrite(&self, bytes: &[u8]) -> Result<(), String> {
             if bytes.is_empty() || bytes.len() > MAX_BYTES {
                 return Err("Prepared SVG exceeds the supported byte limit".into());
@@ -300,6 +339,7 @@ mod native {
         }
     }
 
+    /// Reject anything but a regular file, including symlinks and Windows reparse points.
     fn ensure_regular(metadata: &Metadata) -> Result<(), String> {
         if !metadata.is_file() || is_redirect(metadata) {
             return Err("The SVG or editor must be a regular file, not a link or reparse point".into());
@@ -307,6 +347,8 @@ mod native {
         Ok(())
     }
 
+    /// True for a symlink, or on Windows any reparse point, whose target could be swapped.
+    /// Expects `symlink_metadata`, which describes the link itself rather than its target.
     fn is_redirect(metadata: &Metadata) -> bool {
         if metadata.file_type().is_symlink() {
             return true;
@@ -347,14 +389,20 @@ mod native {
         }
     }
 
-    struct Session {
+    pub(super) struct Session {
         stop: Sender<()>,
-        updates: Receiver<Result<Vec<u8>, String>>,
+        updates: Receiver<Result<ExternalVectorSave, String>>,
         finished: bool,
     }
 
     impl ExternalSvgSession for Session {
+        /// Like [`Self::poll_vector`], keeping only the saved source bytes.
         fn poll(&mut self) -> Option<Result<Vec<u8>, String>> {
+            self.poll_vector().map(|result| result.map(|saved| saved.bytes))
+        }
+
+        /// Take one queued save or error without blocking; a closed queue marks the session finished.
+        fn poll_vector(&mut self) -> Option<Result<ExternalVectorSave, String>> {
             match self.updates.try_recv() {
                 Ok(update) => Some(update),
                 Err(mpsc::TryRecvError::Empty) => None,
@@ -365,6 +413,7 @@ mod native {
             }
         }
 
+        /// True once a poll has seen the watcher thread exit and drop its sender.
         fn finished(&self) -> bool {
             self.finished
         }
@@ -385,24 +434,80 @@ mod native {
         let (send, updates) = mpsc::sync_channel(2);
         thread::Builder::new()
             .name("photocraft-svg-editor".into())
-            .spawn(move || watch(owned, initial, child, stopped, send, interval, settle))
+            .spawn(move || watch(owned, initial, child, stopped, send, (interval, settle), None))
             .map_err(|e| format!("Cannot watch SVG editor saves: {e}"))?;
         Ok(Session { stop, updates, finished: false })
     }
 
+    #[cfg(test)]
+    pub(super) fn start_native_test(
+        owned: OwnedSvg,
+        initial: Vec<u8>,
+        editor: PathBuf,
+        source: photocraft_ui_egui::ExternalVectorSource,
+    ) -> Result<Session, String> {
+        let (stop, stopped) = mpsc::channel();
+        let (send, updates) = mpsc::sync_channel(2);
+        thread::Builder::new()
+            .name("native-vector-test-watcher".into())
+            .spawn(move || watch(owned, initial, None, stopped, send, (Duration::from_millis(30), Duration::from_millis(100)), Some((&editor, &source))))
+            .map_err(|e| e.to_string())?;
+        Ok(Session { stop, updates, finished: false })
+    }
+
+    #[derive(Debug, PartialEq, Eq)]
+    enum Delivery {
+        Sent,
+        Changed,
+        Stopped,
+    }
+
+    /// Keep either a converted save or its error under queue backpressure, without
+    /// re-running conversion. A newer file supersedes either result; cancellation never waits.
+    fn deliver(
+        owned: &OwnedSvg,
+        stamp: &Stamp,
+        send: &SyncSender<Result<ExternalVectorSave, String>>,
+        stopped: &Receiver<()>,
+        mut update: Result<ExternalVectorSave, String>,
+        interval: Duration,
+    ) -> Delivery {
+        loop {
+            if owned.stamp().ok().as_ref() != Some(stamp) {
+                return Delivery::Changed;
+            }
+            match send.try_send(update) {
+                Ok(()) => return Delivery::Sent,
+                Err(TrySendError::Full(value)) => {
+                    update = value;
+                    if !matches!(stopped.recv_timeout(interval), Err(mpsc::RecvTimeoutError::Timeout)) {
+                        return Delivery::Stopped;
+                    }
+                }
+                Err(TrySendError::Disconnected(_)) => return Delivery::Stopped,
+            }
+        }
+    }
+
+    /// Worker loop: poll the working file each `interval`, read it only after its stamp stays
+    /// unchanged for `settle`, and deliver changed bytes with an optional converted SVG preview
+    /// for non-SVG sources. Repeated identical errors and known-failed sources are not re-sent.
+    /// Returns when stopped or the UI drops its receiver, dropping the private working copy.
     fn watch(
         owned: OwnedSvg,
         mut last_bytes: Vec<u8>,
         mut child: Option<Child>,
         stopped: Receiver<()>,
-        send: SyncSender<Result<Vec<u8>, String>>,
-        interval: Duration,
-        settle: Duration,
+        send: SyncSender<Result<ExternalVectorSave, String>>,
+        timing: (Duration, Duration),
+        converter: Option<(&Path, &photocraft_ui_egui::ExternalVectorSource)>,
     ) {
+        let (interval, settle) = timing;
         // The editor may save before the watcher starts. First settled read must compare bytes.
         let mut last_stamp: Option<Stamp> = None;
         let mut pending: Option<(Stamp, Instant)> = None;
         let mut last_error: Option<String> = None;
+        let mut failed_source: Option<[u8; 32]> = None;
         while let Err(mpsc::RecvTimeoutError::Timeout) = stopped.recv_timeout(interval) {
             if child.as_mut().is_some_and(|process| process.try_wait().ok().flatten().is_some()) {
                 child = None;
@@ -428,18 +533,52 @@ mod native {
             };
             match candidate {
                 Ok(bytes) => {
-                    last_error = None;
-                    if bytes == last_bytes {
+                    if bytes == last_bytes || failed_source.is_some_and(|hash| hash == *blake3::hash(&bytes).as_bytes()) {
                         last_stamp = pending.as_ref().map(|(stamp, _)| stamp.clone());
                         continue;
                     }
-                    match send.try_send(Ok(bytes.clone())) {
-                        Ok(()) => {
-                            last_bytes = bytes;
-                            last_stamp = pending.as_ref().map(|(stamp, _)| stamp.clone());
+                    let preview = match converter.filter(|(_, source)| source.extension != "svg") {
+                        Some((editor, source)) => {
+                            let snapshot = photocraft_ui_egui::ExternalVectorSource {
+                                bytes: std::sync::Arc::new(bytes.clone()),
+                                extension: source.extension.clone(),
+                                size: source.size,
+                            };
+                            match super::vector_conversion::render_preview(editor, &snapshot, &stopped) {
+                                Ok(svg) => Some(svg),
+                                Err(error) => {
+                                    let Some((stamp, _)) = pending.as_ref() else { continue };
+                                    if last_error.as_ref() == Some(&error) {
+                                        failed_source = Some(*blake3::hash(&bytes).as_bytes());
+                                        last_stamp = Some(stamp.clone());
+                                    } else {
+                                        match deliver(&owned, stamp, &send, &stopped, Err(error.clone()), interval) {
+                                            Delivery::Sent => {
+                                                last_error = Some(error);
+                                                failed_source = Some(*blake3::hash(&bytes).as_bytes());
+                                                last_stamp = Some(stamp.clone());
+                                            }
+                                            Delivery::Changed => {}
+                                            Delivery::Stopped => return,
+                                        }
+                                    }
+                                    continue;
+                                }
+                            }
                         }
-                        Err(TrySendError::Full(_)) => {}
-                        Err(TrySendError::Disconnected(_)) => break,
+                        None => None,
+                    };
+                    let Some((stamp, _)) = pending.as_ref() else { continue };
+                    let update = Ok(ExternalVectorSave { bytes: bytes.clone(), preview_svg: preview });
+                    match deliver(&owned, stamp, &send, &stopped, update, interval) {
+                        Delivery::Sent => {
+                            last_error = None;
+                            failed_source = None;
+                            last_bytes = bytes;
+                            last_stamp = Some(stamp.clone());
+                        }
+                        Delivery::Changed => {}
+                        Delivery::Stopped => return,
                     }
                 }
                 Err(error) => {
@@ -460,6 +599,29 @@ mod native {
     #[cfg(test)]
     mod tests {
         use super::*;
+
+        #[test]
+        fn conversion_errors_wait_for_queue_capacity_without_disappearing() {
+            let owned = OwnedSvg::create(b"<svg/>").unwrap();
+            let stamp = owned.stamp().unwrap();
+            let (send, updates) = mpsc::sync_channel(1);
+            send.send(Ok(ExternalVectorSave { bytes: b"previous save".to_vec(), preview_svg: None })).unwrap();
+            let (_stop, stopped) = mpsc::channel();
+            let worker = thread::spawn(move || deliver(&owned, &stamp, &send, &stopped, Err("native preview failed".into()), Duration::from_millis(2)));
+            thread::sleep(Duration::from_millis(30));
+            assert_eq!(updates.recv_timeout(Duration::from_secs(2)).unwrap().unwrap().bytes, b"previous save");
+            assert_eq!(updates.recv_timeout(Duration::from_secs(2)).unwrap().unwrap_err(), "native preview failed");
+            assert_eq!(worker.join().unwrap(), Delivery::Sent);
+        }
+
+        #[test]
+        fn explicitly_selected_vector_build_keeps_its_adjacent_cli() {
+            let directory = tempfile::tempdir().unwrap();
+            let editor = directory.path().join("custom-vectorcraft");
+            let cli = directory.path().join(if cfg!(windows) { "vectorcraft-cli.exe" } else { "vectorcraft-cli" });
+            std::fs::write(&cli, b"trusted test fixture").unwrap();
+            assert_eq!(resolve_converter(Some(&editor)).unwrap(), editor);
+        }
 
         const EMPTY_SAVE: &str = "The edited SVG must contain between 1 byte and 16 MiB";
         const CHANGING_SAVE: &str = "The SVG is still being saved";
@@ -500,7 +662,7 @@ mod native {
             let (stop, _stopped) = mpsc::channel();
             let (send, receive) = mpsc::channel();
             for update in updates {
-                send.send(update).unwrap();
+                send.send(update.map(|bytes| ExternalVectorSave { bytes, preview_svg: None })).unwrap();
             }
             Session { stop, updates: receive, finished: false }
         }
@@ -638,3 +800,7 @@ mod vector_conversion;
 #[cfg(target_os = "linux")]
 #[path = "external_svg_portal.rs"]
 mod portal;
+
+#[cfg(test)]
+#[path = "native_saveback_tests.rs"]
+mod native_saveback_tests;

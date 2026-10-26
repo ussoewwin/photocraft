@@ -125,10 +125,15 @@ pub fn find_linked_file(meta: &Metadata, uuid: &str) -> Option<LinkedFile> {
 
 /// Borrow only the selected embedded payload, without copying other smart objects or reading disk.
 pub fn embedded_payload<'a>(meta: &'a Metadata, uuid: &str) -> Option<(String, &'a [u8])> {
+    embedded_payload_in_blocks(meta.psd_global_blocks.iter().map(|(_, key, data)| (key, data.as_slice())), uuid)
+}
+
+/// Borrow one selected payload from PSD global blocks without copying unrelated files.
+pub fn embedded_payload_in_blocks<'a>(blocks: impl IntoIterator<Item = (&'a [u8; 4], &'a [u8])>, uuid: &str) -> Option<(String, &'a [u8])> {
     if uuid.is_empty() {
         return None;
     }
-    for (_, key, data) in &meta.psd_global_blocks {
+    for (key, data) in blocks {
         if !matches!(key, b"lnk2" | b"lnk3" | b"lnkD") {
             continue;
         }

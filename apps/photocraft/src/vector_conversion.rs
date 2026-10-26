@@ -1,4 +1,4 @@
-//! Bounded, private VectorCraft conversion before an embedded AI/PDF/EPS editing session.
+//! Bounded display previews for native vector editing. The working source retains its format.
 //! No document metadata supplies a process, command line or output path.
 
 use super::native::OwnedSvg;
@@ -9,15 +9,43 @@ use std::process::{Command, Stdio};
 use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant};
 
-/// Prepare a bounded SVG working copy, converting native vectors inside private MCP roots.
+/// Validate the source using a private preview, then expose only an original-format copy.
 pub(super) fn prepare(editor: &Path, source: &ExternalVectorSource, stop: &Receiver<()>) -> Result<(OwnedSvg, Vec<u8>), String> {
+    render_preview(editor, source, stop)?;
+    // Foreign AI opens read-only for ordinary Save in VectorCraft. Regenerate only this
+    // private AI working copy with editable AI data; never weaken that source-file protection.
+    // Comparing the watcher with this initial copy prevents an open-only/no-op replacement.
+    let initial = if source.extension == "ai" { run_export(editor, source, stop, "ai")? } else { source.bytes.as_ref().clone() };
+    if source.extension == "ai" {
+        let prepared = ExternalVectorSource { bytes: std::sync::Arc::new(initial.clone()), extension: source.extension.clone(), size: source.size };
+        render_preview(editor, &prepared, stop)?;
+    }
+    let owned = OwnedSvg::create_format(&initial, &source.extension)?;
+    Ok((owned, initial))
+}
+
+/// Render a stable source snapshot inside private MCP roots; never rewrite the editor's file.
+pub(super) fn render_preview(editor: &Path, source: &ExternalVectorSource, stop: &Receiver<()>) -> Result<Vec<u8>, String> {
+    let converted = if source.extension == "svg" { source.bytes.as_ref().clone() } else { run_export(editor, source, stop, "svg")? };
+    source_svg(&converted, source.size)
+}
+
+/// Convert `source` to `format` (`svg` or `ai`) with the `vectorcraft-cli` next to `editor`,
+/// confined to a private temporary read/write root. Errors on a format/magic mismatch, a
+/// missing or linked CLI, a failed open/export reply, cancellation via `stop`, or the
+/// 60-second deadline; the child process is killed and reaped on any failure.
+fn run_export(editor: &Path, source: &ExternalVectorSource, stop: &Receiver<()>, format: &str) -> Result<Vec<u8>, String> {
     if !matches!(source.extension.as_str(), "svg" | "pdf" | "ai" | "eps") {
         return Err("Unsupported embedded vector source type".into());
     }
-    let owned = OwnedSvg::create(&source.bytes)?;
-    if source.extension == "svg" {
-        return Ok((owned, source.bytes.as_ref().clone()));
+    if !matches!(format, "svg" | "ai")
+        || !photocraft_io::vector_preview::is_native_source(&source.bytes)
+        || (source.extension == "pdf" && !source.bytes.starts_with(b"%PDF-"))
+        || (source.extension == "eps" && source.bytes.starts_with(b"%PDF-"))
+    {
+        return Err("The saved bytes do not match the original vector format".into());
     }
+    let owned = OwnedSvg::create_format(&source.bytes, format)?;
     let cli_name = if cfg!(windows) { "vectorcraft-cli.exe" } else { "vectorcraft-cli" };
     let cli = editor.parent().ok_or("The editor has no installation directory")?.join(cli_name);
     // Selecting an editor explicitly also selects its adjacent VectorCraft CLI; PATH and the
@@ -31,7 +59,7 @@ pub(super) fn prepare(editor: &Path, source: &ExternalVectorSource, stop: &Recei
     let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(&input).map_err(|e| format!("Cannot create vector input: {e}"))?;
     file.write_all(&source.bytes).map_err(|e| format!("Cannot write vector input: {e}"))?;
     drop(file);
-    let commands = conversion_commands(&input, &owned.file)?;
+    let commands = export_commands(&input, &owned.file, format)?;
     // MCP's headless roots apply to every thread and file reader, including references in
     // hostile embedded artwork. Ordinary `convert` does not establish those restrictions.
     let responses_path = owned.root.join("Responses.jsonl");
@@ -82,31 +110,40 @@ pub(super) fn prepare(editor: &Path, source: &ExternalVectorSource, stop: &Recei
         responses_file.take(1024 * 1024 + 1).read_to_string(&mut responses).map_err(|e| format!("Invalid conversion responses: {e}"))?;
         validate_responses(&responses)?;
         let converted = owned.read(&owned.stamp()?)?;
-        let svg = source_svg(&converted, source.size)?;
-        // Validate bounded rendering before the interactive editor sees the working copy.
-        photocraft_io::svg::import_svg_bounded("Artwork.svg", &svg, 24_000_000).map_err(|e| format!("Converted SVG is unsupported: {e}"))?;
-        owned.overwrite(&svg)?;
-        Ok(svg)
+        if format == "ai" && !converted.starts_with(b"%PDF-") {
+            return Err("VectorCraft did not save a PDF-compatible AI working copy".into());
+        }
+        Ok(converted)
     })();
     if result.is_err() {
         let _ = child.kill();
         let _ = child.wait();
     }
-    result.map(|svg| (owned, svg))
+    result
 }
 
 /// Build requests only from UTF-8 paths: serializing a non-UTF-8 `Path` inside `json!` panics.
+#[cfg(all(test, unix))]
 fn conversion_commands(input: &Path, output: &Path) -> Result<[(u8, &'static str, serde_json::Value); 2], String> {
+    export_commands(input, output, "svg")
+}
+
+/// The open (id 1) and export (id 2) requests that [`validate_responses`] checks; AI exports
+/// preserve editing data. Non-UTF-8 paths return errors because `json!` would panic on them.
+fn export_commands(input: &Path, output: &Path, format: &str) -> Result<[(u8, &'static str, serde_json::Value); 2], String> {
     let input = input.to_str().ok_or("The temporary vector input path is not UTF-8")?;
     let output = output.to_str().ok_or("The temporary vector output path is not UTF-8")?;
-    Ok([(1, "document.open", serde_json::json!({"path": input})), (2, "document.export", serde_json::json!({"path": output, "format": "svg"}))])
+    Ok([
+        (1, "document.open", serde_json::json!({"path": input})),
+        (2, "document.export", serde_json::json!({"path": output, "format": format, "preserveEditing": format == "ai"})),
+    ])
 }
 
 /// Keep the original PSD source-pixel frame: PDF points and EPS bounds need not equal the
 /// placed object's stored pixel dimensions. The nested viewport scales vector geometry once.
 fn source_svg(bytes: &[u8], size: Option<(f64, f64)>) -> Result<Vec<u8>, String> {
     let text = std::str::from_utf8(bytes).map_err(|_| "Converted SVG is not UTF-8")?;
-    photocraft_io::svg::import_svg_bounded("Artwork.svg", bytes, 24_000_000).map_err(|e| format!("Converted SVG is unsupported: {e}"))?;
+    photocraft_io::svg::import_svg_bounded_with_work("Artwork.svg", bytes, 96_000_000).map_err(|e| format!("Converted SVG is unsupported: {e}"))?;
     let doc = roxmltree::Document::parse(text).map_err(|e| format!("Invalid converted SVG: {e}"))?;
     let root = doc.root_element();
     if root.tag_name().name() != "svg" {
@@ -118,7 +155,13 @@ fn source_svg(bytes: &[u8], size: Option<(f64, f64)>) -> Result<Vec<u8>, String>
     if !w.is_finite() || !h.is_finite() || w <= 0.0 || h <= 0.0 || w > 16384.0 || h > 16384.0 || w * h > 24_000_000.0 {
         return Err("The original vector source dimensions exceed the editing limit".into());
     }
-    let dimension = |key| root.attribute(key).and_then(|v| v.trim_end_matches("pt").parse::<f64>().ok()).filter(|v| v.is_finite() && *v > 0.0);
+    // The nested root keeps its own width/height, so the outer viewBox must use the same CSS
+    // pixels: `612pt` is 816 user units at SVG's 96 dpi. Other units are rejected below.
+    let dimension = |key| {
+        let value = root.attribute(key)?;
+        let (number, scale) = value.strip_suffix("pt").map_or((value, 1.0), |number| (number, 4.0 / 3.0));
+        number.parse::<f64>().ok().map(|v| v * scale).filter(|v| v.is_finite() && *v > 0.0)
+    };
     let (iw, ih) = dimension("width").zip(dimension("height")).ok_or("Converted SVG has no finite dimensions")?;
     let inner = text.get(root.range()).ok_or("Invalid SVG root range")?;
     let result =
@@ -161,6 +204,7 @@ mod tests {
         let commands = conversion_commands(valid, valid).unwrap();
         assert_eq!(commands[0].2["path"], "/tmp/Artwork.svg");
         assert_eq!(commands[1].2["format"], "svg");
+        assert_eq!(commands[1].2["preserveEditing"], false);
     }
 
     #[test]
@@ -170,10 +214,37 @@ mod tests {
         let parsed = photocraft_io::svg::import_svg_bounded("Artwork.svg", &normalized, 24_000_000).unwrap();
         assert_eq!(parsed.document.size, photocraft_geom::Size::new(16, 12));
         assert_eq!(source_svg(svg, None).unwrap(), svg);
+        let fractional = source_svg(svg, Some((16.3, 12.2))).unwrap();
+        let parsed = photocraft_io::svg::import_svg_bounded("Artwork.svg", &fractional, 24_000_000).unwrap();
+        assert_eq!(parsed.document.size, photocraft_geom::Size::new(16, 12));
         for size in [(f64::NAN, 1.0), (1.0, f64::INFINITY), (0.0, 1.0), (16384.0, 16384.0)] {
             assert!(source_svg(svg, Some(size)).is_err());
         }
         assert!(source_svg(b"%PDF-1.6", None).is_err());
+    }
+
+    #[test]
+    fn point_sized_converted_vectors_fill_the_frame_without_cropping() {
+        // 12pt × 9pt is 16 × 12 CSS pixels: red on the left half, blue on the right half,
+        // with and without a root viewBox. Misreading pt as px would scale by 4/3 and crop.
+        for svg in [
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="12pt" height="9pt" viewBox="0 0 12 9"><rect width="6" height="9" fill="red"/><rect x="6" width="6" height="9" fill="blue"/></svg>"#,
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="12pt" height="9pt"><rect width="8" height="12" fill="red"/><rect x="8" width="8" height="12" fill="blue"/></svg>"#,
+        ] {
+            let normalized = source_svg(svg.as_bytes(), Some((16.0, 12.0))).unwrap();
+            let raster = photocraft_io::svg::rasterize_bounded(&normalized, 1.0, 24_000_000).unwrap();
+            assert_eq!((raster.rect.width(), raster.rect.height()), (16, 12));
+            let (x0, y0) = (raster.rect.x0, raster.rect.y0);
+            let is = |x: i32, y: i32, channel: usize| {
+                let px = raster.get(x0 + x, y0 + y);
+                px[3] > 0.99 && px[channel] > 0.99 && px[2 - channel] < 0.01
+            };
+            for y in [0, 6, 11] {
+                assert!(is(0, y, 0) && is(6, y, 0), "left half must be red: {svg}");
+                assert!(is(9, y, 2) && is(15, y, 2), "right half must be blue and uncropped: {svg}");
+            }
+        }
+        assert!(source_svg(br#"<svg xmlns="http://www.w3.org/2000/svg" width="12mm" height="9mm"/>"#, Some((16.0, 12.0))).is_err());
     }
 
     #[test]
@@ -207,7 +278,11 @@ mod live_vectorcraft_tests {
         let (_send, stop) = mpsc::channel();
         let eps = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 8 6\n0 0 1 setrgbcolor 0 0 8 6 rectfill\nshowpage\n%%EOF\n";
         let source = ExternalVectorSource { bytes: Arc::new(eps.to_vec()), extension: "eps".into(), size: Some((16.0, 12.0)) };
-        let (owned, svg) = prepare(editor, &source, &stop).unwrap();
+        let (owned, initial) = prepare(editor, &source, &stop).unwrap();
+        assert_eq!(initial, *source.bytes);
+        assert_eq!(owned.file.extension().unwrap(), "eps");
+        assert_eq!(std::fs::read(&owned.file).unwrap(), *source.bytes);
+        let svg = render_preview(editor, &source, &stop).unwrap();
         assert!(owned.file.exists());
         let raster = photocraft_io::svg::rasterize_bounded(&svg, 1.0, 24_000_000).unwrap();
         assert_eq!((raster.rect.width(), raster.rect.height()), (16, 12));

@@ -1,5 +1,6 @@
 use super::*;
 
+mod filter_mask_paint;
 mod selection;
 mod stack_cache;
 mod svg_profile;
@@ -219,6 +220,26 @@ fn pattern_fill_converts_to_editable_smart_object_without_losing_its_pattern() {
 fn empty_layer_cannot_be_converted() {
     let mut s = session(8);
     assert!(s.execute("layer.smartObjects.convertToSmartObject", json!({})).is_err());
+}
+
+#[test]
+fn convert_to_smart_object_is_disabled_for_a_layer_that_is_already_smart() {
+    let mut s = session(8);
+    paint(&mut s);
+    assert!(s.is_enabled("layer.smartObjects.convertToSmartObject"));
+    convert(&mut s);
+    assert!(!s.is_enabled("layer.smartObjects.convertToSmartObject"));
+}
+
+#[test]
+fn convert_to_smart_object_stays_enabled_for_a_selection_that_includes_a_smart_object() {
+    let mut s = session(8);
+    paint(&mut s);
+    let smart_id = LayerId(convert(&mut s));
+    s.execute("layer.new.layer", json!({})).unwrap();
+    let other_id = s.active().unwrap().active_layer.unwrap();
+    crate::layer_multi_cmds::set_selection(&mut s, vec![smart_id, other_id], Some(other_id), None).unwrap();
+    assert!(s.is_enabled("layer.smartObjects.convertToSmartObject"));
 }
 
 #[test]

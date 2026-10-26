@@ -61,6 +61,7 @@ fn valid_updates_repeat_at_all_depths_and_roundtrip_original_svg() {
     for depth in [8, 16, 32] {
         let (mut s, id) = session(depth);
         let original = s.active().unwrap().doc.clone();
+        let journal_len = s.journal.len();
         let params = request(&mut s, id, BLUE);
         let result = s.execute(UPDATE, params).unwrap();
         assert_eq!(result["updated"], true);
@@ -76,6 +77,7 @@ fn valid_updates_repeat_at_all_depths_and_roundtrip_original_svg() {
         let params = request(&mut s, id, GREEN);
         s.execute(UPDATE, params).unwrap();
         assert_eq!(source(&s, id), GREEN.as_bytes());
+        assert_eq!(s.journal.len(), journal_len, "vector saves must not accumulate full artwork in the replay journal");
         let bytes = photocraft_format::save_to_bytes(&s.active().unwrap().doc, &Default::default()).unwrap();
         let loaded = photocraft_format::load_from_bytes(&bytes).unwrap();
         let loaded_source = &smart(&loaded, id).unwrap().source;
@@ -357,4 +359,276 @@ fn quick_mask_blocks_source_updates_without_mutating_the_document() {
     let params = request(&mut s, id, BLUE);
     s.execute("select.editInQuickMaskMode", json!({})).unwrap();
     fails_without_edit(&mut s, params);
+}
+
+fn native_session(extension: &str, depth: u32) -> (Session, LayerId, Vec<u8>) {
+    let (mut s, id) = session(depth);
+    let bytes = if extension == "eps" { b"%!PS-Adobe-3.0 EPSF-3.0\noriginal".to_vec() } else { b"%PDF-1.7\noriginal".to_vec() };
+    let doc = Arc::make_mut(&mut s.active_mut().unwrap().doc);
+    let LayerContent::Smart(sm) = &mut doc.layer_mut(id).unwrap().content else { panic!("smart") };
+    sm.source = SmartSource::Embedded { file_name: format!("Logo.{extension}"), bytes: Arc::new(bytes.clone()) };
+    (s, id, bytes)
+}
+
+fn native_request(s: &mut Session, id: LayerId, ext: &str, bytes: &[u8]) -> Value {
+    let handoff = s.execute(EXPORT, json!({"layer":id.0})).unwrap();
+    json!({"document":handoff["document"],"layer":id.0,"contentsId":handoff["contentsId"],"fingerprint":handoff["fingerprint"],"sourceBase64":base64::engine::general_purpose::STANDARD.encode(bytes),"extension":ext,"previewSvg":BLUE})
+}
+
+#[test]
+fn original_vector_formats_save_atomically_and_survive_undo_and_persistence() {
+    for ext in ["ai", "pdf", "eps"] {
+        for depth in [8, 16, 32] {
+            let (mut s, id, original) = native_session(ext, depth);
+            let before = s.active().unwrap().doc.clone();
+            let changed = [original.as_slice(), b" edited"].concat();
+            let params = native_request(&mut s, id, ext, &changed);
+            assert_eq!(s.execute(UPDATE_VECTOR, params.clone()).unwrap()["updated"], true);
+            let after = s.active().unwrap().doc.clone();
+            let sm = smart(&after, id).unwrap();
+            assert!(matches!(&sm.source,SmartSource::Embedded {file_name,bytes} if file_name == &format!("Logo.{ext}") && bytes.as_slice() == changed));
+            assert_eq!(sm.vector_preview.as_ref().unwrap().source_hash, *blake3::hash(&changed).as_bytes());
+            assert_eq!(sm.cache.as_ref().unwrap().pixel(15, 11), vec![0.0, 0.0, 1.0, 1.0]);
+            assert!(s.undo());
+            assert_eq!(s.active().unwrap().doc, before);
+            assert!(s.redo());
+            assert_eq!(s.active().unwrap().doc, after);
+            let bundle = photocraft_format::save_to_bytes(&after, &Default::default()).unwrap();
+            let reopened = photocraft_format::load_from_bytes(&bundle).unwrap();
+            assert_eq!(smart(&reopened, id).unwrap(), sm);
+            let mut repeated = native_request(&mut s, id, ext, &changed);
+            let revision = s.active().unwrap().revision;
+            assert_eq!(s.execute(UPDATE_VECTOR, repeated.clone()).unwrap()["updated"], false);
+            assert_eq!(s.active().unwrap().revision, revision);
+            repeated["sourceBase64"] = json!(base64::engine::general_purpose::STANDARD.encode([changed.as_slice(), b" twice"].concat()));
+            s.execute(UPDATE_VECTOR, repeated).unwrap();
+            assert!(s.execute(UPDATE_VECTOR, params).is_err(), "stale session must not overwrite later changes");
+        }
+    }
+}
+
+#[test]
+fn native_saves_reject_wrong_formats_bad_previews_and_locks_without_editing() {
+    let (mut s, id, original) = native_session("ai", 8);
+    let changed = [original.as_slice(), b" edited"].concat();
+    let valid = native_request(&mut s, id, "ai", &changed);
+    for (key, value) in [
+        ("extension", json!("svg")),
+        ("sourceBase64", json!("bad base64!")),
+        ("sourceBase64", json!(base64::engine::general_purpose::STANDARD.encode(RED))),
+        ("previewSvg", json!("not an SVG")),
+        ("previewSvg", json!(r#"<svg xmlns="http://www.w3.org/2000/svg" width="1000000" height="1000000"/>"#)),
+        ("document", json!(0)),
+    ] {
+        let mut params = valid.clone();
+        params[key] = value;
+        let before = s.active().unwrap().doc.clone();
+        assert!(s.execute(UPDATE_VECTOR, params).is_err());
+        assert_eq!(s.active().unwrap().doc, before);
+    }
+    Arc::make_mut(&mut s.active_mut().unwrap().doc).layer_mut(id).unwrap().locks.all = true;
+    assert!(s.execute(UPDATE_VECTOR, valid.clone()).is_err());
+    Arc::make_mut(&mut s.active_mut().unwrap().doc).layer_mut(id).unwrap().locks.all = false;
+    let mut duplicate = s.active().unwrap().doc.layer(id).unwrap().duplicate();
+    let LayerContent::Smart(sm) = &mut duplicate.content else { panic!("smart") };
+    sm.transform = Affine::translate(2.0, 3.0);
+    let duplicate_id = Arc::make_mut(&mut s.active_mut().unwrap().doc).insert_above(Some(id), duplicate);
+    s.execute(UPDATE_VECTOR, valid).unwrap();
+    assert_eq!(source(&s, duplicate_id), changed);
+    assert!(
+        Arc::ptr_eq(
+            &smart(&s.active().unwrap().doc, id).unwrap().vector_preview.as_ref().unwrap().svg,
+            &smart(&s.active().unwrap().doc, duplicate_id).unwrap().vector_preview.as_ref().unwrap().svg
+        ),
+        "shared instances must share the preview allocation"
+    );
+    assert_eq!(smart(&s.active().unwrap().doc, duplicate_id).unwrap().transform, Affine::translate(2.0, 3.0));
+}
+
+#[test]
+fn native_save_keeps_fractional_psd_frame_and_rejects_a_resized_preview() {
+    let (mut s, id, original) = native_session("ai", 8);
+    let spec = photocraft_io::smart_map::PlacedSpec {
+        idnt: "authored",
+        placed: "authored",
+        transform: Affine::IDENTITY,
+        perspective: None,
+        size: (8.3, 6.2),
+        dpi: 72.0,
+        warp: None,
+        filter_fx: None,
+    };
+    let sold = photocraft_io::smart_map::sold_bytes(None, &spec, &mut vec![]);
+    let state = s.active_mut().unwrap();
+    let LayerContent::Smart(sm) = &mut Arc::make_mut(&mut state.doc).layer_mut(id).unwrap().content else { panic!("smart") };
+    sm.psd_raw = Some(Arc::new(sold));
+    let changed = [original.as_slice(), b" changed"].concat();
+    let mut params = native_request(&mut s, id, "ai", &changed);
+    params["previewSvg"] = json!(BLUE.replace("width=\"8\" height=\"6\"", "width=\"8.3\" height=\"6.2\""));
+    s.execute(UPDATE_VECTOR, params).unwrap();
+    let before = s.active().unwrap().doc.clone();
+    let mut params = native_request(&mut s, id, "ai", &[changed.as_slice(), b" next"].concat());
+    params["previewSvg"] = json!(BLUE.replace("width=\"8\" height=\"6\"", "width=\"10\" height=\"6\""));
+    assert!(s.execute(UPDATE_VECTOR, params).is_err());
+    assert_eq!(s.active().unwrap().doc, before);
+}
+
+#[test]
+fn shared_native_instances_check_one_preview_identity_once_and_keep_per_instance_frames() {
+    let (mut s, id, original) = native_session("ai", 8);
+    let changed = [original.as_slice(), b" changed"].concat();
+    let params = native_request(&mut s, id, "ai", &changed);
+    s.execute(UPDATE_VECTOR, params).unwrap();
+    // 40 shared instances borrow one source and preview allocation; one more has an equal
+    // preview in its own allocation, so it is a separate identity and checked separately.
+    let template = s.active().unwrap().doc.layer(id).unwrap().clone();
+    let doc = Arc::make_mut(&mut s.active_mut().unwrap().doc);
+    for _ in 0..40 {
+        doc.insert_above(Some(id), template.duplicate());
+    }
+    let mut copied = template.duplicate();
+    let LayerContent::Smart(sm) = &mut copied.content else { panic!("smart") };
+    let preview = sm.vector_preview.as_mut().unwrap();
+    preview.svg = Arc::new(preview.svg.as_ref().clone());
+    doc.insert_above(Some(id), copied);
+    let next = [changed.as_slice(), b" next"].concat();
+    let params = native_request(&mut s, id, "ai", &next);
+    let before = PREVIEW_FRAME_CHECKS.with(std::cell::Cell::get);
+    s.execute(UPDATE_VECTOR, params).unwrap();
+    assert_eq!(PREVIEW_FRAME_CHECKS.with(std::cell::Cell::get) - before, 2, "one check per source and preview identity");
+    // An instance without a preview still validates its own PSD frame.
+    let spec = photocraft_io::smart_map::PlacedSpec {
+        idnt: "authored",
+        placed: "authored",
+        transform: Affine::IDENTITY,
+        perspective: None,
+        size: (10.0, 6.0),
+        dpi: 72.0,
+        warp: None,
+        filter_fx: None,
+    };
+    let sold = photocraft_io::smart_map::sold_bytes(None, &spec, &mut vec![]);
+    let mut framed = s.active().unwrap().doc.layer(id).unwrap().duplicate();
+    let LayerContent::Smart(sm) = &mut framed.content else { panic!("smart") };
+    sm.vector_preview = None;
+    sm.psd_raw = Some(Arc::new(sold));
+    Arc::make_mut(&mut s.active_mut().unwrap().doc).insert_above(Some(id), framed);
+    let params = native_request(&mut s, id, "ai", &[next.as_slice(), b" again"].concat());
+    let before = s.active().unwrap().doc.clone();
+    let error = s.execute(UPDATE_VECTOR, params).unwrap_err().to_string();
+    assert!(error.contains("source-pixel frame"), "a differing PSD frame on one shared instance must reject: {error}");
+    assert_eq!(s.active().unwrap().doc, before);
+}
+
+/// Distinct old previews share a byte budget even when destination surfaces are tiny.
+#[test]
+fn distinct_native_preview_metadata_exhausts_budget_without_editing_any_instance() {
+    let (mut s, id, original) = native_session("ai", 8);
+    let first_save = [original.as_slice(), b" first"].concat();
+    let params = native_request(&mut s, id, "ai", &first_save);
+    s.execute(UPDATE_VECTOR, params).unwrap();
+    let template = s.active().unwrap().doc.layer(id).unwrap().clone();
+    let doc = Arc::make_mut(&mut s.active_mut().unwrap().doc);
+    let mut preview_length = 0;
+    for n in 0..3 {
+        let mut instance = template.duplicate();
+        let LayerContent::Smart(sm) = &mut instance.content else { panic!("smart") };
+        let preview = sm.vector_preview.as_mut().unwrap();
+        let svg = RED.replace("</svg>", &format!("<!--{n}--></svg>"));
+        preview_length = svg.len();
+        preview.svg = Arc::new(svg.into_bytes());
+        if n == 0 {
+            let layer = doc.layer_mut(id).unwrap();
+            layer.content = instance.content;
+        } else {
+            doc.insert_above(Some(id), instance);
+        }
+    }
+    let next = [first_save.as_slice(), b" next"].concat();
+    let params = native_request(&mut s, id, "ai", &next);
+    let before = s.active().unwrap().doc.clone();
+    let revision = s.active().unwrap().revision;
+    let checks = PREVIEW_FRAME_CHECKS.with(std::cell::Cell::get);
+    let error = update_contents_with_frame_budget(&mut s, &params, true, preview_length * 2).unwrap_err().to_string();
+    assert!(error.contains("validation budget"), "{error}");
+    assert_eq!(PREVIEW_FRAME_CHECKS.with(std::cell::Cell::get) - checks, 2, "exhausted metadata is never parsed");
+    assert_eq!(s.active().unwrap().doc, before);
+    assert_eq!(s.active().unwrap().revision, revision);
+    assert_eq!(s.execute(UPDATE_VECTOR, params).unwrap()["updated"], true);
+    assert!(s.undo());
+    assert_eq!(s.active().unwrap().doc, before);
+}
+
+/// A large opaque native payload is shared data, not work repeated for every display cache.
+#[test]
+fn native_save_refreshes_shared_caches_without_rehashing_the_native_payload_per_instance() {
+    let (mut s, id, original) = native_session("eps", 8);
+    let template = s.active().unwrap().doc.layer(id).unwrap().clone();
+    let doc = Arc::make_mut(&mut s.active_mut().unwrap().doc);
+    for _ in 1..100 {
+        doc.insert_above(Some(id), template.duplicate());
+    }
+    let before = s.active().unwrap().doc.clone();
+    let mut changed = vec![b' '; MAX_VECTOR_SOURCE_BYTES];
+    changed[..original.len()].copy_from_slice(&original);
+    let params = native_request(&mut s, id, "eps", &changed);
+    let hashed = crate::smart_cmds::DISPLAY_NATIVE_HASH_BYTES.with(std::cell::Cell::get);
+    assert_eq!(s.execute(UPDATE_VECTOR, params).unwrap()["updated"], true);
+    assert_eq!(crate::smart_cmds::DISPLAY_NATIVE_HASH_BYTES.with(std::cell::Cell::get) - hashed, 0, "cache refresh must not hash 16 MiB for every copy");
+    let after = s.active().unwrap().doc.clone();
+    let target = smart(&after, id).unwrap();
+    let SmartSource::Embedded { file_name, bytes } = &target.source else { panic!("native source lost") };
+    assert_eq!(file_name, "Logo.eps");
+    assert_eq!(bytes.as_slice(), changed.as_slice());
+    assert_eq!(target.vector_preview.as_ref().unwrap().source_hash, *blake3::hash(&changed).as_bytes());
+    for (_, _, layer) in after.walk() {
+        let LayerContent::Smart(sm) = &layer.content else { continue };
+        let SmartSource::Embedded { bytes: shared, .. } = &sm.source else { panic!("native source lost") };
+        assert!(Arc::ptr_eq(shared, bytes));
+        assert_eq!(sm.contents_id, target.contents_id);
+        assert_eq!(sm.cache.as_ref().unwrap().pixel(15, 11), vec![0.0, 0.0, 1.0, 1.0]);
+        let old = smart(&before, layer.id).unwrap();
+        assert_eq!(sm.transform, old.transform);
+        assert_eq!(sm.smart_filters, old.smart_filters);
+        assert_eq!(sm.filter_mask, old.filter_mask);
+    }
+    assert!(s.undo());
+    assert_eq!(s.active().unwrap().doc, before);
+    assert!(s.redo());
+    assert_eq!(s.active().unwrap().doc, after);
+}
+
+#[test]
+fn native_source_replacement_never_uses_a_forged_or_stale_preview() {
+    let (mut s, id, original) = native_session("ai", 8);
+    let changed = [original.as_slice(), b" changed"].concat();
+    let params = native_request(&mut s, id, "ai", &changed);
+    s.execute(UPDATE_VECTOR, params).unwrap();
+    let mut sm = smart(&s.active().unwrap().doc, id).unwrap().clone();
+    sm.vector_preview.as_mut().unwrap().svg = Arc::new(b"not SVG".to_vec());
+    assert!(crate::smart_cmds::render(&s.active().unwrap().doc, &sm).is_err());
+    sm.vector_preview.as_mut().unwrap().svg = Arc::new(BLUE.as_bytes().to_vec());
+    sm.source = SmartSource::Embedded { file_name: "Changed.ai".into(), bytes: Arc::new(b"%PDF-1.7\nnot the same source".to_vec()) };
+    assert!(crate::smart_cmds::render(&s.active().unwrap().doc, &sm).is_err());
+}
+
+#[test]
+fn native_update_authorizes_filters_on_every_shared_instance_before_editing() {
+    let (mut s, id, original) = native_session("ai", 8);
+    let mut duplicate = s.active().unwrap().doc.layer(id).unwrap().duplicate();
+    let LayerContent::Smart(sm) = &mut duplicate.content else { panic!("smart") };
+    sm.smart_filters.push(SmartFilter {
+        command: "image.adjustments.colorLookup".into(),
+        params: json!({"file":"/not-authorized/private.cube"}),
+        blend: photocraft_color::BlendMode::Normal,
+        opacity: 1.0,
+        visible: true,
+    });
+    Arc::make_mut(&mut s.active_mut().unwrap().doc).insert_above(Some(id), duplicate);
+    let params = native_request(&mut s, id, "ai", &[original.as_slice(), b" changed"].concat());
+    s.authorize =
+        Some(|command, _| if command == "image.adjustments.colorLookup" { Err(EngineError::Other("denied stored native filter".into())) } else { Ok(()) });
+    let before = s.active().unwrap().doc.clone();
+    assert!(s.execute(UPDATE_VECTOR, params).unwrap_err().to_string().contains("denied stored native filter"));
+    assert_eq!(s.active().unwrap().doc, before);
 }

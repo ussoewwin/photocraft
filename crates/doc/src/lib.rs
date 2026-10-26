@@ -499,12 +499,22 @@ fn normalize_runs<S: Clone>(text: &str, runs: Vec<(usize, S)>, base: S) -> Vec<(
     out
 }
 
+/// A bounded display preview for an embedded native vector, bound to its exact source bytes.
+/// The SVG is display data only; saving the object retains the native source format.
+#[derive(Clone, Debug, PartialEq)]
+pub struct VectorPreview {
+    pub source_hash: [u8; 32],
+    pub svg: Arc<Vec<u8>>,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct SmartObject {
     /// Ordinary layer duplicates share this identity; independent contents receive a fresh one.
     pub contents_id: SmartContentsId,
     /// Embedded source file bytes (PSD, PNG, …) or linked path.
     pub source: SmartSource,
+    /// Optional source-pixel display preview for AI/PDF/EPS; ignored after source bytes change.
+    pub vector_preview: Option<VectorPreview>,
     pub transform: Affine,
     pub smart_filters: Vec<SmartFilter>,
     /// Rendered appearance.
@@ -536,6 +546,7 @@ impl SmartObject {
         Self {
             contents_id: SmartContentsId::fresh(),
             source,
+            vector_preview: None,
             transform,
             smart_filters: Vec::new(),
             cache,
@@ -659,6 +670,10 @@ pub struct Layer {
     pub advanced: AdvancedBlending,
     /// Layer › Video Layers frame stack (None for a normal layer).
     pub video: Option<VideoData>,
+    /// The layer's own XMP packet (Photoshop's `layer.xmpMetadata.rawData`), where scripts and
+    /// embedding apps keep data about the layer under their own namespaces. Copied by
+    /// [`Layer::duplicate`], as in Photoshop. PSD `shmd` › `cust` › `layerXMP`.
+    pub xmp: Option<Arc<str>>,
 }
 
 impl Layer {
@@ -692,6 +707,7 @@ impl Layer {
             blend_if: BlendIf::default(),
             advanced: AdvancedBlending::default(),
             video: None,
+            xmp: None,
         }
     }
     pub fn raster(name: impl Into<String>, format: PixelFormat) -> Self {
@@ -841,7 +857,10 @@ pub type PsdGlobalBlock = ([u8; 4], [u8; 4], Arc<Vec<u8>>);
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Metadata {
-    pub xmp: Option<String>,
+    /// The XMP packet as stored, kept as text so properties PhotoCraft doesn't model survive.
+    /// Shared like the other payloads here: cloning a document or a history state never copies
+    /// it (#4535).
+    pub xmp: Option<Arc<str>>,
     pub exif: Option<Arc<Vec<u8>>>,
     /// Free-form image text (PNG tEXt/zTXt/iTXt, TIFF ASCII tags), including duplicate keys.
     pub text: Vec<(String, String)>,
@@ -933,7 +952,8 @@ pub struct FileEncoding {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub webp_quality: Option<u8>,
     /// PNG stereo pairing (the `sTER` chunk's mode byte, PNG Extensions 1.4.0 §3.6): `Some(0)`
-    /// side by side, `Some(1)` stacked, so saving a stereo PNG keeps the mark (#6063).
+    /// cross-fuse (right eye first), `Some(1)` diverging-fuse (left eye first). Both are
+    /// side by side; saving a stereo PNG keeps this eye-order mark (#6063).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub png_stereo: Option<u8>,
 }
