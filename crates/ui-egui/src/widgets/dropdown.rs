@@ -225,7 +225,7 @@ pub fn menu_scroll<R>(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> R
     // An overflowing menu gets Photoshop's scroll arrows above and below its rows (#2091): the
     // thin floating scroll bar alone gave no hint that more items were hidden. Whether it
     // overflows is known only after layout, so it is remembered from the last frame.
-    let id = ui.id().with("menu_scroll");
+    let id = ui.scope_id().with("menu_scroll");
     let overflow = ui.data(|d| d.get_temp::<bool>(id)).unwrap_or(false);
     let offset = ui.data(|d| d.get_temp::<f32>(id.with("offset"))).unwrap_or(0.0);
     let arrows = if overflow { 2.0 * MENU_ARROW_HEIGHT } else { 0.0 };

@@ -1025,7 +1025,7 @@ fn overflowing_menus_get_scroll_arrows_that_scroll_on_hover() {
     let run = |rows: usize| {
         let mut h = Harness::builder().with_size(egui::vec2(220.0, 300.0)).build_ui_state(
             |ui, s: &mut S| {
-                let id = ui.id().with("menu_scroll");
+                let id = ui.scope_id().with("menu_scroll");
                 super::menu_scroll(ui, |ui| {
                     for i in 0..s.0 {
                         ui.label(format!("Item {i}"));
@@ -1059,7 +1059,7 @@ fn a_reopened_menu_takes_no_stale_scroll_step() {
     type S = (bool, f32, f32);
     let mut h = Harness::builder().with_size(egui::vec2(220.0, 300.0)).build_ui_state(
         |ui, s: &mut S| {
-            let id = ui.id().with("menu_scroll");
+            let id = ui.scope_id().with("menu_scroll");
             if s.0 {
                 super::menu_scroll(ui, |ui| {
                     for i in 0..80 {
