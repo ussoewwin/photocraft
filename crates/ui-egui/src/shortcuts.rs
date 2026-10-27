@@ -1040,10 +1040,7 @@ mod tests {
 
     fn press_key(app: &mut PhotocraftApp, ctx: &egui::Context, key: Key, modifiers: Modifiers) {
         ctx.begin_pass(egui::RawInput {
-            events: vec![
-                egui::Event::ModifiersChanged(modifiers),
-                egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers },
-            ],
+            events: vec![egui::Event::ModifiersChanged(modifiers), egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers }],
             ..Default::default()
         });
         handle(app, ctx);

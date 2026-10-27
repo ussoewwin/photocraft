@@ -1926,8 +1926,6 @@ pub fn specs() -> Vec<CommandSpec> {
             run: path_to_selection,
             journal: true,
         },
-
-        // Ctrl+Shift+Enter: add the path to the active selection.
         // ⌘⇧↩ / Ctrl+Shift+Enter adds the path to the selection, ⌘⌥↩ / Ctrl+Alt+Enter subtracts it.
         CommandSpec {
             id: "path.addToSelection",
