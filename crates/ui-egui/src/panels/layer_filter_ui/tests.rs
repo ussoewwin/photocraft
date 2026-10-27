@@ -136,16 +136,14 @@ fn the_dropdown_switches_the_panel_between_filter_types() {
     assert_eq!(drawn(&h), ["ink notes"]);
 }
 
-/// A PNG at `<temp>/<name>/art.png` (a folder per test: tests run in parallel).
-fn art_file(name: &str) -> std::path::PathBuf {
-    let d = std::env::temp_dir().join(format!("photocraft-layer-filter-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    let file = d.join("art.png");
+/// Creates a PNG fixture and returns its temporary directory with the file path.
+fn art_file() -> (tempfile::TempDir, std::path::PathBuf) {
+    let directory = tempfile::tempdir().unwrap();
+    let file = directory.path().join("art.png");
     let mut s = photocraft_engine::Session::new();
     s.execute("file.new", json!({"width": 8, "height": 8, "background": "#ff0000"})).unwrap();
     s.execute("file.saveACopy", json!({"path": file.to_string_lossy(), "layers": false})).unwrap();
-    file
+    (directory, file)
 }
 
 /// "Linked art" (linked to `file`) above "Embedded art" (a copy of `file`), "Plain" and
@@ -168,7 +166,7 @@ fn by_smart(smart: &[&str], missing: std::collections::HashSet<String>) -> Filte
 
 #[test]
 fn the_smart_object_filter_lists_linked_missing_and_embedded_smart_objects() {
-    let file = art_file("list");
+    let (_directory, file) = art_file();
     let mut s = smart_session(&file);
     let doc = &s.active().unwrap().doc;
     let none = std::collections::HashSet::new;
@@ -202,7 +200,7 @@ fn saved_settings_without_the_smart_object_toggles_still_load() {
 
 #[test]
 fn the_smart_object_toggles_filter_the_panel() {
-    let file = art_file("panel");
+    let (_directory, file) = art_file();
     let session = smart_session(&file);
     let mut h = Harness::builder().with_size(vec2(1440.0, 900.0)).with_max_steps(64).build_eframe(move |cc| {
         PhotocraftApp::setup_context(&cc.egui_ctx, Default::default());
