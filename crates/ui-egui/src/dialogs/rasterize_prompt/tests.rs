@@ -46,6 +46,8 @@ fn prompt(app: &PhotocraftApp) -> Option<&crate::state::Dialog> {
     app.ui.dialogs.iter().find(|d| owns(&d.fields))
 }
 
+/// #8806: OK on the prompt rasterizes and adds one history state; the held click is not
+/// replayed, and the next click paints with no prompt.
 #[test]
 fn ok_rasterizes_without_replaying_the_click() {
     for kind in Kind::ALL {
@@ -131,6 +133,8 @@ fn only_pixel_painting_asks() {
     assert!(app.session.active().unwrap().doc.layers.iter().any(|l| matches!(l.content, LayerContent::Text(_))));
 }
 
+/// A prompt with missing, stale or malformed fields returns an error instead of panicking; a
+/// bad tool or point still just rasterizes.
 #[test]
 fn a_stale_or_bad_prompt_fails_gracefully() {
     let mut app = app_with(Kind::Type);
