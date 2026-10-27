@@ -1598,3 +1598,52 @@ fn replace_color_localized_color_clusters() {
     assert!(px(2)[1] > 0.5, "near the point: shifted to green {:?}", px(2));
     assert!(px(38)[0] > 0.9 && px(38)[1] < 0.1, "far away: still red {:?}", px(38));
 }
+
+/// #9754: exercise the real dropdown, not the selection helper, with every listed extension.
+/// Only the CUBE fixture is parsed here; the other files establish listing eligibility.
+#[test]
+fn color_lookup_folder_menu_click_applies_pixels_and_undoes() {
+    use egui_kittest::Harness;
+    use egui_kittest::kittest::Queryable;
+
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("invert.cube");
+    std::fs::write(&path, "LUT_3D_SIZE 2\n1 1 1\n0 1 1\n1 0 1\n0 0 1\n1 1 0\n0 1 0\n1 0 0\n0 0 0\n").unwrap();
+    for name in ["listed.3dl", "listed.look"] {
+        std::fs::write(tmp.path().join(name), "listing-only fixture").unwrap();
+    }
+    let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+    app.run("prefs.set", json!({"path": "fileHandling.lutFolder", "value": tmp.path().to_str().unwrap()})).unwrap();
+    app.run("file.new", json!({"width": 4, "height": 4, "background": "#ff0000"})).unwrap();
+    let mut h = Harness::builder().with_size(egui::vec2(900.0, 800.0)).build_ui_state(|ui, app| crate::dialogs::show(app, ui.ctx()), &mut app);
+    PhotocraftApp::setup_context(&h.ctx, crate::theme::ThemeKind::ALL[0]);
+    let id = open(h.state_mut(), "image.adjustments.colorLookup").unwrap();
+    h.run_steps(3);
+    for _ in 0..500 {
+        if crate::adjust_ui::folder_luts(tmp.path().to_str().unwrap(), &h.ctx).len() == 3 {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        h.run_steps(1);
+    }
+    h.get_by_role_and_label(egui::accesskit::Role::ComboBox, "Lut").click();
+    h.run_steps(2);
+    let _ = h.get_by_label("listed.3dl");
+    let _ = h.get_by_label("listed.look");
+    h.get_by_label("invert.cube").click();
+    h.run_steps(3);
+    let f = h.state_mut().ui.dialog_mut(id).unwrap().fields.clone();
+    assert_eq!(f["file"], json!(path.to_str().unwrap()));
+    assert_eq!(f["lut"], json!("none"));
+    let submitted = params_of(&f);
+    assert!(!submitted.as_object().unwrap().keys().any(|key| key.starts_with("__")));
+    crate::dialogs::confirm(h.state_mut(), id).unwrap();
+    let pixel = |app: &PhotocraftApp| app.session.active().unwrap().doc.layers[0].surface().unwrap().read_region(photocraft_geom::Rect::new(0, 0, 1, 1));
+    let cyan = pixel(h.state());
+    assert!(cyan[0] < 0.01 && cyan[1] > 0.99 && cyan[2] > 0.99, "selected nonidentity LUT applied: {cyan:?}");
+    h.state_mut().run("edit.undo", json!({})).unwrap();
+    let red = pixel(h.state());
+    assert!(red[0] > 0.99 && red[1] < 0.01 && red[2] < 0.01, "Undo restores pixels: {red:?}");
+    h.state_mut().run("edit.redo", json!({})).unwrap();
+    assert_eq!(pixel(h.state()), cyan);
+}
