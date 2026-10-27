@@ -435,6 +435,8 @@ fn marquee_dragged_past_the_canvas_stops_at_its_edge() {
 
 #[test]
 fn subtract_clears_selection_when_only_disjoint_off_canvas_pixels_remain() {
+    use photocraft_geom::Rect;
+    use photocraft_raster::Surface;
     let mut s = session_with_doc(); // 64 × 48
     let mut selection = Surface::new(photocraft_color::PixelFormat::GRAY8);
     // Simulate a moved sparse selection: one remnant on either side of the canvas and one
@@ -452,6 +454,7 @@ fn subtract_clears_selection_when_only_disjoint_off_canvas_pixels_remain() {
 
 #[test]
 fn subtract_clears_selection_with_nonzero_default_when_canvas_is_empty() {
+    use photocraft_raster::Surface;
     let mut s = session_with_doc();
     s.active_mut().unwrap().doc.selection = Some(Surface::with_default(photocraft_color::PixelFormat::GRAY8, &[1.0]));
     s.execute("select.rect", json!({"x": 0, "y": 0, "width": 64, "height": 48, "mode": "subtract"})).unwrap();
