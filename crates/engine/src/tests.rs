@@ -507,6 +507,41 @@ fn undo_and_redo_restore_the_targeted_layers() {
 }
 
 #[test]
+fn selection_inverse_preserves_coverage_history_and_empty_selection() {
+    for depth in [8, 16, 32] {
+        let mut s = Session::new();
+        s.execute("file.new", json!({"width": 530, "height": 270, "depth": depth})).unwrap();
+        s.execute("select.rect", json!({"x": 250, "y": 10, "width": 30, "height": 30, "ellipse": true})).unwrap();
+        let before = s.active().unwrap().doc.clone();
+        let area = before.bounds();
+        let original = before.selection.as_ref().unwrap().to_interleaved(area);
+        s.execute("select.inverse", json!({})).unwrap();
+        let after = s.active().unwrap();
+        let inverted = after.doc.selection.as_ref().unwrap();
+        assert_eq!(inverted.to_interleaved(area), original.iter().map(|b| 255 - b).collect::<Vec<_>>());
+        assert_eq!(inverted.sample_channel(530, 269, 0), 0.0);
+        assert_eq!(inverted.sample_channel(529, 270, 0), 0.0);
+        assert_eq!(after.last_damage, Some(photocraft_geom::Rect::EMPTY));
+        assert_eq!(before.selection.as_ref().unwrap().to_interleaved(area), original);
+        assert!(s.undo());
+        assert_eq!(s.active().unwrap().doc.selection.as_ref().unwrap().to_interleaved(area), original);
+        assert!(s.redo());
+        s.execute("select.inverse", json!({})).unwrap();
+        assert_eq!(s.active().unwrap().doc.selection.as_ref().unwrap().to_interleaved(area), original);
+
+        s.execute("select.all", json!({})).unwrap();
+        s.execute("select.inverse", json!({})).unwrap();
+        let empty = s.active().unwrap().doc.selection.as_ref().unwrap();
+        assert_eq!(empty.tile_count(), 0);
+        // Keep Some(empty), as before: the next Inverse selects the whole canvas again.
+        s.execute("select.inverse", json!({})).unwrap();
+        assert_eq!(s.active().unwrap().doc.selection.as_ref().unwrap().content_bounds(), area);
+    }
+    let mut s = Session::new();
+    assert!(s.execute("select.inverse", json!({})).is_err());
+}
+
+#[test]
 fn selection_modes() {
     let mut s = session_with_doc();
     s.execute("select.rect", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
