@@ -372,6 +372,27 @@ mod tests {
     }
 
     #[test]
+    fn a_scan_finished_after_close_cannot_change_a_reopened_document() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("art.png");
+        let saved = directory.path().join("doc.pcraft");
+        std::fs::write(&path, png(10, 10, "#ff0000")).unwrap();
+        let (mut s, layer) = placed(&path);
+        s.execute("file.saveACopy", json!({"path": saved.to_string_lossy()})).unwrap();
+        let id = s.active().unwrap().doc.id;
+        let stored = super::linked_files(&s.active().unwrap().doc)[0].0.clone();
+        let scan = std::sync::Arc::new(std::sync::Mutex::new(None));
+        s.link_scan = Some(scan.clone());
+        s.close(0);
+        let bytes = std::fs::read(&saved).unwrap();
+        crate::file_cmds::open_bytes_as(&mut s, "doc.pcraft", &bytes, None, Some(saved.to_string_lossy().into_owned())).unwrap();
+        assert_eq!(s.active().unwrap().doc.id, id);
+        *scan.lock().unwrap() = Some((id.0, vec![(stored, vec![layer], None)]));
+        assert!(s.poll_link_scan().is_none());
+        assert!(s.missing_links().is_empty());
+    }
+
+    #[test]
     fn a_background_look_updates_changed_files() {
         let d = dir("scan");
         let path = d.join("art.png");
