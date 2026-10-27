@@ -49,6 +49,19 @@ pub fn gray_target(p: &Value) -> Option<GraySurface> {
     }
 }
 
+/// The target is a spot channel: it stores ink but takes tone, as it reads.
+pub(crate) fn is_spot_target(doc: &Document, p: &Value) -> bool {
+    matches!(target_of(p), Target::Alpha(i) if doc.channels.get(i).is_some_and(|c| c.spot.is_some()))
+}
+
+/// Inverts `r` of a channel surface (ink to tone and back).
+pub(crate) fn invert_region(s: &mut Surface, r: Rect) -> Result<()> {
+    let mut v = crate::allocation::read_region(s, r, "inverting a channel")?;
+    v.iter_mut().for_each(|x| *x = 1.0 - *x);
+    s.try_write_region(r, &v)?;
+    Ok(())
+}
+
 /// The surface a pixel command writes to and whether the layer's transparency is locked.
 pub(crate) fn target_surface<'a>(doc: &'a mut Document, layer: Option<LayerId>, p: &Value) -> Result<(&'a mut Surface, bool)> {
     match target_of(p) {

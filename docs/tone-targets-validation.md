@@ -82,6 +82,19 @@ Validation on Linux with `PHOTOCRAFT_FULL_SWEEP=1` and CI's pinned craft-fonts i
 
 Current logs, preservation comparisons, review notes, screenshot scripts and captures are retained in `plan/merge-main-20261027/` (gitignored).
 
+## Further main integration (2026-10-27)
+
+Current main integrated: `dacecbfea` (PhotoCraft 0.16.0; 220 incoming commits since the previous integration). The sole conflict was adjacent helper insertions in `cmd/channel_cmds/targeting.rs`: our gray-target discriminator and upstream's new spot-channel helpers are both retained unchanged. Automatic merges preserve the explicit-target resolver exports, grayscale adjustment routing and upstream channel/history changes. No intended behavior or imaging algorithm change in the conflict resolution.
+
+Validation on Linux with `PHOTOCRAFT_FULL_SWEEP=1` and CI's pinned craft-fonts input:
+
+- Full engine/UI `cargo test`: **6,856 passed, 0 failed, 39 normally ignored**, including doctest builds. The ignored full-registry adversarial command test passed separately.
+- Strict engine/UI all-target Clippy (`-D warnings`), formatting, layering and wasm passed. `cargo xtask test-corpus --changed` correctly skipped because no corpus-critical paths differ from integrated main.
+- Existing regressions and their target/source preservation checks remain intact. Fresh offscreen Levels/Curves captures for `Saved sky` and `Sky Filter Mask` were inspected. The final scoped integration review found no further actionable issues.
+- Historical benchmarks and broader workspace results remain dated; they were not repeated for this helper-insertion merge. No fresh latency or Windows/macOS claim is made.
+
+Current evidence is retained in `plan/merge-main-20261027b/` (gitignored).
+
 ## 24 MP release comparison
 
 Dense synthetic 6000 × 4000 RGB8 raster layer, raster mask, saved alpha channel and Quick Mask, each filled with 25% gray. The central selection is a 3000 × 2000 rectangle at 0.5 coverage. Proxy factor 4 (1500 × 1000). AMD Ryzen 7 9700X, 16 logical CPUs, Ubuntu 26.04.1, Rust 1.99.0, default optimized release profile (thin LTO).
