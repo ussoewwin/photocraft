@@ -103,7 +103,7 @@ fn cropped_commands_match_full_canvas_reads_padding_and_writeback() {
 #[test]
 fn cropped_blurs_preserve_soft_masks_at_every_depth() {
     for depth in [SampleType::U8, SampleType::U16, SampleType::F32] {
-        let format = PixelFormat { mode: ColorMode::Gray, sample: depth, alpha: false };
+        let format = PixelFormat { sample: depth, ..PixelFormat::GRAY8 };
         for default in [0.0, 0.25] {
             let mut selection = Surface::with_default(format, &[default]);
             for y in 21..39 {
