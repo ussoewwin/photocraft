@@ -7,8 +7,10 @@
 //! buffer is sparse and compositing always starts from the pre-stroke pixels, strokes can be fed in
 //! chunks and re-composited incrementally for interactive painting (see [`StrokeRenderer`]).
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::sync::Arc;
+
+use rustc_hash::FxHashMap;
 
 use photocraft_color::{BlendMode, ColorMode, PixelFormat, SampleType};
 use photocraft_geom::Rect;
@@ -475,10 +477,28 @@ struct CovTile {
     col: Vec<f32>,
 }
 
+impl CovTile {
+    fn new() -> Self {
+        Self { cov: vec![0.0; (COV_TILE * COV_TILE) as usize], depth: Vec::new(), col: Vec::new() }
+    }
+}
+
+/// Preserve both signed coordinates without collisions. FxHash mixes the packed word so
+/// horizontal and vertical runs both distribute across the table's buckets.
+#[inline]
+fn tile_key((tx, ty): (i32, i32)) -> u64 {
+    (u64::from(tx as u32) << 32) | u64::from(ty as u32)
+}
+
+#[inline]
+fn tile_coords(key: u64) -> (i32, i32) {
+    ((key >> 32) as i32, key as i32)
+}
+
 /// A sparse tiled coverage (+ optional colour) buffer.
 #[derive(Clone, Debug, Default)]
 pub struct CoverageMap {
-    tiles: HashMap<(i32, i32), CovTile>,
+    tiles: FxHashMap<u64, CovTile>,
     nc: usize,
     bounds: Rect,
     dirty: HashSet<(i32, i32)>,
@@ -494,14 +514,14 @@ impl CoverageMap {
     #[inline]
     pub fn get(&self, x: i32, y: i32) -> f32 {
         let (tx, ty) = (x.div_euclid(COV_TILE), y.div_euclid(COV_TILE));
-        self.tiles.get(&(tx, ty)).map_or(0.0, |t| t.cov[((y - ty * COV_TILE) * COV_TILE + (x - tx * COV_TILE)) as usize])
+        self.tiles.get(&tile_key((tx, ty))).map_or(0.0, |t| t.cov[((y - ty * COV_TILE) * COV_TILE + (x - tx * COV_TILE)) as usize])
     }
 
     /// Wet Edges depth at a pixel (see [`CovTile::depth`]); `None` when the stroke has none.
     #[inline]
     pub fn depth(&self, x: i32, y: i32) -> Option<f32> {
         let (tx, ty) = (x.div_euclid(COV_TILE), y.div_euclid(COV_TILE));
-        self.tiles.get(&(tx, ty)).and_then(|t| t.depth.get(((y - ty * COV_TILE) * COV_TILE + (x - tx * COV_TILE)) as usize).copied())
+        self.tiles.get(&tile_key((tx, ty))).and_then(|t| t.depth.get(((y - ty * COV_TILE) * COV_TILE + (x - tx * COV_TILE)) as usize).copied())
     }
 
     /// Accumulate dab values over `rect`: flow builds up towards the dab's opacity ceiling
@@ -517,61 +537,56 @@ impl CoverageMap {
         let (t0x, t0y) = (rect.x0.div_euclid(COV_TILE), rect.y0.div_euclid(COV_TILE));
         let (t1x, t1y) = ((rect.x1 - 1).div_euclid(COV_TILE), (rect.y1 - 1).div_euclid(COV_TILE));
         let want_col = color.is_some() && nc > 0;
-        // The tiles this dab touches (a tile with no value in it is skipped), each independent of
-        // the others: a large dab's tiles accumulate in parallel, to the same values.
-        let mut keys: Vec<((i32, i32), Rect)> = Vec::new();
-        for ty in t0y..=t1y {
-            for tx in t0x..=t1x {
+        let dab = DabValues { vals, rect, w, ceil, color: if want_col { color } else { None }, depth, nc };
+        // Iterate directly for small dabs: no work-list allocations or removing existing tiles.
+        let keys = (t0y..=t1y).flat_map(|ty| {
+            (t0x..=t1x).map(move |tx| {
                 let tr = Rect::new(tx * COV_TILE, ty * COV_TILE, (tx + 1) * COV_TILE, (ty + 1) * COV_TILE).intersect(&rect);
-                if tr.is_empty() {
-                    continue;
-                }
-                keys.push(((tx, ty), tr));
-            }
-        }
-        let touched = map_items(&keys, keys.len() * (COV_TILE * COV_TILE) as usize, |(_, tr)| {
-            (tr.y0..tr.y1).any(|y| {
-                let row = (y - rect.y0) as usize * w;
-                vals[row + (tr.x0 - rect.x0) as usize..row + (tr.x1 - rect.x0) as usize].iter().any(|&v| v > 0.0)
+                ((tx, ty), tr)
             })
         });
-        // The touched tiles leave the map while they accumulate and go back after: the dab's cost
-        // follows the tiles under it (one to four for a small tip), not the size of the map, which a
-        // long stroke grows to thousands of tiles.
-        let n = (COV_TILE * COV_TILE) as usize;
-        let mut tiles: Vec<(Rect, (i32, i32), CovTile)> = keys
-            .into_iter()
-            .zip(touched)
-            .filter(|(_, t)| *t)
-            .map(|((key, tr), _)| {
-                let mut tile = self.tiles.remove(&key).unwrap_or_else(|| CovTile { cov: vec![0.0; n], depth: Vec::new(), col: Vec::new() });
-                if want_col && tile.col.is_empty() {
-                    tile.col = vec![0.0; n * nc];
-                }
-                if depth.is_some() && tile.depth.is_empty() {
-                    tile.depth = vec![0.0; n];
-                }
-                self.dirty.insert(key);
-                (tr, key, tile)
-            })
-            .collect();
-        let dab = DabValues { vals, rect, w, ceil, color: if want_col { color } else { None }, depth, nc };
-        // The serial path stays a plain loop over an inlined step (see `rasterize_round`).
         #[cfg(not(target_arch = "wasm32"))]
-        if parallel(tiles.len() * n) {
-            use rayon::prelude::*;
-            tiles.par_iter_mut().for_each(|(tr, key, tile)| dab.tile(*tr, *key, tile));
-        } else {
-            for (tr, key, tile) in &mut tiles {
-                dab.tile(*tr, *key, tile);
+        {
+            let n = (COV_TILE * COV_TILE) as usize;
+            let count = (i64::from(t1x) - i64::from(t0x) + 1) as usize;
+            let count = count.saturating_mul((i64::from(t1y) - i64::from(t0y) + 1) as usize);
+            if parallel(count.saturating_mul(n)) {
+                let keys: Vec<_> = keys.collect();
+                let touched = map_items(&keys, count.saturating_mul(n), |(_, tr)| dab.touches(*tr));
+                let keys: Vec<_> = keys.into_iter().zip(touched).filter_map(|(key, touched)| touched.then_some(key)).collect();
+                if parallel(keys.len().saturating_mul(n)) {
+                    use rayon::prelude::*;
+                    // Only genuinely parallel work takes ownership of tiles out of the map.
+                    let mut tiles: Vec<_> = keys
+                        .into_iter()
+                        .map(|(key, tr)| {
+                            self.dirty.insert(key);
+                            let tile = self.tiles.remove(&tile_key(key)).unwrap_or_else(CovTile::new);
+                            (key, tr, tile)
+                        })
+                        .collect();
+                    tiles.par_iter_mut().for_each(|(key, tr, tile)| {
+                        dab.prepare(tile);
+                        dab.tile(*tr, *key, tile);
+                    });
+                    for (key, _, tile) in tiles {
+                        self.tiles.insert(tile_key(key), tile);
+                    }
+                } else {
+                    self.accumulate_serial(keys.into_iter(), dab);
+                }
+                return;
             }
         }
-        #[cfg(target_arch = "wasm32")]
-        for (tr, key, tile) in &mut tiles {
-            dab.tile(*tr, *key, tile);
-        }
-        for (_, key, tile) in tiles {
-            self.tiles.insert(key, tile);
+        self.accumulate_serial(keys.filter(|(_, tr)| dab.touches(*tr)), dab);
+    }
+
+    fn accumulate_serial(&mut self, keys: impl Iterator<Item = ((i32, i32), Rect)>, dab: DabValues<'_>) {
+        for (key, tr) in keys {
+            let tile = self.tiles.entry(tile_key(key)).or_insert_with(CovTile::new);
+            dab.prepare(tile);
+            dab.tile(tr, key, tile);
+            self.dirty.insert(key);
         }
     }
 
@@ -584,7 +599,7 @@ impl CoverageMap {
     /// The finished coverage over the tiles `keys`: `tail`'s copy of a tile where finishing the
     /// stroke changes it (see [`StrokeRenderer::tail_preview`]), else this map's own.
     fn finished_subset(&self, tail: Option<&Self>, keys: &HashSet<(i32, i32)>) -> Self {
-        let tile = |k: &(i32, i32)| tail.and_then(|t| t.tiles.get(k)).or_else(|| self.tiles.get(k)).map(|t| (*k, t.clone()));
+        let tile = |k: &(i32, i32)| tail.and_then(|t| t.tiles.get(&tile_key(*k))).or_else(|| self.tiles.get(&tile_key(*k))).map(|t| (tile_key(*k), t.clone()));
         Self { tiles: keys.iter().filter_map(tile).collect(), nc: self.nc, bounds: tail.map_or(self.bounds, |t| t.bounds), dirty: HashSet::new() }
     }
 
@@ -595,7 +610,7 @@ impl CoverageMap {
         for (&key, source) in &other.tiles {
             let Some(target) = self.tiles.get_mut(&key) else {
                 self.tiles.insert(key, source.clone());
-                self.dirty.insert(key);
+                self.dirty.insert(tile_coords(key));
                 continue;
             };
             if target.depth.is_empty() {
@@ -615,7 +630,7 @@ impl CoverageMap {
                     }
                 }
             }
-            self.dirty.insert(key);
+            self.dirty.insert(tile_coords(key));
         }
     }
 }
@@ -654,6 +669,23 @@ struct DabValues<'a> {
 }
 
 impl DabValues<'_> {
+    fn touches(self, tr: Rect) -> bool {
+        (tr.y0..tr.y1).any(|y| {
+            let row = (y - self.rect.y0) as usize * self.w;
+            self.vals[row + (tr.x0 - self.rect.x0) as usize..row + (tr.x1 - self.rect.x0) as usize].iter().any(|&v| v > 0.0)
+        })
+    }
+
+    fn prepare(self, tile: &mut CovTile) {
+        let n = (COV_TILE * COV_TILE) as usize;
+        if self.color.is_some() && tile.col.is_empty() {
+            tile.col = vec![0.0; n * self.nc];
+        }
+        if self.depth.is_some() && tile.depth.is_empty() {
+            tile.depth = vec![0.0; n];
+        }
+    }
+
     /// Adds the dab over `tr` (within tile `(tx, ty)`) to `tile`.
     #[inline(always)]
     fn tile(self, tr: Rect, (tx, ty): (i32, i32), tile: &mut CovTile) {
@@ -756,9 +788,9 @@ impl StrokeRenderer {
 
     /// Every coverage tile (stroke and Dual Brush), into `keys`.
     fn keys_into(&self, keys: &mut HashSet<(i32, i32)>) {
-        keys.extend(self.cov.tiles.keys());
+        keys.extend(self.cov.tiles.keys().copied().map(tile_coords));
         if let Some(d) = &self.dual {
-            keys.extend(d.tiles.keys());
+            keys.extend(d.tiles.keys().copied().map(tile_coords));
         }
     }
 
@@ -835,7 +867,7 @@ impl StrokeRenderer {
                 target.write_region(old, &region);
                 dmg = dmg.union(&old);
             }
-            if merged.cov.tiles.contains_key(&(tx, ty)) {
+            if merged.cov.tiles.contains_key(&tile_key((tx, ty))) {
                 dmg = dmg.union(&tile.intersect(&after));
             }
         }
@@ -974,7 +1006,7 @@ impl StrokeRenderer {
             }
         }
         let subset = |m: &CoverageMap| CoverageMap {
-            tiles: keys.iter().filter_map(|k| m.tiles.get(k).map(|t| (*k, t.clone()))).collect(),
+            tiles: keys.iter().filter_map(|k| m.tiles.get(&tile_key(*k)).map(|t| (tile_key(*k), t.clone()))).collect(),
             nc: m.nc,
             bounds: m.bounds,
             dirty: HashSet::new(),
@@ -996,7 +1028,7 @@ impl StrokeRenderer {
         };
         t.raster_pending();
         // Tiles whose coverage the tail doesn't change still composite the same: redraw them all.
-        t.cov.dirty.extend(t.cov.tiles.keys().copied());
+        t.cov.dirty.extend(t.cov.tiles.keys().copied().map(tile_coords));
         Some(t)
     }
 
@@ -1007,7 +1039,7 @@ impl StrokeRenderer {
         }
         for ty in r.y0.div_euclid(COV_TILE)..=(r.y1 - 1).div_euclid(COV_TILE) {
             for tx in r.x0.div_euclid(COV_TILE)..=(r.x1 - 1).div_euclid(COV_TILE) {
-                if self.cov.tiles.contains_key(&(tx, ty)) {
+                if self.cov.tiles.contains_key(&tile_key((tx, ty))) {
                     self.cov.dirty.insert((tx, ty));
                 }
             }
@@ -1049,7 +1081,8 @@ impl StrokeRenderer {
         let b = self.bounds();
         let w = b.width() as usize;
         let mut out = vec![0.0f32; w * b.height() as usize];
-        for (&(tx, ty), t) in &self.cov.tiles {
+        for (&key, t) in &self.cov.tiles {
+            let (tx, ty) = tile_coords(key);
             let tr = Rect::new(tx * COV_TILE, ty * COV_TILE, (tx + 1) * COV_TILE, (ty + 1) * COV_TILE).intersect(&b);
             for y in tr.y0..tr.y1 {
                 for x in tr.x0..tr.x1 {
@@ -1072,7 +1105,7 @@ impl StrokeRenderer {
     pub fn composite(&mut self, pre: &Surface, target: &mut Surface, selection: Option<&Surface>, lock_transparency: bool, all: bool) -> Rect {
         let keys: Vec<(i32, i32)> = if all {
             self.cov.dirty.clear();
-            let mut k: Vec<_> = self.cov.tiles.keys().copied().collect();
+            let mut k: Vec<_> = self.cov.tiles.keys().copied().map(tile_coords).collect();
             k.sort_unstable();
             k
         } else {
@@ -1118,7 +1151,7 @@ impl StrokeRenderer {
             let mut items: Vec<((i32, i32), Rect, Vec<f32>)> = batch.iter().map(|&key| (key, Rect::EMPTY, pool.pop().unwrap_or_default())).collect();
             let composite_tile = |(key, done, region): &mut ((i32, i32), Rect, Vec<f32>)| {
                 let (tx, ty) = *key;
-                let Some(tile) = self.cov.tiles.get(&(tx, ty)) else { return };
+                let Some(tile) = self.cov.tiles.get(&tile_key((tx, ty))) else { return };
                 let tr = Rect::new(tx * COV_TILE, ty * COV_TILE, (tx + 1) * COV_TILE, (ty + 1) * COV_TILE).intersect(&bounds);
                 if tr.is_empty() {
                     return;
@@ -1294,3 +1327,6 @@ impl RoundTip {
 
 #[cfg(test)]
 mod reference;
+
+#[cfg(test)]
+mod coverage_tests;
