@@ -108,7 +108,13 @@ pub(crate) fn display_doc(app: &mut PhotocraftApp, idx: usize) -> Option<(Arc<Do
         return None;
     };
     let dialog = d.id;
+    let opened_on = d.fields.get("__document").and_then(Value::as_u64);
     let st = app.session.documents().get(idx)?;
+    // Another document became active while the picker was open: its layer ids mean nothing here.
+    if opened_on.is_some_and(|id| id != st.doc.id.0) {
+        forget_shown(app);
+        return None;
+    }
     let (document, revision) = (st.doc.id, st.revision);
     let layers = target_layers(&params);
     let key = (egui::Id::unique((document.0, revision, dialog, params.to_string())).value() & (TAG - 1)) | TAG;

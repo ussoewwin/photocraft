@@ -291,3 +291,25 @@ fn ok_commits_the_previewed_gradient_stop_in_one_history_step() {
     assert_eq!(stop_rgb(&doc, id, 1), [0, 255, 0]);
     assert_eq!(committed(&app).3, history + 1);
 }
+
+#[test]
+fn the_preview_never_shows_on_a_document_switched_to_while_the_picker_is_open() {
+    let mut app = app_at(8);
+    let id = new_type_layer(&mut app, "Hello");
+    pick(&mut app, "#ff0000");
+    assert!(display_doc(&mut app, 0).is_some());
+
+    // A second document becomes the active tab, with a type layer that may share the id.
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let other = new_type_layer(&mut app, "Other");
+    let idx = app.session.active_index().unwrap();
+    assert_ne!(idx, 0);
+    assert!(display_doc(&mut app, idx).is_none(), "the picker belongs to the first document");
+    assert!(display_doc(&mut app, 0).is_none(), "an inactive tab shows no dialog preview");
+    assert_eq!(rgb_at(&app.session.active().unwrap().doc, other, 0), [0, 0, 0, 255]);
+
+    // Back on the document it was opened on, the preview returns.
+    assert!(app.session.set_active(0));
+    let (shown, _) = display_doc(&mut app, 0).expect("preview on its own document");
+    assert_eq!(rgb_at(&shown, id, 0), [255, 0, 0, 255]);
+}
