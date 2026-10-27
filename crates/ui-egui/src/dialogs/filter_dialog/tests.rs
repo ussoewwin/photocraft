@@ -467,6 +467,49 @@ fn indexed_counts_are_integer_json_while_dither_amounts_keep_their_decimals() {
 /// #7400: Lens Blur's Source lists the document's alpha channels, by name, each choosable even
 /// when two share a name; `depthChannel` is set through that menu, not shown as a field, and
 /// like the other references it isn't remembered, so a remembered `channel` source opens as None.
+/// #9754: Image › Adjustments › Color Lookup lists the LUT folder's files, and one picked from
+/// it is applied through `file`.
+#[test]
+fn color_lookup_dialog_lists_and_applies_lut_folder_files() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("film.cube");
+    std::fs::write(&path, "LUT_3D_SIZE 2\n0 0 0\n1 0 0\n0 1 0\n1 1 0\n0 0 1\n1 0 1\n0 1 1\n1 1 1\n").unwrap();
+    let path = path.to_str().unwrap().to_string();
+    let key = format!("{}{path}", crate::adjust_ui::FOLDER_LUT);
+    let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+    app.run("prefs.set", json!({"path": "fileHandling.lutFolder", "value": tmp.path().to_str().unwrap()})).unwrap();
+    app.run("file.new", json!({"width": 16, "height": 12})).unwrap();
+    let id = open(&mut app, COLOR_LOOKUP).unwrap();
+    let mut f = app.ui.dialog_mut(id).unwrap().fields.clone();
+    assert_eq!(f[LUT_FOLDER], json!(tmp.path().to_str().unwrap()));
+    // The menu's folder scan runs on a worker thread: draw until it has finished.
+    let ctx = egui::Context::default();
+    for _ in 0..500 {
+        if !crate::adjust_ui::folder_luts(tmp.path().to_str().unwrap(), &ctx).is_empty() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert_eq!(crate::adjust_ui::folder_luts(tmp.path().to_str().unwrap(), &ctx), [("film.cube".to_string(), path.clone())]);
+
+    // Picking the folder file: `file` is set and `lut` stays a valid built-in value.
+    let lut = pick_folder_lut(&mut f, key.clone(), false);
+    f.insert("lut".into(), json!(lut));
+    assert_eq!((&f["lut"], &f["file"]), (&json!("none"), &json!(path)));
+    // Drawn again, the menu keeps showing it (and so keeps it).
+    ctx.run_ui(Default::default(), |ui| body(ui, &mut f)).textures_delta.clear();
+    assert_eq!((&f["lut"], &f["file"]), (&json!("none"), &json!(path)));
+    app.run(COLOR_LOOKUP, params_of(&f)).unwrap();
+
+    // Leaving it for a built-in look drops the file, so the look applies.
+    assert_eq!(pick_folder_lut(&mut f, "warm".into(), true), "warm");
+    assert_eq!(f["file"], json!(""));
+    // A path typed into File isn't touched by a built-in pick.
+    f.insert("file".into(), json!(path));
+    assert_eq!(pick_folder_lut(&mut f, "cool".into(), false), "cool");
+    assert_eq!(f["file"], json!(path));
+}
+
 #[test]
 fn lens_blur_source_lists_the_alpha_channels() {
     let spec = photocraft_engine::commands::find(LENS_BLUR).unwrap().params;
