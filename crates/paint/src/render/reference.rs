@@ -1,6 +1,7 @@
 //! Frozen scalar rasterizer used only as a pixel oracle for the computed-tip fast path.
 use super::*;
 use crate::tile::GrayTile;
+use crate::{soft_exp, tip_reach, tip_shape};
 use photocraft_geom::Point;
 
 impl BrushContext {
@@ -239,6 +240,61 @@ fn computed_tips_match_at_pixel_and_float_boundaries() {
                     d.roundness = 0.375;
                     compare(&ctx, &d, false, ctx.dab_rect(&d, false), false);
                 }
+            }
+        }
+    }
+}
+
+#[test]
+fn cached_profiles_match_scalar_for_small_and_transformed_dabs() {
+    for hardness in [-0.5, 0.0, 0.035, 0.37, 0.95, 1.0, 1.5, f32::NAN, f32::INFINITY] {
+        let ctx = BrushContext::new(&BrushSettings { hardness, ..Default::default() });
+        for radius in [0.5, 1.25, 2.99, 3.0, 7.5, 100.0] {
+            for dual in [false, true] {
+                for with_depth in [false, true] {
+                    for angle in [0.0, 0.7] {
+                        let mut d = Dab::round(Point::new(4.25, -3.75), radius, 0.73);
+                        d.angle = angle;
+                        d.roundness = 0.6;
+                        compare(&ctx, &d, dual, ctx.dab_rect(&d, dual), with_depth);
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Keep the pre-cache scalar coverage equations independent of TipProfile.
+fn tip_falloff(d: f32, radius: f32, hardness: f32) -> f32 {
+    let (r0, s) = tip_shape(radius, hardness);
+    if d <= r0 {
+        return 1.0;
+    }
+    let x = (d - r0) / s;
+    soft_exp(x * x)
+}
+
+fn dab_coverage(d: f32, radius: f32, hardness: f32) -> f32 {
+    // NaN distances paint nothing.
+    if d.is_nan() || d >= tip_reach(radius, hardness) + 0.5 {
+        return 0.0;
+    }
+    tip_falloff(d, radius, hardness)
+}
+
+#[test]
+fn cached_profile_preserves_public_coverage_at_boundaries() {
+    for radius in [-1.0, 0.0, 0.5, 3.0, 100.0, f32::NAN, f32::INFINITY] {
+        for hardness in [-1.0, 0.0, 0.035, 0.37, 1.0, 2.0, f32::NAN, f32::INFINITY] {
+            let profile = TipProfile::new(radius, hardness);
+            let (core, shoulder) = tip_shape(radius, hardness);
+            for d in [-1.0, -0.0, core, core + shoulder, profile.reach(), profile.reach() + 0.5, f32::INFINITY, f32::NEG_INFINITY, f32::NAN] {
+                let expected = dab_coverage(d, radius, hardness);
+                assert_eq!(profile.coverage(d).to_bits(), expected.to_bits());
+                assert_eq!(crate::dab_coverage(d, radius, hardness).to_bits(), expected.to_bits());
+                let expected = tip_falloff(d, radius, hardness);
+                let actual = crate::tip_falloff(d, radius, hardness);
+                assert!(actual.to_bits() == expected.to_bits() || (actual.is_nan() && expected.is_nan()));
             }
         }
     }

@@ -19,7 +19,7 @@ use crate::dynamics::{DabGenerator, grid_cell};
 use crate::retouch::{Footprint, alpha_index, over_native};
 use crate::rng::hash2;
 use crate::tile::{Mips, PatternImage};
-use crate::{Dab, StrokePoint, dab_coverage, tip_falloff, tip_reach};
+use crate::{Dab, StrokePoint, TipProfile};
 
 /// Salt of the 8-bit dither's per-pixel noise.
 const DITHER_SALT: u64 = 0x0000_6469_7468_6572;
@@ -311,7 +311,8 @@ impl BrushContext {
         let r = d.radius;
         let ro = d.roundness.max(0.5 / r).min(1.0);
         let rm = (r * ro).max(0.5);
-        let reach = if aliased || mips.is_some() { rm } else { crate::tip_reach(rm, hardness).max(rm) };
+        let profile = TipProfile::new(rm, hardness);
+        let reach = if aliased || mips.is_some() { rm } else { profile.reach().max(rm) };
         let reach2 = (reach + 0.5) * (reach + 0.5);
         // Sampled-tip mapping.
         let (level, inv_scale, tw, th) = match mips {
@@ -352,7 +353,7 @@ impl BrushContext {
             && d.alpha.is_finite()
             && w > 0
         {
-            rasterize_round(d, rect, out, hardness, aliased);
+            rasterize_round(d, rect, out, profile, aliased);
             return;
         }
         for yy in 0..h {
@@ -382,7 +383,7 @@ impl BrushContext {
                                 let sd = ((su * ro).powi(2) + sv * sv).sqrt();
                                 // Each sample takes the tip's own edge, so the covered area
                                 // changes smoothly with the dab's position.
-                                sum += tip_falloff(sd, rm, hardness);
+                                sum += profile.falloff(sd);
                             }
                         }
                         (sum / (SUBPIXEL.len() * SUBPIXEL.len()) as f32, d2.sqrt() / rm)
@@ -393,7 +394,7 @@ impl BrushContext {
                             continue;
                         }
                         let dd = d2.sqrt();
-                        let val = if aliased { if dd <= rm { 1.0 } else { 0.0 } } else { dab_coverage(dd, rm, hardness) };
+                        let val = if aliased { if dd <= rm { 1.0 } else { 0.0 } } else { profile.coverage(dd) };
                         (val, dd / rm)
                     }
                     Some(m) => {
@@ -1231,7 +1232,7 @@ pub fn render_stroke(
 
 // The zero-angle transform only changes signs; squaring gives the same radial distance.
 #[inline(never)]
-fn rasterize_round(d: &Dab, rect: Rect, out: &mut [f32], hardness: f32, aliased: bool) {
+fn rasterize_round(d: &Dab, rect: Rect, out: &mut [f32], profile: TipProfile, aliased: bool) {
     let (cx, cy) = if aliased { grid_center(d.center.x, d.center.y, 2.0 * d.radius) } else { (d.center.x as f32, d.center.y as f32) };
     let ro = d.roundness.max(0.5 / d.radius).min(1.0);
     let rm = (d.radius * ro).max(0.5);
@@ -1239,8 +1240,8 @@ fn rasterize_round(d: &Dab, rect: Rect, out: &mut [f32], hardness: f32, aliased:
     if w == 0 {
         return;
     }
-    let reach = if aliased { rm } else { tip_reach(rm, hardness).max(rm) };
-    let tip = RoundTip { cx, cy, ro, rm, reach2: (reach + 0.5) * (reach + 0.5), hardness, alpha: d.alpha, aliased, x0: rect.x0, y0: rect.y0 };
+    let reach = if aliased { rm } else { profile.reach().max(rm) };
+    let tip = RoundTip { cx, cy, ro, rm, reach2: (reach + 0.5) * (reach + 0.5), profile, alpha: d.alpha, aliased, x0: rect.x0, y0: rect.y0 };
     // Rows are independent: a large tip's rows run in parallel, to the same values. The serial
     // path stays a plain loop over an inlined row: the same code as before the threads (a closure
     // passed to a helper cost a small tip half its rasterization time).
@@ -1263,7 +1264,7 @@ struct RoundTip {
     ro: f32,
     rm: f32,
     reach2: f32,
-    hardness: f32,
+    profile: TipProfile,
     alpha: f32,
     aliased: bool,
     x0: i32,
@@ -1285,7 +1286,7 @@ impl RoundTip {
             for (xx, dst) in row.iter_mut().enumerate() {
                 let dx = (self.x0 + xx as i32) as f32 + 0.5 - self.cx;
                 let d2 = (dx * self.ro).powi(2) + dy * dy;
-                let val = if d2 >= self.reach2 { 0.0 } else { tip_falloff(d2.sqrt(), self.rm, self.hardness) };
+                let val = if d2 >= self.reach2 { 0.0 } else { self.profile.falloff(d2.sqrt()) };
                 *dst = if val <= 0.0 { 0.0 } else { val * self.alpha };
             }
         }
