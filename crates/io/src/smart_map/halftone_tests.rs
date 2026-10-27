@@ -1,4 +1,5 @@
 //! Halftone Pattern descriptors measured in Photoshop 27.11.0 (#8940).
+use super::import::{GALLERY_CLASS, GALLERY_COMMAND, colour_rgbc};
 use super::*;
 
 /// Builds an editable Halftone Pattern filter with explicit foreground/background colours.
