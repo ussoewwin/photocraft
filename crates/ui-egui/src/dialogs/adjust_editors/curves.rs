@@ -245,102 +245,6 @@ fn curves_mode_row(ui: &mut egui::Ui, v: &mut Value, key: &str, gray: bool) -> E
     e
 }
 
-#[cfg(test)]
-mod polyline_tests {
-    use super::*;
-
-    #[test]
-    fn curve_polyline_reuses_static_geometry_and_refreshes_edits_and_rect() {
-        let mut cache = CurvePolyline::default();
-        let mut points = [[0.0, 0.0], [128.0, 180.0], [255.0, 255.0]];
-        let graph = Rect::from_min_size(pos2(20.0, 30.0), vec2(256.0, 256.0));
-        assert!(cache.update(&points, graph));
-        assert_eq!(cache.line.len(), CURVE_SAMPLES);
-        assert_eq!(cache.line.first(), Some(&graph.left_bottom()));
-        assert_eq!(cache.line.last(), Some(&graph.right_top()));
-        let line = cache.line.clone();
-        assert!(!cache.update(&points, graph));
-        assert_eq!(cache.line, line);
-
-        points[1][1] = 80.0;
-        assert!(cache.update(&points, graph));
-        assert_ne!(cache.line, line);
-        points[1][1] = 180.0; // Undo/preset restore must also invalidate.
-        assert!(cache.update(&points, graph));
-        assert_eq!(cache.line, line);
-
-        let moved = graph.translate(vec2(13.0, 25.0));
-        assert!(cache.update(&points, moved));
-        for (before, after) in line.iter().zip(&cache.line) {
-            assert!((*after - (*before + vec2(13.0, 25.0))).length() < 1e-4);
-        }
-        let resized = Rect::from_min_size(moved.min, vec2(128.0, 180.0));
-        assert!(cache.update(&points, resized));
-        assert_eq!(cache.line.last(), Some(&resized.right_top()));
-        assert!(!cache.update(&points, resized));
-    }
-
-    #[test]
-    fn curve_polyline_memory_is_separate_per_editor_and_channel() {
-        let ctx = egui::Context::default();
-        let graph = Rect::from_min_size(Pos2::ZERO, vec2(256.0, 256.0));
-        let identity = [[0.0, 0.0], [255.0, 255.0]];
-        let inverted = [[0.0, 255.0], [255.0, 0.0]];
-        let editor = egui::Id::new("dialog");
-        let master = editor.with(("curves-polyline", "points"));
-        let red = editor.with(("curves-polyline", "red"));
-        let other_editor = egui::Id::new("properties").with(("curves-polyline", "points"));
-        let line = cached_curve_line(&ctx, master, &identity, graph);
-        assert_ne!(cached_curve_line(&ctx, red, &inverted, graph), line);
-        assert_ne!(cached_curve_line(&ctx, other_editor, &inverted, graph), line);
-        assert_eq!(cached_curve_line(&ctx, master, &identity, graph), line);
-        ctx.data_mut(|d| {
-            assert!(!d.get_temp_mut_or_default::<CurvePolyline>(master).update(&identity, graph));
-            assert!(!d.get_temp_mut_or_default::<CurvePolyline>(red).update(&inverted, graph));
-            assert!(!d.get_temp_mut_or_default::<CurvePolyline>(other_editor).update(&inverted, graph));
-        });
-        assert_ne!(cached_curve_line(&ctx, master, &inverted, graph), line);
-    }
-
-    #[test]
-    #[ignore = "release timing probe; run on GitHub Actions with --release --ignored --nocapture"]
-    fn curve_polyline_release_comparison() {
-        use std::{hint::black_box, time::Instant};
-        let graph = Rect::from_min_size(pos2(20.0, 30.0), vec2(300.0, 300.0));
-        let points = [[0.0, 0.0], [64.0, 48.0], [192.0, 208.0], [255.0, 255.0]];
-        let iterations = 10_000;
-        let start = Instant::now();
-        for _ in 0..iterations {
-            let cp: Vec<_> = black_box(&points).iter().map(|q| photocraft_doc::adjust::CurvePoint { input: q[0] / 255.0, output: q[1] / 255.0 }).collect();
-            let lut = photocraft_compose::adjust::curve_lut(&cp);
-            let line: Vec<_> = lut
-                .iter()
-                .enumerate()
-                .step_by(16)
-                .map(|(i, y)| pos2(graph.left() + i as f32 / 4095.0 * graph.width(), graph.bottom() - y * graph.height()))
-                .collect();
-            black_box(line);
-        }
-        let old = start.elapsed();
-        let start = Instant::now();
-        for _ in 0..iterations {
-            let mut cache = CurvePolyline::default();
-            cache.update(black_box(&points), graph);
-            black_box(cache.line.clone());
-        }
-        let miss = start.elapsed();
-        let ctx = egui::Context::default();
-        let id = egui::Id::new("curve-perf");
-        cached_curve_line(&ctx, id, &points, graph);
-        let start = Instant::now();
-        for _ in 0..iterations {
-            black_box(cached_curve_line(&ctx, id, black_box(&points), graph));
-        }
-        let hit = start.elapsed();
-        println!("{iterations} polylines: old 4096 samples {old:?}; direct 256 samples {miss:?}; cached screen line {hit:?}");
-    }
-}
-
 pub(super) fn curves(ui: &mut egui::Ui, v: &mut Value, cx: &EditorCx) -> Edit {
     let t = Tokens::get(ui.ctx());
     let space = space_of(v);
@@ -514,4 +418,100 @@ pub(super) fn curves(ui: &mut egui::Ui, v: &mut Value, cx: &EditorCx) -> Edit {
         e.changed = true;
     }
     e
+}
+
+#[cfg(test)]
+mod polyline_tests {
+    use super::*;
+
+    #[test]
+    fn curve_polyline_reuses_static_geometry_and_refreshes_edits_and_rect() {
+        let mut cache = CurvePolyline::default();
+        let mut points = [[0.0, 0.0], [128.0, 180.0], [255.0, 255.0]];
+        let graph = Rect::from_min_size(pos2(20.0, 30.0), vec2(256.0, 256.0));
+        assert!(cache.update(&points, graph));
+        assert_eq!(cache.line.len(), CURVE_SAMPLES);
+        assert_eq!(cache.line.first(), Some(&graph.left_bottom()));
+        assert_eq!(cache.line.last(), Some(&graph.right_top()));
+        let line = cache.line.clone();
+        assert!(!cache.update(&points, graph));
+        assert_eq!(cache.line, line);
+
+        points[1][1] = 80.0;
+        assert!(cache.update(&points, graph));
+        assert_ne!(cache.line, line);
+        points[1][1] = 180.0; // Undo/preset restore must also invalidate.
+        assert!(cache.update(&points, graph));
+        assert_eq!(cache.line, line);
+
+        let moved = graph.translate(vec2(13.0, 25.0));
+        assert!(cache.update(&points, moved));
+        for (before, after) in line.iter().zip(&cache.line) {
+            assert!((*after - (*before + vec2(13.0, 25.0))).length() < 1e-4);
+        }
+        let resized = Rect::from_min_size(moved.min, vec2(128.0, 180.0));
+        assert!(cache.update(&points, resized));
+        assert_eq!(cache.line.last(), Some(&resized.right_top()));
+        assert!(!cache.update(&points, resized));
+    }
+
+    #[test]
+    fn curve_polyline_memory_is_separate_per_editor_and_channel() {
+        let ctx = egui::Context::default();
+        let graph = Rect::from_min_size(Pos2::ZERO, vec2(256.0, 256.0));
+        let identity = [[0.0, 0.0], [255.0, 255.0]];
+        let inverted = [[0.0, 255.0], [255.0, 0.0]];
+        let editor = egui::Id::new("dialog");
+        let master = editor.with(("curves-polyline", "points"));
+        let red = editor.with(("curves-polyline", "red"));
+        let other_editor = egui::Id::new("properties").with(("curves-polyline", "points"));
+        let line = cached_curve_line(&ctx, master, &identity, graph);
+        assert_ne!(cached_curve_line(&ctx, red, &inverted, graph), line);
+        assert_ne!(cached_curve_line(&ctx, other_editor, &inverted, graph), line);
+        assert_eq!(cached_curve_line(&ctx, master, &identity, graph), line);
+        ctx.data_mut(|d| {
+            assert!(!d.get_temp_mut_or_default::<CurvePolyline>(master).update(&identity, graph));
+            assert!(!d.get_temp_mut_or_default::<CurvePolyline>(red).update(&inverted, graph));
+            assert!(!d.get_temp_mut_or_default::<CurvePolyline>(other_editor).update(&inverted, graph));
+        });
+        assert_ne!(cached_curve_line(&ctx, master, &inverted, graph), line);
+    }
+
+    #[test]
+    #[ignore = "release timing probe; run on GitHub Actions with --release --ignored --nocapture"]
+    fn curve_polyline_release_comparison() {
+        use std::{hint::black_box, time::Instant};
+        let graph = Rect::from_min_size(pos2(20.0, 30.0), vec2(300.0, 300.0));
+        let points = [[0.0, 0.0], [64.0, 48.0], [192.0, 208.0], [255.0, 255.0]];
+        let iterations = 10_000;
+        let start = Instant::now();
+        for _ in 0..iterations {
+            let cp: Vec<_> = black_box(&points).iter().map(|q| photocraft_doc::adjust::CurvePoint { input: q[0] / 255.0, output: q[1] / 255.0 }).collect();
+            let lut = photocraft_compose::adjust::curve_lut(&cp);
+            let line: Vec<_> = lut
+                .iter()
+                .enumerate()
+                .step_by(16)
+                .map(|(i, y)| pos2(graph.left() + i as f32 / 4095.0 * graph.width(), graph.bottom() - y * graph.height()))
+                .collect();
+            black_box(line);
+        }
+        let old = start.elapsed();
+        let start = Instant::now();
+        for _ in 0..iterations {
+            let mut cache = CurvePolyline::default();
+            cache.update(black_box(&points), graph);
+            black_box(cache.line.clone());
+        }
+        let miss = start.elapsed();
+        let ctx = egui::Context::default();
+        let id = egui::Id::new("curve-perf");
+        cached_curve_line(&ctx, id, &points, graph);
+        let start = Instant::now();
+        for _ in 0..iterations {
+            black_box(cached_curve_line(&ctx, id, black_box(&points), graph));
+        }
+        let hit = start.elapsed();
+        println!("{iterations} polylines: old 4096 samples {old:?}; direct 256 samples {miss:?}; cached screen line {hit:?}");
+    }
 }
