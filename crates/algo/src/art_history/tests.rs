@@ -1,6 +1,65 @@
 use super::*;
 
 #[test]
+fn tolerance_ignores_fully_transparent_samples() {
+    for ch in [2, 4, 5] {
+        for hidden in [1.0, 0.0] {
+            let src = fill(2, 1, ch, |x, _, c| {
+                if c + 1 == ch {
+                    if x == 0 { 1.0 } else { 0.0 }
+                } else if x == 0 {
+                    0.4
+                } else {
+                    hidden
+                }
+            });
+            let before = fill(2, 1, ch, |x, _, c| {
+                if c + 1 == ch {
+                    if x == 0 { 1.0 } else { 0.0 }
+                } else if x == 0 {
+                    0.0
+                } else {
+                    hidden
+                }
+            });
+            let dab = Dab { x: 1.0, y: 0.5, theta: 0.0, radius: 2.0, pressure: 1.0 };
+            for tolerance in [0.6, 0.3] {
+                let mut dest = before.clone();
+                let written = stamp(&mut StampParams {
+                    dest: &mut dest,
+                    dest_w: 2,
+                    dest_h: 1,
+                    dest_origin: (0, 0),
+                    src: &src,
+                    src_w: 2,
+                    src_h: 1,
+                    src_origin: (0, 0),
+                    ch,
+                    dabs: std::slice::from_ref(&dab),
+                    hardness: 1.0,
+                    opacity: 1.0,
+                    flow: 1.0,
+                    tolerance,
+                    tile: 0,
+                    selection: None,
+                    lock_transparent: false,
+                    alpha: Some(ch - 1),
+                })
+                .unwrap();
+                if tolerance == 0.6 {
+                    assert_eq!(written, 0, "channels={ch}, hidden={hidden}");
+                    assert_eq!(dest, before);
+                } else {
+                    assert!(written > 0, "channels={ch}, hidden={hidden}");
+                    assert!((dest[0] - 0.4).abs() < 1e-6);
+                    assert_eq!(&dest[ch..], &before[ch..]);
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn rotated_dabs_preserve_color_at_transparent_edges() {
     for ch in [2, 4, 5] {
         for hidden in [0.0, 1.0] {

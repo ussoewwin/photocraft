@@ -601,6 +601,9 @@ fn dab_mean_diff(p: &StampParams<'_>, dab: &Dab) -> Option<f32> {
             if nch == 0 {
                 continue;
             }
+            if p.alpha.is_some_and(|a| sampled.get(a).is_some_and(|&v| v == 0.0)) {
+                continue;
+            }
             let (mut colour, mut colours, mut alpha) = (0.0f32, 0u32, 0.0f32);
             for i in 0..nch {
                 let Some((&s, &d)) = sampled.get(i).zip(dst.get(i)) else { continue };
