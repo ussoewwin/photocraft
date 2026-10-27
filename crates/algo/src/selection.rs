@@ -134,10 +134,16 @@ pub fn mask_to_surface(m: &[f32], area: Rect) -> Surface {
     surface_from_masks(area, m, None, |_, v| v)
 }
 
+mod combine_mask;
+pub use combine_mask::combine_band;
+
 /// Combines `new` with `old` by `mode`. Returns `None` when nothing is selected.
 pub fn combine(old: Option<&Surface>, new: &[f32], area: Rect, mode: SelectionMode) -> Option<Surface> {
     if area.is_empty() {
         return None;
+    }
+    if old.is_none_or(|s| s.format() == PixelFormat::GRAY8) {
+        return combine_mask::gray8(old, new, area, mode, false);
     }
     // Quantize to the 8-bit grid selections are stored on, so combining a mask with itself is
     // exact. Below half an 8-bit step is nothing.
@@ -381,6 +387,9 @@ pub fn combine_region(old: Option<&Surface>, new: Option<&Region>, mode: Selecti
     let empty = Region { bbox: Rect::EMPTY, mask: Vec::new() };
     let new = new.unwrap_or(&empty);
     let b = new.bbox;
+    if old.is_none_or(|s| s.format() == PixelFormat::GRAY8) {
+        return combine_mask::gray8_bytes(old, &new.mask, b, mode);
+    }
     let prev_u8 = |s: &Surface| -> Vec<u8> {
         let mut v = Vec::new();
         s.read_region_into(b, &mut v);

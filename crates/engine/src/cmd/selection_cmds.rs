@@ -656,16 +656,7 @@ fn polygon_rows(pts: &[(f32, f32)], area: Rect) -> Rect {
 /// whole-canvas combine gives: Replace and Intersect are empty outside the band, and Add and
 /// Subtract keep the old selection there.
 pub(crate) fn combine_band(old: Option<&Surface>, mask: &[f32], band: Rect, m: SelectionMode) -> Option<Surface> {
-    let inside = sel::combine(old, mask, band, m);
-    let Some(old) = old.filter(|_| matches!(m, SelectionMode::Add | SelectionMode::Subtract)) else { return inside };
-    if band.is_empty() {
-        return Some(old.clone());
-    }
-    let values = inside.map_or_else(|| vec![0.0; band.width() as usize * band.height() as usize], |w| w.read_region(band));
-    let mut s = old.clone();
-    s.write_region(band, &values);
-    s.prune();
-    (s.tile_count() > 0).then_some(s)
+    sel::combine_band(old, mask, band, m)
 }
 
 /// Keep dense feather masks local to the drawn shape. Clip before inflating: pixels outside
