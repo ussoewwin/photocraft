@@ -28,8 +28,9 @@ use crate::blocks::num;
 pub(super) const CLASS: &str = "rigidTransform";
 pub(super) const COMMAND: &str = "layer.smartObjects.puppetWarp";
 pub(super) const TEMPLATE_KEY: &str = "__puppetPsd";
-/// Far beyond the few hundred vertices Photoshop's meshes have.
-const MAX_VERTS: usize = 1 << 20;
+/// Far beyond the few hundred vertices Photoshop's meshes have, yet small enough that the
+/// copies a hostile mesh makes (arrays, JSON params, cloned filters) stay bounded.
+const MAX_VERTS: usize = 1 << 16;
 
 fn raw<'a>(d: &'a Descriptor, key: &str) -> Option<&'a [u8]> {
     match d.get(key)? {
