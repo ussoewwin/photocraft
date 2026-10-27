@@ -1850,7 +1850,7 @@
 	Full size tip	სრული ზომის წვერი
 	Gamut warning color	ფერთა გამიდან გასვლის გაფრთხილების ფერი
 	Gamut warning opacity	ფერთა გამიდან გასვლის გაფრთხილების გაუმჭვირვალობა
-	Generator enabled	გენერატორი ჩართულია
+	Enable Generator	გენერატორის ჩართვა
 	Gif	GIF
 	Glossy	პრიალა
 	Grid color	ბადის ფერი
@@ -4362,6 +4362,9 @@ layerLabel	Magenta	მეწამული
 	Dissolve is approximated: it blends without Photoshop's dither.	„გაფანტვა“ მიახლოებითია: შერევა Photoshop-ის დიზერინგის გარეშე ხდება.
 	New Snapshot…	ახალი სნეპშოტი…
 	History Options…	ისტორიის პარამეტრები…
+# History panel › History Options… (#2966)
+	Allow Non-Linear History	არაწრფივი ისტორიის დაშვება
+	Make Layer Visibility Changes Undoable	შრის ხილვადობის ცვლილებებისთვის დაბრუნების ჩართვა
 	Paints from the History panel's source state	ხატავს ისტორიის პანელის წყარო მდგომარეობიდან
 	Sets the source for the history brush	ადგენს ისტორიის ფუნჯის წყაროს
 	Bicubic Automatic	ბიკუბური, ავტომატური
