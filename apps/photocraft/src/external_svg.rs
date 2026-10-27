@@ -25,6 +25,8 @@ mod native {
     const MAX_BYTES: usize = 16 * 1024 * 1024;
     const POLL_INTERVAL: Duration = Duration::from_millis(200);
     const SAVE_SETTLE: Duration = Duration::from_millis(600);
+    /// The file changed while being read. The watcher retries it; it is never shown to the user.
+    const SAVE_IN_PROGRESS: &str = "The SVG is still being saved";
 
     /// Resolve the chosen editor and move conversion, launch and watching off the UI thread.
     pub(super) fn open(editor: ExternalSvgEditor, source: photocraft_ui_egui::ExternalVectorSource) -> Result<Box<dyn ExternalSvgSession>, String> {
@@ -520,7 +522,7 @@ mod native {
         /// Read one settled snapshot, retaining byte limits during concurrent file growth.
         pub(super) fn read(&self, expected: &Stamp) -> Result<Vec<u8>, String> {
             if &self.stamp()? != expected {
-                return Err("The SVG is still being saved".into());
+                return Err(SAVE_IN_PROGRESS.into());
             }
             let mut options = OpenOptions::new();
             options.read(true);
@@ -529,7 +531,7 @@ mod native {
             let metadata = file.metadata().map_err(|e| format!("Cannot inspect the edited SVG handle: {e}"))?;
             ensure_regular(&metadata)?;
             if &Stamp::from_metadata(&metadata)? != expected {
-                return Err("The SVG is still being saved".into());
+                return Err(SAVE_IN_PROGRESS.into());
             }
             let size = usize::try_from(metadata.len()).map_err(|_| "The edited SVG is too large")?;
             let mut bytes = Vec::new();
@@ -540,7 +542,7 @@ mod native {
                 return Err("The edited SVG must contain between 1 byte and 16 MiB".into());
             }
             if bytes.len() != size || &self.stamp()? != expected {
-                return Err("The SVG is still being saved".into());
+                return Err(SAVE_IN_PROGRESS.into());
             }
             Ok(bytes)
         }
@@ -840,18 +842,38 @@ mod native {
                     }
                 }
                 Err(error) => {
-                    last_stamp = None;
-                    if last_error.as_ref() == Some(&error) {
-                        continue;
-                    }
-                    match send.try_send(Err(error.clone())) {
-                        Ok(()) => last_error = Some(error),
-                        Err(TrySendError::Full(_)) => {}
-                        Err(TrySendError::Disconnected(_)) => break,
+                    if !read_failed(error, &mut pending, &mut last_stamp, &mut last_error, &send) {
+                        break;
                     }
                 }
             }
         }
+    }
+
+    /// Handle a failed stamp or read. A save that changed during the read waits to settle
+    /// again without a user-visible error. Other errors are reported once until they change.
+    /// Returns false when the UI has dropped its receiver.
+    fn read_failed(
+        error: String,
+        pending: &mut Option<(Stamp, Instant)>,
+        last_stamp: &mut Option<Stamp>,
+        last_error: &mut Option<String>,
+        send: &SyncSender<Result<ExternalVectorSave, String>>,
+    ) -> bool {
+        *last_stamp = None;
+        if error == SAVE_IN_PROGRESS {
+            *pending = None;
+            return true;
+        }
+        if last_error.as_ref() == Some(&error) {
+            return true;
+        }
+        match send.try_send(Err(error.clone())) {
+            Ok(()) => *last_error = Some(error),
+            Err(TrySendError::Full(_)) => {}
+            Err(TrySendError::Disconnected(_)) => return false,
+        }
+        true
     }
 
     #[cfg(test)]
@@ -1110,7 +1132,6 @@ mod native {
         }
 
         const EMPTY_SAVE: &str = "The edited SVG must contain between 1 byte and 16 MiB";
-        const CHANGING_SAVE: &str = "The SVG is still being saved";
 
         fn update(session: &mut Session, deadline: Instant) -> Result<Vec<u8>, String> {
             loop {
@@ -1129,18 +1150,16 @@ mod native {
                         assert_eq!(bytes, expected, "unexpected SVG save contents");
                         return;
                     }
-                    Err(error) => assert!(matches!(error.as_str(), EMPTY_SAVE | CHANGING_SAVE), "unexpected SVG watcher error: {error}"),
+                    // A save that changes during a read is retried by the watcher, never shown.
+                    Err(error) => assert!(error == EMPTY_SAVE, "unexpected SVG watcher error: {error}"),
                 }
             }
         }
 
         fn expect_empty_error(session: &mut Session, deadline: Instant) {
-            loop {
-                match update(session, deadline) {
-                    Err(error) if error == EMPTY_SAVE => return,
-                    Err(error) if error == CHANGING_SAVE => {}
-                    other => panic!("expected the held-empty SVG error, got {other:?}"),
-                }
+            match update(session, deadline) {
+                Err(error) if error == EMPTY_SAVE => {}
+                other => panic!("expected the held-empty SVG error, got {other:?}"),
             }
         }
 
@@ -1193,7 +1212,7 @@ mod native {
         #[test]
         fn exact_save_wait_skips_only_expected_queued_transient_errors() {
             let bytes = b"<svg>complete</svg>";
-            let mut session = queued_session(vec![Err(EMPTY_SAVE.into()), Err(CHANGING_SAVE.into()), Ok(bytes.to_vec())]);
+            let mut session = queued_session(vec![Err(EMPTY_SAVE.into()), Ok(bytes.to_vec())]);
             expect_saved(&mut session, bytes, Instant::now() + Duration::from_secs(3));
             assert!(session.poll().is_none());
         }
@@ -1203,6 +1222,90 @@ mod native {
         fn exact_save_wait_rejects_unexpected_errors() {
             let mut session = queued_session(vec![Err("Cannot read the edited SVG: permission denied".into()), Ok(b"<svg/>".to_vec())]);
             expect_saved(&mut session, b"<svg/>", Instant::now() + Duration::from_secs(3));
+        }
+
+        #[test]
+        #[should_panic(expected = "unexpected SVG watcher error")]
+        fn exact_save_wait_rejects_a_reported_save_in_progress() {
+            let mut session = queued_session(vec![Err(SAVE_IN_PROGRESS.into()), Ok(b"<svg/>".to_vec())]);
+            expect_saved(&mut session, b"<svg/>", Instant::now() + Duration::from_secs(3));
+        }
+
+        /// A save that changes during a read must settle again without a UI message, while
+        /// other read errors are still reported once and dropped receivers stop the watcher.
+        #[test]
+        fn changing_save_retries_silently_but_other_read_errors_report_once() {
+            let owned = OwnedSvg::create(b"<svg/>").unwrap();
+            let stamp = owned.stamp().unwrap();
+            let (send, updates) = mpsc::sync_channel(2);
+            let mut pending = Some((stamp.clone(), Instant::now()));
+            let mut last_stamp = Some(stamp.clone());
+            let mut last_error = Some(EMPTY_SAVE.to_string());
+            assert!(read_failed(SAVE_IN_PROGRESS.into(), &mut pending, &mut last_stamp, &mut last_error, &send));
+            assert!(pending.is_none(), "the changed save must settle again before it is read");
+            assert!(last_stamp.is_none(), "the next settled stamp must be read");
+            assert_eq!(last_error.as_deref(), Some(EMPTY_SAVE), "a retry neither reports nor forgets the shown error");
+            assert!(updates.try_recv().is_err(), "a save in progress is not a user-visible error");
+
+            let denied = "Cannot read the edited SVG: permission denied".to_string();
+            pending = Some((stamp.clone(), Instant::now()));
+            assert!(read_failed(denied.clone(), &mut pending, &mut last_stamp, &mut last_error, &send));
+            assert!(pending.is_some(), "other read errors keep their existing settle state");
+            assert_eq!(updates.try_recv().unwrap().unwrap_err(), denied);
+            assert!(read_failed(denied.clone(), &mut pending, &mut last_stamp, &mut last_error, &send));
+            assert!(updates.try_recv().is_err(), "a repeated error is reported once");
+
+            let full = || Ok(ExternalVectorSave { bytes: b"<svg/>".to_vec(), preview_svg: None });
+            send.try_send(full()).unwrap();
+            send.try_send(full()).unwrap();
+            let gone = "Cannot inspect the edited SVG: not found".to_string();
+            assert!(read_failed(gone.clone(), &mut pending, &mut last_stamp, &mut last_error, &send));
+            assert_eq!(last_error.as_deref(), Some(denied.as_str()), "an error the full queue refused is retried later");
+            drop(updates);
+            assert!(!read_failed(gone, &mut pending, &mut last_stamp, &mut last_error, &send), "a dropped UI ends the watcher");
+        }
+
+        /// Saves that replace the file while it is being read deliver only complete SVGs, never
+        /// a transient error, and the final stable save always arrives.
+        #[cfg(unix)]
+        #[test]
+        fn saves_replaced_during_reads_deliver_the_final_save_without_transient_errors() {
+            let initial = b"<svg/>".to_vec();
+            let owned = OwnedSvg::create(&initial).unwrap();
+            let file = owned.file.clone();
+            let mut session = start(owned, initial, None, Duration::from_millis(1), Duration::ZERO).unwrap();
+            let final_svg = b"<svg>final</svg>".to_vec();
+            let expected = final_svg.clone();
+            let writer = thread::spawn(move || {
+                let next = file.with_extension("next");
+                for i in 0..300usize {
+                    let body = "x".repeat((i * 7919) % 262_144);
+                    std::fs::write(&next, format!("<svg>{body}</svg>")).unwrap();
+                    std::fs::rename(&next, &file).unwrap();
+                    thread::sleep(Duration::from_micros((i as u64 * 37) % 900));
+                }
+                std::fs::write(&next, &final_svg).unwrap();
+                std::fs::rename(&next, &file).unwrap();
+            });
+            let deadline = Instant::now() + Duration::from_secs(20);
+            let mut deliveries = 0usize;
+            loop {
+                match update(&mut session, deadline) {
+                    Ok(bytes) => {
+                        deliveries += 1;
+                        assert!(bytes.starts_with(b"<svg>") && bytes.ends_with(b"</svg>"), "a torn save was delivered");
+                        // Only the writer's last save has this content.
+                        if bytes == expected {
+                            break;
+                        }
+                    }
+                    Err(error) => panic!("unexpected SVG watcher error during replacement saves: {error}"),
+                }
+            }
+            writer.join().unwrap();
+            assert!(deliveries >= 1);
+            thread::sleep(Duration::from_millis(50));
+            assert!(session.poll().is_none(), "a stable save is delivered once");
         }
 
         #[test]

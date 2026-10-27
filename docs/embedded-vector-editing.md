@@ -83,7 +83,8 @@ explicit, without a shell. The interactive editor runs with its normal desktop p
 the restricted MCP roots apply to preview generation, not to that editor process.
 Working copies reject links and nonregular files; Unix opens
 are no-follow and nonblocking. Unix save settling includes device/inode identity, including equal-time atomic replacement.
-Reads remain byte-bounded even if another process grows the file.
+Reads remain byte-bounded even if another process grows the file. A save that changes while it
+is being read is not reported as an error; the watcher waits for it to settle again and reads it.
 
 Source input/output is limited to 16 MiB. Bounded SVG parsing permits one size-checked gzip
 layer; nested gzip is rejected both at the top level and inside embedded SVG data URLs.
