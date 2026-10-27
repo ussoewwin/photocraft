@@ -1159,6 +1159,79 @@ fn pattern_desc(p: &Value) -> Option<Descriptor> {
     Some(t)
 }
 
+const GRADIENT_STYLES: &[(&str, &str)] = &[
+    ("Rdl", "radial"), ("Lnr", "linear"), ("Angl", "angle"),
+    ("Rflt", "reflected"), ("Dmnd", "diamond"),
+];
+
+/// Color stops from a `gradientLayer` Grad descriptor: `[[location_0_to_1, "#rrggbb"], …]`.
+fn gradient_color_stops(grad: &Descriptor) -> Option<Vec<Value>> {
+    let clrs = get_list(grad, "Clrs")?;
+    clrs.iter().map(|item| {
+        let D::Descriptor(stop) = item else { return None };
+        let hex = color_hex(get_obj(stop, "Clr ")?)?;
+        let loc = get_num(stop, "Lctn")? / 4096.0;
+        Some(json!([loc, hex]))
+    }).collect()
+}
+
+/// Transparency stops from a `gradientLayer` Grad descriptor: `[[location_0_to_1, opacity_0_to_100], …]`.
+fn gradient_transparency_stops(grad: &Descriptor) -> Vec<Value> {
+    get_list(grad, "Trns").unwrap_or(&[]).iter().filter_map(|item| {
+        let D::Descriptor(stop) = item else { return None };
+        let opct = get_num(stop, "Opct")?;
+        let loc = get_num(stop, "Lctn")? / 4096.0;
+        Some(json!([loc, opct]))
+    }).collect()
+}
+
+/// Set params for a `gradientLayer` descriptor → `gradient.fill.set`.
+fn gradient_layer_set_params(t: &Descriptor) -> Option<Value> {
+    let grad = get_obj(t, "Grad")?;
+    let style = lookup(GRADIENT_STYLES, &get_enum(t, "Type")?)?;
+    let angle = get_num(t, "Angl").unwrap_or(90.0);
+    let stops = gradient_color_stops(grad)?;
+    let mut p = Map::new();
+    p.insert("style".into(), style.into());
+    p.insert("angle".into(), angle.into());
+    p.insert("stops".into(), Value::Array(stops));
+    let trns = gradient_transparency_stops(grad);
+    if trns.iter().any(|s| s[1].as_f64() != Some(100.0)) {
+        p.insert("transparency".into(), Value::Array(trns));
+    }
+    if get_bool(t, "Rvrs") == Some(true) { p.insert("reverse".into(), true.into()); }
+    if get_bool(t, "Dthr") == Some(true) { p.insert("dither".into(), true.into()); }
+    if let Some(s) = get_num(t, "Scl ").filter(|&s| (s - 100.0).abs() > 0.01) {
+        p.insert("scale".into(), s.into());
+    }
+    if let Some(ofst) = get_obj(t, "Ofst") {
+        let h = get_num(ofst, "Hrzn").unwrap_or(0.0);
+        let v = get_num(ofst, "Vrtc").unwrap_or(0.0);
+        if h.abs() > 0.001 || v.abs() > 0.001 {
+            p.insert("offset".into(), json!([h, v]));
+        }
+    }
+    Some(Value::Object(p))
+}
+
+/// Create + set params for a `gradientLayer` descriptor → `(layer.newFillLayer.gradient, gradient.fill.set)`.
+fn gradient_layer_params(t: &Descriptor) -> Option<(Value, Value)> {
+    let set_p = gradient_layer_set_params(t)?;
+    let grad = get_obj(t, "Grad")?;
+    let stops = gradient_color_stops(grad)?;
+    let from = stops.first().and_then(|s| s[1].as_str()).map(str::to_string)?;
+    let to = stops.last().and_then(|s| s[1].as_str()).map(str::to_string)?;
+    let style = lookup(GRADIENT_STYLES, &get_enum(t, "Type")?)?;
+    let angle = get_num(t, "Angl").unwrap_or(90.0);
+    let mut create_p = Map::new();
+    create_p.insert("from".into(), from.into());
+    create_p.insert("to".into(), to.into());
+    create_p.insert("style".into(), style.into());
+    create_p.insert("angle".into(), angle.into());
+    if get_bool(t, "Rvrs") == Some(true) { create_p.insert("reverse".into(), true.into()); }
+    Some((Value::Object(create_p), set_p))
+}
+
 /// Layer › Layer Mask: the `UsrM` value of an Add Layer Mask `Mk` ↔ its command.
 const MASK_USING: &[(&str, &str)] = &[
     ("RvlA", "layer.layerMask.revealAll"),
@@ -1274,6 +1347,13 @@ fn make_from(d: &Descriptor) -> Mapped {
             },
             Some(t) if t.class_id.is("patternLayer") => match pattern_params(t) {
                 Some(p) => step("layer.newFillLayer.pattern", Value::Object(p)),
+                None => Mapped::Unsupported { harmless: false },
+            },
+            Some(t) if t.class_id.is("gradientLayer") => match gradient_layer_params(t) {
+                Some((create_p, set_p)) => steps(vec![
+                    ("layer.newFillLayer.gradient", create_p),
+                    ("gradient.fill.set", set_p),
+                ]),
                 None => Mapped::Unsupported { harmless: false },
             },
             _ => Mapped::Unsupported { harmless: false },
@@ -1535,6 +1615,35 @@ fn set_from(d: &Descriptor) -> Mapped {
             if p.keys().any(|k| k != "layer") {
                 v.push(("layer.setProps", Value::Object(p)));
             }
+            if let Some(blnd_list) = get_list(t, "Blnd") {
+                let entries: Option<Vec<Value>> = blnd_list.iter().map(|item| {
+                    let D::Descriptor(blnd) = item else { return None };
+                    let chnl_ref = get_ref(blnd, "Chnl")?;
+                    let ch_name = match target(chnl_ref) {
+                        Target::Ordinal(o) if o == "Trgt" || o == "Cmps" => "gray",
+                        Target::Ordinal(o) => lookup(CHANNELS, &o)?,
+                        _ => return None,
+                    };
+                    let src_b = get_num(blnd, "SrcB")? as i64;
+                    let src_l = get_num(blnd, "Srcl")? as i64;
+                    let src_w = get_num(blnd, "SrcW")? as i64;
+                    let src_m = get_num(blnd, "Srcm")? as i64;
+                    let mut entry = json!({"channel": ch_name, "thisLayer": [src_b, src_l, src_w, src_m]});
+                    if let (Some(db), Some(dl), Some(dw), Some(dt)) = (
+                        get_num(blnd, "DstB"), get_num(blnd, "Dstl"),
+                        get_num(blnd, "DstW"), get_num(blnd, "Dstt"),
+                    ) {
+                        entry["underlying"] = json!([db as i64, dl as i64, dw as i64, dt as i64]);
+                    }
+                    Some(entry)
+                }).collect();
+                if let Some(entries) = entries {
+                    if let Some(mut bp) = layer_target(r) {
+                        bp.insert("blendIf".into(), Value::Array(entries));
+                        v.push(("layer.setProps", Value::Object(bp)));
+                    }
+                }
+            }
             if v.is_empty() { unsupported } else { steps(v) }
         }
         // A Pattern Fill layer's pattern (double-click its thumbnail).
@@ -1542,6 +1651,10 @@ fn set_from(d: &Descriptor) -> Mapped {
             Some(t) if t.class_id.is("patternLayer") => match pattern_params(t) {
                 Some(p) if !p.is_empty() => step("layer.fill.pattern.set", Value::Object(p)),
                 _ => unsupported,
+            },
+            Some(t) if t.class_id.is("gradientLayer") => match gradient_layer_set_params(t) {
+                Some(p) => step("gradient.fill.set", p),
+                None => unsupported,
             },
             _ => unsupported,
         },
