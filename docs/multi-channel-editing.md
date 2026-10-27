@@ -74,6 +74,10 @@ across RGB/CMYK/Lab at all three depths, plus filter-mask Cut/Clear and dialog
 capture. The Art History Brush joins the drawing preservation matrix. The fused
 tone kernel is unchanged; the measurements below retain their original date.
 
+The 2026-10-27 main refresh carries the same implementation and regressions into
+the upstream command, dialog, canvas and tool modules. Public engine/UI facades
+and control-protocol commands retain their existing names.
+
 The release benchmark is `crates/engine/examples/multi_channel_bench.rs`. It uses a
 6000 × 4000 synthetic RGB16 raster, one warmup and six measured repetitions per case,
 with target modes interleaved. Document setup is outside the timed interval; command
