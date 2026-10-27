@@ -461,10 +461,10 @@ mod polyline_tests {
         let graph = Rect::from_min_size(Pos2::ZERO, vec2(256.0, 256.0));
         let identity = [[0.0, 0.0], [255.0, 255.0]];
         let inverted = [[0.0, 255.0], [255.0, 0.0]];
-        let editor = egui::Id::new("dialog");
+        let editor = egui::Id::unique("dialog");
         let master = editor.with(("curves-polyline", "points"));
         let red = editor.with(("curves-polyline", "red"));
-        let other_editor = egui::Id::new("properties").with(("curves-polyline", "points"));
+        let other_editor = egui::Id::unique("properties").with(("curves-polyline", "points"));
         let line = cached_curve_line(&ctx, master, &identity, graph);
         assert_ne!(cached_curve_line(&ctx, red, &inverted, graph), line);
         assert_ne!(cached_curve_line(&ctx, other_editor, &inverted, graph), line);
@@ -505,7 +505,7 @@ mod polyline_tests {
         }
         let miss = start.elapsed();
         let ctx = egui::Context::default();
-        let id = egui::Id::new("curve-perf");
+        let id = egui::Id::unique("curve-perf");
         cached_curve_line(&ctx, id, &points, graph);
         let start = Instant::now();
         for _ in 0..iterations {
