@@ -333,10 +333,12 @@ struct SrcView<'a> {
     h: usize,
     origin: (i32, i32),
     ch: usize,
+    alpha: Option<usize>,
 }
 
 fn sample_bilinear(src: SrcView<'_>, sx: f32, sy: f32, out: &mut [f32]) -> bool {
     let ch = src.ch;
+    let alpha = src.alpha.filter(|&a| a < ch);
     if ch == 0 || out.len() < ch {
         return false;
     }
@@ -370,10 +372,17 @@ fn sample_bilinear(src: SrcView<'_>, sx: f32, sy: f32, out: &mut [f32]) -> bool 
             let (Ok(ux), Ok(uy)) = (usize::try_from(px), usize::try_from(py)) else { continue };
             let Some(base) = pixel_index(ux, uy, src.w, src.h, ch) else { continue };
             let Some(pxs) = src.data.get(base..base.saturating_add(ch)) else { continue };
-            for (d, s) in dst.iter_mut().zip(pxs.iter()) {
-                *d += *s * wt;
+            let coverage = alpha.and_then(|a| pxs.get(a)).copied().unwrap_or(1.0);
+            for (c, (d, s)) in dst.iter_mut().zip(pxs.iter()).enumerate() {
+                *d += *s * wt * if alpha.is_some_and(|a| c < a) { coverage } else { 1.0 };
             }
             any = true;
+        }
+    }
+    if let Some(a) = alpha {
+        let coverage = dst.get(a).copied().unwrap_or(0.0);
+        for value in dst.iter_mut().take(a) {
+            *value = if coverage > 0.0 { *value / coverage } else { 0.0 };
         }
     }
     any
@@ -535,7 +544,7 @@ fn stamp_dab_on_rect(p: &mut StampParams<'_>, dab: &Dab, rect: (i32, i32, i32, i
                 continue;
             }
             let (sx, sy) = rotated_source(dab, x, y);
-            if !sample_bilinear(SrcView { data: p.src, w: p.src_w, h: p.src_h, origin: p.src_origin, ch: p.ch }, sx, sy, &mut sampled) {
+            if !sample_bilinear(SrcView { data: p.src, w: p.src_w, h: p.src_h, origin: p.src_origin, ch: p.ch, alpha: p.alpha }, sx, sy, &mut sampled) {
                 continue;
             }
             let Some(li) = pixel_index(lx, ly, tw, th, p.ch) else { continue };
@@ -585,7 +594,7 @@ fn dab_mean_diff(p: &StampParams<'_>, dab: &Dab) -> Option<f32> {
             let Some(di) = origin_index(p.dest_origin, x, y, p.dest_w, p.dest_h, p.ch) else { continue };
             let Some(dst) = p.dest.get(di..di.saturating_add(p.ch)) else { continue };
             let (sx, sy) = rotated_source(dab, x, y);
-            if !sample_bilinear(SrcView { data: p.src, w: p.src_w, h: p.src_h, origin: p.src_origin, ch: p.ch }, sx, sy, &mut sampled) {
+            if !sample_bilinear(SrcView { data: p.src, w: p.src_w, h: p.src_h, origin: p.src_origin, ch: p.ch, alpha: p.alpha }, sx, sy, &mut sampled) {
                 continue;
             }
             let nch = p.ch.min(dst.len()).min(sampled.len());
