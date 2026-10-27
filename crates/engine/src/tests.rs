@@ -445,7 +445,7 @@ fn subtract_clears_selection_when_only_disjoint_off_canvas_pixels_remain() {
     selection.fill_rect(Rect::new(-4, 10, 0, 14), &[1.0]);
     selection.fill_rect(Rect::new(20, 10, 24, 14), &[1.0]);
     selection.fill_rect(Rect::new(64, 10, 68, 14), &[1.0]);
-    s.active_mut().unwrap().doc.selection = Some(selection);
+    Arc::make_mut(&mut s.active_mut().unwrap().doc).selection = Some(selection);
 
     s.execute("select.rect", json!({"x": 0, "y": 0, "width": 64, "height": 48, "mode": "subtract"})).unwrap();
 
@@ -456,7 +456,7 @@ fn subtract_clears_selection_when_only_disjoint_off_canvas_pixels_remain() {
 fn subtract_clears_selection_with_nonzero_default_when_canvas_is_empty() {
     use photocraft_raster::Surface;
     let mut s = session_with_doc();
-    s.active_mut().unwrap().doc.selection = Some(Surface::with_default(photocraft_color::PixelFormat::GRAY8, &[1.0]));
+    Arc::make_mut(&mut s.active_mut().unwrap().doc).selection = Some(Surface::with_default(photocraft_color::PixelFormat::GRAY8, &[1.0]));
     s.execute("select.rect", json!({"x": 0, "y": 0, "width": 64, "height": 48, "mode": "subtract"})).unwrap();
     assert!(s.active().unwrap().doc.selection.is_none());
 }
