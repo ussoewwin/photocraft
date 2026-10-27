@@ -60,8 +60,9 @@ Other application executables retain their direct-launch behavior.
 On macOS, VectorCraft discovery also checks `/Applications/VectorCraft.app` and
 `~/Applications/VectorCraft.app` and runs the bundle's executable directly. Other application
 accepts an application bundle (`.app`): its Info.plist `CFBundleExecutable` must name an
-executable inside the bundle's `Contents/MacOS`, and the bundle is opened with
-`/usr/bin/open -a` so it receives the file as an open-document event. Adobe Illustrator is
+executable inside the bundle's `Contents/MacOS`. Bundles with the application identifier
+`ai.storyteller.vectorcraft` run directly with the working file as an argument, matching
+automatic discovery; other bundles use `/usr/bin/open -a` for open-document events. Adobe Illustrator is
 offered when an `Adobe Illustrator*.app` is found in `/Applications` (at most one folder deep).
 AI/PDF/EPS previews look for `vectorcraft-cli` in the same bundle's `Contents/MacOS`, then in
 the other known locations; current VectorCraft macOS packages ship the CLI as a separate
@@ -84,7 +85,9 @@ Working copies reject links and nonregular files; Unix opens
 are no-follow and nonblocking. Unix save settling includes device/inode identity, including equal-time atomic replacement.
 Reads remain byte-bounded even if another process grows the file.
 
-Source input/output is limited to 16 MiB. PSD preview validation caches shared sources and
+Source input/output is limited to 16 MiB. Bounded SVG parsing permits one size-checked gzip
+layer; nested gzip is rejected both at the top level and inside embedded SVG data URLs.
+PSD preview validation caches shared sources and
 uses a 96 million pixel-work budget across distinct previews; previews beyond that budget fall
 back to the PSD cached appearance without changing the native source. The charge includes
 raster decoding, eager layer caches and embedded-SVG intermediate surfaces. Raster-bearing

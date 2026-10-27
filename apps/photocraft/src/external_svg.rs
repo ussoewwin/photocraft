@@ -222,8 +222,11 @@ mod native {
     #[cfg(unix)]
     fn resolve_program(path: &Path, macos_bundles: bool) -> Result<Resolved, String> {
         if macos_bundles && path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("app")) && path.is_dir() {
-            let (bundle, program) = bundle_executable(path)?;
-            return Ok(Resolved { program, bundle: Some(bundle) });
+            let (bundle, program, vectorcraft) = bundle_executable_and_identity(path)?;
+            // Unlike Cocoa editors, VectorCraft consumes file arguments, not LaunchServices
+            // open-document events. Identify the app by its bundle id, not the presence of a
+            // CLI beside an unrelated user-selected editor. SVG editing needs no CLI at all.
+            return Ok(if vectorcraft { Resolved::direct(program) } else { Resolved { program, bundle: Some(bundle) } });
         }
         validate_executable(path).map(Resolved::direct)
     }
@@ -274,6 +277,13 @@ mod native {
     /// that resolves to an executable regular file inside that same `Contents/MacOS`.
     #[cfg(unix)]
     fn bundle_executable(bundle: &Path) -> Result<(PathBuf, PathBuf), String> {
+        bundle_executable_and_identity(bundle).map(|(bundle, program, _)| (bundle, program))
+    }
+
+    /// Validate the bundle and identify VectorCraft from its declared application identifier.
+    /// A neighbouring converter alone does not identify an arbitrary chosen editor.
+    #[cfg(unix)]
+    fn bundle_executable_and_identity(bundle: &Path) -> Result<(PathBuf, PathBuf, bool), String> {
         if !bundle.is_absolute() {
             return Err("Choose an absolute application path".into());
         }
@@ -305,13 +315,20 @@ mod native {
         if !directory.starts_with(&bundle) || program.parent() != Some(directory.as_path()) {
             return Err("The application's executable must be inside its bundle".into());
         }
-        Ok((bundle, program))
+        let vectorcraft = bundle_string_property(&bytes, "CFBundleIdentifier")?.as_deref() == Some("ai.storyteller.vectorcraft");
+        Ok((bundle, program, vectorcraft))
     }
 
     /// The top-level `CFBundleExecutable` string of an Info.plist. Events are streamed with a
     /// nesting limit instead of building a value tree, so hostile nesting cannot exhaust the stack.
     #[cfg(unix)]
     fn bundle_executable_name(info_plist: &[u8]) -> Result<String, String> {
+        bundle_string_property(info_plist, "CFBundleExecutable")?.ok_or_else(|| "The application's Info.plist names no executable".into())
+    }
+
+    /// Read one top-level string without constructing a recursive property-list value.
+    #[cfg(unix)]
+    fn bundle_string_property(info_plist: &[u8], key: &str) -> Result<Option<String>, String> {
         use plist::stream::{Event, Reader};
         const MAX_DEPTH: usize = 32;
         let invalid = || "The application's Info.plist is not a valid property list".to_string();
@@ -327,7 +344,7 @@ mod native {
                         return Err(invalid());
                     }
                     if depth == 1 && wanted {
-                        return Err("The application's CFBundleExecutable is not a string".into());
+                        return Err(format!("The application's {key} is not a string"));
                     }
                     depth = depth.checked_add(1).filter(|d| *d <= MAX_DEPTH).ok_or_else(invalid)?;
                 }
@@ -341,17 +358,17 @@ mod native {
                     }
                 }
                 Event::String(text) if depth == 1 && expecting_key => {
-                    wanted = text == "CFBundleExecutable";
+                    wanted = text == key;
                     expecting_key = false;
                 }
-                Event::String(text) if depth == 1 && wanted => return Ok(text.into_owned()),
-                _ if depth == 1 && wanted => return Err("The application's CFBundleExecutable is not a string".into()),
+                Event::String(text) if depth == 1 && wanted => return Ok(Some(text.into_owned())),
+                _ if depth == 1 && wanted => return Err(format!("The application's {key} is not a string")),
                 _ if depth == 1 => expecting_key = true,
                 _ if depth == 0 => return Err(invalid()),
                 _ => {}
             }
         }
-        Err("The application's Info.plist names no executable".into())
+        Ok(None)
     }
 
     /// Canonicalize an absolute user-selected path and require an executable regular file.
@@ -909,6 +926,40 @@ mod native {
             let command = direct.command(&file);
             assert_eq!(command.get_program(), program.as_os_str());
             assert_eq!(command.get_args().collect::<Vec<_>>(), [file.as_os_str()]);
+        }
+
+        /// A selected VectorCraft bundle must receive the watched file as argv, including
+        /// SVG-only installations without a CLI. Other applications retain open-document
+        /// events even if someone placed a vectorcraft-cli file beside their executable.
+        #[cfg(unix)]
+        #[test]
+        fn manually_selected_vectorcraft_bundle_uses_argv_without_misclassifying_other_apps() {
+            let directory = tempfile::tempdir().unwrap();
+            for binary in [false, true] {
+                let mut info = plist::Dictionary::new();
+                info.insert("CFBundleExecutable".into(), plist::Value::String("VectorCraft".into()));
+                info.insert("CFBundleIdentifier".into(), plist::Value::String("ai.storyteller.vectorcraft".into()));
+                let mut bytes = Vec::new();
+                if binary {
+                    plist::Value::Dictionary(info).to_writer_binary(&mut bytes).unwrap();
+                } else {
+                    plist::Value::Dictionary(info).to_writer_xml(&mut bytes).unwrap();
+                }
+                let bundle = fake_bundle(directory.path(), if binary { "Renamed" } else { "VectorCraft" }, "VectorCraft", &bytes);
+                let resolved = resolve_program(&bundle, true).unwrap();
+                assert!(resolved.bundle.is_none(), "VectorCraft must receive file arguments");
+                assert!(!has_adjacent_cli(&resolved.program), "SVG editing works without the converter");
+                let file = directory.path().join("Artwork.svg");
+                let command = resolved.command(&file);
+                assert_eq!(command.get_program(), resolved.program.as_os_str());
+                assert_eq!(command.get_args().collect::<Vec<_>>(), [file.as_os_str()]);
+            }
+            let other = fake_bundle(directory.path(), "Other", "Other", &xml_info("Other"));
+            std::fs::write(other.join("Contents/MacOS/vectorcraft-cli"), b"#!/bin/sh\n").unwrap();
+            let resolved = resolve_program(&other, true).unwrap();
+            assert!(has_adjacent_cli(&resolved.program));
+            assert!(resolved.bundle.is_some(), "an adjacent CLI is not the application's identity");
+            assert_eq!(resolved.command(&directory.path().join("Artwork.svg")).get_program(), "/usr/bin/open");
         }
 
         #[cfg(unix)]
