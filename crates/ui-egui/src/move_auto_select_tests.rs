@@ -258,6 +258,8 @@ fn shift_click_adds_shape_layers_one_after_another() {
     assert_eq!(selected, ids);
 }
 
+/// #8208: with Show Transform Controls on, one click outside a resized box both commits the
+/// resize and Auto-Selects the layer under the pointer; it no longer takes a second click.
 #[test]
 fn one_click_accepts_a_resized_box_and_picks_the_layer_under_it() {
     let (mut app, a, b) = app();
