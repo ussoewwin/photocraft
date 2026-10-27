@@ -424,7 +424,7 @@
 	Fill Content	შევსების შიგთავსი
 	Deselect Layers	შრეების მონიშვნის მოხსნა
 	Find Layers	შრეების ძებნა
-	Layer Comps	კომპოზიციები
+	Layer Comps	შრეების კომპოზიციები
 	Layers	შრეები
 	All Layers	ყველა შრე
 	Hidden Layers	დამალული შრეები
@@ -721,7 +721,7 @@
 	Clone Source	კლონირების წყარო
 	Color	ფერი
 	Glyphs	გლიფები
-	Gradients	გრადიენტი
+	Gradients	გრადიენტები
 	Histogram	ჰისტოგრამა
 	History	ისტორია
 	Info	ინფორმაცია
@@ -736,7 +736,7 @@
 	Properties	თვისებები
 	Shapes	ფიგურები
 	Styles	სტილები
-	Swatches	ნიმუშები
+	Swatches	ფერის ნიმუშები
 	Timeline	დროის ხაზი
 	Tool Presets	ხელსაწყოს პრესეტები
 	Tools	ხელსაწყოები
@@ -761,6 +761,7 @@
 	Split Warp Vertically	დეფორმაციის ვერტიკალურად გაყოფა
 	Statistics…	სტატისტიკა…
 	Refine Strokes	დაზუსტების შტრიხები
+	Edits	ცვლილებები
 @plural	{n} item|{n} items	{n} ელემენტი
 	Auto	ავტომატური
 	(print to the printer)	(პრინტერზე ბეჭდვა)
@@ -1552,7 +1553,7 @@
 	Brush	ფუნჯი
 	Block	ბლოკი
 	Brush Pose	ფუნჯის პოზა
-	Brush Tip Shape	წვერის ფორმა
+	Brush Tip Shape	ფუნჯის წვერის ფორმა
 	Brush Tool	ფუნჯის ხელსაწყო
 	Build-up	აეროგრაფი
 	Burn Tool	გამამუქებლის ხელსაწყო
@@ -1729,7 +1730,7 @@
 	Selection	მონიშნული
 	SemiBold	ნახევრად მუქი
 	Shadows up to:	ჩრდილები, ზედა ზღვარი:
-	Shape Dynamics	ფორმის ცვლა
+	Shape Dynamics	ფორმის დინამიკა
 	Sharpen Tool	გამკვეთრების ხელსაწყო
 	Show Extras Options	დამატებითი ელემენტების პარამეტრების ჩვენება
 	Slice Select Tool	ნაჭრის მონიშვნის ხელსაწყო
@@ -1809,7 +1810,7 @@
 	Brush preview color	ფუნჯის წინასწარი ნახვის ფერი
 	Cache levels	ქეშის დონეები
 	Cache tile size	ქეშის ფილის ზომა
-	Camera Raw Defaults	Camera Raw: ნაგულისხმევი
+	Camera Raw Defaults	Camera Raw-ის ნაგულისხმევი პარამეტრები
 	Canvas border	ტილოს საზღვარი
 	Show canvas dots	ტილოს წერტილების ჩვენება
 	Canvas color	ტილოს ფერი
@@ -1839,7 +1840,7 @@
 	Enable floating document window docking	მცურავი დოკუმენტის ფანჯრების მიმაგრების ჩართვა
 	Enable narrow options bar	ვიწრო პარამეტრების ზოლის ჩართვა
 	Enabled	ჩართულია
-	Enhanced Controls	გაუმჯობესებული მართვა
+	Enhanced Controls	გაუმჯობესებული მართვის ელემენტები
 	Export clipboard	გაცვლის ბუფერის ექსპორტი
 	Extra large	ძალიან დიდი
 	File Handling	ფაილებთან მუშაობა
@@ -1860,7 +1861,7 @@
 	Gridline every	ბადის ხაზი ყოველ
 	Guide color	დამხმარე ხაზის ფერი
 	Guide style	დამხმარე ხაზის სტილი
-	Guides, Grid & Slices	ხაზები, ბადე, ნაჭრები
+	Guides, Grid & Slices	დამხმარე ხაზები, ბადე და ნაჭრები
 	Gutter	შუალედი
 	History Log	ისტორიის ჟურნალი
 	History states	ისტორიის მდგომარეობები
@@ -1946,11 +1947,11 @@
 	Text file	ტექსტური ფაილი
 	Tiny	ძალიან პატარა
 	Touch gestures	სენსორული ჟესტები
-	Transparency & Gamut	გამჭვირვალობა და გამი
+	Transparency & Gamut	გამჭვირვალობა და ფერთა დიაპაზონი
 	Type units	ტექსტის ერთეულები
 	UI font size	ინტერფეისის შრიფტის ზომა
 	UI scale	ინტერფეისის მასშტაბი
-	Units & Rulers	ერთეულები, სახაზავები
+	Units & Rulers	ერთეულები და სახაზავები
 	Use additional plugins folder	პლაგინების დამატებითი საქაღალდის გამოყენება
 	Use esc to commit	დადასტურება Esc-ით
 	Use gpu	GPU-ის გამოყენება
@@ -3029,7 +3030,7 @@ layerLabel	No Color	ფერის გარეშე
 	Clipping Mask	მომჭრელი ნიღაბი
 	Tool Options	ხელსაწყოების პარამეტრები
 	Color Picker	ფერის ამრჩევი
-	Color Swatches	ნიმუშები
+	Color Swatches	ფერის ნიმუშები
 	Linear Dodge	წრფივი გაღიავება
 	Preview Image	გამოსახულების გადახედვა
 	Save As	შენახვა როგორც
@@ -3420,7 +3421,7 @@ layerLabel	No Color	ფერის გარეშე
 	Circle	წრე
 	Clumped	შეჯგუფებული
 	Coarse Dots	მსხვილი წერტილები
-	Colored Pencil	ფანქარი
+	Colored Pencil	ფერადი ფანქარი
 	Contrasty	კონტრასტული
 	Cool	ცივი
 	Craquelure	კრაკელიური
@@ -3447,7 +3448,7 @@ layerLabel	No Color	ფერის გარეშე
 	Enlarged	გადიდებული
 	Even Fields	ლუწი ველები
 	Faded Film	გახუნებული ფირი
-	Film Grain	ფირის მარცვალი
+	Film Grain	ფირის მარცვლოვნება
 	Fine	წვრილი
 	Fine Dots	წვრილი წერტილები
 	Flat	ბრტყელი
@@ -3488,7 +3489,7 @@ layerLabel	No Color	ფერის გარეშე
 	Out From Center	ცენტრიდან გარეთ
 	Oval	ოვალი
 	Overlay Edge	კიდის გადაფარვა
-	Palette Knife	მასტიხინი
+	Palette Knife	პალიტრის დანა
 	Parallel	პარალელური
 	Patchwork	ნაჭრების მოზაიკა
 	Pentagon	ხუთკუთხედი
@@ -3580,7 +3581,7 @@ layerLabel	No Color	ფერის გარეშე
 	Tiny Lens	პატარა ლინზა
 	To Center	ცენტრისკენ
 	Unaltered	უცვლელი
-	Underpainting	ქვედა ფენა
+	Underpainting	ქვედა ფენის ხატვა
 	Underwater	წყალქვეშა
 	Uniform	ერთგვაროვანი
 	Upper	ზედა
@@ -3692,7 +3693,7 @@ layerLabel	No Color	ფერის გარეშე
 	Oil Paint	ზეთის საღებავი
 	Open As	გახსნა როგორც
 	Package	შეფუთვა
-	Paint Daubs	მონასმები
+	Paint Daubs	საღებავის ლაქები
 	Path Blur	ტრაექტორიის გასწვრივ გაბუნდოვნება
 	Paths to Illustrator	ტრაექტორიები Illustrator-ში
 	Photomerge	Photomerge
@@ -3701,11 +3702,11 @@ layerLabel	No Color	ფერის გარეშე
 	Place Embedded	ჩაშენებულის განთავსება
 	Place Linked	დაკავშირებულის განთავსება
 	Place Scale Marker	მასშტაბის მარკერის განთავსება
-	Plastic Wrap	ცელოფანი
+	Plastic Wrap	პლასტიკური შეფუთვა
 	Pointillize	პუანტილიზმი
 	Polar Coordinates	პოლარული კოორდინატები
 	Polar To Rectangular	პოლარულიდან მართკუთხაში
-	Poster Edges	პოსტერის კიდე
+	Poster Edges	პოსტერის კიდეები
 	Preset Manager	პრესეტების მართვა
 	Profile	პროფილი
 	Radial Blur	რადიალური გაბუნდოვნება
@@ -3734,7 +3735,7 @@ layerLabel	No Color	ფერის გარეშე
 	Shear	დახრა
 	Smart Blur	ჭკვიანი გაბუნდოვნება
 	Smart Sharpen	ჭკვიანი გამკვეთრება
-	Smudge Stick	ღაბნის ჯოხი
+	Smudge Stick	გამღაბნელი ჩხირი
 	Solid Color	მყარი ფერი
 	Spherize	სფერიზება
 	Spin Blur	ბრუნვითი გაბუნდოვნება
@@ -4230,6 +4231,11 @@ layerLabel	Magenta	მეწამული
 	Working-cmyk	სამუშაო CMYK
 	Simulate Paper	ქაღალდის იმიტაცია
 	Warming Filter (85)	გამათბობელი ფილტრი (85)
+	Warming Filter (LBA)	გამათბობელი ფილტრი (LBA)
+	Warming Filter (81)	გამათბობელი ფილტრი (81)
+	Cooling Filter (80)	გამაციებელი ფილტრი (80)
+	Cooling Filter (LBB)	გამაციებელი ფილტრი (LBB)
+	Cooling Filter (82)	გამაციებელი ფილტრი (82)
 	Cw	საათის ისრის მიმართულებით
 	Ccw	საათის ისრის საწინააღმდეგოდ
 	Nearest	უახლოესი მეზობელი
@@ -4442,46 +4448,72 @@ layerLabel	Magenta	მეწამული
 	Right-to-left paragraph direction	აბზაცის მიმართულება მარჯვნიდან მარცხნივ
 	Not rendered: this adjustment ({key}) is kept as imported.	არ არის დარენდერებული: ეს კორექცია ({key}) შენარჩუნებულია იმპორტირებული სახით.
 	Print preview image	ამობეჭდვამდე ნახვის გამოსახულება
-# Update checks (Help menu and startup)
-	Automatically Check for Updates	განახლებების ავტომატური შემოწმება
+
+# Strings added upstream (sync 2026-10-27)
+	105%	105%
+	110%	110%
+	115%	115%
+	120%	120%
+	From:	საიდან:
+	Full Document	მთელი დოკუმენტი
+	Merged Layers	შერწყმული შრეები
+	Damaged Photoshop document	დაზიანებული Photoshop-ის დოკუმენტი
+	The document “{name}” may be damaged.	დოკუმენტი „{name}“ შეიძლება დაზიანებული იყოს.
+	Some layers, pixels or masks could not be read. Do you want to continue opening it?	ზოგიერთი შრის, პიქსელის ან ნიღბის წაკითხვა ვერ მოხერხდა. გსურთ გახსნის გაგრძელება?
+	If you continue, saving over the original may permanently discard unreadable data. Save a copy to keep the original.	თუ გააგრძელებთ და ორიგინალს გადააწერთ, წაუკითხავი მონაცემები შეიძლება სამუდამოდ დაიკარგოს. ორიგინალის შესანარჩუნებლად შეინახეთ ასლი.
+	Alt-click a plane to set the clone source	სიბრტყეზე Alt-დაწკაპუნებით მიუთითეთ კლონირების წყარო
+	Too many clone strokes: apply Vanishing Point first	კლონირების შტრიხები ზედმეტად ბევრია: ჯერ გამოიყენეთ გაქრობის წერტილი
+	Calibration	კალიბრაცია
+	Red Primary	წითელი ძირითადი
+	Green Primary	მწვანე ძირითადი
+	Blue Primary	ლურჯი ძირითადი
+	Write xmp sidecars	XMP თანმხლები ფაილების ჩაწერა
+	Set the tone sliders from the image	ტონის სლაიდერების დაყენება გამოსახულების მიხედვით
+	Settings from {name}	პარამეტრები {name}-დან
+	Settings from {name}; {count} not supported: {names}	პარამეტრები {name}-დან; მხარდაუჭერელი ({count}): {names}
+	Could not write {name}: {error}	{name}-ის ჩაწერა ვერ მოხერხდა: {error}
+	Kept {name}: written by another application	{name} შენარჩუნებულია: ჩაწერილია სხვა აპლიკაციის მიერ
+	Shadow Tint	ჩრდილების ტონირება
 	Check for Updates…	განახლებების შემოწმება…
-	Checking for updates…	განახლებების შემოწმება…
-	Check Again	ხელახლა შემოწმება
-	Could not check for updates.	განახლებების შემოწმება ვერ მოხერხდა.
-	Installed version: {version}	დაინსტალირებული ვერსია: {version}
-	Open Download Page	ჩამოტვირთვის გვერდის გახსნა
-	Open the release page to choose an installer for your system.	გახსენით გამოშვების გვერდი და აირჩიეთ თქვენი სისტემის ინსტალატორი.
-	PhotoCraft {version} is available.	ხელმისაწვდომია PhotoCraft {version}.
-	PhotoCraft is up to date.	PhotoCraft განახლებულია.
 	PhotoCraft Updates	PhotoCraft-ის განახლებები
+	Checking for updates…	განახლებების შემოწმება…
+	Open the release page to choose an installer for your system.	გახსენით გამოშვების გვერდი და აირჩიეთ თქვენი სისტემის ინსტალატორი.
+	Open Download Page	ჩამოტვირთვის გვერდის გახსნა
+	PhotoCraft is up to date.	PhotoCraft განახლებულია.
+	Could not check for updates.	განახლებების შემოწმება ვერ მოხერხდა.
 	Updates have not been checked yet.	განახლებები ჯერ არ შემოწმებულა.
-# Color panel menu: slider modes, ramps and copy
+	Check Again	ხელახლა შემოწმება
+	Automatically Check for Updates	განახლებების ავტომატური შემოწმება
+	Installed version: {version}	დაინსტალირებული ვერსია: {version}
+	PhotoCraft {version} is available.	ხელმისაწვდომია PhotoCraft {version}.
+	Import Styles…	სტილების იმპორტი…
+	Export Selected Styles…	მონიშნული სტილების ექსპორტი…
+	Export Styles…	სტილების ექსპორტი…
+	{file} is not a style library (.asl)	{file} სტილების ბიბლიოთეკა არ არის (.asl)
+@plural	Imported {n} style from {file}|Imported {n} styles from {file}	{file}-დან იმპორტირებულია სტილი: {n}
+@plural	Exported {n} style to {file}|Exported {n} styles to {file}	სტილი: {n} ექსპორტირებულია {file}-ში
+	Hue Cube	ფერის ტონის კუბი
+	Brightness Cube	სიკაშკაშის კუბი
+	Color Wheel	ფერთა წრე
 	RGB Sliders	RGB სლაიდერები
 	HSB Sliders	HSB სლაიდერები
 	CMYK Sliders	CMYK სლაიდერები
 	Lab Sliders	Lab სლაიდერები
 	Web Color Sliders	ვებფერის სლაიდერები
-	Hue Cube	ფერის ტონის კუბი
-	Brightness Cube	სიკაშკაშის კუბი
-	Color Wheel	ფერთა წრე
+	Copy Color as HTML	ფერის კოპირება HTML კოდად
+	Copy Color's Hex Code	ფერის Hex კოდის კოპირება
 	RGB Spectrum	RGB სპექტრი
 	CMYK Spectrum	CMYK სპექტრი
 	Grayscale Ramp	ნაცრისფერი ტონების შკალა
 	Current Colors	მიმდინარე ფერები
 	Make Ramp Web Safe	ვებისთვის უსაფრთხო შკალა
-	Copy Color as HTML	ფერის კოპირება HTML კოდად
-	Copy Color's Hex Code	ფერის Hex კოდის კოპირება
-# Styles panel: .asl style libraries
-	Import Styles…	სტილების იმპორტი…
-	Export Styles…	სტილების ექსპორტი…
-	Export Selected Styles…	მონიშნული სტილების ექსპორტი…
-	{file} is not a style library (.asl)	{file} არ არის სტილების ბიბლიოთეკა (.asl)
-@plural	Exported {n} style to {file}|Exported {n} styles to {file}	სტილი: {n} ექსპორტირებულია {file}-ში
-@plural	Imported {n} style from {file}|Imported {n} styles from {file}	{file}-დან იმპორტირებულია სტილი: {n}
-# Damaged PSD/PSB prompt
-	Damaged Photoshop document	დაზიანებული Photoshop-ის დოკუმენტი
-	The document “{name}” may be damaged.	დოკუმენტი „{name}“ შესაძლოა დაზიანებული იყოს.
-	Some layers, pixels or masks could not be read. Do you want to continue opening it?	ზოგიერთი შრის, პიქსელის ან ნიღბის წაკითხვა ვერ მოხერხდა. გსურთ, გააგრძელოთ გახსნა?
-	If you continue, saving over the original may permanently discard unreadable data. Save a copy to keep the original.	თუ გააგრძელებთ და ორიგინალს გადააწერთ, წაუკითხავი მონაცემები შეიძლება სამუდამოდ დაიკარგოს. ორიგინალის შესანარჩუნებლად შეინახეთ ასლი.
-# Select and Mask: the workspace's edits (select.refineEdge)
-	Edits	ცვლილებები
+	Art History Brush Tool	მხატვრული ისტორიის ფუნჯის ხელსაწყო
+	Tight Short	მჭიდრო მოკლე
+	Tight Medium	მჭიდრო საშუალო
+	Tight Long	მჭიდრო გრძელი
+	Loose Medium	თავისუფალი საშუალო
+	Loose Long	თავისუფალი გრძელი
+	Dab	ლაქა
+	Tight Curl	მჭიდრო ხვია
+	Loose Curl	თავისუფალი ხვია
+	Stylized dabs from a history state	სტილიზებული ლაქები ისტორიის მდგომარეობიდან
