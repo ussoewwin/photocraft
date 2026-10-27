@@ -458,16 +458,16 @@ fn modify(s: &mut Session, p: &Value, op: &str) -> Result<Value> {
     if canvas.size().area() > MAX_MODIFY_PIXELS as u64 {
         return Err(EngineError::BadParams { cmd: format!("select.modify.{op}"), msg: "the selection is too large to modify".into() });
     }
+    // Feather reaches ⌈3σ⌉ (σ = r, as in Photoshop); the others reach at most ceil(r).
+    let reach = if op == "feather" { sel::feather_reach(r) } else { r.ceil() as usize };
     // Keep both mask conversion and tiled replacement within the affected region. The
     // zero halo makes internal window edges inert; nonzero edges can only be canvas edges,
     // so the existing Apply effect at canvas bounds padding still has the same meaning.
-    let area = if matches!(op, "expand" | "contract" | "border") { modify_window::area(doc, r) } else { canvas };
+    let area = modify_window::area(doc, reach as f32);
     let m = sel::mask_from_surface(doc.selection.as_ref(), area);
     let (w, h) = (area.width() as usize, area.height() as usize);
-    // Feather reaches ⌈3σ⌉ (σ = r, as in Photoshop); the others reach r. A margin past that
-    // keeps the canvas edge out of reach. A selection clear of the canvas edge needs none: both
-    // readings agree there.
-    let reach = if op == "feather" { sel::feather_reach(r) } else { r.ceil() as usize };
+    // A margin past the reach keeps the padded edge out of reach. A selection clear of the
+    // canvas edge needs none: both readings agree there.
     let pad = if touches_edge(&m, w, h) { reach.saturating_add(2) } else { 0 };
     let grown = |n: usize| pad.checked_mul(2).and_then(|p| n.checked_add(p));
     let (Some(pw), Some(ph)) = (grown(w), grown(h)) else {
