@@ -845,7 +845,16 @@ fn transform(s: &mut Session, p: &Value) -> Result<Value> {
         move |doc, _, ctx| {
             ctx.stage(0.0, 1.0, "Transforming", |ctl| {
                 if let Some(ids) = &layers_for_job {
-                    transform_layers_doc(doc, ids, &h, affine, interp, ctl)
+                    let several = crate::layer_multi_cmds::top_level(doc, ids).len() > 1;
+                    transform_layers_doc(doc, ids, &h, affine, interp, ctl)?;
+                    // Photoshop drops the selection after transforming several layers (whole
+                    // layers move, so the outline no longer frames anything); in the same edit,
+                    // so one undo brings both back. A list that is one layer (or a group and
+                    // its own children) keeps it.
+                    if several && !h.is_identity() {
+                        doc.selection = None;
+                    }
+                    Ok(())
                 } else {
                     transform_doc(doc, id, &p, lone, &h, affine, interp, ctl)
                 }
@@ -857,8 +866,8 @@ fn transform(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// Apply one homography to several top-level layers in one edit. Multi-layer transforms move the
 /// layers as whole objects: a pixel selection does not crop each selected layer independently.
-/// The selection outline therefore stays where it is; this matches the Move tool's existing
-/// multi-layer move semantics.
+/// The selection is left alone here (the live preview keeps showing it); the committed
+/// `edit.transform` drops it, as Photoshop does.
 fn transform_layers_doc(doc: &mut Document, ids: &[LayerId], h: &Homography, affine: Option<Affine>, interp: Interp, ctl: &Interrupt) -> Result<()> {
     let ids = crate::layer_multi_cmds::top_level(doc, ids);
     if ids.is_empty() {
@@ -961,7 +970,7 @@ pub fn specs() -> Vec<CommandSpec> {
         label: "Free Transform",
         menu: &[],
         shortcut: None,
-        params: r##"{"layer":id? OR "layers":[id,…]? (shared multi-layer transform; top-level layers only),"rect":[x0,y0,x1,y1]? (source frame; default = layer content ∩ selection, or the union of multi-layer content),"quad":[[x,y]×4]? (where the frame's corners go, clockwise from top-left),"matrix":[a,b,c,d,e,f]? (affine alternative),"scaleX":%?,"scaleY":%?,"rotate":deg?,"dx":px?,"dy":px? (relative alternative: scale and rotate about the frame's centre, then move, as a Photoshop action records a Free Transform),"interpolation":"bicubic|bilinear|nearest|bicubicSharper|bicubicSmoother|bicubicAutomatic"="bicubic" (Photoshop's bicubic variants render as Bicubic),"target":"pixels"|"mask"|"quickMask"|{"channel":i}=Channels panel target (single-layer only; an unlinked mask, an alpha channel or the Quick Mask transforms alone; a linked mask moves with its layer)}"##,
+        params: r##"{"layer":id? OR "layers":[id,…]? (shared multi-layer transform; top-level layers only; two or more drop the selection),"rect":[x0,y0,x1,y1]? (source frame; default = layer content ∩ selection, or the union of multi-layer content),"quad":[[x,y]×4]? (where the frame's corners go, clockwise from top-left),"matrix":[a,b,c,d,e,f]? (affine alternative),"scaleX":%?,"scaleY":%?,"rotate":deg?,"dx":px?,"dy":px? (relative alternative: scale and rotate about the frame's centre, then move, as a Photoshop action records a Free Transform),"interpolation":"bicubic|bilinear|nearest|bicubicSharper|bicubicSmoother|bicubicAutomatic"="bicubic" (Photoshop's bicubic variants render as Bicubic),"target":"pixels"|"mask"|"quickMask"|{"channel":i}=Channels panel target (single-layer only; an unlinked mask, an alpha channel or the Quick Mask transforms alone; a linked mask moves with its layer)}"##,
         enabled: has_layer,
         journal: true,
         run: transform,
@@ -1023,6 +1032,58 @@ mod tests {
         let b = st.doc.layer(second).unwrap().surface().unwrap().content_bounds();
         assert_eq!(a, Rect::new(25, 30, 45, 40));
         assert_eq!(b, Rect::new(65, 60, 85, 80));
+    }
+
+    /// Photoshop, with two layers selected and a marquee active: Free Transform moves both whole
+    /// layers and drops the selection. One undo restores the layers and the selection.
+    #[test]
+    fn shared_transform_moves_whole_layers_and_drops_the_selection() {
+        let mut s = session();
+        let first = s.active().unwrap().active_layer.unwrap();
+        s.execute("layer.new.layer", json!({})).unwrap();
+        let second = s.active().unwrap().active_layer.unwrap();
+        s.edit("paint second", |doc, _| {
+            doc.layer_mut(second).unwrap().surface_mut().unwrap().fill_rect(Rect::new(50, 40, 70, 60), &[0.0, 1.0, 0.0, 1.0]);
+            Ok(())
+        })
+        .unwrap();
+        s.execute("select.rect", json!({"x": 0, "y": 0, "width": 15, "height": 100})).unwrap();
+        let before_a = s.active().unwrap().doc.layer(first).unwrap().surface().unwrap().content_bounds();
+        let sel_before = s.active().unwrap().doc.selection.as_ref().unwrap().content_bounds();
+
+        s.execute("edit.transform", json!({"layers": [first.0, second.0], "dx": 20, "dy": 0, "interpolation": "nearest"})).unwrap();
+        let st = s.active().unwrap();
+        let a = st.doc.layer(first).unwrap().surface().unwrap().content_bounds();
+        let b = st.doc.layer(second).unwrap().surface().unwrap().content_bounds();
+        assert_eq!(a, Rect::new(before_a.x0 + 20, before_a.y0, before_a.x1 + 20, before_a.y1), "the whole layer moves");
+        assert_eq!(b, Rect::new(70, 40, 90, 60));
+        assert!(st.doc.selection.is_none(), "the selection is dropped");
+
+        s.execute("edit.undo", json!({})).unwrap();
+        let st = s.active().unwrap();
+        assert_eq!(st.doc.layer(first).unwrap().surface().unwrap().content_bounds(), before_a);
+        assert_eq!(st.doc.selection.as_ref().map(|m| m.content_bounds()), Some(sel_before), "one undo brings the selection back");
+    }
+
+    /// A `layers` list that is only one layer is no multi-layer transform: the selection stays.
+    #[test]
+    fn a_one_layer_list_keeps_the_selection() {
+        let mut s = session();
+        let id = s.active().unwrap().active_layer.unwrap();
+        s.execute("select.rect", json!({"x": 0, "y": 0, "width": 15, "height": 100})).unwrap();
+        s.execute("edit.transform", json!({"layers": [id.0], "dx": 20, "dy": 0})).unwrap();
+        assert!(s.active().unwrap().doc.selection.is_some());
+    }
+
+    /// A single layer keeps its behaviour: only the selected pixels move, and the selection with them.
+    #[test]
+    fn single_layer_transform_still_moves_the_selection() {
+        let mut s = session();
+        let id = s.active().unwrap().active_layer.unwrap();
+        s.execute("select.rect", json!({"x": 10, "y": 10, "width": 10, "height": 10})).unwrap();
+        s.execute("edit.transform", json!({"layer": id.0, "dx": 20, "dy": 0})).unwrap();
+        let sel = s.active().unwrap().doc.selection.as_ref().unwrap().content_bounds();
+        assert_eq!((sel.x0, sel.x1), (30, 40));
     }
 
     #[test]

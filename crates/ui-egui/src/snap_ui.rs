@@ -215,16 +215,18 @@ fn begin(app: &mut PhotocraftApp, p: [f64; 2], mods: egui::Modifiers) {
     let moves_layer = crate::canvas::command_moves_layer(app, tool, p, mods);
     let crop_tol = crate::crop_ui::tolerance(app);
     let gesture = if let Some(t) = &app.ui.transform {
+        // A shared box moves every layer of its session: none of them is a target.
+        let moving = crate::transform_tool::moving_layers(app).unwrap_or_else(|| vec![LayerId(t.layer)]);
         let corner = match crate::transform_tool::hit(t, p, crate::transform_tool::handle_tolerance(app)) {
-            crate::transform_tool::Hit::Corner(index) => t.quad.get(index).map(|&point| (Gesture::TransformCorner { index, point }, vec![LayerId(t.layer)])),
+            crate::transform_tool::Hit::Corner(index) => t.quad.get(index).map(|&point| (Gesture::TransformCorner { index, point }, moving.clone())),
             _ => None,
         };
         if t.mode == crate::state::TransformMode::Distort {
             corner
         } else if near_handle(&t.quad, p, crate::transform_tool::handle_tolerance(app)) {
-            corner.or_else(|| Some((Gesture::Point, vec![LayerId(t.layer)])))
+            corner.or(Some((Gesture::Point, moving)))
         } else if in_quad(&t.quad, p) {
-            Some((Gesture::TransformMove { rect: quad_rect(&t.quad) }, vec![LayerId(t.layer)]))
+            Some((Gesture::TransformMove { rect: quad_rect(&t.quad) }, moving))
         } else {
             None
         }
@@ -1221,6 +1223,35 @@ mod tests {
         let q = app.ui.transform.as_ref().unwrap().quad;
         assert_eq!(q[1][0], 348.0, "the corner stays where it was dropped");
         assert!(app.prefs_rt.snap_lines.is_empty());
+    }
+
+    /// A shared Free Transform box for several layers doesn't snap to those layers' original
+    /// edges: they move with it. Its left edge starts exactly on the mover's left edge, so a
+    /// 2 px drag snapped straight back when only the active layer was left out.
+    #[test]
+    fn a_shared_transform_box_does_not_snap_to_its_own_layers() {
+        let mut app = app_with_box();
+        let mover = app.session.active().unwrap().active_layer.unwrap();
+        app.run("layer.new.layer", json!({"name": "second"})).unwrap();
+        app.run("select.rect", json!({"x": 120, "y": 40, "width": 40, "height": 40})).unwrap();
+        app.run("edit.fill", json!({"color": "#00ff00"})).unwrap();
+        app.run("select.deselect", json!({})).unwrap();
+        let second = app.session.active().unwrap().active_layer.unwrap();
+        app.run("layer.select", json!({"layer": mover.0, "mode": "add"})).unwrap();
+        app.ui.tool = Tool::Move;
+        crate::transform_tool::begin_layers(&mut app, vec![mover, second], [40.0, 40.0, 160.0, 80.0]).unwrap();
+        assert_eq!(crate::transform_tool::moving_layers(&app).map(|l| l.len()), Some(2));
+        let m = egui::Modifiers::NONE;
+        crate::canvas::tool_event(&mut app, ToolEvent::Down { x: 50.0, y: 50.0, pressure: 1.0 }, m);
+        crate::canvas::tool_event(&mut app, ToolEvent::Move { x: 51.0, y: 50.0, pressure: 1.0 }, m);
+        crate::canvas::tool_event(&mut app, ToolEvent::Up { x: 52.0, y: 50.0 }, m);
+        let q = app.ui.transform.as_ref().unwrap().quad;
+        assert!((q[0][0] - 42.0).abs() < 1e-6, "the box follows the pointer: {q:?}");
+        // The snap still works against a layer that stays put (the target's left edge, x = 300).
+        crate::canvas::tool_event(&mut app, ToolEvent::Down { x: 50.0, y: 50.0, pressure: 1.0 }, m);
+        crate::canvas::tool_event(&mut app, ToolEvent::Up { x: 306.0, y: 50.0 }, m);
+        let q = app.ui.transform.as_ref().unwrap().quad;
+        assert!((q[0][0] - 300.0).abs() < 1e-6, "{q:?}");
     }
 
     #[test]

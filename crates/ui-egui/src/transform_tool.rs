@@ -304,6 +304,11 @@ pub fn begin(app: &mut PhotocraftApp, ctx: &egui::Context) -> Result<(), String>
     Ok(())
 }
 
+/// The layers a shared transform box moves (none outside one): snapping must not target them.
+pub(crate) fn moving_layers(app: &PhotocraftApp) -> Option<Vec<LayerId>> {
+    app.multi_transform.as_ref().map(|m| m.layers.clone())
+}
+
 /// Start one shared transform box for several selected layers from Move › Show Transform
 /// Controls. Every layer is transformed by the same homography around `rect`; the engine commits
 /// them together as one history step. This path deliberately does not use the single-layer lifted
