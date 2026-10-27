@@ -504,8 +504,17 @@ fn color_lookup_dialog_lists_and_applies_lut_folder_files() {
     // Leaving it for a built-in look drops the file, so the look applies.
     assert_eq!(pick_folder_lut(&mut f, "warm".into(), true), "warm");
     assert_eq!(f["file"], json!(""));
+    // A picked file that has left the folder since (no longer in the scan) still shows as its
+    // entry, so leaving it for a built-in look still drops the file.
+    assert_eq!(pick_folder_lut(&mut f, key.clone(), false), "none");
+    let was_folder = shows_folder_lut(&f, "none", &[]);
+    assert!(was_folder);
+    assert_eq!(pick_folder_lut(&mut f, "warm".into(), was_folder), "warm");
+    assert_eq!(f["file"], json!(""));
+    assert!(!f.contains_key(FOLDER_LUT_PICK));
     // A path typed into File isn't touched by a built-in pick.
     f.insert("file".into(), json!(path));
+    assert!(!shows_folder_lut(&f, "none", &[]));
     assert_eq!(pick_folder_lut(&mut f, "cool".into(), false), "cool");
     assert_eq!(f["file"], json!(path));
 }
