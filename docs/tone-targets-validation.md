@@ -69,6 +69,19 @@ Validation on Linux:
 
 Logs, the CI font input, review notes, scripts and current captures are retained locally in `plan/merge-main-20261026/` (gitignored).
 
+## Main integration and review (2026-10-27)
+
+Current main integrated: `d42f9da94` (PhotoCraft 0.16.0). Upstream split and relocated the engine commands and UI modules. The existing channel resolver and scalar discriminator now live under `cmd/channel_cmds/`, and the command registry retains the extracted adjustment helpers while using the shared gray-parameter filter. The Actions and adjustment-dialog changes and tests moved into `panels/` and `dialogs/`; normalized comparisons confirm their content matches the previous PR head. Levels imports the shared named-channel picker from its sibling Curves module with parent-only visibility. No intended behavior or imaging algorithm changed.
+
+Validation on Linux with `PHOTOCRAFT_FULL_SWEEP=1` and CI's pinned craft-fonts input:
+
+- Full engine/UI `cargo test`: **6,797 passed, 0 failed, 38 normally ignored**, including doctest builds. The first run was interrupted after engine/UI unit tests passed; the completed cached rerun above includes the UI integration suite too.
+- The ignored full-registry adversarial command test passed separately. Strict engine/UI all-target Clippy (`-D warnings`), formatting, layering and wasm passed. `cargo xtask test-corpus --changed` correctly skipped because no corpus-critical paths differ from integrated main.
+- All 29 introduced regression functions and expanded checks are retained. Fresh offscreen Levels/Curves captures for `Saved sky` last-used settings and explicitly targeted `Sky Filter Mask` were inspected: target names, neutral controls, preview and layout remain correct. The final scoped integration review found no further actionable issues.
+- Historical performance and broader workspace results remain dated above and below. They were not repeated for this module port; no fresh before/after latency or Windows/macOS claim is made.
+
+Current logs, preservation comparisons, review notes, screenshot scripts and captures are retained in `plan/merge-main-20261027/` (gitignored).
+
 ## 24 MP release comparison
 
 Dense synthetic 6000 × 4000 RGB8 raster layer, raster mask, saved alpha channel and Quick Mask, each filled with 25% gray. The central selection is a 3000 × 2000 rectangle at 0.5 coverage. Proxy factor 4 (1500 × 1000). AMD Ryzen 7 9700X, 16 logical CPUs, Ubuntu 26.04.1, Rust 1.99.0, default optimized release profile (thin LTO).
