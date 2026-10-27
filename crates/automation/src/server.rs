@@ -191,6 +191,10 @@ pub struct SaveParams {
     /// DDS: also write the full mip chain, each level a box filter of the one above.
     #[serde(default, rename = "ddsMipmaps")]
     pub dds_mipmaps: bool,
+    /// .pcraft: also write the flattened document at its canvas size as `composite/full.png`.
+    /// Off by default.
+    #[serde(default, rename = "pcraftFullComposite")]
+    pub pcraft_full_composite: bool,
     #[serde(default)]
     pub index: Option<usize>,
 }
@@ -1077,6 +1081,7 @@ impl PhotocraftMcp {
                 p.format.is_some().then_some("format"),
                 p.quality.is_some().then_some("quality"),
                 p.tiff_layers.then_some("tiffLayers"),
+                p.pcraft_full_composite.then_some("pcraftFullComposite"),
                 dpx_bits.is_some().then_some("dpxBits"),
                 p.index.is_some().then_some("index"),
             ]
@@ -1103,7 +1108,8 @@ impl PhotocraftMcp {
         }
         let Some(r) = self
             .headless_op(move |h| {
-                let mut opts = photocraft_io::ExportOptions { tiff_layers: p.tiff_layers, tga_bits, ..Default::default() };
+                let mut opts =
+                    photocraft_io::ExportOptions { tiff_layers: p.tiff_layers, tga_bits, pcraft_full_composite: p.pcraft_full_composite, ..Default::default() };
                 opts.encode.dpx_bits = dpx_bits;
                 opts.encode.dds = photocraft_io::DdsOptions { compression: dds_compression.unwrap_or_default(), mipmaps: p.dds_mipmaps };
                 if let Some(q) = p.quality {

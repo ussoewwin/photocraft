@@ -74,6 +74,10 @@ pub(crate) struct ExportArgs {
     /// and CMYK shrink) or progressive
     #[arg(long, value_name = "baseline|optimized|progressive", value_parser = jpeg_format)]
     pub(crate) jpeg_format: Option<JpegFormat>,
+    /// Also write the flattened document at its canvas size into .pcraft output, as
+    /// composite/full.png
+    #[arg(long)]
+    pub(crate) pcraft_full_composite: bool,
 }
 
 /// Convert between formats (.pcraft, .psd, .png, .jpg, .tif, .webp, .exr, …)
