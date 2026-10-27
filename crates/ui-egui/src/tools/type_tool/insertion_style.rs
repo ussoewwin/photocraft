@@ -10,6 +10,18 @@ pub(super) fn pending(app: &PhotocraftApp) -> Option<&TypeInsertionStyle> {
         .then_some(p)
 }
 
+/// Backspace/Delete select the removed character before replacing it; the typing font survives that.
+fn pending_across_deletion(app: &PhotocraftApp, start: usize, end: usize, text: &str) -> Option<TypeInsertionStyle> {
+    if !text.is_empty() {
+        return None;
+    }
+    let ed = app.ui.text_edit.as_ref()?;
+    let p = app.ui.type_insertion_style.as_ref()?;
+    let st = app.session.active()?;
+    (st.doc.id.0 == p.document && ed.layer == p.layer && ed.session == p.session && st.revision == p.revision && (p.caret == start || p.caret == end))
+        .then(|| p.clone())
+}
+
 pub(super) fn shown(app: &PhotocraftApp, c: &mut photocraft_doc::text::CharStyle) {
     if let Some(p) = pending(app) {
         c.clone_from(&p.style);
@@ -37,7 +49,7 @@ pub(super) fn set_font(app: &mut PhotocraftApp, props: &serde_json::Value) -> bo
 /// Replace and style the inserted characters atomically, including paste and IME preedit.
 pub(super) fn replace(app: &mut PhotocraftApp, start: usize, end: usize, text: &str) -> bool {
     let Some(ed) = app.ui.text_edit.clone() else { return false };
-    let pending = pending(app).cloned();
+    let pending = pending(app).cloned().or_else(|| pending_across_deletion(app, start, end, text));
     let caret = start.saturating_add(text.chars().count());
     let mut params = json!({"layer": ed.layer, "replace": {"start": start, "end": end, "text": text}, "coalesce": ed.session});
     if let Some(p) = &pending

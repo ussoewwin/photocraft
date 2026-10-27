@@ -353,6 +353,51 @@ fn returning_focus_to_the_same_canvas_caret_keeps_the_chosen_typing_font() {
 }
 
 #[test]
+fn backspace_and_delete_preserve_pending_caret_font() {
+    for key in [Key::Backspace, Key::Delete] {
+        let (mut h, id) = fixture(false, 0, false, "abcdef");
+        select(&mut h, [3, 3]);
+        h.run();
+        choose(&mut h, FONTS[1], "enter");
+        h.ctx.memory_mut(|m| {
+            if let Some(id) = m.focused() {
+                m.surrender_focus(id);
+            }
+        });
+        h.key_press(key);
+        h.run();
+        assert!(super::insertion_style::pending(&h.state().app).is_some());
+        h.event(egui::Event::Text("Z".into()));
+        h.run();
+        let expected = if key == Key::Backspace {
+            vec![FONTS[0], FONTS[0], FONTS[1], FONTS[0], FONTS[0], FONTS[0]]
+        } else {
+            vec![FONTS[0], FONTS[0], FONTS[0], FONTS[1], FONTS[0], FONTS[0]]
+        };
+        assert_eq!(families(&saved(&h, id)), expected);
+    }
+
+    // Multiple backspaces in a row still preserve the pending font
+    let (mut h, id) = fixture(false, 0, false, "abcdef");
+    select(&mut h, [3, 3]);
+    h.run();
+    choose(&mut h, FONTS[1], "enter");
+    h.ctx.memory_mut(|m| {
+        if let Some(id) = m.focused() {
+            m.surrender_focus(id);
+        }
+    });
+    h.key_press(Key::Backspace);
+    h.run();
+    h.key_press(Key::Backspace);
+    h.run();
+    assert!(super::insertion_style::pending(&h.state().app).is_some());
+    h.event(egui::Event::Text("Z".into()));
+    h.run();
+    assert_eq!(families(&saved(&h, id)), [FONTS[0], FONTS[1], FONTS[0], FONTS[0], FONTS[0]]);
+}
+
+#[test]
 fn commit_shortcut_resolves_a_pending_query_like_enter() {
     // "n" matches several families, and the current one is not the first row, so a fallback to
     // the first row would apply a family the menu never highlighted.
