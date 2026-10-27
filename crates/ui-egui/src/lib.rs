@@ -1411,6 +1411,19 @@ impl PhotocraftApp {
         // Long commands become background jobs when enabled (`jobs_ui`); the rest run inline.
         let params = self.with_mask_target(id, params);
         let params = vector_ui::with_active_path(self, id, params);
+        // ⌘⇧↩ / ⌘⌥↩ load the path selected in the Paths panel, as ⌘↩ does, rather than always the work path.
+        let params = if matches!(id, "path.addToSelection" | "path.subtractFromSelection") && params.get("name").is_none() {
+            match vector_ui::active_path_name(self) {
+                Some(name) => {
+                    let mut p = params.as_object().cloned().unwrap_or_default();
+                    p.insert("name".into(), json!(name));
+                    Value::Object(p)
+                }
+                None => params,
+            }
+        } else {
+            params
+        };
         let path_mask = vector_ui::takes_path_mask(id) && params.get("path").is_some_and(|v| !v.is_null());
         let on_active_layer = self
             .session
@@ -1475,6 +1488,8 @@ impl PhotocraftApp {
                     | "select.loadSelection"
                     | "select.loadLuminosity"
                     | "path.toSelection"
+                    | "path.addToSelection"
+                    | "path.subtractFromSelection"
             )
             && self.session.active().is_some_and(|st| st.doc.selection.is_some())
         {
