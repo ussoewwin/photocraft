@@ -150,10 +150,10 @@ pub(crate) use placing::detach_psd;
 use placing::{convert, shift_layer, via_copy};
 pub use placing::{layer_to_smart, layers_to_smart, placement};
 pub(crate) use placing::{set_placement, shift_smart, transform_placement};
-use rendering::refresh_or_fail;
-pub(crate) use rendering::source_box;
 #[cfg(test)]
 pub(crate) use rendering::DISPLAY_NATIVE_HASH_BYTES;
+use rendering::refresh_or_fail;
+pub(crate) use rendering::source_box;
 #[cfg(test)]
 use rendering::{NativeDigests, blend_surfaces, place, render_in};
 pub use rendering::{apply_smart_filters, purge_stack_cache, refresh, refresh_layer, render, render_below_filter, stack_cache_bytes, stack_image};
