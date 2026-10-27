@@ -39,9 +39,9 @@ pub(crate) fn copy(s: &mut Session, p: &Value) -> Result<Option<Value>> {
     let Some(d) = s.active() else { return Ok(None) };
     let doc = &d.doc;
     let canvas = doc.bounds();
-    // The surface the values come from, and which of its samples is the channel.
-    let (src, k) = if crate::channel_cmds::is_channel_target(p) {
-        (crate::channel_cmds::read_target_surface(doc, d.active_layer, p)?, 0)
+    // A single channel copies as tone; CMYK and spot channels store ink.
+    let (src, k, ink) = if crate::channel_cmds::is_channel_target(p) {
+        (crate::channel_cmds::read_target_surface(doc, d.active_layer, p)?, 0, crate::channel_cmds::is_spot_target(doc, p))
     } else if p.get("target").is_some() {
         return Ok(None);
     } else {
@@ -50,11 +50,11 @@ pub(crate) fn copy(s: &mut Session, p: &Value) -> Result<Option<Value>> {
             ChannelTarget::Color(k) => {
                 let id = d.active_layer.ok_or_else(|| EngineError::Other("no active layer".into()))?;
                 let surf = doc.layer(id).and_then(Layer::surface).ok_or_else(|| EngineError::Other("the active layer has no pixels".into()))?;
-                (surf, k)
+                (surf, k, surf.format().mode == ColorMode::Cmyk)
             }
             ChannelTarget::Alpha(i) => {
                 let c = doc.channels.get(i).ok_or_else(|| EngineError::Other(format!("no alpha channel {i} (document has {})", doc.channels.len())))?;
-                (&c.surface, 0)
+                (&c.surface, 0, c.spot.is_some())
             }
         }
     };
@@ -73,8 +73,9 @@ pub(crate) fn copy(s: &mut Session, p: &Value) -> Result<Option<Value>> {
     let len = (values.len() / n).checked_mul(2).ok_or_else(|| EngineError::Other("the channel is too large to copy".into()))?;
     let mut px = crate::allocation::capacity(len, "copying a channel")?;
     for (i, p) in values.chunks_exact(n).enumerate() {
-        let value = p.get(k).copied().unwrap_or(0.0);
-        px.push(if src.format().mode == ColorMode::Cmyk { 1.0 - value } else { value });
+        // A CMYK or spot channel copies as its tone (#5787).
+        px.push(p.get(k).map_or(0.0, |&v| if ink { 1.0 - v } else { v }));
+
         px.push(cover.as_ref().map_or(1.0, |(m, mk)| m.get(i * mk).copied().unwrap_or(0.0)));
     }
     let mut surface = Surface::new(fmt);
@@ -101,8 +102,8 @@ pub(crate) fn paste(s: &mut Session, p: &Value, k: usize, in_place: bool, limit:
     let area = src.content_bounds().intersect(&canvas);
     s.edit(label, |doc, _| {
         let surf = crate::commands::paint_surface(doc, id, &Value::Null)?;
-        let n = surf.format().channels();
-        let ink = surf.format().mode == ColorMode::Cmyk;
+        let (n, mode) = (surf.format().channels(), surf.format().mode);
+
         if k >= n {
             return Err(EngineError::Other(format!("no colour channel {k} in this layer")));
         }
@@ -116,8 +117,8 @@ pub(crate) fn paste(s: &mut Session, p: &Value, k: usize, in_place: bool, limit:
             let mut px = crate::allocation::read_region(surf, area, "pasting into a channel")?;
             for (i, (dst, s)) in px.chunks_exact_mut(n).zip(&rgba).enumerate() {
                 let w = s[3] * weight.as_ref().map_or(1.0, |(m, mk)| m.get(i * mk).copied().unwrap_or(0.0));
-                let tone = photocraft_color::convert::rgb_to_gray([s[0], s[1], s[2]]);
-                let v = if ink { 1.0 - tone } else { tone };
+                let v = crate::channel_cmds::tone(mode, photocraft_color::convert::rgb_to_gray([s[0], s[1], s[2]]));
+
                 if let Some(c) = dst.get_mut(k) {
                     *c += (v - *c) * w.clamp(0.0, 1.0);
                 }
