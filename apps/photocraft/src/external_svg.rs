@@ -34,17 +34,11 @@ mod native {
         let portal = matches!(&editor, ExternalSvgEditor::VectorCraft);
         #[cfg(not(target_os = "linux"))]
         let portal = false;
-        let vectorcraft = matches!(&editor, ExternalSvgEditor::VectorCraft);
-        let executable = if portal && source.extension == "svg" { None } else { Some(resolve_editor(editor)?) };
+        let executable = if portal && source.extension == "svg" { None } else { Some(resolve(editor)?) };
         // Display conversion is always performed by VectorCraft's CLI, even when the user
-        // chooses a different interactive editor. Explicit VectorCraft builds keep their matching CLI.
-        let converter = if source.extension == "svg" {
-            None
-        } else if vectorcraft {
-            executable.clone()
-        } else {
-            Some(resolve_converter(executable.as_deref())?)
-        };
+        // chooses a different interactive editor. A VectorCraft build with an adjacent CLI keeps
+        // its matching CLI; for a macOS bundle that is the bundle's own `Contents/MacOS`.
+        let converter = if source.extension == "svg" { None } else { Some(resolve_converter(executable.as_ref().map(|e| e.program.as_path()))?) };
         if source.bytes.is_empty() || source.bytes.len() > MAX_BYTES || !matches!(source.extension.as_str(), "svg" | "pdf" | "ai" | "eps") {
             return Err("Unsupported embedded vector source or source exceeds 16 MiB".into());
         }
@@ -75,7 +69,7 @@ mod native {
                             return;
                         }
                         if let Some(executable) = executable.as_ref() {
-                            match std::process::Command::new(executable).arg(&owned.file).spawn() {
+                            match executable.launch(&owned.file) {
                                 Ok(child) => {
                                     watch(owned, initial, Some(child), stopped, send, (POLL_INTERVAL, SAVE_SETTLE), converter.as_deref().map(|e| (e, &source)))
                                 }
@@ -94,39 +88,270 @@ mod native {
         Ok(Box::new(Session { stop, updates, finished: false }))
     }
 
-    /// An explicit VectorCraft build may carry its own CLI. Other editors use the known
-    /// VectorCraft installation; document metadata never participates in discovery.
-    fn resolve_converter(selected: Option<&Path>) -> Result<PathBuf, String> {
+    /// The editor-choice dialog's label for a user-selected program, named by every
+    /// "not found" error so the user can find the control.
+    const OTHER_APPLICATION: &str = "Other application";
+
+    /// A validated editor and how to start it.
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub(super) struct Resolved {
+        /// The canonical executable file. It is run directly unless `bundle` is set, and its
+        /// directory is where an adjacent `vectorcraft-cli` is looked for.
+        pub(super) program: PathBuf,
+        /// A canonical macOS application bundle opened through LaunchServices
+        /// (`/usr/bin/open -a`), so a Cocoa app receives the file as an open-document event
+        /// instead of an argument it would ignore.
+        pub(super) bundle: Option<PathBuf>,
+    }
+
+    impl Resolved {
+        /// Run `program` itself with the working file as its only argument.
+        fn direct(program: PathBuf) -> Self {
+            Self { program, bundle: None }
+        }
+
+        /// The process that opens `file`: no shell, no PATH lookup, one file argument.
+        fn command(&self, file: &Path) -> std::process::Command {
+            match &self.bundle {
+                Some(bundle) => {
+                    let mut command = std::process::Command::new("/usr/bin/open");
+                    // Both paths are absolute, so neither can be read as an `open` option.
+                    command.arg("-a").arg(bundle).arg(file);
+                    command
+                }
+                None => {
+                    let mut command = std::process::Command::new(&self.program);
+                    command.arg(file);
+                    command
+                }
+            }
+        }
+
+        /// Start the editor on `file`. For a bundle the child is `open`, which exits once
+        /// LaunchServices has delivered the file; the watcher only reaps it.
+        fn launch(&self, file: &Path) -> std::io::Result<Child> {
+            self.command(file).spawn()
+        }
+    }
+
+    /// True when `program`'s directory holds a regular (not linked) `vectorcraft-cli`.
+    fn has_adjacent_cli(program: &Path) -> bool {
         let name = if cfg!(windows) { "vectorcraft-cli.exe" } else { "vectorcraft-cli" };
+        program.parent().is_some_and(|directory| std::fs::symlink_metadata(directory.join(name)).is_ok_and(|m| m.is_file() && !m.file_type().is_symlink()))
+    }
+
+    /// The executable whose adjacent `vectorcraft-cli` converts AI/PDF/EPS previews. A selected
+    /// build that carries its own CLI keeps it (for a macOS bundle, `Contents/MacOS` of that same
+    /// bundle). Otherwise the first known VectorCraft installation that has one is used; document
+    /// metadata never participates in discovery.
+    fn resolve_converter(selected: Option<&Path>) -> Result<PathBuf, String> {
         if let Some(editor) = selected
-            && let Some(directory) = editor.parent()
-            && std::fs::symlink_metadata(directory.join(name)).is_ok_and(|m| m.is_file() && !m.file_type().is_symlink())
+            && has_adjacent_cli(editor)
         {
             return Ok(editor.to_path_buf());
         }
-        resolve_editor(ExternalSvgEditor::VectorCraft)
-            .map_err(|_| "AI/PDF/EPS editing also needs an installed VectorCraft CLI to validate display previews".into())
+        vectorcraft_programs()
+            .into_iter()
+            .find(|program| has_adjacent_cli(program))
+            .ok_or_else(|| "AI/PDF/EPS editing also needs an installed VectorCraft CLI to validate display previews".into())
     }
 
-    /// Discover only known installations or an explicitly chosen executable.
+    /// A known VectorCraft location: a bare executable, or a macOS application bundle.
     #[cfg(unix)]
-    fn resolve_editor(editor: ExternalSvgEditor) -> Result<PathBuf, String> {
-        match editor {
-            ExternalSvgEditor::Program(path) => validate_executable(Path::new(&path)),
-            ExternalSvgEditor::VectorCraft => {
-                let mut candidates = vec![PathBuf::from("/usr/local/bin/vectorcraft"), PathBuf::from("/usr/bin/vectorcraft")];
-                if let Some(home) = std::env::var_os("HOME") {
-                    let home = PathBuf::from(home);
-                    candidates.insert(0, home.join(".local/share/flatpak/app/ai.storyteller.vectorcraft/current/active/files/bin/vectorcraft"));
-                    candidates.push(home.join(".local/bin/vectorcraft"));
-                }
-                candidates
-                    .into_iter()
-                    .find_map(|path| validate_executable(&path).ok())
-                    .ok_or_else(|| "VectorCraft was not found. Choose its executable with Other application".into())
+    #[derive(Debug, PartialEq, Eq)]
+    enum Install {
+        Executable(PathBuf),
+        Bundle(PathBuf),
+    }
+
+    /// Fixed VectorCraft locations in search order. On macOS the standard application folders
+    /// come first; the Unix install prefixes apply everywhere. Nothing is searched recursively.
+    #[cfg(unix)]
+    fn vectorcraft_installs(home: Option<&Path>, macos: bool) -> Vec<Install> {
+        let mut installs = vec![];
+        if macos {
+            installs.push(Install::Bundle(PathBuf::from("/Applications/VectorCraft.app")));
+            if let Some(home) = home {
+                installs.push(Install::Bundle(home.join("Applications/VectorCraft.app")));
             }
-            ExternalSvgEditor::Illustrator => Err("Choose a local executable with Other application".into()),
         }
+        if let Some(home) = home {
+            installs.push(Install::Executable(home.join(".local/share/flatpak/app/ai.storyteller.vectorcraft/current/active/files/bin/vectorcraft")));
+        }
+        installs.push(Install::Executable(PathBuf::from("/usr/local/bin/vectorcraft")));
+        installs.push(Install::Executable(PathBuf::from("/usr/bin/vectorcraft")));
+        if let Some(home) = home {
+            installs.push(Install::Executable(home.join(".local/bin/vectorcraft")));
+        }
+        installs
+    }
+
+    /// Every valid known VectorCraft executable, in search order.
+    #[cfg(unix)]
+    fn vectorcraft_programs() -> Vec<PathBuf> {
+        let home = std::env::var_os("HOME").map(PathBuf::from);
+        vectorcraft_installs(home.as_deref(), cfg!(target_os = "macos"))
+            .into_iter()
+            .filter_map(|install| match install {
+                Install::Executable(path) => validate_executable(&path).ok(),
+                // VectorCraft opens the files named on its command line and does not handle
+                // macOS open-document events, so its bundle executable is run directly.
+                Install::Bundle(bundle) => bundle_executable(&bundle).ok().map(|(_, program)| program),
+            })
+            .collect()
+    }
+
+    /// Discover only known installations or an explicitly chosen executable or application.
+    #[cfg(unix)]
+    fn resolve(editor: ExternalSvgEditor) -> Result<Resolved, String> {
+        match editor {
+            ExternalSvgEditor::Program(path) => resolve_program(Path::new(&path), cfg!(target_os = "macos")),
+            ExternalSvgEditor::VectorCraft => vectorcraft_programs()
+                .into_iter()
+                .next()
+                .map(Resolved::direct)
+                .ok_or_else(|| format!("VectorCraft was not found. Choose its executable with {OTHER_APPLICATION}")),
+            ExternalSvgEditor::Illustrator if cfg!(target_os = "macos") => newest_illustrator(Path::new("/Applications")),
+            ExternalSvgEditor::Illustrator => Err(format!("Choose a local executable with {OTHER_APPLICATION}")),
+        }
+    }
+
+    /// A user-selected program: on macOS an application bundle (`.app`, which the system file
+    /// chooser returns as a directory) opens through LaunchServices; anything else must be an
+    /// executable regular file.
+    #[cfg(unix)]
+    fn resolve_program(path: &Path, macos_bundles: bool) -> Result<Resolved, String> {
+        if macos_bundles && path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("app")) && path.is_dir() {
+            let (bundle, program) = bundle_executable(path)?;
+            return Ok(Resolved { program, bundle: Some(bundle) });
+        }
+        validate_executable(path).map(Resolved::direct)
+    }
+
+    /// The newest Adobe Illustrator bundle under `applications`, opened through LaunchServices.
+    #[cfg(unix)]
+    fn newest_illustrator(applications: &Path) -> Result<Resolved, String> {
+        illustrator_bundles(applications)
+            .into_iter()
+            .rev()
+            .find_map(|bundle| bundle_executable(&bundle).ok())
+            .map(|(bundle, program)| Resolved { program, bundle: Some(bundle) })
+            .ok_or_else(|| format!("Illustrator was not found. Choose its application with {OTHER_APPLICATION}"))
+    }
+
+    /// Adobe installs `Adobe Illustrator <version>/Adobe Illustrator <version>.app` in
+    /// /Applications. Look at most one folder deep (512 entries, then 64 per folder), never
+    /// recursively, and sort by name so the last entry is the highest version.
+    #[cfg(unix)]
+    fn illustrator_bundles(applications: &Path) -> Vec<PathBuf> {
+        let is_illustrator = |name: &std::ffi::OsStr| name.to_str().is_some_and(|name| name.starts_with("Adobe Illustrator"));
+        let is_app = |path: &Path| path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("app"));
+        let mut bundles = vec![];
+        let Ok(entries) = std::fs::read_dir(applications) else { return bundles };
+        for entry in entries.take(512).flatten() {
+            if !is_illustrator(&entry.file_name()) {
+                continue;
+            }
+            let path = entry.path();
+            if is_app(&path) {
+                bundles.push(path);
+                continue;
+            }
+            let Ok(inner) = std::fs::read_dir(&path) else { continue };
+            bundles.extend(inner.take(64).flatten().filter(|app| is_illustrator(&app.file_name())).map(|app| app.path()).filter(|path| is_app(path)));
+        }
+        bundles.sort();
+        bundles
+    }
+
+    /// Info.plist files are a few kilobytes; anything larger is not a real application.
+    #[cfg(unix)]
+    const MAX_INFO_PLIST_BYTES: u64 = 1024 * 1024;
+
+    /// Resolve an application bundle to its canonical path and its executable,
+    /// `Contents/MacOS/<CFBundleExecutable>`. The bundle must be a directory named `*.app`, its
+    /// Info.plist (XML or binary) a bounded regular file, and the executable a plain file name
+    /// that resolves to an executable regular file inside that same `Contents/MacOS`.
+    #[cfg(unix)]
+    fn bundle_executable(bundle: &Path) -> Result<(PathBuf, PathBuf), String> {
+        if !bundle.is_absolute() {
+            return Err("Choose an absolute application path".into());
+        }
+        let bundle = bundle.canonicalize().map_err(|e| format!("Cannot resolve the chosen application: {e}"))?;
+        let named_app = bundle.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("app"));
+        if !named_app || !std::fs::symlink_metadata(&bundle).is_ok_and(|m| m.is_dir()) {
+            return Err("Choose an application bundle (.app) or an executable file".into());
+        }
+        let mut options = OpenOptions::new();
+        options.read(true);
+        no_follow(&mut options);
+        let info = options.open(bundle.join("Contents/Info.plist")).map_err(|e| format!("Cannot read the application's Info.plist: {e}"))?;
+        let metadata = info.metadata().map_err(|e| format!("Cannot inspect the application's Info.plist: {e}"))?;
+        if !metadata.is_file() || metadata.len() > MAX_INFO_PLIST_BYTES {
+            return Err("The application's Info.plist must be a regular file of at most 1 MiB".into());
+        }
+        let mut bytes = Vec::new();
+        info.take(MAX_INFO_PLIST_BYTES + 1).read_to_end(&mut bytes).map_err(|e| format!("Cannot read the application's Info.plist: {e}"))?;
+        if bytes.len() as u64 > MAX_INFO_PLIST_BYTES {
+            return Err("The application's Info.plist must be a regular file of at most 1 MiB".into());
+        }
+        let name = bundle_executable_name(&bytes)?;
+        if name.is_empty() || name.len() > 255 || name == "." || name == ".." || name.contains(['/', '\\', '\0']) {
+            return Err("The application's Info.plist names an invalid executable".into());
+        }
+        let directory = bundle.join("Contents/MacOS");
+        let program = validate_executable(&directory.join(&name))?;
+        let directory = directory.canonicalize().map_err(|e| format!("Cannot resolve the application's executable folder: {e}"))?;
+        if !directory.starts_with(&bundle) || program.parent() != Some(directory.as_path()) {
+            return Err("The application's executable must be inside its bundle".into());
+        }
+        Ok((bundle, program))
+    }
+
+    /// The top-level `CFBundleExecutable` string of an Info.plist. Events are streamed with a
+    /// nesting limit instead of building a value tree, so hostile nesting cannot exhaust the stack.
+    #[cfg(unix)]
+    fn bundle_executable_name(info_plist: &[u8]) -> Result<String, String> {
+        use plist::stream::{Event, Reader};
+        const MAX_DEPTH: usize = 32;
+        let invalid = || "The application's Info.plist is not a valid property list".to_string();
+        let mut depth = 0usize;
+        // At depth 1 (the root dictionary) entries alternate between key and value.
+        let mut expecting_key = true;
+        let mut wanted = false;
+        for event in Reader::new(std::io::Cursor::new(info_plist)) {
+            let event = event.map_err(|_| invalid())?;
+            match event {
+                Event::StartArray(_) | Event::StartDictionary(_) => {
+                    if depth == 0 && !matches!(event, Event::StartDictionary(_)) {
+                        return Err(invalid());
+                    }
+                    if depth == 1 && wanted {
+                        return Err("The application's CFBundleExecutable is not a string".into());
+                    }
+                    depth = depth.checked_add(1).filter(|d| *d <= MAX_DEPTH).ok_or_else(invalid)?;
+                }
+                Event::EndCollection => {
+                    depth = depth.checked_sub(1).ok_or_else(invalid)?;
+                    if depth == 0 {
+                        break;
+                    }
+                    if depth == 1 {
+                        expecting_key = true;
+                    }
+                }
+                Event::String(text) if depth == 1 && expecting_key => {
+                    wanted = text == "CFBundleExecutable";
+                    expecting_key = false;
+                }
+                Event::String(text) if depth == 1 && wanted => return Ok(text.into_owned()),
+                _ if depth == 1 && wanted => return Err("The application's CFBundleExecutable is not a string".into()),
+                _ if depth == 1 => expecting_key = true,
+                _ if depth == 0 => return Err(invalid()),
+                _ => {}
+            }
+        }
+        Err("The application's Info.plist names no executable".into())
     }
 
     /// Canonicalize an absolute user-selected path and require an executable regular file.
@@ -164,7 +389,7 @@ mod native {
                 candidates
                     .into_iter()
                     .find_map(|path| validate_executable(&path).ok())
-                    .ok_or_else(|| "VectorCraft was not found. Choose its executable with Other editor".into())
+                    .ok_or_else(|| format!("VectorCraft was not found. Choose its executable with {OTHER_APPLICATION}"))
             }
             ExternalSvgEditor::Illustrator => {
                 let mut candidates = vec![];
@@ -185,9 +410,21 @@ mod native {
                     .into_iter()
                     .rev()
                     .find_map(|path| validate_executable(&path).ok())
-                    .ok_or_else(|| "Illustrator was not found. Choose its executable with Other editor".into())
+                    .ok_or_else(|| format!("Illustrator was not found. Choose its executable with {OTHER_APPLICATION}"))
             }
         }
+    }
+
+    /// Windows programs are always run directly with the working file as their argument.
+    #[cfg(windows)]
+    fn resolve(editor: ExternalSvgEditor) -> Result<Resolved, String> {
+        resolve_editor(editor).map(Resolved::direct)
+    }
+
+    /// The known VectorCraft executable, if one is installed.
+    #[cfg(windows)]
+    fn vectorcraft_programs() -> Vec<PathBuf> {
+        resolve_editor(ExternalSvgEditor::VectorCraft).ok().into_iter().collect()
     }
 
     /// Require an absolute `.exe` that is a regular file, not a link or reparse point, and
@@ -420,6 +657,7 @@ mod native {
     }
 
     impl Drop for Session {
+        /// Signal the worker to stop without waiting for it.
         fn drop(&mut self) {
             // No thread join or editor termination on the UI thread. The worker owns TempDir
             // and drops it after this bounded wakeup, including when the update receiver closes.
@@ -427,6 +665,7 @@ mod native {
         }
     }
 
+    /// Watch an already-written working file with test timings, without conversion.
     #[cfg(test)]
     fn start(owned: OwnedSvg, initial: Vec<u8>, child: Option<Child>, interval: Duration, settle: Duration) -> Result<Session, String> {
         let (stop, stopped) = mpsc::channel();
@@ -439,6 +678,8 @@ mod native {
         Ok(Session { stop, updates, finished: false })
     }
 
+    /// Watch a native working file with short test timings, converting each save's preview
+    /// with `editor`'s adjacent CLI as a real session would.
     #[cfg(test)]
     pub(super) fn start_native_test(
         owned: OwnedSvg,
@@ -621,6 +862,200 @@ mod native {
             let cli = directory.path().join(if cfg!(windows) { "vectorcraft-cli.exe" } else { "vectorcraft-cli" });
             std::fs::write(&cli, b"trusted test fixture").unwrap();
             assert_eq!(resolve_converter(Some(&editor)).unwrap(), editor);
+        }
+
+        /// A synthetic `<root>/<name>.app` whose Info.plist is `info` and whose
+        /// `Contents/MacOS/<executable>` is an executable script. Returns the bundle path.
+        #[cfg(unix)]
+        fn fake_bundle(root: &Path, name: &str, executable: &str, info: &[u8]) -> PathBuf {
+            use std::os::unix::fs::PermissionsExt;
+            let bundle = root.join(format!("{name}.app"));
+            std::fs::create_dir_all(bundle.join("Contents/MacOS")).unwrap();
+            std::fs::write(bundle.join("Contents/Info.plist"), info).unwrap();
+            let program = bundle.join("Contents/MacOS").join(executable);
+            std::fs::write(&program, b"#!/bin/sh\n").unwrap();
+            std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+            bundle
+        }
+
+        #[cfg(unix)]
+        fn xml_info(executable: &str) -> Vec<u8> {
+            format!(
+                r#"<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>CFBundleName</key><string>Editor</string><key>CFBundleDocumentTypes</key><array><dict><key>CFBundleTypeName</key><string>SVG</string></dict></array><key>CFBundleExecutable</key><string>{executable}</string></dict></plist>"#
+            )
+            .into_bytes()
+        }
+
+        #[cfg(unix)]
+        #[test]
+        fn macos_bundle_selection_opens_the_bundle_with_launch_services() {
+            let directory = tempfile::tempdir().unwrap();
+            let bundle = fake_bundle(directory.path(), "Editor", "Editor Binary", &xml_info("Editor Binary"));
+            let resolved = resolve_program(&bundle, true).unwrap();
+            let canonical = bundle.canonicalize().unwrap();
+            assert_eq!(resolved.bundle.as_deref(), Some(canonical.as_path()));
+            assert_eq!(resolved.program, canonical.join("Contents/MacOS/Editor Binary"));
+            let file = directory.path().join("Artwork.svg");
+            let command = resolved.command(&file);
+            assert_eq!(command.get_program(), "/usr/bin/open");
+            let args: Vec<_> = command.get_args().collect();
+            assert_eq!(args, [std::ffi::OsStr::new("-a"), canonical.as_os_str(), file.as_os_str()]);
+            // Outside macOS a directory is never an editor, bundle or not.
+            assert!(resolve_program(&bundle, false).is_err());
+            // A plain executable keeps running directly with the file as its only argument.
+            let program = canonical.join("Contents/MacOS/Editor Binary");
+            let direct = resolve_program(&program, true).unwrap();
+            assert_eq!(direct, Resolved::direct(program.clone()));
+            let command = direct.command(&file);
+            assert_eq!(command.get_program(), program.as_os_str());
+            assert_eq!(command.get_args().collect::<Vec<_>>(), [file.as_os_str()]);
+        }
+
+        #[cfg(unix)]
+        #[test]
+        fn macos_bundle_reads_binary_info_plists() {
+            let mut info = plist::Dictionary::new();
+            info.insert("CFBundleExecutable".into(), plist::Value::String("VectorCraft".into()));
+            let mut bytes = Vec::new();
+            plist::Value::Dictionary(info).to_writer_binary(&mut bytes).unwrap();
+            assert!(bytes.starts_with(b"bplist00"));
+            let directory = tempfile::tempdir().unwrap();
+            let bundle = fake_bundle(directory.path(), "VectorCraft", "VectorCraft", &bytes);
+            let (canonical, program) = bundle_executable(&bundle).unwrap();
+            assert_eq!(program, canonical.join("Contents/MacOS/VectorCraft"));
+        }
+
+        #[cfg(unix)]
+        #[test]
+        fn macos_bundle_rejects_escapes_links_and_malformed_info_plists() {
+            use std::os::unix::fs::PermissionsExt;
+            let directory = tempfile::tempdir().unwrap();
+            let root = directory.path();
+            // The executable name is a file name inside Contents/MacOS, never a path.
+            for name in ["../../../outside", "sub/dir", ".", ".."] {
+                let bundle = fake_bundle(root, "Traversal", "Traversal", &xml_info(name));
+                assert!(bundle_executable(&bundle).is_err(), "{name}");
+            }
+            // A link from inside the bundle to an executable elsewhere is not the bundle's program.
+            let outside = root.join("outside-tool");
+            std::fs::write(&outside, b"#!/bin/sh\n").unwrap();
+            std::fs::set_permissions(&outside, std::fs::Permissions::from_mode(0o755)).unwrap();
+            let bundle = fake_bundle(root, "Linked", "Real", &xml_info("Escape"));
+            std::os::unix::fs::symlink(&outside, bundle.join("Contents/MacOS/Escape")).unwrap();
+            assert!(bundle_executable(&bundle).unwrap_err().contains("inside its bundle"));
+            // Contents/MacOS itself redirected out of the bundle.
+            let bundle = fake_bundle(root, "LinkedDir", "Tool", &xml_info("Tool"));
+            std::fs::remove_dir_all(bundle.join("Contents/MacOS")).unwrap();
+            std::fs::create_dir(root.join("elsewhere")).unwrap();
+            std::fs::copy(&outside, root.join("elsewhere/Tool")).unwrap();
+            std::os::unix::fs::symlink(root.join("elsewhere"), bundle.join("Contents/MacOS")).unwrap();
+            assert!(bundle_executable(&bundle).unwrap_err().contains("inside its bundle"));
+            // A linked Info.plist is not followed.
+            let bundle = fake_bundle(root, "LinkedInfo", "Tool", &xml_info("Tool"));
+            let real_info = root.join("Info.plist");
+            std::fs::write(&real_info, xml_info("Tool")).unwrap();
+            std::fs::remove_file(bundle.join("Contents/Info.plist")).unwrap();
+            std::os::unix::fs::symlink(&real_info, bundle.join("Contents/Info.plist")).unwrap();
+            assert!(bundle_executable(&bundle).is_err());
+            // The named executable must be executable.
+            let bundle = fake_bundle(root, "NotExecutable", "Tool", &xml_info("Tool"));
+            std::fs::set_permissions(bundle.join("Contents/MacOS/Tool"), std::fs::Permissions::from_mode(0o644)).unwrap();
+            assert!(bundle_executable(&bundle).is_err());
+            // Oversized, non-dictionary, deeply nested and non-string entries fail without panicking.
+            let huge = vec![b' '; MAX_INFO_PLIST_BYTES as usize + 1];
+            assert!(bundle_executable(&fake_bundle(root, "Huge", "Tool", &huge)).unwrap_err().contains("1 MiB"));
+            let deep = format!(
+                "<plist><dict><key>Deep</key>{}{}<key>CFBundleExecutable</key><string>Tool</string></dict></plist>",
+                "<array>".repeat(100_000),
+                "</array>".repeat(100_000)
+            );
+            assert!(bundle_executable_name(deep.as_bytes()).is_err());
+            assert!(bundle_executable_name(b"<plist><array><string>Tool</string></array></plist>").is_err());
+            assert!(bundle_executable_name(b"<plist><dict><key>CFBundleExecutable</key><array/></dict></plist>").is_err());
+            assert!(bundle_executable_name(b"<plist><dict><key>CFBundleExecutable</key><integer>1</integer></dict></plist>").is_err());
+            assert!(bundle_executable_name(b"<plist><dict><key>CFBundleName</key><string>Tool</string></dict></plist>").is_err());
+            assert!(bundle_executable_name(b"not a plist").is_err());
+            // A nested CFBundleExecutable key does not name the bundle's executable.
+            let nested = b"<plist><dict><key>Other</key><dict><key>CFBundleExecutable</key><string>Wrong</string></dict><key>CFBundleExecutable</key><string>Right</string></dict></plist>";
+            assert_eq!(bundle_executable_name(nested).unwrap(), "Right");
+            // A file or a non-.app directory is not a bundle.
+            assert!(bundle_executable(&outside).is_err());
+            assert!(bundle_executable(&root.join("elsewhere")).is_err());
+            assert!(bundle_executable(Path::new("relative/Editor.app")).is_err());
+        }
+
+        #[cfg(unix)]
+        #[test]
+        fn macos_vectorcraft_discovery_checks_standard_application_folders_first() {
+            let home = Path::new("/home/synthetic");
+            let mac = vectorcraft_installs(Some(home), true);
+            assert_eq!(mac[0], Install::Bundle(PathBuf::from("/Applications/VectorCraft.app")));
+            assert_eq!(mac[1], Install::Bundle(home.join("Applications/VectorCraft.app")));
+            let other = vectorcraft_installs(Some(home), false);
+            assert!(other.iter().all(|install| matches!(install, Install::Executable(_))), "no bundles outside macOS");
+            assert_eq!(&mac[2..], other.as_slice(), "the Unix locations keep their order");
+            assert_eq!(
+                other,
+                [
+                    Install::Executable(home.join(".local/share/flatpak/app/ai.storyteller.vectorcraft/current/active/files/bin/vectorcraft")),
+                    Install::Executable(PathBuf::from("/usr/local/bin/vectorcraft")),
+                    Install::Executable(PathBuf::from("/usr/bin/vectorcraft")),
+                    Install::Executable(home.join(".local/bin/vectorcraft")),
+                ]
+            );
+            assert_eq!(vectorcraft_installs(None, true)[0], Install::Bundle(PathBuf::from("/Applications/VectorCraft.app")));
+        }
+
+        #[cfg(unix)]
+        #[test]
+        fn bundled_vectorcraft_cli_is_found_inside_the_same_bundle() {
+            use std::os::unix::fs::PermissionsExt;
+            let directory = tempfile::tempdir().unwrap();
+            let bundle = fake_bundle(directory.path(), "VectorCraft", "VectorCraft", &xml_info("VectorCraft"));
+            let (_, program) = bundle_executable(&bundle).unwrap();
+            assert!(!has_adjacent_cli(&program), "no CLI yet");
+            // A CLI beside the bundle directory is not inside the bundle.
+            std::fs::write(directory.path().join("vectorcraft-cli"), b"#!/bin/sh\n").unwrap();
+            assert!(!has_adjacent_cli(&program));
+            let cli = bundle.join("Contents/MacOS/vectorcraft-cli");
+            std::fs::write(&cli, b"#!/bin/sh\n").unwrap();
+            std::fs::set_permissions(&cli, std::fs::Permissions::from_mode(0o755)).unwrap();
+            assert_eq!(resolve_converter(Some(&program)).unwrap(), program);
+        }
+
+        #[cfg(unix)]
+        #[test]
+        fn macos_illustrator_discovery_is_one_level_deep_and_prefers_the_newest() {
+            let directory = tempfile::tempdir().unwrap();
+            let applications = directory.path();
+            for version in ["2024", "2025"] {
+                let folder = applications.join(format!("Adobe Illustrator {version}"));
+                std::fs::create_dir(&folder).unwrap();
+                fake_bundle(&folder, &format!("Adobe Illustrator {version}"), "Adobe Illustrator", &xml_info("Adobe Illustrator"));
+            }
+            // Broken newer install, unrelated apps and deeper nesting are skipped.
+            std::fs::create_dir_all(applications.join("Adobe Illustrator 2026/Adobe Illustrator 2026.app")).unwrap();
+            fake_bundle(applications, "Other Editor", "Other", &xml_info("Other"));
+            std::fs::create_dir_all(applications.join("Adobe Illustrator 2027/Deeper")).unwrap();
+            fake_bundle(&applications.join("Adobe Illustrator 2027/Deeper"), "Adobe Illustrator 2027", "Adobe Illustrator", &xml_info("Adobe Illustrator"));
+            let found = illustrator_bundles(applications);
+            assert_eq!(found.len(), 3, "{found:?}");
+            assert!(found.iter().all(|path| path.file_name().unwrap().to_str().unwrap().starts_with("Adobe Illustrator")));
+            let newest = newest_illustrator(applications).unwrap();
+            let expected = applications.join("Adobe Illustrator 2025/Adobe Illustrator 2025.app").canonicalize().unwrap();
+            assert_eq!(newest.bundle, Some(expected.clone()));
+            assert_eq!(newest.program, expected.join("Contents/MacOS/Adobe Illustrator"));
+            assert!(newest_illustrator(&applications.join("missing")).unwrap_err().contains(OTHER_APPLICATION));
+        }
+
+        #[test]
+        fn missing_editor_errors_name_the_dialog_option() {
+            let dialog = include_str!("../../../crates/ui-egui/src/smart_svg_ui.rs");
+            assert!(dialog.contains(&format!("(Editor::Program, \"{OTHER_APPLICATION}\")")), "the dialog label changed");
+            let source = include_str!("external_svg.rs");
+            assert!(!source.contains(concat!("Other ", "editor")), "errors must name the dialog's option");
+            #[cfg(target_os = "linux")]
+            assert!(resolve(ExternalSvgEditor::Illustrator).unwrap_err().contains(OTHER_APPLICATION));
         }
 
         const EMPTY_SAVE: &str = "The edited SVG must contain between 1 byte and 16 MiB";

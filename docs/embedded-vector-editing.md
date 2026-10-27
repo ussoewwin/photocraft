@@ -55,8 +55,19 @@ VectorCraft build for that invocation. A sandboxed distribution must arrange acc
 its compatible converter; this source change adds no broad filesystem or host-process
 permissions and does not establish default Flatpak packaging acceptance. SVG editing
 through the portal does not require access to the VectorCraft deployment. Explicit
-Other application executables retain their direct-launch behavior. Windows and macOS
-runtime acceptance has not been performed. Browser and automation paths do not launch
+Other application executables retain their direct-launch behavior.
+
+On macOS, VectorCraft discovery also checks `/Applications/VectorCraft.app` and
+`~/Applications/VectorCraft.app` and runs the bundle's executable directly. Other application
+accepts an application bundle (`.app`): its Info.plist `CFBundleExecutable` must name an
+executable inside the bundle's `Contents/MacOS`, and the bundle is opened with
+`/usr/bin/open -a` so it receives the file as an open-document event. Adobe Illustrator is
+offered when an `Adobe Illustrator*.app` is found in `/Applications` (at most one folder deep).
+AI/PDF/EPS previews look for `vectorcraft-cli` in the same bundle's `Contents/MacOS`, then in
+the other known locations; current VectorCraft macOS packages ship the CLI as a separate
+download, so it must be placed there or installed beside a discovered executable. These paths
+are unit-tested on Linux with synthetic bundles. Windows and macOS runtime acceptance has not
+been performed. Browser and automation paths do not launch
 editors; browser internal editing remains available.
 
 This PR does not add clipboard discovery or Paste As. It stands alone on main, without

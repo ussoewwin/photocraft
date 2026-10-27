@@ -282,7 +282,8 @@ pub(crate) fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
             (Editor::Program, "Other application"),
             (Editor::Internal, "PhotoCraft (internal editor)"),
         ] {
-            if choice == Editor::Illustrator && !cfg!(windows) {
+            // The desktop shell discovers Illustrator installations only on Windows and macOS.
+            if choice == Editor::Illustrator && !cfg!(any(windows, target_os = "macos")) {
                 continue;
             }
             let available = pending.target.extension == "svg" || choice != Editor::Internal;

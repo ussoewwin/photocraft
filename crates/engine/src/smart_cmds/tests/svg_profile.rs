@@ -41,6 +41,40 @@ fn svg_smart_contents_and_stack_reject_excessive_editable_caches() {
     assert!(stack_image("Clipboard.svg", svg.as_bytes(), PixelFormat::RGBA32F, photocraft_doc::StackMode::Mean).is_err());
 }
 
+/// Warp setup needs only the source frame. An SVG whose editable layer caches exceed the budget
+/// renders through the bounded whole-drawing path, so it must still get that frame, while Stack
+/// Mode and Edit Contents keep refusing to build its layers.
+#[test]
+fn svg_warp_frame_uses_bounded_bounds_while_stack_and_contents_stay_strict() {
+    // 256 × 256 × 400 shapes = 26,214,400 pixels of layer caches, over the 24 MP budget.
+    let svg = format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"256\" height=\"256\">{}</svg>",
+        "<rect width=\"256\" height=\"256\" fill=\"#336699\"/>".repeat(400)
+    );
+    let s = session(8);
+    let doc = s.active().unwrap().doc.clone();
+    let mut smart =
+        SmartObject::new(SmartSource::Embedded { file_name: "Clipboard.svg".into(), bytes: Arc::new(svg.clone().into_bytes()) }, Affine::IDENTITY, None);
+    let bounds = [0.0, 0.0, 256.0, 256.0];
+    assert_eq!(source_box(&doc, &smart), Some(bounds));
+    smart.warp = Some(photocraft_geom::warp::Warp::custom(photocraft_geom::warp::BezierMesh::identity(bounds, 1, 1), bounds));
+    assert_eq!(source_box(&doc, &smart), Some(bounds), "a warped SVG keeps its frame");
+    let warped = render(&doc, &smart).unwrap().unwrap();
+    assert!((warped.pixel(10, 10)[2] - 0x99 as f32 / 255.0).abs() < 0.01, "the bounded warp render draws the SVG");
+    // Strict paths are unchanged.
+    assert!(decode_source("Clipboard.svg", svg.as_bytes()).unwrap_err().to_string().contains("cache budget"));
+    smart.warp = None;
+    smart.stack_mode = Some(photocraft_doc::StackMode::Mean);
+    assert_eq!(source_box(&doc, &smart), None, "Stack Mode needs the strict layered import");
+    // The canvas limit is exact: 24,000,000 pixels gets a frame, one more row does not.
+    let canvas = |h: u32| format!("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"4000\" height=\"{h}\"><rect width=\"8\" height=\"8\"/></svg>");
+    let frame = |svg: String| {
+        source_box(&doc, &SmartObject::new(SmartSource::Embedded { file_name: "Big.svg".into(), bytes: Arc::new(svg.into_bytes()) }, Affine::IDENTITY, None))
+    };
+    assert_eq!(frame(canvas(6000)), Some([0.0, 0.0, 4000.0, 6000.0]));
+    assert_eq!(frame(canvas(6001)), None);
+}
+
 #[test]
 fn svg_smart_render_cache_tracks_destination_profile_and_transform() {
     for depth in DEPTHS {

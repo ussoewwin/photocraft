@@ -252,6 +252,9 @@ impl Fetch for LoadFetch<'_> {
         self.blob_bounded(hash, self.opts.max_blob_bytes)
     }
 
+    /// A content-addressed blob of at most `limit` bytes (never more than `max_blob_bytes`):
+    /// read once, decompressed within the limit, counted against the load's memory budget and
+    /// checked against its hash, then shared. Optional vector previews pass a 16 MiB limit.
     fn blob_bounded(&mut self, hash: &str, limit: usize) -> Result<Arc<Vec<u8>>> {
         let limit = limit.min(self.opts.max_blob_bytes);
         if let Some(b) = self.blobs.get(hash) {

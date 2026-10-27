@@ -374,6 +374,8 @@ struct ImageBudget {
     error: Option<String>,
 }
 
+/// Record the first budget or decoding failure seen while usvg resolves images. Resolver
+/// callbacks cannot return errors, so the parse checks this slot afterwards and fails with it.
 fn image_error(budget: &Mutex<ImageBudget>, error: impl Into<String>) {
     let mut budget = budget.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     if budget.error.is_none() {
@@ -381,6 +383,8 @@ fn image_error(budget: &Mutex<ImageBudget>, error: impl Into<String>) {
     }
 }
 
+/// Deduct one image's `width × height` decoded pixels from the shared budget before it is
+/// decoded. A zero-sized, overflowing or over-budget image records an error and returns `false`.
 fn charge_image(budget: &Mutex<ImageBudget>, width: usize, height: usize) -> bool {
     let pixels = u64::try_from(width).ok().zip(u64::try_from(height).ok()).and_then(|(w, h)| w.checked_mul(h));
     let mut budget = budget.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -396,8 +400,11 @@ fn charge_image(budget: &Mutex<ImageBudget>, width: usize, height: usize) -> boo
     }
 }
 
-// A GIF's first frame can exceed its logical screen. resvg allocates the frame's RGBA buffer,
-// so inspect its descriptor too, without reading any LZW pixels.
+/// The size declared by a GIF's first image descriptor, skipping extension blocks with checked
+/// offsets; `None` when the stream is truncated or malformed.
+///
+/// A GIF's first frame can exceed its logical screen. resvg allocates the frame's RGBA buffer,
+/// so inspect its descriptor too, without reading any LZW pixels.
 fn gif_frame_size(bytes: &[u8]) -> Option<(usize, usize)> {
     let packed = *bytes.get(10)?;
     let table = if packed & 0x80 != 0 { 3usize.checked_mul(1usize.checked_shl(u32::from((packed & 7) + 1))?)? } else { 0 };
@@ -428,8 +435,11 @@ fn gif_frame_size(bytes: &[u8]) -> Option<(usize, usize)> {
     }
 }
 
-// VP8X declares a container canvas, while a malformed lossy VP8 chunk may declare a larger
-// frame which the downstream decoder allocates before comparing it with that canvas.
+/// Widen `dimensions` to the largest frame declared by the WebP RIFF `chunks` (VP8/VP8L
+/// bitstreams and one level of ANMF animation frames); `None` when a chunk is malformed.
+///
+/// VP8X declares a container canvas, while a malformed lossy VP8 chunk may declare a larger
+/// frame which the downstream decoder allocates before comparing it with that canvas.
 fn webp_frame_sizes(chunks: &[u8], dimensions: &mut (usize, usize), nested: bool) -> Option<()> {
     let mut at = 0usize;
     while at < chunks.len() {
@@ -467,6 +477,10 @@ fn webp_frame_sizes(chunks: &[u8], dimensions: &mut (usize, usize), nested: bool
     Some(())
 }
 
+/// usvg's data-URL image resolver with budgets: nested SVG images are parsed with the same
+/// budget up to [`MAX_EMBEDDED_SVG_DEPTH`], and PNG/JPEG/GIF/WebP images are charged their
+/// largest declared frame before decoding. Anything else, or any overrun, records an error and
+/// resolves to no image so the enclosing parse fails.
 fn bounded_data_image(mime: &str, data: Arc<Vec<u8>>, options: &usvg::Options, budget: &Arc<Mutex<ImageBudget>>, depth: usize) -> Option<usvg::ImageKind> {
     if budget.lock().unwrap_or_else(std::sync::PoisonError::into_inner).error.is_some() {
         return None;
@@ -528,10 +542,15 @@ fn bounded_data_image(mime: &str, data: Arc<Vec<u8>>, options: &usvg::Options, b
     }
 }
 
+/// [`parse_image_bounded_with`] using the shared system font database.
 fn parse_image_bounded(bytes: &[u8], budget: Arc<Mutex<ImageBudget>>, depth: usize) -> Result<usvg::Tree, IoError> {
     parse_image_bounded_with(bytes, budget, depth, fonts)
 }
 
+/// Parse one (possibly gzip-compressed) SVG at nesting `depth` against `budget`: the byte,
+/// inflated-size and XML-depth limits apply first, embedded images go through
+/// [`bounded_data_image`], and the tree's drawing-node count and repeatable image resources are
+/// added to the budget for the caller's work estimate. Fonts load only when text is present.
 fn parse_image_bounded_with(
     bytes: &[u8],
     budget: Arc<Mutex<ImageBudget>>,
@@ -579,6 +598,8 @@ fn parse_image_bounded_with(
 /// Used paint/effect resources can decode an image once per use. Ordinary paths, gradients,
 /// clipping paths and blur filters without image references do not multiply unrelated photos.
 fn repeatable_image_resources(tree: &usvg::Tree) -> (bool, bool) {
+    /// Mark `kinds` (raster, SVG) for images reachable from `group`, visiting each group once
+    /// and turning conservative (both kinds) past the depth or step bound.
     fn visit(group: &usvg::Group, depth: usize, seen: &mut std::collections::HashSet<usize>, steps: &mut usize, kinds: &mut (bool, bool)) {
         if depth > MAX_RECURSION || *steps >= 1_000_000 {
             *kinds = (true, true); // Conservative when resource inspection itself reaches its bound.
@@ -629,14 +650,18 @@ struct ParsedWork {
     repeatable_svg: bool,
 }
 
+/// Parse untrusted SVG with at most `max_pixels` (capped at 24 MP) of decoded image pixels.
 fn parse_bounded(bytes: &[u8], max_pixels: u64) -> Result<Parsed, IoError> {
     parse_bounded_inner(bytes, max_pixels).map(|(tree, _)| tree)
 }
 
+/// [`parse_bounded`], also returning how many embedded SVG images were parsed (each one is
+/// rendered through its own intermediate surface).
 fn parse_bounded_inner(bytes: &[u8], max_pixels: u64) -> Result<(Parsed, u64), IoError> {
     parse_bounded_inner_with(bytes, max_pixels, fonts)
 }
 
+/// [`parse_bounded_inner`] with an explicit font source, so tests can pin the available fonts.
 fn parse_bounded_inner_with(bytes: &[u8], max_pixels: u64, fonts: fn() -> Arc<usvg::fontdb::Database>) -> Result<(Parsed, u64), IoError> {
     parse_bounded_work_with(bytes, max_pixels, fonts).map(|work| (work.parsed, work.svg_images))
 }
@@ -682,6 +707,7 @@ fn inflate(bytes: &[u8]) -> Result<std::borrow::Cow<'_, [u8]>, IoError> {
     inflate_with_limit(bytes, MAX_INFLATED_BYTES)
 }
 
+/// [`inflate`] with an explicit `limit`, which also applies to uncompressed input.
 fn inflate_with_limit(bytes: &[u8], limit: u64) -> Result<std::borrow::Cow<'_, [u8]>, IoError> {
     use std::io::Read;
     if !bytes.starts_with(&[0x1f, 0x8b]) {
@@ -838,6 +864,22 @@ pub fn import_svg_bounded_layers(name: &str, bytes: &[u8], max_cached_pixels: u6
     import_svg_inner(name, bytes, MAX_GROUP_DEPTH, Some(max_cached_pixels), true)
 }
 
+/// The pixel bounds [`import_svg_bounded`] gives the drawing, found without rendering any layer
+/// cache. It applies the same bounded parse (decoded-image and nested-SVG budgets) and the same
+/// canvas limit, so a canvas of exactly `max_cached_pixels` (at most 24 MP) fits and one more
+/// pixel does not. A smart object's warp frame needs only these bounds, so an SVG whose editable
+/// layer caches exceed the budget (rejected by [`import_svg_bounded_layers`]) still has one.
+pub fn bounded_canvas_bounds(bytes: &[u8], max_cached_pixels: u64) -> Result<Rect, IoError> {
+    let parsed = parse_bounded(bytes, max_cached_pixels)?;
+    let cv = canvas(&parsed.tree, &mut Vec::new());
+    let limit = max_cached_pixels.min(MAX_RASTER_PIXELS);
+    if cv.size.area() > limit {
+        return Err(IoError::Svg(format!("{} × {} px exceeds the SVG layer cache budget of {limit} pixels", cv.size.width, cv.size.height)));
+    }
+    Ok(Rect::from_size(cv.size))
+}
+
+/// Parse (bounded when `max_cached_pixels` is set) and convert to layers; see [`import_parsed_with_limits`].
 fn import_svg_inner(
     name: &str,
     bytes: &[u8],
@@ -852,6 +894,7 @@ fn import_svg_inner(
     import_parsed(name, parsed, max_group_depth, max_cached_pixels, reject_cache_overflow)
 }
 
+/// [`import_parsed_with_limits`] with the default retained-pixel byte budget.
 fn import_parsed(
     name: &str,
     parsed: Parsed,
@@ -867,6 +910,10 @@ fn import_parsed_with_budget(name: &str, parsed: Parsed, max_group_depth: usize,
     import_parsed_with_limits(name, parsed, max_group_depth, None, false, pixel_budget)
 }
 
+/// Convert a parsed tree into a document. With `max_cached_pixels`, a canvas over the budget is
+/// an error and caches over it either fail (`reject_cache_overflow`) or collapse the drawing into
+/// one pixel layer with a warning; more than [`MAX_NODES`] elements always collapse.
+/// `pixel_budget` bounds the bytes of retained layer pixels.
 fn import_parsed_with_limits(
     name: &str,
     parsed: Parsed,
@@ -950,6 +997,8 @@ pub fn rasterize_bounded(bytes: &[u8], scale: f32, max_decoded_pixels: u64) -> R
     rasterize_tree(&tree, scale)
 }
 
+/// Render the whole tree at `scale` (clamped to 1/64–64) times its canvas size into a straight-alpha
+/// buffer at the origin; a result over the 24 MP rasterisation limit is an error.
 fn rasterize_tree(tree: &usvg::Tree, scale: f32) -> Result<photocraft_compose::Buffer, IoError> {
     let cv = canvas(tree, &mut Vec::new());
     let k = cv.scale * scale.clamp(1.0 / 64.0, 64.0);
@@ -2057,6 +2106,41 @@ mod tests {
         assert!(import_svg_bounded("bounded", bytes, 64).is_ok());
         let oversized = br#"<svg xmlns="http://www.w3.org/2000/svg" width="5000" height="5000"><rect width="5000" height="5000"/></svg>"#;
         assert!(import_svg_bounded("bounded", oversized, u64::MAX).unwrap_err().to_string().contains("cache budget"));
+    }
+
+    /// The smart-object budget is 24,000,000 pixels: a total exactly equal to it fits, one more
+    /// node of caches does not. Bounds-only callers keep a frame past the layer-cache budget, and
+    /// the canvas itself is limited at the same exact boundary.
+    #[test]
+    fn bounded_canvas_bounds_match_the_import_at_the_exact_24_mp_boundary() {
+        const BUDGET: u64 = 24_000_000;
+        let rects = |n: usize| {
+            format!("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"2000\" height=\"2000\">{}</svg>", "<rect width=\"2000\" height=\"2000\"/>".repeat(n))
+        };
+        // 2000 × 2000 × 6 = 24,000,000: exactly at the budget, still editable layers.
+        let at_budget = rects(6);
+        let strict = import_svg_bounded_layers("at", at_budget.as_bytes(), BUDGET).unwrap();
+        assert_eq!(strict.document.layers.len(), 6);
+        assert_eq!(bounded_canvas_bounds(at_budget.as_bytes(), BUDGET).unwrap(), strict.document.bounds());
+        // A seventh node is 28,000,000 pixels of caches: strict layers refuse it, bounds do not.
+        let over = rects(7);
+        assert!(import_svg_bounded_layers("over", over.as_bytes(), BUDGET).unwrap_err().to_string().contains("cache budget"));
+        assert_eq!(bounded_canvas_bounds(over.as_bytes(), BUDGET).unwrap(), Rect::new(0, 0, 2000, 2000));
+        // The canvas: 4000 × 6000 is exactly 24 MP and fits; one more row does not.
+        let canvas = |h: u32| format!("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"4000\" height=\"{h}\"><rect width=\"8\" height=\"8\"/></svg>");
+        assert_eq!(bounded_canvas_bounds(canvas(6000).as_bytes(), BUDGET).unwrap(), Rect::new(0, 0, 4000, 6000));
+        assert!(bounded_canvas_bounds(canvas(6001).as_bytes(), BUDGET).unwrap_err().to_string().contains("cache budget"));
+        // A larger request never lifts the 24 MP rasterisation limit, and parse budgets still apply.
+        assert!(bounded_canvas_bounds(canvas(6001).as_bytes(), u64::MAX).is_err());
+        assert!(bounded_canvas_bounds(b"<svg", BUDGET).is_err());
+        let huge_image = format!(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1\" height=\"1\">{}</svg>",
+            embedded_image(
+                "image/png",
+                &[b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR".as_slice(), &32768u32.to_be_bytes(), &32768u32.to_be_bytes(), &[8, 6, 0, 0, 0]].concat()
+            )
+        );
+        assert!(bounded_canvas_bounds(huge_image.as_bytes(), BUDGET).is_err(), "decoded images keep their budget");
     }
     /// A one-font database reproduces Linux hosts without Times New Roman. A missing authored
     /// family must still produce text geometry; it must not silently disappear on save-back.

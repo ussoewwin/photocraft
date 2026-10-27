@@ -8,12 +8,17 @@ use std::time::{Duration, Instant};
 use zbus::blocking::{Connection, Proxy};
 use zbus::zvariant::{Fd, OwnedObjectPath, OwnedValue, Value};
 
+/// Ask the desktop (xdg-desktop-portal OpenURI) to let the user pick an editor for the working
+/// file, on a fresh session-bus connection with a 5-second method timeout. Returns once the
+/// portal answers; `stop` or a 120-second deadline cancels the wait.
 pub(super) fn open(owned: &OwnedSvg, stop: &Receiver<()>) -> Result<(), String> {
     let connection =
         zbus::blocking::connection::Builder::session().map_err(|e| e.to_string())?.method_timeout(Duration::from_secs(5)).build().map_err(|e| e.to_string())?;
     open_on(&connection, owned, stop)
 }
 
+/// [`open`] on an existing connection: share a checked writable handle (never a pathname) with
+/// `OpenFile`, always asking the user to choose, and wait for the named request's response.
 fn open_on(connection: &Connection, owned: &OwnedSvg, stop: &Receiver<()>) -> Result<(), String> {
     use futures_lite::StreamExt;
     // Retain the checked handle for the portal call. Writable document-portal access also

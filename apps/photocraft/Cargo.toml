@@ -74,6 +74,12 @@ dispatch2 = { version = "=0.3.1", default-features = false, features = ["std"] }
 
 [target.'cfg(unix)'.dependencies]
 rustix = { version = "=1.1.5", features = ["fs"] }
+# Reads CFBundleExecutable from a chosen macOS application bundle's Info.plist (XML or binary) for
+# external vector editing. Already in Cargo.lock (craft-update); built on every Unix so Linux CI
+# compiles and tests the bundle checks. The event-stream reader (behind plist's "unstable"
+# feature) lets us cap nesting: building a `Value`, or serde's ignored fields, recurses per level.
+# Pinned exactly because that API may change in a minor release: review the diff before bumping.
+plist = { version = "=1.10.3", features = ["enable_unstable_features_that_may_break_with_minor_version_bumps"] }
 
 # Drop position on X11 (`cursor.rs`): pure-Rust X client, already in Cargo.lock; pinned exactly.
 [target.'cfg(target_os = "linux")'.dependencies]

@@ -63,6 +63,9 @@ pub fn frame(preview: &VectorPreview, source: &[u8]) -> Option<(f64, f64)> {
     frame_for_svg(&preview.svg, validate(preview, source)?)
 }
 
+/// The source-pixel frame written by a preview's root `width`/`height`, accepted only when it
+/// rounds to the validated display canvas `size`. Without unitless dimensions the display canvas
+/// itself is the frame; non-finite, oversized or mismatched dimensions give `None`.
 pub(crate) fn frame_for_svg(svg: &[u8], size: Size) -> Option<(f64, f64)> {
     let text = std::str::from_utf8(svg).ok()?;
     let parsed = roxmltree::Document::parse(text).ok()?;
@@ -173,6 +176,7 @@ pub(crate) struct ImportCache {
 }
 
 impl Default for ImportCache {
+    /// One file import's cache with the standard 96 MP aggregate preview-work allowance.
     fn default() -> Self {
         Self::new(96_000_000)
     }
@@ -244,6 +248,7 @@ pub(crate) struct ExportCache {
 }
 
 impl Default for ExportCache {
+    /// One PSD export's cache with the standard 96 MP aggregate preview-work allowance.
     fn default() -> Self {
         Self::new(96_000_000)
     }

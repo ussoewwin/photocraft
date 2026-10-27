@@ -4865,6 +4865,7 @@ dependencies = [
  "photocraft-raster",
  "photocraft-tablet",
  "photocraft-ui-egui",
+ "plist",
  "resvg",
  "rfd",
  "ron",

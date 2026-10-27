@@ -1312,3 +1312,40 @@ fn clouds_and_fibers_move_with_the_smart_object() {
         }
     }
 }
+
+/// The native-source digest cache keys by allocation without keeping sources alive, never
+/// returns a digest for different bytes, and stays within its capacity.
+#[test]
+fn native_digest_cache_is_bounded_weak_and_never_stale() {
+    let mut cache = NativeDigests::new(4);
+    let source = Arc::new(b"%PDF-1.7\nfirst".to_vec());
+    let digest = *blake3::hash(&source).as_bytes();
+    assert_eq!(cache.get(&source), None);
+    cache.insert(&source, digest);
+    assert_eq!(cache.get(&source), Some(digest));
+    assert_eq!(Arc::strong_count(&source), 1, "the cache must not own the source");
+    // Equal bytes in another allocation are a different identity: verified separately.
+    let copy = Arc::new(source.as_ref().clone());
+    assert_eq!(cache.get(&copy), None);
+    // A dropped source's entry is pruned; a new source of the same length is never served
+    // the old digest, even if the allocator reuses the buffer.
+    drop(copy);
+    let address = Arc::as_ptr(&source);
+    drop(source);
+    let replacement = Arc::new(b"%PDF-1.7\nother".to_vec());
+    assert_ne!(Arc::as_ptr(&replacement), address, "the entry pins the old header address");
+    assert_eq!(cache.get(&replacement), None);
+    assert!(cache.entries.is_empty(), "dead entries are pruned");
+    // Capacity is a hard bound with least-recently-used eviction.
+    let live: Vec<Arc<Vec<u8>>> = (0..10u8).map(|n| Arc::new(vec![n; 8])).collect();
+    for bytes in &live {
+        cache.insert(bytes, *blake3::hash(bytes).as_bytes());
+        assert!(cache.entries.len() <= 4);
+    }
+    assert!(live[..6].iter().all(|bytes| cache.get(bytes).is_none()));
+    assert!(live[6..].iter().all(|bytes| cache.get(bytes) == Some(*blake3::hash(bytes).as_bytes())));
+    assert!(live.iter().all(|bytes| Arc::strong_count(bytes) == 1));
+    let mut disabled = NativeDigests::new(0);
+    disabled.insert(&live[0], [0; 32]);
+    assert!(disabled.entries.is_empty());
+}
