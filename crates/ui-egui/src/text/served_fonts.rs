@@ -12,6 +12,25 @@ use crate::PhotocraftApp;
 /// Layers whose document was busy with a background job when their font arrived.
 static PENDING: Mutex<Vec<(DocId, LayerId)>> = Mutex::new(Vec::new());
 
+/// The served catalog is process-wide, and every family added while a font menu is open adds a
+/// row that egui styles on its next pass, so `Harness::run` takes one more pass per family. Tests
+/// that add families hold this for writing ([`changing_catalog`]), and tests that wait for an
+/// open font menu to settle hold it for reading ([`steady_catalog`]).
+#[cfg(test)]
+static CATALOG: std::sync::RwLock<()> = std::sync::RwLock::new(());
+
+/// Held by a test while it adds families to the served catalog.
+#[cfg(test)]
+pub(crate) fn changing_catalog() -> std::sync::RwLockWriteGuard<'static, ()> {
+    CATALOG.write().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// Held by a test while it waits for an open font menu to settle: no family is added meanwhile.
+#[cfg(test)]
+pub(crate) fn steady_catalog() -> std::sync::RwLockReadGuard<'static, ()> {
+    CATALOG.read().unwrap_or_else(PoisonError::into_inner)
+}
+
 /// Registers delivered font files (`(family, bytes)`, the family as the manifest lists it) and
 /// re-renders the type layers that use those families, or whose text falls back to them (a script
 /// fallback, e.g. Arabic set in Inter), and show our own layout. A PSD layer still
@@ -83,7 +102,10 @@ mod tests {
     fn a_layer_in_a_script_redraws_when_that_scripts_fallback_arrives() {
         // Thai: other tests use other scripts (the served catalog is process-wide).
         let thai = "Served Test Thai";
-        photocraft_text::served::add_fonts(&parse_manifest(&format!("{thai} | Regular | fonts/t/T.ttf | Thai\n")).0);
+        {
+            let _catalog = changing_catalog();
+            photocraft_text::served::add_fonts(&parse_manifest(&format!("{thai} | Regular | fonts/t/T.ttf | Thai\n")).0);
+        }
         let layer = |text: &str| TextLayer { text: text.into(), font_family: "Inter".into(), ..Default::default() };
         assert!(redraws_for(&layer("สวัสดี"), &[thai.into()]), "Thai text set in Inter falls back to it");
         assert!(!redraws_for(&layer("hello"), &[thai.into()]));
