@@ -11,6 +11,10 @@ on:
     types: [opened, synchronize, reopened, labeled]
   workflow_dispatch:
     inputs:
+      color_range:
+        description: "Compare cropped Color Range on 24 MP (Linux, exact outputs)"
+        type: boolean
+        default: false
       selection_morphology:
         description: "Compare selection morphology on 36 MP (Linux, exact outputs)"
         type: boolean
@@ -424,6 +428,36 @@ jobs:
           name: fuzz-${{ matrix.target.crate }}-${{ matrix.target.name }}
           path: crates/${{ matrix.target.crate }}/fuzz/artifacts
 
+  color-range-performance:
+    if: inputs.color_range == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      RAYON_NUM_THREADS: "4"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Linux build dependencies
+        uses: storytold/craft-common-actions/actions/install-apt-packages@main
+        with:
+          packages: >-
+            libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev
+            libgtk-3-dev
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: color-range-perf
+      - name: Compare exact outputs and release timings on 24 MP
+        run: |
+          set -o pipefail
+          cargo test --release -p photocraft-engine --lib color_range_release_comparison -- --ignored --nocapture | tee color-range-perf.txt
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: color-range-performance
+          path: color-range-perf.txt
+
   selection-morphology:
     if: inputs.selection_morphology == true
     runs-on: ubuntu-latest
@@ -459,7 +493,7 @@ jobs:
           path: selection-morphology-perf.txt
 
   selection-morphology-quick-perf:
-    if: inputs.selection_morphology == true
+    if: inputs.selection_morphology == true || inputs.color_range == true
     # Match perf-nightly.yml: Linux llvmpipe lacks the float render targets needed by
     # bevel_bench, so its required GPU rows cannot be measured there.
     runs-on: macos-15
