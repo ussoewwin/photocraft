@@ -142,8 +142,14 @@ pub fn combine(old: Option<&Surface>, new: &[f32], area: Rect, mode: SelectionMo
     if area.is_empty() {
         return None;
     }
-    if old.is_none_or(|s| s.format() == PixelFormat::GRAY8) {
-        return combine_mask::gray8(old, new, area, mode, false);
+    // Replace already writes straight from the input mask to tiles; it needs no old mask.
+    if mode == SelectionMode::Replace || (old.is_none() && mode == SelectionMode::Add) {
+        let s = mask_to_surface(new, area);
+        return (s.tile_count() > 0).then_some(s);
+    }
+    let old = old?;
+    if old.format() == PixelFormat::GRAY8 {
+        return combine_mask::gray8(Some(old), new, area, mode, false);
     }
     // Quantize to the 8-bit grid selections are stored on, so combining a mask with itself is
     // exact. Below half an 8-bit step is nothing.
@@ -151,7 +157,7 @@ pub fn combine(old: Option<&Surface>, new: &[f32], area: Rect, mode: SelectionMo
     let s = match mode {
         SelectionMode::Replace => surface_from_masks(area, new, None, |_, v| v),
         _ => {
-            let prev = mask_from_surface(old, area);
+            let prev = mask_from_surface(Some(old), area);
             match mode {
                 SelectionMode::Add => surface_from_masks(area, new, Some(&prev), |p, v| p.max(q(v))),
                 SelectionMode::Subtract => surface_from_masks(area, new, Some(&prev), |p, v| (p - q(v)).max(0.0)),

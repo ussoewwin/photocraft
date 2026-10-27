@@ -32,7 +32,7 @@ fn reference_band(old: Option<&Surface>, mask: &[f32], area: Rect, mode: Selecti
     if area.is_empty() {
         return Some(old.clone());
     }
-    let values = mask_from_surface(inside.as_ref(), area);
+    let values = inside.map_or_else(|| vec![0.0; area.width() as usize * area.height() as usize], |s| s.read_region(area));
     let mut out = old.clone();
     out.write_region(area, &values);
     out.prune();
@@ -88,6 +88,15 @@ fn unusual_selection_formats_keep_their_float_behavior() {
                 assert_eq!(combine(Some(&old), &mask, area, mode), reference(Some(&old), &mask, area, mode));
                 if color == ColorMode::Grayscale {
                     assert_eq!(combine_band(Some(&old), &mask, area, mode), reference_band(Some(&old), &mask, area, mode));
+                } else {
+                    let out = combine_band(Some(&old), &mask, area, mode).unwrap();
+                    let inside = reference(Some(&old), &mask, area, mode).unwrap();
+                    let expected = inside.pixel(0, 0)[0];
+                    let encoded = Surface::with_default(out.format(), &vec![expected; out.channels()]);
+                    assert_eq!(out.pixel(0, 0), encoded.pixel(0, 0));
+                    if matches!(mode, SelectionMode::Add | SelectionMode::Subtract) {
+                        assert_eq!(out.pixel(20, 20), old.pixel(20, 20));
+                    }
                 }
             }
         }
@@ -143,7 +152,7 @@ fn gray8_combining_release_comparison() {
     for (case, size) in [("sparse", 50), ("dense", 4000), ("full", 6000)] {
         let mut mask = vec![0.0; 6000 * 6000];
         let start = (6000 - size) / 2;
-        for row in mask.chunks_exact_mut(6000).skip(start).take(size) {
+        for row in mask.as_chunks_mut::<6000>().0.iter_mut().skip(start).take(size) {
             row[start..start + size].fill(0.5);
         }
         for mode in MODES {

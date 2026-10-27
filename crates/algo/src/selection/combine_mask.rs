@@ -13,7 +13,7 @@ use std::sync::Arc;
 /// and Intersect return only the selection inside the band. Missing mask samples read zero.
 pub fn combine_band(old: Option<&Surface>, mask: &[f32], band: Rect, mode: SelectionMode) -> Option<Surface> {
     let keep = matches!(mode, SelectionMode::Add | SelectionMode::Subtract);
-    if !keep {
+    if !keep || old.is_none() {
         return combine(old, mask, band, mode);
     }
     if band.is_empty() {
@@ -27,7 +27,14 @@ pub fn combine_band(old: Option<&Surface>, mask: &[f32], band: Rect, mode: Selec
     let inside = combine(old, mask, band, mode);
     let mut out = old.cloned()?;
     let values = inside.map_or_else(|| vec![0.0; band.width() as usize * band.height() as usize], |s| s.read_region(band));
-    out.write_region(band, &values);
+    if out.channels() == 1 {
+        out.write_region(band, &values);
+    } else {
+        // A selection uses its first channel as coverage. Broadcast it when writing back to
+        // an unusual multichannel surface, rather than passing a short buffer to write_region.
+        let pixels: Vec<f32> = values.iter().flat_map(|v| std::iter::repeat_n(*v, out.channels())).collect();
+        out.write_region(band, &pixels);
+    }
     out.prune();
     (out.tile_count() > 0).then_some(out)
 }
