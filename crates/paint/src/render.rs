@@ -342,7 +342,9 @@ impl BrushContext {
         if !(mips.is_some() || small || (aliased && b.square) || noise || tex_tip || wet)
             && depth.is_none()
             && proj.is_none()
-            && d.angle == 0.0
+            // Rotation preserves a circle's distance; ellipses still need the transform.
+            && (d.angle == 0.0 || ro == 1.0)
+            && d.angle.is_finite()
             && d.radius.is_finite()
             && d.roundness.is_finite()
             && rm.is_finite()
@@ -1229,7 +1231,8 @@ pub fn render_stroke(
     r.composite(&pre, target, selection, lock_transparency, true)
 }
 
-// The zero-angle transform only changes signs; squaring gives the same radial distance.
+// With zero angle, the transform only changes signs. For circles, any rotation preserves
+// radial distance. Both cases can omit the transform (projection is excluded by the caller).
 #[inline(never)]
 fn rasterize_round(d: &Dab, rect: Rect, out: &mut [f32], hardness: f32, aliased: bool) {
     let (cx, cy) = if aliased { grid_center(d.center.x, d.center.y, 2.0 * d.radius) } else { (d.center.x as f32, d.center.y as f32) };

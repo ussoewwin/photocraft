@@ -162,6 +162,64 @@ fn computed_tips_match_scalar_bits() {
 }
 
 #[test]
+fn circular_tips_ignore_finite_rotation() {
+    for aliased in [false, true] {
+        for hardness in [0.0, 0.5, 1.0] {
+            let ctx = BrushContext::new(&BrushSettings { aliased, hardness, ..Default::default() });
+            for radius in [3.0, 15.25, 150.0] {
+                for roundness in [1.0, 1.5] {
+                    let mut d = Dab::round(Point::new(-31.25, 63.75), radius, 0.37);
+                    d.roundness = roundness;
+                    let rect = ctx.dab_rect(&d, false);
+                    let expected: Vec<_> = [false, true]
+                        .into_iter()
+                        .map(|dual| {
+                            let mut coverage = Vec::new();
+                            ctx.rasterize_reference(&d, dual, rect, &mut coverage, None);
+                            coverage
+                        })
+                        .collect();
+                    for angle in [-2.3, 0.7, std::f32::consts::FRAC_PI_2, std::f32::consts::PI] {
+                        for (flip_x, flip_y) in [(false, false), (true, false), (false, true), (true, true)] {
+                            d.angle = angle;
+                            d.flip_x = flip_x;
+                            d.flip_y = flip_y;
+                            for (dual, expected) in [false, true].into_iter().zip(&expected) {
+                                let mut actual = vec![0.75; 19];
+                                ctx.rasterize(&d, dual, rect, &mut actual);
+                                assert_eq!(actual.len(), expected.len());
+                                let mismatch = actual.iter().zip(expected).enumerate().find(|(_, (a, b))| a.to_bits() != b.to_bits());
+                                assert!(
+                                    mismatch.is_none(),
+                                    "circle changed with rotation: {mismatch:?}; {d:?}, aliased={aliased}, hardness={hardness}, dual={dual}"
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn rotated_ellipses_and_projected_circles_match_scalar_bits() {
+    for aliased in [false, true] {
+        let ctx = BrushContext::new(&BrushSettings { aliased, hardness: 0.5, ..Default::default() });
+        for (roundness, proj_scale) in [(0.4, 1.0), (1.0, 0.6)] {
+            for angle in [0.0, 0.7, -2.3] {
+                let mut d = Dab::round(Point::new(-31.25, 63.75), 15.25, 0.37);
+                d.roundness = roundness;
+                d.angle = angle;
+                d.proj_scale = proj_scale;
+                d.proj_angle = 0.3;
+                compare(&ctx, &d, false, ctx.dab_rect(&d, false), false);
+            }
+        }
+    }
+}
+
+#[test]
 fn large_corner_dabs_keep_off_canvas_coverage() {
     for (hardness, aliased) in [(0.0, false), (1.0, false), (1.0, true)] {
         let ctx = BrushContext::new(&BrushSettings { hardness, aliased, ..Default::default() });
