@@ -214,7 +214,6 @@ pub(super) fn show_only(layers: &mut [photocraft_doc::Layer], keep: &[LayerId]) 
         }
         match &mut l.content {
             LayerContent::Group(g) if g.children.iter().any(|c| keep.iter().any(|k| contains(c, *k))) => {
-                l.clipped = false;
                 // This ancestor only clips the covering children. Its background is already
                 // on the base canvas; drawing it again would cover the moving layer in white.
                 if let Some(board) = &mut g.artboard {

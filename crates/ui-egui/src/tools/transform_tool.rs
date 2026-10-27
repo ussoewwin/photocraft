@@ -170,6 +170,13 @@ impl Several {
         let mut d = live.clone();
         show_only(&mut d.layers, ids);
         for id in ids {
+            if let Some(path) = d.path_of(*id) {
+                for n in 1..path.len() {
+                    if let Some(ancestor) = path.get(..n).and_then(|p| d.layer_at_mut(p)) {
+                        ancestor.clipped = false;
+                    }
+                }
+            }
             if let Some(l) = d.layer_mut(*id) {
                 l.clipped = false;
             }
