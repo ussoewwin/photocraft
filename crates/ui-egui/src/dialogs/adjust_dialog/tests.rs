@@ -921,6 +921,8 @@ fn recorded_photo_filter_settings_complete_to_their_preset_colour() {
     assert_eq!(done, json!({"filter": "cooling80", "density": 60, "extra": [1], "color": "#006dff"}), "only the colour is added");
     // A recorded colour (here a float triple the engine would rewrite as hex) is left alone.
     assert!(complete_params(&app, pf, &json!({"filter": "cooling80", "color": [0.5, 0.0, 0.0]})).is_none());
+    let null = complete_params(&app, pf, &json!({"filter": "cooling80", "color": null})).unwrap();
+    assert_eq!(null["color"], json!("#006dff"), "a null colour completes from the preset, as the engine reads it");
     assert!(complete_params(&app, pf, &json!({"density": 60})).is_none(), "no preset to take a colour from");
     assert!(complete_params(&app, pf, &json!({"filter": "nope"})).is_none(), "rejected params");
     // Other adjustments keep their recorded values exactly (a pencil curve isn't smoothed again).

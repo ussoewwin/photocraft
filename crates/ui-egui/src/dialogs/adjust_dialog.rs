@@ -315,7 +315,8 @@ pub fn open_last(app: &mut PhotocraftApp, command: &str) -> Option<u64> {
 /// needs adding, or for params the engine rejects.
 pub(crate) fn complete_params(app: &PhotocraftApp, command: &str, params: &Value) -> Option<Value> {
     let kind = command.strip_prefix(PREFIX).filter(|k| *k == "photoFilter")?;
-    let recorded = params.as_object().filter(|p| p.contains_key("filter") && !p.contains_key("color"))?;
+    // A `null` colour reads as none, as the engine reads it.
+    let recorded = params.as_object().filter(|p| p.contains_key("filter") && p.get("color").is_none_or(Value::is_null))?;
     let adjustment = photocraft_engine::adjust_params::from_params(kind, params, None, curve_mode(app, kind)).ok()?;
     let color = photocraft_engine::adjust_params::to_params(&adjustment).get("color").cloned()?;
     let mut done = recorded.clone();
