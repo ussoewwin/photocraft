@@ -1,4 +1,5 @@
 use super::path_ops::active_path_name;
+use super::pen::path_operations_menu;
 use super::shapes::is_shape_tool;
 use super::{GradientChoices, LayerContent, PaintChange, PhotocraftApp, Tokens, Tool, Value, json, paint_param, swatch};
 

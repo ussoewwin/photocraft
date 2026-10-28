@@ -28,7 +28,6 @@ mod shapes;
 
 pub(crate) use curvature::curvature_anchor_at;
 pub use curvature::{curvature_down, curvature_move, curvature_toggle, curvature_up};
-use options::selected_shape;
 #[cfg(test)]
 use options::{corner_radii_patch, solid_paint};
 pub(crate) use options::{enabled_stroke_width, paint_gesture};
@@ -50,7 +49,6 @@ use paths_panel::path_context_actions;
 pub use paths_panel::{PathEntry, PathRow, path_rows, paths_footer, paths_panel};
 #[cfg(test)]
 pub(crate) use pen::over_first_anchor;
-use pen::path_operations_menu;
 #[cfg(test)]
 use pen::pen_to_json;
 pub(crate) use pen::{PATH_OPS, pen_path, pen_replace};
