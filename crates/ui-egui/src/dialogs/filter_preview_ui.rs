@@ -28,6 +28,9 @@ const PREVIEW_H: f32 = 150.0;
 const ZOOM_FIELD: &str = "__pvZoom";
 const CENTER_X_FIELD: &str = "__pvCx";
 const CENTER_Y_FIELD: &str = "__pvCy";
+/// Whether a `ui.pointer` press on the locator is held (agents send press, moves and release as
+/// separate requests).
+const POINTER_DOWN_FIELD: &str = "__pvPointerDown";
 
 /// Draw the filter dialog's in-dialog preview window below its parameters (its `fields` `f`). A
 /// no-op for dialogs without a preview and for Select and Mask, which has its own view.
@@ -173,11 +176,25 @@ pub(crate) fn center_at(app: &mut PhotocraftApp, x: f64, y: f64) -> bool {
         return false;
     }
     let Some(size) = app.session.active().map(|st| st.doc.size) else { return false };
-    let (cx, cy) = clamp_center(x as f32, y as f32, size.width as f32, size.height as f32);
+    // Clamped before narrowing: a huge finite point (1e40 from `ui.pointer`) would overflow `f32`
+    // to infinity, which `clamp_center` reads as corrupt and puts at 0, not at the far edge.
+    let (cx, cy) = (x.clamp(0.0, f64::from(size.width)) as f32, y.clamp(0.0, f64::from(size.height)) as f32);
     let Some(d) = app.ui.dialog_mut(id) else { return false };
     d.fields.insert(CENTER_X_FIELD.into(), json!(cx));
     d.fields.insert(CENTER_Y_FIELD.into(), json!(cy));
     true
+}
+
+/// A `ui.pointer` primary-button event on the top dialog's locator (#9648): a press centres the
+/// preview window, and so does a move while that press is held, remembered across requests as a
+/// held mouse button is; a hover or a release does not.
+pub(crate) fn pointer_event(app: &mut PhotocraftApp, down: bool, up: bool, x: f64, y: f64) {
+    let Some(d) = locator(app).and_then(|id| app.ui.dialog_mut(id)) else { return };
+    let held = !up && (down || d.fields.get(POINTER_DOWN_FIELD).and_then(Value::as_bool) == Some(true));
+    d.fields.insert(POINTER_DOWN_FIELD.into(), json!(held));
+    if held {
+        center_at(app, x, y);
+    }
 }
 
 /// The zoom levels the − / + buttons step through, like the Filter Gallery's.
@@ -552,6 +569,11 @@ mod tests {
         assert_eq!(centre(&app), (Some(json!(0.0)), Some(json!(48.0))));
         assert!(!center_at(&mut app, f64::NAN, 5.0));
         assert!(!center_at(&mut app, 5.0, f64::INFINITY));
+        assert_eq!(centre(&app), (Some(json!(0.0)), Some(json!(48.0))));
+        // A huge but finite point (past `f32`'s range) clamps to the far edge, not to 0.
+        assert!(center_at(&mut app, 1e40, -1e300));
+        assert_eq!(centre(&app), (Some(json!(64.0)), Some(json!(0.0))));
+        assert!(center_at(&mut app, -1e300, 1e40));
         assert_eq!(centre(&app), (Some(json!(0.0)), Some(json!(48.0))));
         let st = app.session.active().unwrap();
         assert_eq!((st.revision, st.history.past_len()), (revision, history), "the document and its history are untouched");

@@ -200,3 +200,44 @@ fn agents_centre_the_preview_with_ui_pointer_without_painting() {
     let _ = crate::control::handle(h.state_mut(), &ctx, &req);
     assert_ne!(edits(&h).0, before.0, "the Brush paints once no preview dialog is open");
 }
+
+/// Sends `events` as one `ui.pointer` request, then lets the frames run as between requests.
+fn pointer(h: &mut Harness<'static, PhotocraftApp>, events: Value) {
+    let (req, _rx) = crate::control::ControlRequest::new("ui.pointer", json!({"events": events}));
+    let _ = crate::control::handle(h.state_mut(), &egui::Context::default(), &req);
+    h.run_steps(2);
+}
+
+/// Agents send a press, its moves and its release as separate requests: only a held press centres
+/// the preview, a bare hover does not.
+#[test]
+fn ui_pointer_centres_only_while_the_press_is_held() {
+    let mut h = harness(Some("filter.sharpen.smartSharpen"), 0.0);
+    pointer(&mut h, json!([{"kind": "move", "x": 40, "y": 30}]));
+    // An event without a kind is a move, so a hover too.
+    pointer(&mut h, json!([{"x": 50, "y": 40}]));
+    assert!(near(centre(&h), [200.0, 150.0]), "a hover leaves the preview where it was: {:?}", centre(&h));
+    pointer(&mut h, json!([{"kind": "down", "x": 40, "y": 30}]));
+    assert!(near(centre(&h), [40.0, 30.0]), "{:?}", centre(&h));
+    pointer(&mut h, json!([{"kind": "move", "x": 80, "y": 60}]));
+    assert!(near(centre(&h), [80.0, 60.0]), "a move while the press is held drags it: {:?}", centre(&h));
+    pointer(&mut h, json!([{"kind": "up", "x": 80, "y": 60}]));
+    pointer(&mut h, json!([{"kind": "move", "x": 120, "y": 90}]));
+    assert!(near(centre(&h), [80.0, 60.0]), "after the release a move is a hover again: {:?}", centre(&h));
+}
+
+/// A Brush stroke an agent began before the dialog opened still ends: its release reaches the tool.
+#[test]
+fn a_tool_gesture_begun_before_the_dialog_still_ends_under_it() {
+    let mut h = harness(None, 0.0);
+    let before = edits(&h);
+    pointer(&mut h, json!([{"kind": "down", "x": 40, "y": 30}, {"kind": "move", "x": 80, "y": 30}]));
+    assert!(h.state().drag.is_some(), "the Brush stroke is under way");
+    crate::filter_dialog::open(h.state_mut(), "filter.sharpen.smartSharpen").unwrap();
+    h.run_steps(2);
+    assert!(h.state().drag.is_some(), "the stroke is still open under the dialog");
+    pointer(&mut h, json!([{"kind": "up", "x": 80, "y": 30}]));
+    assert!(h.state().drag.is_none(), "the release reached the Brush");
+    assert_eq!(edits(&h).1, before.1 + 1, "the stroke is one history step");
+    assert!(near(centre(&h), [200.0, 150.0]), "the release is not a locator press: {:?}", centre(&h));
+}
