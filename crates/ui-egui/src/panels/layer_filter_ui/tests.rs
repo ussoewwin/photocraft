@@ -142,12 +142,20 @@ fn the_dropdown_switches_the_panel_between_filter_types() {
 fn boards_session() -> photocraft_engine::Session {
     let mut s = photocraft_engine::Session::new();
     s.execute("file.new", json!({"width": 64, "height": 48})).unwrap();
-    s.execute("layer.new.layer", json!({"name": "Grass"})).unwrap();
+    // Every layer is made before the artboards, since a new layer goes into the artboard it is on.
+    for name in ["Grass", "Oak", "Loose"] {
+        s.execute("layer.new.layer", json!({"name": name})).unwrap();
+    }
+    let grass = layer(&s.active().unwrap().doc, "Grass");
+    s.execute("layer.select", json!({"layer": grass})).unwrap();
     s.execute("layer.new.artboardFromLayers", json!({"name": "Back"})).unwrap();
-    s.execute("layer.new.layer", json!({"name": "Oak"})).unwrap();
+    let oak = layer(&s.active().unwrap().doc, "Oak");
+    s.execute("layer.select", json!({"layer": oak})).unwrap();
     s.execute("layer.groupLayers", json!({"name": "Trees"})).unwrap();
     s.execute("layer.new.artboardFromLayers", json!({"name": "Front"})).unwrap();
-    s.execute("layer.new.layer", json!({"name": "Loose"})).unwrap();
+    let loose = layer(&s.active().unwrap().doc, "Loose");
+    s.execute("layer.select", json!({"layer": loose})).unwrap();
+    s.execute("layer.arrange.bringToFront", json!({})).unwrap();
     s.execute("layer.setExpanded", json!({"all": true, "expanded": true})).unwrap();
     s
 }
@@ -219,16 +227,18 @@ fn the_artboard_filter_walks_deep_groups_without_recursion() {
     use photocraft_geom::Rect;
     use std::collections::HashSet;
 
-    let mut nested = Layer::new("Leaf", LayerContent::Group(Group { children: vec![], expanded: false, artboard: None }));
+    let mut nested = Layer::new("Leaf", LayerContent::Group(Group { children: vec![], expanded: false, artboard: None, frame_stroke: None }));
     let selected = nested.id;
     let mut expected = HashSet::from([selected]);
     for _ in 0..16_384 {
-        nested = Layer::new("Group", LayerContent::Group(Group { children: vec![nested], expanded: false, artboard: None }));
+        nested = Layer::new("Group", LayerContent::Group(Group { children: vec![nested], expanded: false, artboard: None, frame_stroke: None }));
         expected.insert(nested.id);
     }
     let mut doc = Document::new("Deep groups", Size::new(8, 8), ColorMode::Rgb, SampleType::U8);
-    let board =
-        Layer::new("Board", LayerContent::Group(Group { children: vec![nested], expanded: true, artboard: Some(Artboard::new(Rect::new(0, 0, 8, 8))) }));
+    let board = Layer::new(
+        "Board",
+        LayerContent::Group(Group { children: vec![nested], expanded: true, artboard: Some(Artboard::new(Rect::new(0, 0, 8, 8))), frame_stroke: None }),
+    );
     expected.insert(board.id);
     doc.layers.push(board);
     std::thread::Builder::new()
