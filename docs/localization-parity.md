@@ -56,7 +56,7 @@ other catalogs translate; reviewed by a native speaker, [notes](localization-it.
 measured key and the union of the other catalogs' dynamic labels; its one/few/many plurals reuse
 the Russian rule. Swedish `sv` (4,537 rows, added 2026-10-28) covers every measured key and the
 other catalogs' dynamic labels; combined from the community catalogs in #5985 and #9536 with one
-term per concept, preferring the terms Swedish users know from the reference application.
+term per concept; the contested terms follow a native speaker's questionnaire answers.
 
 Czech UI follow-up (2026-10-11): status and notice wrappers, hardware labels, brush and
 transform accessibility names, rasterization prompts, profile mismatch messages and preset
