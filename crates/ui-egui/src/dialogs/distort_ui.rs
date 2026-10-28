@@ -103,7 +103,9 @@ pub(crate) fn surface_image(surf: &Surface, r: Rect, max_side: usize) -> ColorIm
 /// Adaptive Wide Angle). These are modal: other menu commands wait for OK or Cancel
 /// (`menus::modal_allows`).
 pub(crate) fn modal_workspace(app: &PhotocraftApp) -> Option<&'static str> {
-    if app.distort.liquify.is_some() {
+    if app.distort.select_mask.is_some() {
+        Some("select.selectAndMask")
+    } else if app.distort.liquify.is_some() {
         Some("filter.liquify")
     } else if app.distort.caf.is_some() {
         Some("edit.contentAwareFill")

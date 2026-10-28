@@ -772,3 +772,23 @@ fn the_reason_a_stale_workspace_closed_is_translated() {
         }
     }
 }
+
+#[test]
+fn sparse_large_preview_counts_coverage_without_a_dense_canvas_mask() {
+    let area = Rect::new(0, 0, 100_000, 100_000);
+    let mut selection = Surface::new(photocraft_color::PixelFormat::GRAY8);
+    selection.write_pixel(99_999, 99_999, &[1.0]);
+    selection.write_pixel(2, 3, &[0.5]);
+    selection.write_pixel(-1, -1, &[1.0]);
+    assert_eq!(selected_pixels(Some(&selection), area), 2);
+    assert!(preview_ants(Some(&selection), area, 1.0).is_none());
+    let small = Rect::new(0, 0, 10, 10);
+    assert_eq!(selected_pixels(Some(&selection), small), 1);
+    assert_eq!(preview_ants(Some(&selection), small, 1.0).unwrap().len(), 4);
+
+    let mut inverted = Surface::with_default(photocraft_color::PixelFormat::GRAY8, &[1.0]);
+    inverted.write_pixel(2, 3, &[0.0]);
+    let smaller = Rect::new(0, 0, 1000, 1000);
+    assert_eq!(selected_pixels(Some(&inverted), smaller), 999_999);
+    assert_eq!(selected_pixels(None, area), 0);
+}

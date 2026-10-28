@@ -48,6 +48,8 @@ const PANEL_W: f32 = 350.0;
 const UNDO_LIMIT: usize = 100;
 /// Marching ants with more edges than this are not drawn.
 const MAX_ANT_EDGES: usize = 200_000;
+/// Bound the temporary dense mask used for marching ants.
+const MAX_ANT_PIXELS: usize = 4_000_000;
 /// The `prefs.dialogs` key under which Remember Settings keeps the settings.
 const REMEMBERED: &str = "select.refineEdge.workspace";
 const CMD: &str = crate::select_mask_view::COMMAND;
@@ -1103,6 +1105,38 @@ fn ant_edges(m: &[f32], w: usize, h: usize, k: f32) -> Option<Vec<[[f32; 2]; 2]>
     Some(out)
 }
 
+/// Count selected pixels without allocating a canvas-sized mask. Missing tiles use the surface's
+/// default value, including an inverted selection whose default is selected.
+fn selected_pixels(selection: Option<&Surface>, area: Rect) -> usize {
+    let Some(surface) = selection else { return 0 };
+    let default_selected = surface.default_pixel().first().is_some_and(|v| *v >= 0.5);
+    let area_pixels = (area.width() as usize).saturating_mul(area.height() as usize);
+    let mut count = if default_selected { area_pixels } else { 0 };
+    for (coord, _) in surface.tiles() {
+        let tile_area = coord.rect().intersect(&area);
+        if tile_area.is_empty() {
+            continue;
+        }
+        let pixels = (tile_area.width() as usize).saturating_mul(tile_area.height() as usize);
+        if default_selected {
+            count = count.saturating_sub(pixels);
+        }
+        let values = photocraft_algo::selection::mask_from_surface(Some(surface), tile_area);
+        count = count.saturating_add(values.iter().filter(|v| **v >= 0.5).count());
+    }
+    count
+}
+
+/// Generate ants only when the dense temporary mask fits the preview budget.
+fn preview_ants(selection: Option<&Surface>, area: Rect, k: f32) -> Option<Vec<[[f32; 2]; 2]>> {
+    let (w, h) = (area.width() as usize, area.height() as usize);
+    if w.checked_mul(h).is_none_or(|n| n > MAX_ANT_PIXELS) {
+        return None;
+    }
+    let coverage = photocraft_algo::selection::mask_from_surface(selection, area);
+    ant_edges(&coverage, w, h, k)
+}
+
 /// The preview of `job`: the edits applied (from where the cache left off), the edge refined and
 /// the result shown in the view, as an image no wider than the device allows.
 fn compute(job: Job, cancel: Option<&photocraft_engine::jobs::JobCtx>) -> Result<(Shown, BaseCache, Arc<Document>), String> {
@@ -1150,10 +1184,9 @@ fn compute(job: Job, cancel: Option<&photocraft_engine::jobs::JobCtx>) -> Result
     let (tw, th) = (pw.div_ceil(f.max(1)), ph.div_ceil(f.max(1)));
     let buf = photocraft_compose::render_reduced(&shown, u32::try_from(tw).unwrap_or(1), u32::try_from(th).unwrap_or(1));
     let image = crate::canvas::display_image(job.display.as_deref(), &buf);
-    let coverage = photocraft_algo::selection::mask_from_surface(shown.selection.as_ref(), shown.bounds());
-    let selected = coverage.iter().filter(|v| **v >= 0.5).count();
+    let selected = selected_pixels(shown.selection.as_ref(), shown.bounds());
     let mode = params.get("__view").and_then(|v| v.get("mode")).and_then(Value::as_str);
-    let ants = (mode == Some(Mode::MarchingAnts.id())).then(|| ant_edges(&coverage, pw, ph, k as f32)).flatten();
+    let ants = if mode == Some(Mode::MarchingAnts.id()) { preview_ants(shown.selection.as_ref(), shown.bounds(), k as f32) } else { None };
     let covers = [(pw as f32) * k as f32, (ph as f32) * k as f32];
     Ok((Shown { image, ants, selected, trail: job.trail, covers }, cache, proxy))
 }
