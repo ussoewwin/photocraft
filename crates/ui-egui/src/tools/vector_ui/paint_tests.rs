@@ -377,6 +377,46 @@ fn colour_picker_button_opens_the_full_picker_on_the_paint() {
     assert_eq!(crate::paint_picker::recent_colors(&app.session).first().copied().map(crate::color_picker_ui::hex).as_deref(), Some("#ff8800"));
 }
 
+/// The popover's Color Picker keeps the screen eyedropper: a sampled colour waits in the dialog
+/// until OK, then becomes the next shape's fill or stroke colour.
+#[test]
+fn popover_colour_picker_samples_the_screen_for_the_next_shape() {
+    let mut app = app("rgb", 8);
+    let mut picks = std::collections::VecDeque::from([[0.91, 0.17, 0.32], [0.12, 0.68, 0.93]]);
+    app.services.screen_pick = Some(Box::new(move |_| {
+        let (tx, receiver) = std::sync::mpsc::channel();
+        tx.send(Ok(crate::screen_picker::Capture::Color(picks.pop_front()))).unwrap();
+        crate::screen_picker::Pending { receiver, cancelled: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)) }
+    }));
+    app.ui.tool_options.shape_fill = false;
+    let mut h = harness(app, false);
+    for label in ["Fill color", "Stroke color"] {
+        let tools = (h.state().session.tools.foreground, h.state().session.tools.background);
+        h.get_by_label(label).click();
+        h.run_steps(3);
+        h.get_by_label("Color Picker").click();
+        h.run_steps(3);
+        h.get_by_label("Pick screen color").click();
+        h.run_steps(4);
+        assert_eq!((h.state().session.tools.foreground, h.state().session.tools.background), tools, "{label}: sampling waits for OK");
+        let id = h.state().ui.dialogs.last().expect("the Color Picker dialog").id;
+        crate::dialogs::confirm(h.state_mut(), id).unwrap();
+        h.run_steps(2);
+    }
+    // The picker holds the sample as hex: 8 bits a channel.
+    let hex = |c: [f32; 3]| {
+        let [r, g, b] = c.map(|v| (v * 255.0).round() / 255.0);
+        [r, g, b, 1.0]
+    };
+    let (fill, stroke) = (hex([0.91, 0.17, 0.32]), hex([0.12, 0.68, 0.93]));
+    assert_eq!((h.state().session.tools.foreground, h.state().session.tools.background), (fill, stroke));
+    assert!(h.state().ui.tool_options.shape_fill);
+    assert_eq!(h.state().ui.tool_options.stroke_width, 3.0);
+    finish_shape(h.state_mut(), Tool::Rectangle, [20.0, 20.0], [100.0, 80.0], Modifiers::NONE);
+    assert_eq!(shape(h.state()).fill, Some(solid_paint(fill)));
+    assert_eq!(shape(h.state()).stroke.as_ref().unwrap().paint, solid_paint(stroke));
+}
+
 #[test]
 fn no_colour_and_solid_choices_are_explicit_live_tool_defaults() {
     let mut h = harness(app("rgb", 8), false);
