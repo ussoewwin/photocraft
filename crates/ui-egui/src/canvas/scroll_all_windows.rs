@@ -149,11 +149,12 @@ mod tests {
     /// Returns the dragged view's center and the stored centers of document 0's main view and of
     /// the window's view.
     fn drag_on_canvas(option: bool, shift: bool, in_window: bool) -> ([f32; 2], [f32; 2], [f32; 2]) {
-        drag_on_canvas_with(option, shift, false, in_window)
+        drag_on_canvas_with(option, shift, false, in_window, false)
     }
 
-    /// As `drag_on_canvas`, with Shift held in Window › Modifier Keys when `sticky_shift` is set.
-    fn drag_on_canvas_with(option: bool, shift: bool, sticky_shift: bool, in_window: bool) -> ([f32; 2], [f32; 2], [f32; 2]) {
+    /// As `drag_on_canvas`, with Shift held in Window › Modifier Keys when `sticky_shift` is set,
+    /// and with a dialog open over the canvas when `dialog` is set.
+    fn drag_on_canvas_with(option: bool, shift: bool, sticky_shift: bool, in_window: bool, dialog: bool) -> ([f32; 2], [f32; 2], [f32; 2]) {
         let ctx = egui::Context::default();
         let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
         app.run("file.new", json!({"width": 2000, "height": 1500})).unwrap();
@@ -164,6 +165,9 @@ mod tests {
         app.ui.tool = Tool::Hand;
         app.ui.tool_options.hand_scroll_all = option;
         app.ui.shell.sticky_shift = sticky_shift;
+        if dialog {
+            app.ui.open_dialog(crate::state::DialogKind::About, Default::default());
+        }
         app.ui.views[0] = view(1.0, [1000.0, 750.0], 0.0);
         app.ui.windows.push(DocWindow { id: 5, document: 1, view: view(1.0, [500.0, 375.0], 0.0), open: true, position: None });
         let mut v = if in_window { view(1.0, [500.0, 375.0], 0.0) } else { view(1.0, [1000.0, 750.0], 0.0) };
@@ -172,6 +176,10 @@ mod tests {
         let mut frame = |app: &mut PhotocraftApp, events: Vec<egui::Event>| {
             let input = egui::RawInput { screen_rect: Some(rect), events, ..Default::default() };
             let mut out = ctx.run_ui(input, |ui| {
+                // The open dialog's modal layer leaves the canvas widget inert (`dialogs::pan_delta`).
+                if dialog {
+                    ui.disable();
+                }
                 if in_window {
                     app.drawing_window = Some(5);
                     v = crate::canvas::canvas_view(app, ui, 1, rect, v.clone(), false);
@@ -209,9 +217,20 @@ mod tests {
 
     #[test]
     fn shift_held_in_the_modifier_keys_panel_makes_a_hand_drag_scroll_the_document_windows_too() {
-        let (dragged, _, window) = drag_on_canvas_with(false, false, true, false);
+        let (dragged, _, window) = drag_on_canvas_with(false, false, true, false, false);
         assert!(near(dragged, [1060.0, 720.0]), "the dragged view follows the pointer: {dragged:?}");
         assert!(near(window, [530.0, 360.0]), "sticky Shift turns it on for the drag: {window:?}");
+    }
+
+    #[test]
+    fn a_hand_drag_under_an_open_dialog_scrolls_the_document_windows_too() {
+        let (dragged, _, window) = drag_on_canvas_with(false, false, false, false, true);
+        assert!(near(dragged, [1060.0, 720.0]), "the dragged view pans under the dialog: {dragged:?}");
+        assert_eq!(window, [500.0, 375.0], "off: the window stays");
+        let (_, _, window) = drag_on_canvas_with(true, false, false, false, true);
+        assert!(near(window, [530.0, 360.0]), "on: it scrolls to the same relative location: {window:?}");
+        let (_, _, window) = drag_on_canvas_with(false, true, false, false, true);
+        assert!(near(window, [530.0, 360.0]), "Shift turns it on for the drag: {window:?}");
     }
 
     #[test]
