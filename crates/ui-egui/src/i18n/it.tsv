@@ -4602,3 +4602,6 @@ shape	Appearance	Aspetto
 	Font size presets	Predefiniti dimensione font
 	Leading presets	Predefiniti interlinea
 	Tracking presets	Predefiniti spaziatura
+
+# JPEG Options: the size the file will have (#7843)
+	Estimated file size	Dimensioni stimate del file

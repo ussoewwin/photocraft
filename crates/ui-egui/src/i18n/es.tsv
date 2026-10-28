@@ -4447,3 +4447,6 @@ navigator	Zoom	Zoom
 	Font size presets	Valores predefinidos de tamaño de fuente
 	Leading presets	Valores predefinidos de interlineado
 	Tracking presets	Valores predefinidos de tracking
+
+# JPEG Options: the size the file will have (#7843)
+	Estimated file size	Tamaño estimado del archivo

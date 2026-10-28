@@ -3168,3 +3168,6 @@ curves	Smooth	平滑
 	Font size presets	字号预设
 	Leading presets	行距预设
 	Tracking presets	字距调整预设
+
+# JPEG Options: the size the file will have (#7843)
+	Estimated file size	预计文件大小

@@ -4399,3 +4399,6 @@ cameraRaw	Yellow	Sárga
 	Font size presets	Betűméret-előbeállítások
 	Leading presets	Sorköz-előbeállítások
 	Tracking presets	Betűköz-előbeállítások
+
+# JPEG Options: the size the file will have (#7843)
+	Estimated file size	Becsült fájlméret

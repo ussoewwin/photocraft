@@ -4213,3 +4213,6 @@ cameraData	Lens	Lens
 	Font size presets	Yazı tipi boyutu hazır ayarları
 	Leading presets	Satır aralığı hazır ayarları
 	Tracking presets	İzleme hazır ayarları
+
+# JPEG Options: the size the file will have (#7843)
+	Estimated file size	Tahmini dosya boyutu

@@ -563,3 +563,6 @@ cameraRaw	Yellow	पीला
 	Target	लक्ष्य
 	Units	इकाइयाँ
 	Demosaic	डिमोज़ेक
+
+# JPEG Options: the size the file will have (#7843)
+	Estimated file size	अनुमानित फ़ाइल आकार

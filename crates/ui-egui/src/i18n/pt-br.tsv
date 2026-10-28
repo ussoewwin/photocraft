@@ -4415,3 +4415,6 @@ layerLabel	No Color	Sem cor
 	Font size presets	Predefinições de tamanho da fonte
 	Leading presets	Predefinições de entrelinha
 	Tracking presets	Predefinições de tracking
+
+# JPEG Options: the size the file will have (#7843)
+	Estimated file size	Tamanho estimado do arquivo

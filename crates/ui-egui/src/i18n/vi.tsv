@@ -3983,3 +3983,6 @@ curves	Smooth	Làm mượt
 	Font size presets	Cỡ chữ đặt sẵn
 	Leading presets	Giãn dòng đặt sẵn
 	Tracking presets	Khoảng cách chữ đặt sẵn
+
+# JPEG Options: the size the file will have (#7843)
+	Estimated file size	Kích thước tệp ước tính

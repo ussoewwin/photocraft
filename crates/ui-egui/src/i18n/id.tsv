@@ -3507,3 +3507,6 @@ curves	Smooth	Haluskan
 	Font size presets	Preset ukuran font
 	Leading presets	Preset leading
 	Tracking presets	Preset tracking
+
+# JPEG Options: the size the file will have (#7843)
+	Estimated file size	Perkiraan ukuran file

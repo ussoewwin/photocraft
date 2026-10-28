@@ -3704,3 +3704,6 @@ curves	Smooth	매끄럽게
 	Font size presets	글꼴 크기 사전 설정
 	Leading presets	행간 사전 설정
 	Tracking presets	자간 사전 설정
+
+# JPEG Options: the size the file will have (#7843)
+	Estimated file size	예상 파일 크기

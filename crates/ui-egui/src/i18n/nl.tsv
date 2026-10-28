@@ -4245,3 +4245,6 @@ curves	Smooth	Vloeiend maken
 	Font size presets	Voorinstellingen lettergrootte
 	Leading presets	Voorinstellingen interlinie
 	Tracking presets	Voorinstellingen spatiëring
+
+# JPEG Options: the size the file will have (#7843)
+	Estimated file size	Geschatte bestandsgrootte
