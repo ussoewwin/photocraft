@@ -1152,7 +1152,23 @@ fn parse_pointer_event(i: usize, e: &Value) -> std::result::Result<PointerSample
 
 /// Whether a modal tool, picker or context menu took the event instead of the canvas.
 fn pointer_event_intercepted(app: &mut PhotocraftApp, ctx: &egui::Context, g: &PointerGesture, s: &PointerSample) -> bool {
-    pointer_eyedropper_took(app, ctx, g, s) || color_range_took(app, g, s) || (g.secondary && secondary_menu_took(app, ctx, g, s))
+    pointer_eyedropper_took(app, ctx, g, s)
+        || color_range_took(app, g, s)
+        || preview_locator_took(app, g, s)
+        || (g.secondary && secondary_menu_took(app, ctx, g, s))
+}
+
+/// A filter dialog with a preview window on top: the image is its locator, as for the mouse
+/// (#9648). A press or drag with the primary button centres the window there; every event is
+/// consumed, so nothing reaches the tool under the dialog.
+fn preview_locator_took(app: &mut PhotocraftApp, g: &PointerGesture, s: &PointerSample) -> bool {
+    if crate::filter_preview_ui::locator(app).is_none() {
+        return false;
+    }
+    if !matches!(s.ev, ToolEvent::Up { .. }) && !g.secondary && !g.middle && !g.space {
+        crate::filter_preview_ui::center_at(app, s.x, s.y);
+    }
+    true
 }
 
 fn pointer_eyedropper_took(app: &mut PhotocraftApp, ctx: &egui::Context, g: &PointerGesture, s: &PointerSample) -> bool {
