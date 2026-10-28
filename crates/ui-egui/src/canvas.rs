@@ -1060,13 +1060,14 @@ fn handle_canvas_tool_stroke(
         }
         app.stylus.clear_selection();
         app.stylus.clock_ms = now_ms;
-        // A held pen keeps the clock running for airbrush build-up and smoothing catch-up.
-        if app.drag.is_some() && stroke_wants_time(app) {
-            ctx.request_repaint_after(std::time::Duration::from_millis(HOLD_REPEAT_MS as u64));
-        }
         app.defer_live_stroke = false;
         // One live-stroke update for the whole frame, not one per recovered sample.
         feed_live_stroke(app);
+        // A held pen keeps the clock running for airbrush build-up and smoothing catch-up (asked
+        // after the feed, which brings in what the stroke's thread last painted).
+        if app.drag.is_some() && stroke_wants_time(app) {
+            ctx.request_repaint_after(std::time::Duration::from_millis(HOLD_REPEAT_MS as u64));
+        }
         // The stroke is still painting what it was given: show its steps as they finish.
         if live_stroke_busy(app) {
             ctx.request_repaint();

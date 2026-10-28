@@ -47,6 +47,9 @@ struct State {
     /// Steps painted since the canvas last took them, and what the last one shows.
     steps: Vec<Step>,
     shown: Shown,
+    /// A step failed: later points are dropped and `shown` stays the last good step, as when the
+    /// canvas stopped feeding the stroke after its error.
+    failed: bool,
     /// The canvas let go of the stroke: the thread ends.
     closed: bool,
 }
@@ -80,7 +83,12 @@ impl Shared {
         let mut stroke = stroke;
         let step = stroke.push(&pts);
         let mut st = self.lock();
-        st.shown = Shown::of(&stroke);
+        if step.is_ok() {
+            st.shown = Shown::of(&stroke);
+        } else {
+            st.failed = true;
+            st.pending.clear();
+        }
         st.steps.push(step);
         st.stroke = Some(stroke);
         drop(st);
@@ -114,7 +122,7 @@ pub(super) struct PaintThread {
 impl PaintThread {
     pub(super) fn start(stroke: EngineStroke) -> Self {
         let shown = Shown::of(&stroke);
-        let state = State { pending: Vec::new(), stroke: Some(stroke), steps: Vec::new(), shown: shown.clone(), closed: false };
+        let state = State { pending: Vec::new(), stroke: Some(stroke), steps: Vec::new(), shown: shown.clone(), failed: false, closed: false };
         let shared = Arc::new(Shared { state: Mutex::new(state), changed: Condvar::new() });
         let thread = if cfg!(target_arch = "wasm32") {
             None
@@ -126,12 +134,18 @@ impl PaintThread {
         Self { shared, thread, shown }
     }
 
-    /// Hand points over to be painted.
+    /// Hand points over to be painted (none after a failed step).
     pub(super) fn push(&mut self, pts: Vec<StrokePoint>) {
         if pts.is_empty() {
             return;
         }
-        self.shared.lock().pending.extend(pts);
+        {
+            let mut st = self.shared.lock();
+            if st.failed {
+                return;
+            }
+            st.pending.extend(pts);
+        }
         if self.thread.is_some() {
             self.shared.changed.notify_all();
         } else {
@@ -252,6 +266,27 @@ mod tests {
         thread.peek(|_| ());
         assert!(thread.busy(), "a painted step nobody took yet");
         assert_eq!(thread.catch_up(Duration::ZERO).len(), 1);
+        assert!(!thread.busy());
+    }
+
+    #[test]
+    fn after_a_failed_step_the_stroke_paints_nothing_more_and_shows_its_last_good_step() {
+        // The Mixer Brush keeps its last good preview after an error (`take_steps`); points queued
+        // behind the failed batch must not paint over it.
+        let mut s = Session::new();
+        s.execute("file.new", json!({"width": 200, "height": 100, "background": "white"})).unwrap();
+        s.execute("layer.new.layer", json!({"name": "paint"})).unwrap();
+        let p = json!({"points": [[30, 50]], "size": 16});
+        let mixer = photocraft_engine::brush_cmds::mixer_live::LiveMixer::begin(&s, &p).unwrap();
+        let mut thread = PaintThread::start(EngineStroke::Mixer(Box::new(mixer)));
+        let good = thread.shown().doc.clone();
+        // More samples than a live Mixer stroke takes, then one it would take.
+        thread.push(vec![StrokePoint::new(40.0, 50.0, 1.0); 70_000]);
+        thread.peek(|_| ());
+        thread.push(vec![StrokePoint::new(150.0, 50.0, 1.0)]);
+        let steps = thread.catch_up(Duration::MAX);
+        assert!(matches!(steps.as_slice(), [Err(_)]), "only the failed step");
+        assert!(Arc::ptr_eq(&thread.shown().doc, &good), "the last good step stays shown");
         assert!(!thread.busy());
     }
 }
