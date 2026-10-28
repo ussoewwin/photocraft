@@ -729,11 +729,16 @@ pub(crate) fn triangle_mesh(tri: [Pos2; 3], h: f32, feather: f32) -> Mesh {
     let n = 16usize;
     let mut m = Mesh::default();
     let (fill, fringe) = (offset_triangle(tri, -feather / 2.0), offset_triangle(tri, feather / 2.0));
-    let color = |s: f32, b: f32| rgb32(hsb_to_rgb([h * 360.0, s, b]));
+    // A vertex of the smaller triangle shows the colour picking reads at its position, which is
+    // on `tri`, so the drawn colour and the picked one agree.
+    let solid = |m: &mut Mesh, s: f32, b: f32| {
+        let p = triangle_point(fill, s, b);
+        let (s, b) = triangle_sv(tri, p).unwrap_or((s, b));
+        m.colored_vertex(p, rgb32(hsb_to_rgb([h * 360.0, s, b])));
+    };
     for j in 0..=n {
         for i in 0..=n {
-            let (s, b) = (i as f32 / n as f32, j as f32 / n as f32);
-            m.colored_vertex(triangle_point(fill, s, b), color(s, b));
+            solid(&mut m, i as f32 / n as f32, j as f32 / n as f32);
         }
     }
     let row = (n + 1) as u32;
@@ -754,7 +759,7 @@ pub(crate) fn triangle_mesh(tri: [Pos2; 3], h: f32, feather: f32) -> Mesh {
     let start = m.vertices.len() as u32;
     let mut count = 0u32;
     for (s, b) in edge {
-        m.colored_vertex(triangle_point(fill, s, b), color(s, b));
+        solid(&mut m, s, b);
         m.colored_vertex(triangle_point(fringe, s, b), Color32::TRANSPARENT);
         count += 1;
     }

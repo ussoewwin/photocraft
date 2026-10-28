@@ -387,6 +387,10 @@ fn color_wheel_edges_are_feathered() {
         } else {
             assert!(d > 0.5 - 1e-2, "solid vertex {d} from the edge");
             solid_edge += usize::from((d - 0.5).abs() < 1e-2);
+            // It shows the colour picking reads where it is drawn.
+            let (s, b) = crate::color_panel_ui::triangle_sv(tri, v.pos).unwrap();
+            let picked = crate::color_panel_ui::rgb32(photocraft_color::convert::hsb_to_rgb([90.0, s, b]));
+            assert_eq!(v.color, picked, "vertex at {:?}", v.pos);
         }
     }
     assert!(fringe >= 48 && solid_edge >= 48, "{fringe} fringe, {solid_edge} edge vertices");
