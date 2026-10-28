@@ -37,9 +37,13 @@ pub(crate) fn finish_gesture(app: &mut PhotocraftApp, d: Drag) {
         let Some(d) = app.drag.take() else { return };
         let live = app.live_stroke.take();
         if let Some(l) = live {
-            let (doc, key, steps) = (l.doc, l.key, l.damage.len() as u64);
-            if let EngineStroke::Mixer(mixer) = l.stroke {
-                if l.preview_failed {
+            // What the stroke's thread was still painting.
+            let (painted, stroke) = l.paint.finish();
+            let failed = l.preview_failed || painted.iter().any(Result::is_err);
+            let steps = (l.damage.len() + painted.len()) as u64;
+            let (doc, key) = (l.doc, l.key);
+            if let Some(EngineStroke::Mixer(mixer)) = stroke {
+                if failed {
                     let mut p = stroke_params(app, &d, &app.stylus.stroke_points(&d.points));
                     p["seed"] = json!(mixer.seed);
                     drop(mixer);
