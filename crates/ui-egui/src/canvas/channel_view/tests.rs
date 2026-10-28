@@ -365,3 +365,29 @@ fn cmyk_channels_show_the_document_inks() {
         assert!(px.iter().all(|p| *p == Color32::from_gray(gray)), "{channel}: {:?}", px[0]);
     }
 }
+
+/// With a channel hidden, the shown inks convert through the document's own CMYK profile, as its
+/// composite does, not the built-in one.
+#[test]
+fn cmyk_channel_views_use_the_document_profile() {
+    let mut s = Session::new();
+    s.execute("file.new", json!({"width": 4, "height": 4, "mode": "cmyk"})).unwrap();
+    s.execute("tools.setColors", json!({"foregroundCmyk": [0.0, 0.5, 0.5, 0.0]})).unwrap();
+    s.execute("edit.fillForeground", json!({})).unwrap();
+    s.execute("channel.setVisible", json!({"channel": "black", "visible": false})).unwrap();
+    let st = s.active().unwrap();
+    let params =
+        photocraft_cms::synth::CmykParams { description: "Test Uncoated".into(), tvi: [0.26, 0.26, 0.26, 0.3], grid_a2b: 5, grid_b2a: 9, ..Default::default() };
+    let mut doc = (*st.doc).clone();
+    doc.icc_profile = Some(photocraft_cms::synth::cmyk_profile(&params).to_bytes());
+    let space = photocraft_compose::cmyk_space(&doc).expect("a profile other than the built-in one");
+    let fmt = doc.pixel_format();
+    let inks: Vec<f32> = [0.0, 0.5, 0.5, 0.0].into_iter().chain(fmt.alpha.then_some(1.0)).collect();
+    let tagged = photocraft_color::convert::with_cmyk_space(Some(&space), || to_rgba(&fmt, &inks));
+    let builtin = to_rgba(&fmt, &inks);
+    // 8-bit inks: within one level of the tagged conversion, well away from the built-in one.
+    let off = |c: [f32; 4], px: Color32| [px.r(), px.g(), px.b()].iter().zip(c).map(|(p, c)| (i32::from(*p) - i32::from(q(c))).abs()).max().unwrap();
+    let px = render(&doc, &st.channel_view, doc.bounds(), 1, Look::default(), st.active_layer).unwrap()[0];
+    assert!(off(tagged, px) <= 1, "{px:?} vs tagged {tagged:?}");
+    assert!(off(builtin, px) > 4, "{px:?} vs built-in {builtin:?}");
+}

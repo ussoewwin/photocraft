@@ -226,30 +226,34 @@ fn render_with_source(
         let shown: Vec<usize> = (0..colors).filter(|k| v.color_visible(*k)).collect();
         let computed = if source.cached.is_some_and(|px| px.len() == n) { None } else { Some(composite(doc, r, factor)) };
         let pixels = source.cached.filter(|px| px.len() == n).or(computed.as_deref())?;
-        let converted = pixels
-            .iter()
-            .copied()
-            .map(|px| {
-                // CMYK samples are inks already (opaque: flattened onto paper).
-                let mut native = if mode == ColorMode::Cmyk { px.into_iter().chain(fmt.alpha.then_some(1.0)).collect() } else { from_rgba(&fmt, px) };
-                if shown.len() == 1 && !in_color {
-                    let x = native[shown[0]];
-                    // Ink channels read dark where there is ink.
-                    let g = if mode == ColorMode::Cmyk { 1.0 - x } else { x };
-                    return [g, g, g, 1.0];
-                }
-                for (k, x) in native[..colors].iter_mut().enumerate() {
-                    if !v.color_visible(k) {
-                        // Hidden channels contribute nothing (Lab: neutral a/b, and a neutral
-                        // Lightness under Show Channels in Color, so an isolated a/b channel
-                        // tints over mid gray instead of black, as Photoshop does).
-                        *x = if mode == ColorMode::Lab && (k > 0 || in_color) { 0.5 } else { 0.0 };
+        // The inks show through the document's own CMYK profile, as in its composite.
+        let space = photocraft_compose::cmyk_space(doc);
+        let converted = photocraft_color::convert::with_cmyk_space(space.as_ref(), || {
+            pixels
+                .iter()
+                .copied()
+                .map(|px| {
+                    // CMYK samples are inks already (opaque: flattened onto paper).
+                    let mut native = if mode == ColorMode::Cmyk { px.into_iter().chain(fmt.alpha.then_some(1.0)).collect() } else { from_rgba(&fmt, px) };
+                    if shown.len() == 1 && !in_color {
+                        let x = native[shown[0]];
+                        // Ink channels read dark where there is ink.
+                        let g = if mode == ColorMode::Cmyk { 1.0 - x } else { x };
+                        return [g, g, g, 1.0];
                     }
-                }
-                let c = to_rgba(&fmt, &native);
-                [c[0], c[1], c[2], 1.0]
-            })
-            .collect();
+                    for (k, x) in native[..colors].iter_mut().enumerate() {
+                        if !v.color_visible(k) {
+                            // Hidden channels contribute nothing (Lab: neutral a/b, and a neutral
+                            // Lightness under Show Channels in Color, so an isolated a/b channel
+                            // tints over mid gray instead of black, as Photoshop does).
+                            *x = if mode == ColorMode::Lab && (k > 0 || in_color) { 0.5 } else { 0.0 };
+                        }
+                    }
+                    let c = to_rgba(&fmt, &native);
+                    [c[0], c[1], c[2], 1.0]
+                })
+                .collect()
+        });
         if n <= MAX_COMPOSITE_CACHE_PIXELS {
             *source.fresh = computed;
         }
