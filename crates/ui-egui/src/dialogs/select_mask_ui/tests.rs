@@ -781,7 +781,7 @@ fn sparse_large_preview_counts_coverage_without_a_dense_canvas_mask() {
     selection.write_pixel(2, 3, &[0.5]);
     selection.write_pixel(-1, -1, &[1.0]);
     assert_eq!(selected_pixels(Some(&selection), area), 2);
-    assert!(preview_ants(Some(&selection), area, 1.0).is_none());
+    assert_eq!(preview_ants(Some(&selection), area, 1.0).unwrap().len(), 8);
     let small = Rect::new(0, 0, 10, 10);
     assert_eq!(selected_pixels(Some(&selection), small), 1);
     assert_eq!(preview_ants(Some(&selection), small, 1.0).unwrap().len(), 4);

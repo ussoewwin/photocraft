@@ -1131,10 +1131,61 @@ fn selected_pixels(selection: Option<&Surface>, area: Rect) -> usize {
 fn preview_ants(selection: Option<&Surface>, area: Rect, k: f32) -> Option<Vec<[[f32; 2]; 2]>> {
     let (w, h) = (area.width() as usize, area.height() as usize);
     if w.checked_mul(h).is_none_or(|n| n > MAX_ANT_PIXELS) {
-        return None;
+        return sparse_preview_ants(selection?, area, k);
     }
     let coverage = photocraft_algo::selection::mask_from_surface(selection, area);
     ant_edges(&coverage, w, h, k)
+}
+
+/// Follow sparse selections on large canvases without scanning the empty canvas. A selected
+/// default or too many stored pixels falls back to omitting ants, as for too many edges.
+fn sparse_preview_ants(surface: &Surface, area: Rect, k: f32) -> Option<Vec<[[f32; 2]; 2]>> {
+    if surface.default_pixel().first().is_some_and(|v| *v >= 0.5) {
+        return None;
+    }
+    let mut work = 0usize;
+    let mut edges = Vec::new();
+    let mut sample = vec![0.0; surface.channels()];
+    for (coord, _) in surface.tiles() {
+        let tile = coord.rect().intersect(&area);
+        if tile.is_empty() {
+            continue;
+        }
+        work = work.checked_add((tile.width() as usize).checked_mul(tile.height() as usize)?)?;
+        if work > MAX_ANT_PIXELS {
+            return None;
+        }
+        let coverage = photocraft_algo::selection::mask_from_surface(Some(surface), tile);
+        for y in tile.y0..tile.y1 {
+            for x in tile.x0..tile.x1 {
+                let index = (y - tile.y0) as usize * tile.width() as usize + (x - tile.x0) as usize;
+                if !coverage.get(index).is_some_and(|v| *v >= 0.5) {
+                    continue;
+                }
+                let (fx, fy) = ((x - area.x0) as f32, (y - area.y0) as f32);
+                for (nx, ny, a, b) in [
+                    (x - 1, y, [fx, fy], [fx, fy + 1.0]),
+                    (x + 1, y, [fx + 1.0, fy], [fx + 1.0, fy + 1.0]),
+                    (x, y - 1, [fx, fy], [fx + 1.0, fy]),
+                    (x, y + 1, [fx, fy + 1.0], [fx + 1.0, fy + 1.0]),
+                ] {
+                    let selected = if nx < area.x0 || nx >= area.x1 || ny < area.y0 || ny >= area.y1 {
+                        false
+                    } else {
+                        surface.read_pixel(nx, ny, &mut sample);
+                        sample.first().is_some_and(|v| *v >= 0.5)
+                    };
+                    if !selected {
+                        edges.push([[a[0] * k, a[1] * k], [b[0] * k, b[1] * k]]);
+                        if edges.len() > MAX_ANT_EDGES {
+                            return None;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Some(edges)
 }
 
 /// The preview of `job`: the edits applied (from where the cache left off), the edge refined and
