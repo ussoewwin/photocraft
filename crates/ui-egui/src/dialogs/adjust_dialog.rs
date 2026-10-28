@@ -17,6 +17,8 @@ use crate::tone::{self, HistSource};
 const PREFIX: &str = "image.adjustments.";
 const CURVE_PICKER: &str = "__curvePicker";
 const CURVE_PICKER_BASE: &str = "__curvePickerBase";
+/// Set once a Photo Filter dialog has drawn: its editor memory was refreshed for this opening.
+const PHOTO_FILTER_FRESH: &str = "__photoFilterFresh";
 
 fn picker(value: Option<&Value>) -> Option<photocraft_engine::adjust_params::CurvesEyedropper> {
     use photocraft_engine::adjust_params::CurvesEyedropper;
@@ -306,6 +308,15 @@ pub fn open_last(app: &mut PhotocraftApp, command: &str) -> Option<u64> {
     Some(id)
 }
 
+/// `params` of the adjustment `command` with every key filled in as the engine reads them: a
+/// recorded Photo Filter that names only its `filter` gets that preset's `color`, not the dialog's
+/// neutral one. `None` for other commands and for params the engine rejects.
+pub(crate) fn complete_params(app: &PhotocraftApp, command: &str, params: &Value) -> Option<Value> {
+    let kind = command.strip_prefix(PREFIX).filter(|k| adjust_editors::has_editor(k))?;
+    let adjustment = photocraft_engine::adjust_params::from_params(kind, params, None, curve_mode(app, kind)).ok()?;
+    Some(photocraft_engine::adjust_params::to_params(&adjustment))
+}
+
 /// Remember an adjustment dialog's settings after a successful OK, for [`open_last`]. Editing a
 /// smart filter's settings is not a use of the dialog's own (as `filter_dialog::remember`).
 pub(crate) fn remember(app: &mut PhotocraftApp, fields: &Map<String, Value>) {
@@ -340,6 +351,12 @@ fn curve_mode(app: &PhotocraftApp, kind: &str) -> photocraft_doc::ColorMode {
 pub fn body(app: &mut PhotocraftApp, ui: &mut egui::Ui, fields: &mut Map<String, Value>) {
     let kind = fields.get("__adjust").and_then(Value::as_str).unwrap_or_default().to_string();
     let mode = curve_mode(app, &kind);
+    // Each opening starts from the settings it opened at: Photo Filter's Filter / Color choice
+    // follows its colour, whatever a cancelled opening left in the editor memory.
+    if kind == "photoFilter" && !fields.contains_key(PHOTO_FILTER_FRESH) {
+        adjust_editors::forget_photo_filter_mode(ui.ctx(), dialog_mem(&kind));
+        fields.insert(PHOTO_FILTER_FRESH.into(), json!(false));
+    }
     if matches!(kind.as_str(), "levels" | "curves") {
         picker_controls(ui, fields, mode);
         ui.add_space(4.0);

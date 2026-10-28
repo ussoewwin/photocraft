@@ -495,9 +495,12 @@ pub fn open_editor(app: &mut PhotocraftApp, ctx: &egui::Context, layer: u64, sm:
     }) else {
         return;
     };
+    // An adjustment's recorded settings are completed first, so a key the record lacks shows (and
+    // saves) what the engine reads for it rather than the dialog's neutral value.
+    let params = crate::adjust_dialog::complete_params(app, &f.command, &f.params).unwrap_or_else(|| f.params.clone());
     if let Some(d) = app.ui.dialog_mut(id) {
         d.fields.insert("__smartFilter".into(), target);
-        if let Value::Object(p) = &f.params {
+        if let Value::Object(p) = &params {
             for (k, v) in p {
                 if !k.starts_with("__") {
                     d.fields.insert(k.clone(), v.clone());

@@ -885,3 +885,38 @@ fn photo_filter_opens_at_its_last_settings() {
         photocraft_engine::adjust_params::to_params(&photocraft_engine::adjust_params::default_for("levels", photocraft_doc::ColorMode::Rgb).unwrap());
     assert_eq!(app.ui.dialog_mut(again).unwrap().fields["inBlack"], defaults["inBlack"], "Levels opens neutral without ⌥");
 }
+
+/// #9879 review: a custom colour confirmed in Photo Filter reopens with Color chosen, even after an
+/// opening that switched to Filter and was cancelled (the choice lives in the editor memory).
+#[test]
+fn photo_filter_reopens_with_the_choice_its_colour_implies() {
+    let mut h = Harness::builder().with_size(egui::vec2(1200.0, 900.0)).build_ui_state(|ui, app| crate::dialogs::show(app, ui.ctx()), app_with_image());
+    PhotocraftApp::setup_context(&h.ctx, crate::theme::ThemeKind::ALL[0]);
+    let cmd = "image.adjustments.photoFilter";
+    let id = open(h.state_mut(), cmd).unwrap();
+    h.state_mut().ui.dialog_mut(id).unwrap().fields.insert("color".into(), json!("#123456"));
+    h.run_steps(2);
+    crate::dialogs::confirm(h.state_mut(), id).unwrap();
+    // The next opening chooses Filter (what clicking its radio stores), then is cancelled.
+    let mode = dialog_mem("photoFilter").with(crate::adjust_editors::PHOTO_FILTER_MODE);
+    let id = open(h.state_mut(), cmd).unwrap();
+    h.run_steps(2);
+    h.ctx.data_mut(|d| d.insert_temp(mode, false));
+    h.state_mut().ui.close_dialog(id);
+    h.run_steps(1);
+    let id = open(h.state_mut(), cmd).unwrap();
+    h.run_steps(2);
+    assert_eq!(h.state_mut().ui.dialog_mut(id).unwrap().fields["color"], json!("#123456"));
+    assert_eq!(h.ctx.data(|d| d.get_temp::<bool>(mode)), Some(true), "Color is chosen for the custom colour");
+}
+
+/// #9879 review: a recorded Photo Filter that names only its preset completes to that preset's
+/// colour, so editing it as a smart filter doesn't swap in the dialog's neutral colour.
+#[test]
+fn recorded_photo_filter_settings_complete_to_their_preset_colour() {
+    let app = app_with_image();
+    let done = complete_params(&app, "image.adjustments.photoFilter", &json!({"filter": "cooling80", "density": 60})).unwrap();
+    assert_eq!((done["color"].as_str(), done["density"].as_f64()), (Some("#006dff"), Some(60.0)));
+    assert!(complete_params(&app, "filter.blur.gaussian", &json!({"radius": 2})).is_none(), "not an adjustment");
+    assert!(complete_params(&app, "image.adjustments.photoFilter", &json!({"filter": "nope"})).is_none(), "rejected params");
+}
