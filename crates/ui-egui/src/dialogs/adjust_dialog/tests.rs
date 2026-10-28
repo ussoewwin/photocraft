@@ -911,12 +911,20 @@ fn photo_filter_reopens_with_the_choice_its_colour_implies() {
 }
 
 /// #9879 review: a recorded Photo Filter that names only its preset completes to that preset's
-/// colour, so editing it as a smart filter doesn't swap in the dialog's neutral colour.
+/// colour, so editing it as a smart filter doesn't swap in the dialog's neutral colour. Recorded
+/// values are kept as they were, and nothing else is rewritten.
 #[test]
 fn recorded_photo_filter_settings_complete_to_their_preset_colour() {
     let app = app_with_image();
-    let done = complete_params(&app, "image.adjustments.photoFilter", &json!({"filter": "cooling80", "density": 60})).unwrap();
-    assert_eq!((done["color"].as_str(), done["density"].as_f64()), (Some("#006dff"), Some(60.0)));
+    let pf = "image.adjustments.photoFilter";
+    let done = complete_params(&app, pf, &json!({"filter": "cooling80", "density": 60, "extra": [1]})).unwrap();
+    assert_eq!(done, json!({"filter": "cooling80", "density": 60, "extra": [1], "color": "#006dff"}), "only the colour is added");
+    // A recorded colour (here a float triple the engine would rewrite as hex) is left alone.
+    assert!(complete_params(&app, pf, &json!({"filter": "cooling80", "color": [0.5, 0.0, 0.0]})).is_none());
+    assert!(complete_params(&app, pf, &json!({"density": 60})).is_none(), "no preset to take a colour from");
+    assert!(complete_params(&app, pf, &json!({"filter": "nope"})).is_none(), "rejected params");
+    // Other adjustments keep their recorded values exactly (a pencil curve isn't smoothed again).
+    let curves = json!({"pencil": true, "smooth": 2, "rgb": [0, 255]});
+    assert!(complete_params(&app, "image.adjustments.curves", &curves).is_none());
     assert!(complete_params(&app, "filter.blur.gaussian", &json!({"radius": 2})).is_none(), "not an adjustment");
-    assert!(complete_params(&app, "image.adjustments.photoFilter", &json!({"filter": "nope"})).is_none(), "rejected params");
 }

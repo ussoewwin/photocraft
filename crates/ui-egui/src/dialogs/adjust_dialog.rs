@@ -308,13 +308,19 @@ pub fn open_last(app: &mut PhotocraftApp, command: &str) -> Option<u64> {
     Some(id)
 }
 
-/// `params` of the adjustment `command` with every key filled in as the engine reads them: a
-/// recorded Photo Filter that names only its `filter` gets that preset's `color`, not the dialog's
-/// neutral one. `None` for other commands and for params the engine rejects.
+/// `params` of the adjustment `command` with the keys the dialog would otherwise fill in wrongly:
+/// a recorded Photo Filter that names only its `filter` gets that preset's `color`, not the
+/// dialog's neutral one. Every recorded value is kept as it was (a round trip through the engine
+/// would rewrite them: float colours as hex, a pencil curve smoothed again). `None` when nothing
+/// needs adding, or for params the engine rejects.
 pub(crate) fn complete_params(app: &PhotocraftApp, command: &str, params: &Value) -> Option<Value> {
-    let kind = command.strip_prefix(PREFIX).filter(|k| adjust_editors::has_editor(k))?;
+    let kind = command.strip_prefix(PREFIX).filter(|k| *k == "photoFilter")?;
+    let recorded = params.as_object().filter(|p| p.contains_key("filter") && !p.contains_key("color"))?;
     let adjustment = photocraft_engine::adjust_params::from_params(kind, params, None, curve_mode(app, kind)).ok()?;
-    Some(photocraft_engine::adjust_params::to_params(&adjustment))
+    let color = photocraft_engine::adjust_params::to_params(&adjustment).get("color").cloned()?;
+    let mut done = recorded.clone();
+    done.insert("color".into(), color);
+    Some(Value::Object(done))
 }
 
 /// Remember an adjustment dialog's settings after a successful OK, for [`open_last`]. Editing a

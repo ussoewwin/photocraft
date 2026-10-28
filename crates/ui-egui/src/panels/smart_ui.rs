@@ -495,8 +495,8 @@ pub fn open_editor(app: &mut PhotocraftApp, ctx: &egui::Context, layer: u64, sm:
     }) else {
         return;
     };
-    // An adjustment's recorded settings are completed first, so a key the record lacks shows (and
-    // saves) what the engine reads for it rather than the dialog's neutral value.
+    // A recorded Photo Filter that names only its preset gets the preset's colour, which the
+    // dialog would otherwise fill in with its neutral one; recorded values stay as they were.
     let params = crate::adjust_dialog::complete_params(app, &f.command, &f.params).unwrap_or_else(|| f.params.clone());
     if let Some(d) = app.ui.dialog_mut(id) {
         d.fields.insert("__smartFilter".into(), target);
