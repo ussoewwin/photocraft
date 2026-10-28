@@ -51,7 +51,7 @@ pub(crate) use draw::{Readout, live_readout, styled_frame};
 pub(crate) use draw::{carries_selection_of, draw_selection};
 pub use draw::{draw_content, draw_overlay};
 #[cfg(test)]
-use draw::{front_vertices, handle_anchor, texture_quad};
+use draw::{front_vertices, handle_anchor};
 pub(crate) use options_bar::position_size_fields;
 #[cfg(test)]
 use options_bar::{

@@ -1,4 +1,6 @@
 use super::commit::{cancel, commit, start_steps};
+#[cfg(test)]
+use super::draw::texture_quad;
 use super::preview::{Above, preview_image};
 use super::{
     Arc, BezierMesh, CAS_ONLY_SCALES, Color32, DocId, Document, Follow, Homography, LOCKED, LayerContent, LayerId, MadeLayer, PhotocraftApp, Several, Steps,
