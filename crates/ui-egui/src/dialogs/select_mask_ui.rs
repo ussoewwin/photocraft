@@ -1570,6 +1570,160 @@ fn follow_revision(app: &mut PhotocraftApp) {
     }
 }
 
+/// Draws the document, the refined edge, the stroke being drawn and the polygon in progress.
+fn paint_canvas(ui: &mut egui::Ui, ctx: &egui::Context, w: &mut SelectMaskWorkspace, t: &Tokens, painter: &egui::Painter, resp: &egui::Response, area: ERect) {
+    let v = View { area, zoom: w.zoom, center: w.center };
+    let clip = painter.with_clip_rect(area);
+    let img = v.rect(w.canvas);
+    let uv = ERect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
+    widgets::checker(&clip, img.intersect(area), 8.0);
+    let preview = w.preview.tex.as_ref().filter(|_| !w.hide_view);
+    match (preview, &w.image_tex) {
+        (Some(tex), _) => {
+            // The reduced copy's last row and column may reach past the canvas.
+            let covers = ERect::from_min_size(img.min, vec2(w.preview.covers[0] * v.zoom, w.preview.covers[1] * v.zoom));
+            clip.with_clip_rect(img.intersect(area)).image(tex.id(), covers, uv, Color32::WHITE);
+        }
+        (None, Some(tex)) => {
+            clip.image(tex.id(), img, uv, Color32::WHITE);
+        }
+        (None, None) => {}
+    }
+    // Marching Ants: the refined selection's edge, black dashes on white.
+    if !w.hide_view
+        && w.opts.view == Mode::MarchingAnts
+        && let Some(edges) = &w.preview.ants
+    {
+        let phase = (ui.input(|i| i.time) * 8.0) as usize;
+        for e in edges {
+            let (a, b) = (v.to_screen([f64::from(e[0][0]), f64::from(e[0][1])]), v.to_screen([f64::from(e[1][0]), f64::from(e[1][1])]));
+            let dark = ((e[0][0] + e[0][1]) as usize / 4 + phase).is_multiple_of(2);
+            clip.line_segment([a, b], Stroke::new(1.0, if dark { Color32::BLACK } else { Color32::WHITE }));
+        }
+        ctx.request_repaint_after(std::time::Duration::from_millis(120));
+    }
+    if w.preview.shown != w.preview.want && !w.pressed {
+        let sp = ERect::from_min_size(area.right_bottom() - vec2(26.0, 26.0), vec2(18.0, 18.0));
+        ui.put(sp, egui::Spinner::new().size(16.0));
+    }
+    // The stroke being drawn: the part the preview doesn't show yet (all of it without
+    // Real-Time Refinement), joined to the part it does, so the stroke follows the pointer.
+    let ink = Color32::from_rgba_unmultiplied(t.accent.r(), t.accent.g(), t.accent.b(), 110);
+    if let Some(g) = w.gesture.as_ref().or(w.trail.as_ref()) {
+        let line: Vec<Pos2> = g.points.iter().map(|p| v.to_screen(*p)).collect();
+        match g.tool {
+            SmTool::Quick | SmTool::Brush | SmTool::RefineEdge if w.preview.trail != usize::MAX => {
+                let tail = line.get(w.preview.trail.saturating_sub(1)..).unwrap_or_default();
+                let r = w.size() as f32 * 0.5 * v.zoom;
+                for p in tail {
+                    clip.circle_filled(*p, r, ink);
+                }
+                if tail.len() > 1 {
+                    clip.add(egui::Shape::line(tail.to_vec(), Stroke::new(2.0 * r, ink)));
+                }
+            }
+            SmTool::Lasso => {
+                clip.add(egui::Shape::line(line, Stroke::new(1.0, t.accent)));
+            }
+            SmTool::Object => {
+                if let (Some(a), Some(b)) = (line.first(), line.last()) {
+                    clip.rect_stroke(ERect::from_two_pos(*a, *b), 0.0, Stroke::new(1.0, t.accent), egui::StrokeKind::Middle);
+                }
+            }
+            _ => {}
+        }
+    }
+    if let Some((_, pts)) = &w.poly {
+        let mut line: Vec<Pos2> = pts.iter().map(|p| v.to_screen(*p)).collect();
+        if let Some(hp) = resp.hover_pos() {
+            line.push(hp);
+        }
+        clip.add(egui::Shape::line(line, Stroke::new(1.0, t.accent)));
+    }
+}
+
+/// The cursor over the document, and the image's outline.
+fn paint_cursor(ctx: &egui::Context, w: &mut SelectMaskWorkspace, clip: &egui::Painter, resp: &egui::Response, v: View, pan: bool, alt: bool) {
+    let (img, t) = (v.rect(w.canvas), Tokens::get(ctx));
+    // The cursor: Photoshop's hand while panning (closed while dragging), the brush's circle
+    // (with + or −), the zoom glass, else a crosshair.
+    if let Some(hp) = resp.hover_pos() {
+        w.hover = Some(v.to_doc(hp));
+    }
+    if pan && (resp.dragged() || resp.is_pointer_button_down_on()) {
+        ctx.set_cursor_icon(egui::CursorIcon::Grabbing);
+    } else if let Some(hp) = resp.hover_pos() {
+        if pan {
+            ctx.set_cursor_icon(egui::CursorIcon::Grab);
+        } else if w.tool.brushes() {
+            let r = (w.size() as f32 * 0.5 * v.zoom).max(2.0);
+            clip.circle_stroke(hp, r, Stroke::new(1.5, Color32::BLACK));
+            clip.circle_stroke(hp, r, Stroke::new(0.75, Color32::WHITE));
+            let add = w.add != alt;
+            for s in [Stroke::new(2.5, Color32::from_black_alpha(140)), Stroke::new(1.0, Color32::from_white_alpha(220))] {
+                clip.line_segment([hp - vec2(3.0, 0.0), hp + vec2(3.0, 0.0)], s);
+                if add {
+                    clip.line_segment([hp - vec2(0.0, 3.0), hp + vec2(0.0, 3.0)], s);
+                }
+            }
+            ctx.set_cursor_icon(egui::CursorIcon::None);
+        } else {
+            ctx.set_cursor_icon(match w.tool {
+                SmTool::Zoom if alt => egui::CursorIcon::ZoomOut,
+                SmTool::Zoom => egui::CursorIcon::ZoomIn,
+                _ => egui::CursorIcon::Crosshair,
+            });
+        }
+    }
+    clip.rect_stroke(img, 0.0, Stroke::new(1.0, t.separator), egui::StrokeKind::Outside);
+}
+
+/// Pan, zoom-click and tool gestures on the document, as events for `pointer`.
+#[allow(clippy::too_many_arguments)]
+fn canvas_input(
+    ui: &egui::Ui,
+    ctx: &egui::Context,
+    w: &mut SelectMaskWorkspace,
+    resp: &egui::Response,
+    v: View,
+    pan: bool,
+    events: &mut Vec<ToolEvent>,
+    mods: &mut egui::Modifiers,
+) {
+    if pan && resp.dragged() {
+        let dl = resp.drag_delta();
+        w.center = [w.center[0] - f64::from(dl.x / w.zoom), w.center[1] - f64::from(dl.y / w.zoom)];
+    } else if w.tool == SmTool::PolygonalLasso && !pan {
+        *mods = ui.input(|i| i.modifiers);
+        if resp.double_clicked() {
+            w.close_polygon();
+        } else if resp.clicked()
+            && let Some(pp) = resp.interact_pointer_pos()
+        {
+            let q = v.to_doc(pp);
+            events.push(ToolEvent::Down { x: q[0], y: q[1], pressure: 1.0 });
+        }
+    } else if !pan
+        && resp.is_pointer_button_down_on()
+        && let Some(pp) = resp.interact_pointer_pos()
+    {
+        let q = v.to_doc(pp);
+        *mods = ui.input(|i| i.modifiers);
+        if w.pressed {
+            events.push(ToolEvent::Move { x: q[0], y: q[1], pressure: 1.0 });
+            ctx.request_repaint();
+        } else {
+            w.pressed = true;
+            events.push(ToolEvent::Down { x: q[0], y: q[1], pressure: 1.0 });
+        }
+    }
+    if w.pressed && !resp.is_pointer_button_down_on() {
+        w.pressed = false;
+        let q = w.hover.unwrap_or(w.center);
+        events.push(ToolEvent::Up { x: q[0], y: q[1] });
+    }
+}
+
 /// Draws the workspace (a full-window layer over the app).
 pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
     follow_revision(app);
@@ -1698,140 +1852,12 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
             }
         }
         let v = View { area, zoom: w.zoom, center: w.center };
-        let clip = painter.with_clip_rect(area);
-        let img = v.rect(w.canvas);
-        let uv = ERect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
-        widgets::checker(&clip, img.intersect(area), 8.0);
-        let preview = w.preview.tex.as_ref().filter(|_| !w.hide_view);
-        match (preview, &w.image_tex) {
-            (Some(tex), _) => {
-                // The reduced copy's last row and column may reach past the canvas.
-                let covers = ERect::from_min_size(img.min, vec2(w.preview.covers[0] * v.zoom, w.preview.covers[1] * v.zoom));
-                clip.with_clip_rect(img.intersect(area)).image(tex.id(), covers, uv, Color32::WHITE);
-            }
-            (None, Some(tex)) => {
-                clip.image(tex.id(), img, uv, Color32::WHITE);
-            }
-            (None, None) => {}
-        }
-        // Marching Ants: the refined selection's edge, black dashes on white.
-        if !w.hide_view
-            && w.opts.view == Mode::MarchingAnts
-            && let Some(edges) = &w.preview.ants
-        {
-            let phase = (ui.input(|i| i.time) * 8.0) as usize;
-            for e in edges {
-                let (a, b) = (v.to_screen([f64::from(e[0][0]), f64::from(e[0][1])]), v.to_screen([f64::from(e[1][0]), f64::from(e[1][1])]));
-                let dark = ((e[0][0] + e[0][1]) as usize / 4 + phase).is_multiple_of(2);
-                clip.line_segment([a, b], Stroke::new(1.0, if dark { Color32::BLACK } else { Color32::WHITE }));
-            }
-            ctx.request_repaint_after(std::time::Duration::from_millis(120));
-        }
-        if w.preview.shown != w.preview.want && !w.pressed {
-            let sp = ERect::from_min_size(area.right_bottom() - vec2(26.0, 26.0), vec2(18.0, 18.0));
-            ui.put(sp, egui::Spinner::new().size(16.0));
-        }
-        // The stroke being drawn: the part the preview doesn't show yet (all of it without
-        // Real-Time Refinement), joined to the part it does, so the stroke follows the pointer.
-        let ink = Color32::from_rgba_unmultiplied(t.accent.r(), t.accent.g(), t.accent.b(), 110);
-        if let Some(g) = w.gesture.as_ref().or(w.trail.as_ref()) {
-            let line: Vec<Pos2> = g.points.iter().map(|p| v.to_screen(*p)).collect();
-            match g.tool {
-                SmTool::Quick | SmTool::Brush | SmTool::RefineEdge if w.preview.trail != usize::MAX => {
-                    let tail = line.get(w.preview.trail.saturating_sub(1)..).unwrap_or_default();
-                    let r = w.size() as f32 * 0.5 * v.zoom;
-                    for p in tail {
-                        clip.circle_filled(*p, r, ink);
-                    }
-                    if tail.len() > 1 {
-                        clip.add(egui::Shape::line(tail.to_vec(), Stroke::new(2.0 * r, ink)));
-                    }
-                }
-                SmTool::Lasso => {
-                    clip.add(egui::Shape::line(line, Stroke::new(1.0, t.accent)));
-                }
-                SmTool::Object => {
-                    if let (Some(a), Some(b)) = (line.first(), line.last()) {
-                        clip.rect_stroke(ERect::from_two_pos(*a, *b), 0.0, Stroke::new(1.0, t.accent), egui::StrokeKind::Middle);
-                    }
-                }
-                _ => {}
-            }
-        }
-        if let Some((_, pts)) = &w.poly {
-            let mut line: Vec<Pos2> = pts.iter().map(|p| v.to_screen(*p)).collect();
-            if let Some(hp) = resp.hover_pos() {
-                line.push(hp);
-            }
-            clip.add(egui::Shape::line(line, Stroke::new(1.0, t.accent)));
-        }
+        paint_canvas(ui, ctx, w, &t, &painter, &resp, area);
         // Space, the middle button or the Hand pan. The Polygonal Lasso takes clicks: each adds a
         // vertex, a double-click closes.
         let pan = ui.input(|i| i.key_down(egui::Key::Space) || i.pointer.middle_down()) || w.tool == SmTool::Hand;
-        // The cursor: Photoshop's hand while panning (closed while dragging), the brush's circle
-        // (with + or −), the zoom glass, else a crosshair.
-        if let Some(hp) = resp.hover_pos() {
-            w.hover = Some(v.to_doc(hp));
-        }
-        let alt = ui.input(|i| i.modifiers.alt);
-        if pan && (resp.dragged() || resp.is_pointer_button_down_on()) {
-            ctx.set_cursor_icon(egui::CursorIcon::Grabbing);
-        } else if let Some(hp) = resp.hover_pos() {
-            if pan {
-                ctx.set_cursor_icon(egui::CursorIcon::Grab);
-            } else if w.tool.brushes() {
-                let r = (w.size() as f32 * 0.5 * v.zoom).max(2.0);
-                clip.circle_stroke(hp, r, Stroke::new(1.5, Color32::BLACK));
-                clip.circle_stroke(hp, r, Stroke::new(0.75, Color32::WHITE));
-                let add = w.add != alt;
-                for s in [Stroke::new(2.5, Color32::from_black_alpha(140)), Stroke::new(1.0, Color32::from_white_alpha(220))] {
-                    clip.line_segment([hp - vec2(3.0, 0.0), hp + vec2(3.0, 0.0)], s);
-                    if add {
-                        clip.line_segment([hp - vec2(0.0, 3.0), hp + vec2(0.0, 3.0)], s);
-                    }
-                }
-                ctx.set_cursor_icon(egui::CursorIcon::None);
-            } else {
-                ctx.set_cursor_icon(match w.tool {
-                    SmTool::Zoom if alt => egui::CursorIcon::ZoomOut,
-                    SmTool::Zoom => egui::CursorIcon::ZoomIn,
-                    _ => egui::CursorIcon::Crosshair,
-                });
-            }
-        }
-        clip.rect_stroke(img, 0.0, Stroke::new(1.0, t.separator), egui::StrokeKind::Outside);
-        if pan && resp.dragged() {
-            let dl = resp.drag_delta();
-            w.center = [w.center[0] - f64::from(dl.x / w.zoom), w.center[1] - f64::from(dl.y / w.zoom)];
-        } else if w.tool == SmTool::PolygonalLasso && !pan {
-            mods = ui.input(|i| i.modifiers);
-            if resp.double_clicked() {
-                w.close_polygon();
-            } else if resp.clicked()
-                && let Some(pp) = resp.interact_pointer_pos()
-            {
-                let q = v.to_doc(pp);
-                events.push(ToolEvent::Down { x: q[0], y: q[1], pressure: 1.0 });
-            }
-        } else if !pan
-            && resp.is_pointer_button_down_on()
-            && let Some(pp) = resp.interact_pointer_pos()
-        {
-            let q = v.to_doc(pp);
-            mods = ui.input(|i| i.modifiers);
-            if w.pressed {
-                events.push(ToolEvent::Move { x: q[0], y: q[1], pressure: 1.0 });
-                ctx.request_repaint();
-            } else {
-                w.pressed = true;
-                events.push(ToolEvent::Down { x: q[0], y: q[1], pressure: 1.0 });
-            }
-        }
-        if w.pressed && !resp.is_pointer_button_down_on() {
-            w.pressed = false;
-            let q = w.hover.unwrap_or(w.center);
-            events.push(ToolEvent::Up { x: q[0], y: q[1] });
-        }
+        paint_cursor(ctx, w, &painter.with_clip_rect(area), &resp, v, pan, ui.input(|i| i.modifiers.alt));
+        canvas_input(ui, ctx, w, &resp, v, pan, &mut events, &mut mods);
         if (w.opts.clone(), w.sample_all) != before {
             w.stale();
         }
