@@ -330,6 +330,16 @@ impl PatternImage {
 mod tests {
     use super::*;
 
+    #[test]
+    fn fast_floor_matches_floor() {
+        let edges = [-3.0f32, -2.5, -1.0, -0.5, -0.0, 0.0, 0.5, 1.0, 1e9, -1e9, 1_999_999_999.0, 2.5e9, -2.5e9, f32::MAX, f32::MIN];
+        let fractions = (-4000..4000).map(|i| i as f32 * 0.37);
+        for x in edges.into_iter().chain(fractions) {
+            assert_eq!(fast_floor(x), x.floor(), "{x}");
+        }
+        assert!(fast_floor(f32::NAN).is_nan());
+    }
+
     /// Cloning a tile (and the brush settings holding it, on every pointer event of a stroke)
     /// shares its samples instead of copying them (#4534).
     #[test]

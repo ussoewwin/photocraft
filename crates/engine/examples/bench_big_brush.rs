@@ -35,7 +35,7 @@ fn pct(v: &mut [f64], p: f64) -> f64 {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().collect();
-    let frames: usize = arg(&args, "--frames").and_then(|v| v.parse().ok()).unwrap_or(90);
+    let frames: usize = arg(&args, "--frames").and_then(|v| v.parse().ok()).unwrap_or(60).clamp(1, 10_000);
     let sizes: Vec<f64> = arg(&args, "--sizes").unwrap_or("300,800,1500".into()).split(',').filter_map(|v| v.parse().ok()).collect();
     let file = args.get(1).filter(|a| !a.starts_with("--"));
     let pressure = json!({"control": "penPressure"});
@@ -68,9 +68,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             s.tools.brush = brush.clone();
             // A 4K canvas fit to a 4K screen with panels: about 45 %.
             let zoom = 0.45;
-            // Each frame brings four pen samples, 12 px apart (a brisk stroke at 120 Hz).
+            // Each frame brings four pen samples, 11.2 px apart across (a brisk stroke at 120 Hz),
+            // whatever `--frames` is; long runs sweep back and forth over the canvas.
             let at = |k: usize| {
-                let t = k as f64 / (frames * 4) as f64;
+                let sweep = k as f64 * 11.2 / (0.7 * w);
+                let t = 1.0 - (sweep % 2.0 - 1.0).abs();
                 let p = StrokePoint::new(w * (0.15 + 0.7 * t), h * (0.5 + 0.25 * (t * 9.0).sin()), (0.4 + 0.6 * (t * 5.0).sin().abs()) as f32);
                 StrokePoint { time: k as f64 * 2.0, ..p }
             };
