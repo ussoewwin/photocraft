@@ -22,6 +22,10 @@ on:
       fuzz_seconds:
         description: "Seconds per fuzz target"
         default: "600"
+      dry_mixer:
+        description: "Compare the live Mixer Brush against the origin/main merge base on 24 MP (Linux)"
+        type: boolean
+        default: false
 
 # The token is only used to check out the code: no job writes to the repository.
 permissions:
@@ -481,3 +485,60 @@ jobs:
           path: |
             target/perf/*.json
             target/perf/summary.md
+
+  dry-mixer:
+    if: inputs.dry_mixer == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      RAYON_NUM_THREADS: "4"
+      CARGO_PROFILE_RELEASE_LTO: "false"
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Pin baseline to the merge base with origin/main
+        id: baseline
+        run: |
+          git remote add upstream https://github.com/storytold/photocraft.git
+          git fetch --no-tags upstream main
+          base=$(git merge-base HEAD upstream/main)
+          echo "sha=$base" >> "$GITHUB_OUTPUT"
+          git worktree add --detach "$RUNNER_TEMP/photocraft-baseline" "$base"
+          mkdir -p "$RUNNER_TEMP/photocraft-baseline/crates/engine/examples"
+          cp crates/engine/examples/bench_dry_mixer.rs "$RUNNER_TEMP/photocraft-baseline/crates/engine/examples/bench_dry_mixer.rs"
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - name: Install Linux build dependencies
+        uses: storytold/craft-common-actions/actions/install-apt-packages@main
+        with:
+          packages: >-
+            libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev
+            libgtk-3-dev
+      - name: Benchmark baseline and candidate on this runner
+        run: |
+          set -o pipefail
+          echo "baseline=${{ steps.baseline.outputs.sha }}" | tee dry-mixer-perf.txt
+          echo "candidate=${GITHUB_SHA}" | tee -a dry-mixer-perf.txt
+          CARGO_TARGET_DIR="$RUNNER_TEMP/target-baseline" cargo run --release --manifest-path "$RUNNER_TEMP/photocraft-baseline/Cargo.toml" -p photocraft-engine --example bench_dry_mixer | tee baseline-mixer.txt
+          CARGO_TARGET_DIR="$RUNNER_TEMP/target-candidate" cargo run --release -p photocraft-engine --example bench_dry_mixer | tee candidate-mixer.txt
+          cat baseline-mixer.txt candidate-mixer.txt >> dry-mixer-perf.txt
+          python3 - <<'PY'
+          import re
+          def fingerprints(path):
+              rows = open(path).readlines()
+              result = {}
+              for row in rows:
+                  match = re.search(r'wet=\s*(\d+)% sample_all=\s*(\w+) size=\s*(\d+).*blake3=(\w+)', row)
+                  if match:
+                      result[match.group(1, 2, 3)] = match.group(4)
+              return result
+          before, after = fingerprints('baseline-mixer.txt'), fingerprints('candidate-mixer.txt')
+          assert len(before) == 12 and before == after, 'baseline/candidate mixer output or state differs'
+          PY
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: dry-mixer-performance
+          path: dry-mixer-perf.txt
