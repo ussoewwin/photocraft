@@ -125,3 +125,5 @@ mod pen_path_ops_tests;
 
 #[cfg(test)]
 mod paint_tests;
+
+pub(crate) use pen::freeform_locked_shape;

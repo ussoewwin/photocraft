@@ -321,3 +321,26 @@ fn an_unknown_operation_falls_back_to_new_layer() {
     square(&mut app, 30.0, 30.0, 50.0);
     assert_eq!(layers(&app), count + 2);
 }
+
+#[test]
+fn freeform_refuses_a_locked_shape_before_starting_a_stroke() {
+    use crate::canvas::{ToolEvent, tool_event};
+    for lock in ["all", "pixels"] {
+        let mut app = app();
+        app.ui.tool_options.vector_mode = "shape".into();
+        square(&mut app, 20.0, 20.0, 100.0);
+        let (id, body) = shape_path(&app);
+        app.run("layer.lockLayers", json!({lock: true})).unwrap();
+        let steps = app.session.active().unwrap().history.past_len();
+        app.ui.tool = Tool::FreeformPen;
+        app.ui.tool_options.pen_path_op = "subtract".into();
+        tool_event(&mut app, ToolEvent::Down { x: 50.0, y: 50.0, pressure: 1.0 }, egui::Modifiers::NONE);
+        assert!(app.drag.is_none(), "{lock}: stroke was not started");
+        assert!(app.ui.status_error, "{lock}");
+        assert_eq!(shape_path(&app), (id, body), "{lock}");
+        assert_eq!(app.session.active().unwrap().history.past_len(), steps, "{lock}");
+        app.session.undo();
+        tool_event(&mut app, ToolEvent::Down { x: 50.0, y: 50.0, pressure: 1.0 }, egui::Modifiers::NONE);
+        assert!(app.drag.is_some(), "{lock}: unlocked stroke can start");
+    }
+}

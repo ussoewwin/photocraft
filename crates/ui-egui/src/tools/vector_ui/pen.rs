@@ -651,6 +651,18 @@ fn path_op_button(ui: &mut egui::Ui, glyph: &str, label: &str, checked: bool) ->
 // ---------------------------------------------------------------------------------------------
 // Freeform Pen and Curvature Pen
 
+/// Refuse a Freeform stroke before drawing when its selected shape cannot be edited.
+pub(crate) fn freeform_locked_shape(app: &PhotocraftApp) -> bool {
+    if app.ui.tool_options.vector_mode != "shape" || pen_path_op(&app.ui.tool_options).is_none() {
+        return false;
+    }
+    let Some(id) = selected_shape(&app.session) else { return false };
+    app.session.active().is_some_and(|st| {
+        let locks = st.doc.effective_locks(id);
+        locks.all || locks.pixels
+    })
+}
+
 /// Freeform Pen release: fit the drag's trace within the options bar's Curve Fit and commit it
 /// as the Pen does. Releasing on the start point closes the path; a click draws nothing. The
 /// points at indices `straight` were ⌥-clicked: the segment into each one stays straight.
