@@ -1064,13 +1064,13 @@ fn handle_canvas_tool_stroke(
         if app.drag.is_some() && stroke_wants_time(app) {
             ctx.request_repaint_after(std::time::Duration::from_millis(HOLD_REPEAT_MS as u64));
         }
+        app.defer_live_stroke = false;
+        // One live-stroke update for the whole frame, not one per recovered sample.
+        feed_live_stroke(app);
         // The stroke is still painting what it was given: show its steps as they finish.
         if live_stroke_busy(app) {
             ctx.request_repaint();
         }
-        app.defer_live_stroke = false;
-        // One live-stroke update for the whole frame, not one per recovered sample.
-        feed_live_stroke(app);
         crate::magnetic_lasso_ui::flush(app);
     }
     if buttons.stopped {

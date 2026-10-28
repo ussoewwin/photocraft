@@ -174,7 +174,7 @@ pub(crate) struct LiveStroke {
     pub(super) preview_failed: bool,
     pub(super) paint: PaintThread,
     /// The jitter seed the commit must reuse (`EngineStroke::seed`).
-    seed: Option<u64>,
+    pub(super) seed: Option<u64>,
     pub(super) doc: photocraft_doc::DocId,
     revision: u64,
     /// Preview key of the stroke; step `n` displays as `key + n`.

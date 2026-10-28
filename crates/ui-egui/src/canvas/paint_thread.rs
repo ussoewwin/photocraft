@@ -8,7 +8,8 @@
 
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::thread::JoinHandle;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use web_time::Instant;
 
 use photocraft_engine::paint::StrokePoint;
 use photocraft_geom::Rect;
