@@ -43,7 +43,7 @@ pub(crate) fn gesture_mods(ctx: &Context, mods: egui::Modifiers) -> egui::Modifi
 }
 
 pub(crate) fn menu_id() -> Id {
-    Id::new("canvas-brush-mode-menu")
+    Id::unique("canvas-brush-mode-menu")
 }
 
 pub(crate) fn open(app: &mut PhotocraftApp, ctx: &Context, pos: [f32; 2]) {
