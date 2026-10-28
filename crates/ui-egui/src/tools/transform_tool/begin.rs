@@ -1,7 +1,7 @@
-use super::commit::{commit, start_steps};
+use super::commit::{cancel, commit, start_steps};
 use super::preview::{Above, preview_image};
 use super::{
-    Arc, BezierMesh, CAS_ONLY_SCALES, Color32, DocId, Document, Follow, Homography, LOCKED, LayerContent, LayerId, MadeLayer, PhotocraftApp, Steps,
+    Arc, BezierMesh, CAS_ONLY_SCALES, Color32, DocId, Document, Follow, Homography, LOCKED, LayerContent, LayerId, MadeLayer, PhotocraftApp, Several, Steps,
     TransformPreview, TransformSession, Warp, WarpStyle, corners, json,
 };
 

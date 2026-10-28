@@ -32,7 +32,6 @@ mod preview;
 mod warp;
 
 pub(crate) use begin::begin_content_aware;
-use begin::moves_kind;
 pub(crate) use begin::moving_layers;
 #[cfg(test)]
 pub(crate) use begin::moving_texel;

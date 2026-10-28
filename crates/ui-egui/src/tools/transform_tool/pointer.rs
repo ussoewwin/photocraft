@@ -1,10 +1,10 @@
-use super::begin::warps_type;
+use super::begin::{moving_layers, warps_type};
 use super::commit::{commit, committing, moves_type};
 use super::drag_modes::{apply_drag, apply_mode_drag, drag_mods, handle_indicator, mode_allows, mode_mods};
 use super::warp::{quick_split_kind, split_cursor, surface_at, warp_hit, warp_pointer};
 use super::{
-    CursorIcon, HANDLE_PX, Homography, LayerContent, LayerId, PhotocraftApp, ToolEvent, TransformMode, TransformPreview, TransformSession, ViewXform,
-    WarpStyle, handle_tolerance,
+    CursorIcon, HANDLE_PX, Homography, LayerContent, PhotocraftApp, ToolEvent, TransformMode, TransformPreview, TransformSession, ViewXform, WarpStyle,
+    handle_tolerance,
 };
 
 /// Which part of the box a document point hits.
