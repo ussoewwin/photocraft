@@ -226,7 +226,8 @@ fn ui_pointer_centres_only_while_the_press_is_held() {
     assert!(near(centre(&h), [80.0, 60.0]), "after the release a move is a hover again: {:?}", centre(&h));
 }
 
-/// A Brush stroke an agent began before the dialog opened still ends: its release reaches the tool.
+/// A Brush stroke an agent began before the dialog opened still ends along its own path: its moves
+/// and release reach the tool, not the locator.
 #[test]
 fn a_tool_gesture_begun_before_the_dialog_still_ends_under_it() {
     let mut h = harness(None, 0.0);
@@ -236,8 +237,35 @@ fn a_tool_gesture_begun_before_the_dialog_still_ends_under_it() {
     crate::filter_dialog::open(h.state_mut(), "filter.sharpen.smartSharpen").unwrap();
     h.run_steps(2);
     assert!(h.state().drag.is_some(), "the stroke is still open under the dialog");
-    pointer(&mut h, json!([{"kind": "up", "x": 80, "y": 30}]));
+    pointer(&mut h, json!([{"kind": "move", "x": 80, "y": 120}, {"kind": "move", "x": 120, "y": 120}]));
+    let points = h.state().drag.as_ref().map(|d| d.points.clone()).unwrap_or_default();
+    assert!(points.iter().any(|p| p[1] > 100.0), "the moves under the dialog reached the stroke: {points:?}");
+    pointer(&mut h, json!([{"kind": "up", "x": 120, "y": 120}]));
     assert!(h.state().drag.is_none(), "the release reached the Brush");
     assert_eq!(edits(&h).1, before.1 + 1, "the stroke is one history step");
-    assert!(near(centre(&h), [200.0, 150.0]), "the release is not a locator press: {:?}", centre(&h));
+    assert!(near(centre(&h), [200.0, 150.0]), "the stroke's moves and release are not locator presses: {:?}", centre(&h));
+}
+
+/// A release the locator doesn't take (Space held, or another dialog on top) still ends its press,
+/// so a later hover doesn't drag the preview with no button down.
+#[test]
+fn a_release_elsewhere_ends_the_locator_press() {
+    let mut h = harness(Some("filter.sharpen.smartSharpen"), 0.0);
+    pointer(&mut h, json!([{"kind": "down", "x": 40, "y": 30}]));
+    assert!(near(centre(&h), [40.0, 30.0]), "{:?}", centre(&h));
+    let (req, _rx) = crate::control::ControlRequest::new("ui.pointer", json!({"events": [{"kind": "up", "x": 40, "y": 30}], "space": true}));
+    let _ = crate::control::handle(h.state_mut(), &egui::Context::default(), &req);
+    h.run_steps(2);
+    pointer(&mut h, json!([{"kind": "move", "x": 120, "y": 90}]));
+    assert!(near(centre(&h), [40.0, 30.0]), "a Space-held release ends the press: {:?}", centre(&h));
+
+    // The release lands on a Color Picker opened over the dialog.
+    pointer(&mut h, json!([{"kind": "down", "x": 60, "y": 50}]));
+    assert!(near(centre(&h), [60.0, 50.0]), "{:?}", centre(&h));
+    let picker = crate::color_picker_ui::open(h.state_mut(), "foreground");
+    pointer(&mut h, json!([{"kind": "up", "x": 60, "y": 50}]));
+    h.state_mut().ui.close_dialog(picker);
+    h.run_steps(2);
+    pointer(&mut h, json!([{"kind": "move", "x": 120, "y": 90}]));
+    assert!(near(centre(&h), [60.0, 50.0]), "a release on another dialog ends the press: {:?}", centre(&h));
 }

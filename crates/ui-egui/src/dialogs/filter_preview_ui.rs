@@ -197,6 +197,14 @@ pub(crate) fn pointer_event(app: &mut PhotocraftApp, down: bool, up: bool, x: f6
     }
 }
 
+/// A primary `ui.pointer` release, wherever it went: no locator press stays held in any open
+/// dialog, even one that was not on top or not taking the pointer when the button came up.
+pub(crate) fn clear_pointer_state(app: &mut PhotocraftApp) {
+    for d in &mut app.ui.dialogs {
+        d.fields.remove(POINTER_DOWN_FIELD);
+    }
+}
+
 /// The zoom levels the − / + buttons step through, like the Filter Gallery's.
 const ZOOM_STEPS: [f32; 7] = [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0];
 
