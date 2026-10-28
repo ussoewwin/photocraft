@@ -2,7 +2,7 @@ use super::manage::fix_view_now;
 use super::planes::{color_count, materialize};
 use super::refs::{ChanRef, bad, parse_ref};
 use super::view::{ChannelTarget, touch};
-use super::*;
+use super::{ColorMode, Document, EngineError, Layer, LayerId, Rect, Result, Session, Surface, Value, from_rgba, json, list};
 
 // ---------------------------------------------------------------------------------------------
 // Targets for pixel commands

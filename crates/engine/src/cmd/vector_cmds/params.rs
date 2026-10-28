@@ -1,4 +1,7 @@
-use super::*;
+use super::{
+    Color, Fill, FillRule, GradientStyle, Knot, LayerId, LineCap, LineJoin, LiveShape, Path, PathOp, Point, Result, Session, ShapeStroke, StrokeAlign, Subpath,
+    Value, bad, json,
+};
 
 pub(crate) fn layer_id(s: &Session, p: &Value) -> Result<LayerId> {
     crate::commands::layer_param(s, p)

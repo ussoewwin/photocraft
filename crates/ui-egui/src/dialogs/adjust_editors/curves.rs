@@ -1,4 +1,7 @@
-use super::*;
+use super::{
+    Color32, CurveUi, Edit, EditorCx, Pos2, Rect, RichText, Sense, Stroke, StrokeKind, Tokens, ToneSpace, Value, adjust_params, curve_edit, json, label, pos2,
+    space_of, tone, vec2, widgets,
+};
 
 // ---------------------------------------------------------------------------------------------
 // Channels of Levels / Curves
@@ -430,8 +433,11 @@ pub(super) fn curves(ui: &mut egui::Ui, v: &mut Value, cx: &EditorCx) -> Edit {
 #[cfg(test)]
 mod multi_channel_tests {
     use super::super::levels::read_levels;
+    use super::super::{auto_levels, editor};
     use super::*;
+    use crate::{PhotocraftApp, tone::HistSource};
     use photocraft_engine::{Session, channel_cmds};
+    use std::sync::Arc;
 
     fn context(mode: &str) -> EditorCx {
         let mut s = Session::new();
