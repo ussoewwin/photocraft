@@ -413,7 +413,7 @@ pub(super) fn feed_live_stroke(app: &mut PhotocraftApp) {
     let steps = l.paint.catch_up(LIVE_STROKE_WAIT);
     let tool = d.tool;
     take_steps(app, tool, steps);
-    app.stroke_trace.stroke(crate::gpu_canvas::now_ms() - started);
+    app.perf.stage.stroke_ms += crate::gpu_canvas::now_ms() - started;
 }
 
 /// How long a frame waits for the live stroke to paint the points it was just given. A light
@@ -652,7 +652,7 @@ pub(super) fn commit_brush_stroke(app: &mut PhotocraftApp, d: &Drag) {
     }
     let started = crate::gpu_canvas::now_ms();
     let result = app.run(stroke_command(app, d.tool), p);
-    app.stroke_trace.stroke(crate::gpu_canvas::now_ms() - started);
+    app.perf.stage.stroke_ms += crate::gpu_canvas::now_ms() - started;
     app.session.clear_live_stroke();
     let Ok(r) = result else { return };
     let after = app.session.documents().iter().find(|st| st.doc.id == doc).map(|st| (st.revision, st.doc.clone()));
