@@ -1,5 +1,6 @@
+use super::targeting::{Target, target_of};
 use super::view::{ChannelTarget, color_names};
-use super::*;
+use super::{ColorMode, DocState, Document, PixelFormat, Rect, Surface, Value};
 
 /// The Levels/Curves Channel popup lists only this channel when the Channels panel has a
 /// single non-composite target (a colour component, layer mask, saved channel or Quick Mask).

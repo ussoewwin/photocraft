@@ -95,6 +95,19 @@ Validation on Linux with `PHOTOCRAFT_FULL_SWEEP=1` and CI's pinned craft-fonts i
 
 Current evidence is retained in `plan/merge-main-20261027b/` (gitignored).
 
+## Main integration and review (2026-10-29)
+
+Current main integrated: `69b8fd9c1` (PhotoCraft 0.17.0; 240 incoming commits). Three conflicts were resolved by retaining upstream's extracted dialog-canvas handler, adding the shared named-channel picker to the explicit Levels imports, and retaining both the tone-target and transform-readout integration modules. The existing sampling comment now lives in the extracted handler. Engine target helpers use explicit imports required by main's wildcard-import ban; obsolete imports were removed. No runtime behavior change was introduced by these resolutions.
+
+Validation on Linux with `PHOTOCRAFT_FULL_SWEEP=1` and CI's pinned craft-fonts input:
+
+- Full engine/UI `cargo test`: **7,001 passed, 0 failed, 39 normally ignored**, including doctest builds. The initial run hit the unchanged font-family UI test's eight-frame settling limit; its isolated run and complete cached rerun passed without changing or skipping the test. Both logs are retained. The ignored full-registry adversarial command test passed separately.
+- Strict engine/UI all-target Clippy (`-D warnings`) passed with main's new cognitive-complexity, argument-count and wildcard-import rules, without suppressions. Formatting, layering and wasm passed. The changed-corpus check correctly skipped because no corpus-critical paths differ from integrated main.
+- Existing Levels/Curves regressions remain registered. Four fresh offscreen captures were inspected for named alpha and Smart Filter mask controls, previews and layout. The final scoped integration review found no further actionable issues.
+- Historical benchmarks and broader workspace results remain dated and were not rerun for this import/canvas refactor integration. No fresh latency or Windows/macOS result is claimed.
+
+Current evidence is retained in `plan/merge-main-20261029/` (gitignored).
+
 ## 24 MP release comparison
 
 Dense synthetic 6000 × 4000 RGB8 raster layer, raster mask, saved alpha channel and Quick Mask, each filled with 25% gray. The central selection is a 3000 × 2000 rectangle at 0.5 coverage. Proxy factor 4 (1500 × 1000). AMD Ryzen 7 9700X, 16 logical CPUs, Ubuntu 26.04.1, Rust 1.99.0, default optimized release profile (thin LTO).
