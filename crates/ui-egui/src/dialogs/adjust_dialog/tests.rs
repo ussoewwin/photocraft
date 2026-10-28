@@ -849,3 +849,39 @@ fn curves_on_a_targeted_filter_mask_is_a_gray_plane() {
     assert!(h.ch[0][0] > 0 && h.ch[0][255] > 0, "black and white levels");
     assert_eq!(curve_mode(&app, "curves"), photocraft_doc::ColorMode::Grayscale);
 }
+
+/// #9879: Photo Filter opens at the filter and density last confirmed in it, without ⌥; Levels
+/// still opens at its neutral settings, and a smart filter's dialog never takes the last ones.
+#[test]
+fn photo_filter_opens_at_its_last_settings() {
+    let mut app = app_with_image();
+    let cmd = "image.adjustments.photoFilter";
+    let first = open_neutral(&mut app, cmd).unwrap();
+    let neutral = crate::filter_dialog::params_of(&app.ui.dialog_mut(first).unwrap().fields.clone());
+    app.ui.dialogs.clear();
+    let id = open(&mut app, cmd).unwrap();
+    let sample = photocraft_engine::adjust_params::to_params(
+        &photocraft_engine::adjust_params::from_params("photoFilter", &sample_params("photoFilter"), None, photocraft_doc::ColorMode::Rgb).unwrap(),
+    );
+    assert_ne!(sample, neutral, "the sample differs from the neutral settings");
+    if let Value::Object(p) = sample.clone() {
+        app.ui.dialog_mut(id).unwrap().fields.extend(p);
+    }
+    crate::dialogs::confirm(&mut app, id).unwrap();
+
+    let again = open(&mut app, cmd).unwrap();
+    assert_eq!(crate::filter_dialog::params_of(&app.ui.dialog_mut(again).unwrap().fields.clone()), sample, "reopened at the last settings");
+    app.ui.dialogs.clear();
+    let smart = open_neutral(&mut app, cmd).unwrap();
+    assert_eq!(crate::filter_dialog::params_of(&app.ui.dialog_mut(smart).unwrap().fields.clone()), neutral, "open_neutral ignores them");
+    app.ui.dialogs.clear();
+
+    let levels = "image.adjustments.levels";
+    let id = open(&mut app, levels).unwrap();
+    app.ui.dialog_mut(id).unwrap().fields.insert("inBlack".into(), json!(30));
+    crate::dialogs::confirm(&mut app, id).unwrap();
+    let again = open(&mut app, levels).unwrap();
+    let defaults =
+        photocraft_engine::adjust_params::to_params(&photocraft_engine::adjust_params::default_for("levels", photocraft_doc::ColorMode::Rgb).unwrap());
+    assert_eq!(app.ui.dialog_mut(again).unwrap().fields["inBlack"], defaults["inBlack"], "Levels opens neutral without ⌥");
+}

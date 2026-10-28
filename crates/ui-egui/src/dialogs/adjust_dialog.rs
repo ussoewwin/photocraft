@@ -261,8 +261,19 @@ pub fn reset(app: &PhotocraftApp, ctx: &egui::Context, fields: &mut Map<String, 
     }
 }
 
-/// Opens the dialog for `command` with the kind's neutral settings.
+/// Adjustments whose dialog opens at the settings last confirmed in it, as Photoshop's Photo
+/// Filter keeps its filter and density from one use to the next (#9879). The others open at their
+/// neutral settings, and ⌥ reopens them at the last ones ([`open_last`]).
+const REMEMBERS_LAST: &[&str] = &["photoFilter"];
+
+/// Opens the dialog for `command`: at its last confirmed settings for the [`REMEMBERS_LAST`]
+/// kinds, else at the kind's neutral ones.
 pub fn open(app: &mut PhotocraftApp, command: &str) -> Option<u64> {
+    if command.strip_prefix(PREFIX).is_some_and(|kind| REMEMBERS_LAST.contains(&kind)) { open_last(app, command) } else { open_neutral(app, command) }
+}
+
+/// Opens the dialog for `command` with the kind's neutral settings.
+pub fn open_neutral(app: &mut PhotocraftApp, command: &str) -> Option<u64> {
     let kind = command.strip_prefix(PREFIX).filter(|k| adjust_editors::has_editor(k))?;
     let spec = photocraft_engine::commands::find(command)?;
     let mode = curve_mode(app, kind);
@@ -283,7 +294,7 @@ pub fn open(app: &mut PhotocraftApp, command: &str) -> Option<u64> {
 /// adjustment's shortcut, ⌥⌘L / ⌥⌘M, #8900), or at the neutral ones when there are none or they
 /// don't fit the current colour mode.
 pub fn open_last(app: &mut PhotocraftApp, command: &str) -> Option<u64> {
-    let id = open(app, command)?;
+    let id = open_neutral(app, command)?;
     let kind = command.strip_prefix(PREFIX).unwrap_or_default();
     let mode = curve_mode(app, kind);
     let Some(last) = app.session.prefs().dialogs.get(command).cloned() else { return Some(id) };
