@@ -384,6 +384,42 @@ impl Graph {
     }
 }
 
+struct ArcIter<'a> {
+    g: &'a Graph,
+    a: u32,
+}
+
+impl Iterator for ArcIter<'_> {
+    /// `(neighbour, residual capacity out, residual capacity in)`.
+    type Item = (usize, f32, f32);
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.a == NONE {
+            return None;
+        }
+        let a = self.a as usize;
+        self.a = self.g.next[a];
+        Some((self.g.head[a] as usize, self.g.r_cap[a], self.g.r_cap[a ^ 1]))
+    }
+}
+
+impl Graph {
+    /// Sum of residual capacities on arcs leaving the source side of the cut (zero after
+    /// [`Graph::maxflow`]: no augmenting path remains).
+    pub fn residual_out_of_source_side(&self) -> f32 {
+        let mut s = 0.0;
+        for i in 0..self.node_count() {
+            if self.in_source(i) {
+                for (j, out, _) in self.arcs(i) {
+                    if !self.in_source(j) {
+                        s += out;
+                    }
+                }
+            }
+        }
+        s
+    }
+}
+
 #[cfg(test)]
 mod cancellation_tests {
     use super::{CANCEL_EVERY, Graph};
@@ -426,41 +462,5 @@ mod cancellation_tests {
         // The first check is at entry; more than CANCEL_EVERY active nodes ensure the
         // second is the periodic poll, before the solver can finish.
         assert_eq!(calls.get(), 2);
-    }
-}
-
-struct ArcIter<'a> {
-    g: &'a Graph,
-    a: u32,
-}
-
-impl Iterator for ArcIter<'_> {
-    /// `(neighbour, residual capacity out, residual capacity in)`.
-    type Item = (usize, f32, f32);
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.a == NONE {
-            return None;
-        }
-        let a = self.a as usize;
-        self.a = self.g.next[a];
-        Some((self.g.head[a] as usize, self.g.r_cap[a], self.g.r_cap[a ^ 1]))
-    }
-}
-
-impl Graph {
-    /// Sum of residual capacities on arcs leaving the source side of the cut (zero after
-    /// [`Graph::maxflow`]: no augmenting path remains).
-    pub fn residual_out_of_source_side(&self) -> f32 {
-        let mut s = 0.0;
-        for i in 0..self.node_count() {
-            if self.in_source(i) {
-                for (j, out, _) in self.arcs(i) {
-                    if !self.in_source(j) {
-                        s += out;
-                    }
-                }
-            }
-        }
-        s
     }
 }
