@@ -1179,6 +1179,21 @@ fn gradient_color_stops(grad: &Descriptor) -> Option<Vec<Value>> {
     Some(stops)
 }
 
+/// Per-segment midpoints from a `gradientLayer` Grad descriptor, in 0..1 range (Photoshop
+/// stores 0–100 in `Mdpn`; 50 is the default). Returns `None` when all segments use the
+/// default so the caller can omit the `"midpoints"` key. One value per segment (one fewer
+/// than stops); `Mdpn` on the last stop describes no segment and is ignored.
+fn gradient_midpoints(grad: &Descriptor) -> Option<Vec<f64>> {
+    let clrs = get_list(grad, "Clrs")?;
+    let n = clrs.len().saturating_sub(1);
+    let mids: Vec<f64> = clrs.iter().take(n).map(|item| {
+        let D::Descriptor(stop) = item else { return 0.5 };
+        get_num(stop, "Mdpn").map(|m| m / 100.0).unwrap_or(0.5)
+    }).collect();
+    if mids.iter().all(|&m| (m - 0.5).abs() < 0.001) { return None; }
+    Some(mids)
+}
+
 /// Transparency stops from a `gradientLayer` Grad descriptor: `[[location_0_to_1, opacity_0_to_100], …]`.
 fn gradient_transparency_stops(grad: &Descriptor) -> Vec<Value> {
     get_list(grad, "Trns").unwrap_or(&[]).iter().filter_map(|item| {
@@ -1200,6 +1215,9 @@ fn gradient_layer_set_params(t: &Descriptor) -> Option<Value> {
     p.insert("angle".into(), angle.into());
     p.insert("stops".into(), Value::Array(stops));
     p.insert("transparency".into(), Value::Array(gradient_transparency_stops(grad)));
+    if let Some(mids) = gradient_midpoints(grad) {
+        p.insert("midpoints".into(), Value::Array(mids.into_iter().map(Value::from).collect()));
+    }
     p.insert("reverse".into(), get_bool(t, "Rvrs").unwrap_or(false).into());
     p.insert("dither".into(), get_bool(t, "Dthr").unwrap_or(false).into());
     p.insert("scale".into(), get_num(t, "Scl ").unwrap_or(100.0).into());
