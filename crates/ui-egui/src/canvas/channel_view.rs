@@ -8,6 +8,7 @@
 //! recomposited per frame.
 
 use egui::{Color32, TextureOptions};
+use photocraft_color::PixelFormat;
 use photocraft_doc::{AlphaChannel, ColorMode, Document};
 use photocraft_engine::channel_cmds::{ChannelView, color_count};
 use photocraft_engine::mask_view_cmds::MaskViewMode;
@@ -90,9 +91,16 @@ impl Look {
     }
 }
 
-/// Composite RGBA (over white, like Photoshop's channel views) at `factor` stride.
+/// Composite RGBA (over white, like Photoshop's channel views) at `factor` stride; a CMYK
+/// document's ink values instead (see [`ink_samples`]).
 /// Render in bands instead of allocating a full-resolution float composite to sample a preview.
 fn composite(doc: &Document, r: Rect, factor: u32) -> Vec<[f32; 4]> {
+    if doc.mode == ColorMode::Cmyk {
+        let f = factor as usize;
+        let xs: Vec<i32> = (r.x0..r.x1).step_by(f).collect();
+        let ys: Vec<i32> = (r.y0..r.y1).step_by(f).collect();
+        return ink_samples(doc, &xs, &ys);
+    }
     let (w, h) = (r.width().div_ceil(factor), r.height().div_ceil(factor));
     let mut out = Vec::with_capacity((w * h) as usize);
     let f = factor as i32;
@@ -107,6 +115,36 @@ fn composite(doc: &Document, r: Rect, factor: u32) -> Vec<[f32; 4]> {
         }
         Ok(())
     });
+    out
+}
+
+/// The C, M, Y and K inks of `doc` flattened onto white paper (no ink) at document pixels `xs` ×
+/// `ys` (both ascending), row by row. These are the document's own inks, as Photoshop's channel
+/// views show them, not the composite separated again from RGB: a 100/100/100/0 black has no K
+/// (#8359). Composited in bands, so no full-size ink composite is held.
+pub(crate) fn ink_samples(doc: &Document, xs: &[i32], ys: &[i32]) -> Vec<[f32; 4]> {
+    let mut out = Vec::with_capacity(xs.len() * ys.len());
+    let (Some(&x0), Some(&x1)) = (xs.first(), xs.last()) else {
+        return out;
+    };
+    let fmt = PixelFormat { alpha: false, ..doc.pixel_format() };
+    let rows = photocraft_compose::band_rows_for((x1 - x0 + 1) as u32, 0);
+    let mut row = Vec::new();
+    let mut i = 0;
+    while i < ys.len() {
+        let y0 = ys[i];
+        let end = i + ys[i..].iter().take_while(|&&y| y < y0.saturating_add(rows)).count();
+        let band = Rect::new(x0, y0, x1 + 1, ys[end - 1] + 1);
+        let inks = photocraft_compose::composite_to_surface(doc, band, fmt, Some([1.0; 3]));
+        for &y in &ys[i..end] {
+            inks.read_region_into(Rect::new(x0, y, x1 + 1, y + 1), &mut row);
+            out.extend(xs.iter().map(|&x| {
+                let p = &row[(x - x0) as usize * 4..];
+                [p[0], p[1], p[2], p[3]]
+            }));
+        }
+        i = end;
+    }
     out
 }
 
@@ -191,8 +229,9 @@ fn render_with_source(
         let converted = pixels
             .iter()
             .copied()
-            .map(|rgba| {
-                let mut native = from_rgba(&fmt, rgba);
+            .map(|px| {
+                // CMYK samples are inks already (opaque: flattened onto paper).
+                let mut native = if mode == ColorMode::Cmyk { px.into_iter().chain(fmt.alpha.then_some(1.0)).collect() } else { from_rgba(&fmt, px) };
                 if shown.len() == 1 && !in_color {
                     let x = native[shown[0]];
                     // Ink channels read dark where there is ink.

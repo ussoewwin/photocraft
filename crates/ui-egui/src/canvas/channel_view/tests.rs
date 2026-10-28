@@ -349,3 +349,19 @@ fn rgb_off_shows_alpha_quick_mask_or_the_layer_mask() {
     let px = render(&st.doc, &st.channel_view, st.doc.bounds(), 1, Look::default(), st.active_layer).unwrap();
     assert_eq!(px[0], Color32::BLACK, "the hidden mask reads black, not the red layer");
 }
+
+/// A CMYK channel shows the document's ink, not the composite separated again from RGB: rich
+/// black 100/100/100/0 has no K, and full C, M and Y (#8359).
+#[test]
+fn cmyk_channels_show_the_document_inks() {
+    let mut s = Session::new();
+    s.execute("file.new", json!({"width": 4, "height": 4, "mode": "cmyk"})).unwrap();
+    s.execute("tools.setColors", json!({"foregroundCmyk": [1.0, 1.0, 1.0, 0.0]})).unwrap();
+    s.execute("edit.fillForeground", json!({})).unwrap();
+    for (channel, gray) in [("cyan", 0), ("magenta", 0), ("yellow", 0), ("black", 255)] {
+        s.execute("channel.target", json!({"channel": channel})).unwrap();
+        let st = s.active().unwrap();
+        let px = render(&st.doc, &st.channel_view, st.doc.bounds(), 1, Look::default(), st.active_layer).unwrap();
+        assert!(px.iter().all(|p| *p == Color32::from_gray(gray)), "{channel}: {:?}", px[0]);
+    }
+}
