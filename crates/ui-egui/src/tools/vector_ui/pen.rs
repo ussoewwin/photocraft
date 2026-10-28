@@ -1,7 +1,7 @@
 use super::curvature::{curvature_hit, curvature_refresh};
-use super::path_ops::targeted_vector_mask;
+use super::path_ops::{targeted_vector_mask, work_path_shown};
 use super::shapes::{fill_param, stroke_param};
-use super::*;
+use super::{Document, Path, PenPath, PhotocraftApp, Resumed, Tool, Value, json};
 
 // ---------------------------------------------------------------------------------------------
 // Pen
@@ -467,6 +467,10 @@ fn resume_at(app: &PhotocraftApp, x: f64, y: f64, tol: f64) -> Option<PenPath> {
         ("layer".to_string(), Some(id), p)
     } else {
         let name = app.ui.selected_path.clone().filter(|n| path_exists(&st.doc, n)).unwrap_or_else(|| "work".into());
+        // A Work Path hidden by Make Selection isn't carried on: a new path replaces it (#6079).
+        if name == "work" && !work_path_shown(app) {
+            return None;
+        }
         let p = doc_path(&st.doc, &name)?.clone();
         (name, None, p)
     };
