@@ -153,6 +153,9 @@ impl Graph {
     }
 
     fn bk(&mut self, cancel: &dyn Fn() -> bool) -> Option<f64> {
+        if cancel() {
+            return None;
+        }
         let n = self.node_count();
         let mut queue: VecDeque<u32> = VecDeque::new();
         let mut orphans: VecDeque<u32> = VecDeque::new();
@@ -227,7 +230,7 @@ impl Graph {
                 self.adopt(o as usize, time, &mut queue, &mut orphans);
             }
         }
-        Some(self.flow)
+        if cancel() { None } else { Some(self.flow) }
     }
 
     fn augment(&mut self, m: usize, orphans: &mut VecDeque<u32>) {
@@ -378,6 +381,51 @@ impl Graph {
             }
             a = self.next[au];
         }
+    }
+}
+
+#[cfg(test)]
+mod cancellation_tests {
+    use super::{CANCEL_EVERY, Graph};
+    use std::cell::Cell;
+
+    #[test]
+    fn bk_checks_cancellation_on_short_runs() {
+        let mut graph = Graph::with_capacity(2, 0);
+        graph.add_tweights(0, 1.0, 0.0);
+        graph.add_tweights(1, 0.0, 1.0);
+        assert!(graph.maxflow_bk_with(&|| true).is_none());
+
+        let calls = Cell::new(0);
+        assert!(
+            graph
+                .maxflow_bk_with(&|| {
+                    calls.set(calls.get() + 1);
+                    calls.get() == 2
+                })
+                .is_none()
+        );
+        assert_eq!(calls.get(), 2, "short run must check before returning");
+    }
+
+    #[test]
+    fn bk_checks_cancellation_during_a_long_run() {
+        let mut graph = Graph::with_capacity(CANCEL_EVERY as usize + 1, 0);
+        for i in 0..graph.node_count() {
+            graph.add_tweights(i, 1.0, 0.0);
+        }
+        let calls = Cell::new(0);
+        assert!(
+            graph
+                .maxflow_bk_with(&|| {
+                    calls.set(calls.get() + 1);
+                    calls.get() == 2
+                })
+                .is_none()
+        );
+        // The first check is at entry; more than CANCEL_EVERY active nodes ensure the
+        // second is the periodic poll, before the solver can finish.
+        assert_eq!(calls.get(), 2);
     }
 }
 
