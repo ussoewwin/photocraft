@@ -120,8 +120,9 @@ fn every_theme_puts_opacity_right_after_mode() {
             assert_eq!(names.get(mode + 1), Some(&"Opacity"), "{theme:?} {tool:?}: Opacity follows Mode in {names:?}");
             assert!(found[mode].1.right() <= found[mode + 1].1.left(), "{theme:?} {tool:?}: Mode and Opacity don't overlap: {found:?}");
             if matches!(tool, Tool::Brush | Tool::Eraser) && !crate::theme::Tokens::for_kind(theme).pro {
-                let hardness = names.iter().position(|l| *l == "Hardness");
-                assert!(hardness.is_some_and(|i| i < mode), "{theme:?} {tool:?}: Hardness stays, beside Size: {names:?}");
+                let size = names.iter().position(|l| *l == "Size").unwrap_or_else(|| panic!("{theme:?} {tool:?}: no Size control in {names:?}"));
+                assert_eq!(names.get(size + 1), Some(&"Hardness"), "{theme:?} {tool:?}: Hardness stays right after Size: {names:?}");
+                assert!(size + 1 < mode, "{theme:?} {tool:?}: Size and Hardness come before Mode: {names:?}");
             }
         }
     }
