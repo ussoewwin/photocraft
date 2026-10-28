@@ -40,3 +40,7 @@ PhotoCraft's English labels; no proprietary translation resources were used.
 
 Russian translations: PhotoCraft contributors, original translations of
 PhotoCraft's English labels; no proprietary translation resources were used.
+
+Swedish translations: PhotoCraft contributors, combined from the catalogs contributed by @kler and
+@davvarn and reviewed with Claude (Anthropic) as an AI contributor; original translations of
+PhotoCraft's English labels, and no proprietary translation resources were used.

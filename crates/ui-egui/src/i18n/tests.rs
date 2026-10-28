@@ -136,6 +136,21 @@ fn spanish_resolves_and_pluralises() {
 }
 
 #[test]
+fn swedish_resolves_and_pluralises() {
+    let sv = Lang::from_code("sv").expect("sv registered");
+    assert_eq!(sv.name(), "Svenska");
+    for tag in ["sv", "SV", "sv-SE", "sv_SE.UTF-8", "sv-FI", "sv_FI.UTF-8", "sv-AX"] {
+        assert_eq!(lang_from_tag(tag), Some(sv), "{tag}");
+        assert_eq!(Lang::from_pref(tag), sv, "{tag}");
+    }
+    let forms: Vec<usize> = [0, 1, 2, 21].into_iter().map(sv.0.plural).collect();
+    assert_eq!(forms, [1, 0, 1, 1]);
+    assert_eq!(tr(sv, "File"), "Arkiv");
+    assert_eq!(trn(sv, 1, "{n} layer", "{n} layers"), "1 lager");
+    assert_eq!(trn(sv, 3, "{n} layer", "{n} layers"), "3 lager");
+}
+
+#[test]
 fn hungarian_resolves_and_keeps_the_singular_after_counts() {
     let hu = Lang::from_code("hu").expect("hu registered");
     for tag in ["hu", "hu_HU.UTF-8", "hu-HU"] {
