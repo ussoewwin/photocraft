@@ -1165,14 +1165,18 @@ const GRADIENT_STYLES: &[(&str, &str)] = &[
 ];
 
 /// Color stops from a `gradientLayer` Grad descriptor: `[[location_0_to_1, "#rrggbb"], …]`.
+/// Returns `None` if the descriptor is malformed or has fewer than 2 stops.
 fn gradient_color_stops(grad: &Descriptor) -> Option<Vec<Value>> {
     let clrs = get_list(grad, "Clrs")?;
-    clrs.iter().map(|item| {
+    let stops: Option<Vec<Value>> = clrs.iter().map(|item| {
         let D::Descriptor(stop) = item else { return None };
         let hex = color_hex(get_obj(stop, "Clr ")?)?;
         let loc = get_num(stop, "Lctn")? / 4096.0;
         Some(json!([loc, hex]))
-    }).collect()
+    }).collect();
+    let stops = stops?;
+    if stops.len() < 2 { return None; }
+    Some(stops)
 }
 
 /// Transparency stops from a `gradientLayer` Grad descriptor: `[[location_0_to_1, opacity_0_to_100], …]`.
@@ -1195,22 +1199,14 @@ fn gradient_layer_set_params(t: &Descriptor) -> Option<Value> {
     p.insert("style".into(), style.into());
     p.insert("angle".into(), angle.into());
     p.insert("stops".into(), Value::Array(stops));
-    let trns = gradient_transparency_stops(grad);
-    if trns.iter().any(|s| s[1].as_f64() != Some(100.0)) {
-        p.insert("transparency".into(), Value::Array(trns));
-    }
-    if get_bool(t, "Rvrs") == Some(true) { p.insert("reverse".into(), true.into()); }
-    if get_bool(t, "Dthr") == Some(true) { p.insert("dither".into(), true.into()); }
-    if let Some(s) = get_num(t, "Scl ").filter(|&s| (s - 100.0).abs() > 0.01) {
-        p.insert("scale".into(), s.into());
-    }
-    if let Some(ofst) = get_obj(t, "Ofst") {
-        let h = get_num(ofst, "Hrzn").unwrap_or(0.0);
-        let v = get_num(ofst, "Vrtc").unwrap_or(0.0);
-        if h.abs() > 0.001 || v.abs() > 0.001 {
-            p.insert("offset".into(), json!([h, v]));
-        }
-    }
+    p.insert("transparency".into(), Value::Array(gradient_transparency_stops(grad)));
+    p.insert("reverse".into(), get_bool(t, "Rvrs").unwrap_or(false).into());
+    p.insert("dither".into(), get_bool(t, "Dthr").unwrap_or(false).into());
+    p.insert("scale".into(), get_num(t, "Scl ").unwrap_or(100.0).into());
+    let (h, v) = get_obj(t, "Ofst")
+        .map(|ofst| (get_num(ofst, "Hrzn").unwrap_or(0.0), get_num(ofst, "Vrtc").unwrap_or(0.0)))
+        .unwrap_or((0.0, 0.0));
+    p.insert("offset".into(), json!([h, v]));
     Some(Value::Object(p))
 }
 
