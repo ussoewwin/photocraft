@@ -691,7 +691,7 @@ fn ok_after_a_document_switch_changes_neither_document() {
     open(&mut app).unwrap();
     ui(&mut app, json!({"stroke": {"points": [[120.0, 50.0], [130.0, 50.0]]}}));
     let before = (fingerprint(&app, 0), fingerprint(&app, 1));
-    let switched = call(&mut app, "ui.menu.invoke", json!({"command": "window.document.1"}));
+    let switched = call(&mut app, "engine.execute", json!({"command": "document.activate", "params": {"document": 1}}));
     assert_eq!(app.session.active_index(), Some(1), "{switched}");
     let r = call(&mut app, "ui.menu.invoke", json!({"command": "select.selectAndMask", "params": {"ui": {"commit": true}}}));
     assert!(r.get("error").is_some(), "the stale OK is refused: {r}");
