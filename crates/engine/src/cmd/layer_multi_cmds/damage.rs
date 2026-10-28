@@ -1,4 +1,6 @@
-use super::*;
+use photocraft_color::{PixelFormat, SampleType};
+
+use super::{Document, Layer, LayerContent, LayerId, Rect, Session, VideoData};
 
 /// The document pixels an edit of the layers `ids` (moved, shown, hidden or restyled; contents
 /// otherwise as they were) can have changed from `before` to `after`, or `None` for anywhere.

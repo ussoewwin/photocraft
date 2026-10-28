@@ -16,7 +16,10 @@
 
 use super::content_aware_move::{Target, replace};
 use super::patch::coverage;
-use super::*;
+use super::{
+    Document, EngineError, LayerId, PixelFormat, Rect, Region, Result, SampleLayers, Session, Stroke, Surface, Value, alpha_index, bad, clamp_samples,
+    composite_region, damage_json, flag, json, parse_brush, reject_huge_stroke, targets_pixels,
+};
 use photocraft_doc::Layer;
 
 const CMD: &str = "paint.remove";
@@ -216,7 +219,8 @@ fn fill_to_new_layer(doc: &mut Document, id: Option<LayerId>, out: &Region, hole
     }
     let mut l = Layer::raster(doc.next_layer_name("Layer"), fmt);
     crate::pixels_mut(&mut l)?.write_region(out.rect, &data);
-    let nid = doc.insert_above(id, l);
+    // Above the sampled layer and in its clipping mask, like Layer via Copy.
+    let nid = crate::layer_place::insert_new(doc, id, l, crate::layer_place::Place::Above);
     Ok((out.rect, nid))
 }
 

@@ -5,7 +5,7 @@
 //! The selection itself lives in [`DocState::selected_layers`] (UI state, like the active layer):
 //! changing it never adds a history step. Every structural change below is one history step.
 
-use photocraft_color::{PixelFormat, SampleType};
+use photocraft_color::PixelFormat;
 use photocraft_doc::{Document, Layer, LayerContent, LayerId, VideoData};
 use photocraft_geom::Rect;
 use serde_json::{Value, json};
@@ -141,7 +141,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Group from Layers…",
             &["Layer", "New"],
             None,
-            r##"{"layer":id?,"name":str?} (no layer: every selected layer)"##,
+            r##"{"layer":id?,"name":text?,"color":"none|red|orange|yellow|green|seafoam|blue|indigo|magenta|fuchsia|violet|gray"="none","mode":str="passThrough" (blend mode),"opacity":0..100=100 (percent)} (no layer: every selected layer; the new group starts collapsed)"##,
             has_layer,
             group_layers
         ),

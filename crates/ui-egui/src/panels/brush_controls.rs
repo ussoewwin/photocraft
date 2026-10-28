@@ -1,4 +1,4 @@
-use super::*;
+use super::{Align2, BlendMode, Color32, PhotocraftApp, Rect, Sense, Stroke, StrokeKind, Tokens, c32, icons, json, pos2, vec2, widgets};
 
 /// A painting tool's Mode dropdown over `modes` (`None` is Clear); the wheel over it steps the
 /// mode. Returns the mode picked this frame.

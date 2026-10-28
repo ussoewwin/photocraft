@@ -3,7 +3,9 @@ use super::consts::{ACC_FORMAT, CHUNK, CHUNK_UNIFORM, FX_BUDGET, MAP16, MAP32, M
 use super::kit::{Kit, SHADER, tex_entry, uniform_entry};
 use super::paging::{cell_rect, field_reaches, first_error, grid_rects};
 use super::textures::{FxEntry, Resident, Tex, TexKind};
-use super::*;
+use super::{
+    Compositor, DeviceHealth, DocId, Document, Fault, HashMap, Kernel, LayerContent, Plan, Rect, Role, TILE_SIZE, Unsupported, fx, plan, prefix, timing,
+};
 
 impl Compositor {
     /// Create a compositor with the default accumulation format ([`ACC_FORMAT`]).
@@ -386,7 +388,7 @@ impl Compositor {
 
     /// A pattern's texture must fit the device and the per-pattern cap; a larger one renders on
     /// the CPU compositor.
-    fn check_pattern(&self, pat: &Pattern) -> Result<(), Unsupported> {
+    fn check_pattern(&self, pat: &photocraft_doc::Pattern) -> Result<(), Unsupported> {
         if pat.width > self.device_max || pat.height > self.device_max {
             return Err(Unsupported(format!("pattern `{}` larger than the GPU texture limit", pat.name)));
         }
