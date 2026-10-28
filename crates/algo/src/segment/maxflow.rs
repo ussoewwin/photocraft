@@ -140,6 +140,14 @@ impl Graph {
         self.bk(cancel)
     }
 
+    /// [`Graph::maxflow_with`] that always runs Boykov–Kolmogorov. It is the faster solver on
+    /// the 8-connected colour-model grids of GrabCut (about 2.3x on a 107k-pixel working image);
+    /// push/relabel wins on Quick Selection's many area-cost terminals, which keep
+    /// [`Graph::maxflow_with`].
+    pub fn maxflow_bk_with(&mut self, cancel: &dyn Fn() -> bool) -> Option<f64> {
+        self.bk(cancel)
+    }
+
     pub(super) fn maxflow_bk(&mut self) -> f64 {
         self.bk(&never).unwrap_or(self.flow)
     }

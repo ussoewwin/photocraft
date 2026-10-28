@@ -1068,3 +1068,56 @@ fn hole_fill_without_specks_fills_object_coloured_holes_only() {
     assert!(out[25 * w + 25], "a speck of the object's colour fills");
     assert!(!out[10 * w + 10], "a speck of the background's colour stays open");
 }
+
+/// Energy of a labelling: data costs plus the contrast weights of separated 8-neighbours.
+fn grid_energy(img: &RgbImage, cf: &[f32], cb: &[f32], cut: &[bool], weight: impl Fn(f32) -> f32) -> f64 {
+    let (w, h) = (img.w as i32, img.h as i32);
+    let mut e = 0.0f64;
+    for y in 0..h {
+        for x in 0..w {
+            let i = (y * w + x) as usize;
+            e += f64::from(if cut[i] { cf[i] } else { cb[i] });
+            for (dx, dy, len) in NB {
+                let (nx, ny) = (x + dx, y + dy);
+                if nx >= 0 && nx < w && ny < h {
+                    let j = (ny * w + nx) as usize;
+                    if cut[i] != cut[j] {
+                        e += f64::from(weight(d2(img.px[i], img.px[j])) / len);
+                    }
+                }
+            }
+        }
+    }
+    e
+}
+
+#[test]
+fn bk_and_default_grid_cut_reach_the_same_minimum_energy() {
+    // Large enough (>= 4096 free nodes, both terminals) that the default solver is push/relabel.
+    let (w, h) = (120usize, 100usize);
+    let mut rng = Rng::new(7);
+    let img = RgbImage::from_fn(w, h, |x, y| {
+        let inside = (x as f32 - 60.0).powi(2) + (y as f32 - 50.0).powi(2) < 1600.0;
+        let base = if inside { [0.8, 0.3, 0.2] } else { [0.2, 0.4, 0.7] };
+        base.map(|v| v + 0.08 * rng.normal())
+    });
+    let cf: Vec<f32> = img.px.iter().map(|p| 4.0 * d2(*p, [0.8, 0.3, 0.2])).collect();
+    let cb: Vec<f32> = img.px.iter().map(|p| 4.0 * d2(*p, [0.2, 0.4, 0.7])).collect();
+    let fixed: Vec<u8> = (0..w * h)
+        .map(|i| {
+            if i % w == 0 {
+                HARD_BG
+            } else if i == (50 * w + 60) {
+                HARD_FG
+            } else {
+                FREE
+            }
+        })
+        .collect();
+    let weight = |d: f32| 50.0 * (-8.0 * d).exp();
+    let a = grid_cut_cancellable(&img, &cf, &cb, &fixed, weight, &|| false).expect("default cut");
+    let b = grid_cut_bk_cancellable(&img, &cf, &cb, &fixed, weight, &|| false).expect("bk cut");
+    let (ea, eb) = (grid_energy(&img, &cf, &cb, &a, weight), grid_energy(&img, &cf, &cb, &b, weight));
+    assert!((ea - eb).abs() <= 1e-3 * ea.abs().max(1.0), "default {ea} vs bk {eb}");
+    assert!(grid_cut_bk_cancellable(&img, &cf, &cb, &fixed, weight, &|| true).is_none(), "BK honours cancel");
+}
