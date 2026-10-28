@@ -580,12 +580,14 @@ fn dab_intersects(dab: &Dab, tile: (i32, i32, i32, i32)) -> bool {
 /// Mean difference between `src` and `dest` over the dab's covered pixels (working-space peak is
 /// 1, so a tolerance of 50% is `0.5`). Per pixel it is the larger of the mean colour change and the
 /// alpha change: an opaque pixel's unchanged alpha must not water a colour change down, and the
-/// Eraser keeps the colour and lowers only the alpha. `None` if nothing is covered.
+/// Eraser keeps the colour and lowers only the alpha. Fully transparent source samples are left
+/// out; a dab whose samples are all transparent has a mean of `0.0`. `None` if nothing is covered.
 fn dab_mean_diff(p: &StampParams<'_>, dab: &Dab) -> Option<f32> {
     let (x0, y0, x1, y1) = dab_bounds(dab)?;
     let mut sampled = vec![0.0f32; p.ch];
     let mut sum = 0.0f32;
     let mut count = 0u32;
+    let mut transparent = 0u32;
     for y in y0..y1 {
         for x in x0..x1 {
             if coverage_at(dab, x, y, p.hardness) <= 0.0 {
@@ -602,6 +604,7 @@ fn dab_mean_diff(p: &StampParams<'_>, dab: &Dab) -> Option<f32> {
                 continue;
             }
             if p.alpha.is_some_and(|a| sampled.get(a).is_some_and(|&v| v == 0.0)) {
+                transparent = transparent.saturating_add(1);
                 continue;
             }
             let (mut colour, mut colours, mut alpha) = (0.0f32, 0u32, 0.0f32);
@@ -620,7 +623,8 @@ fn dab_mean_diff(p: &StampParams<'_>, dab: &Dab) -> Option<f32> {
         }
     }
     if count == 0 {
-        return None;
+        // Stamping a fully transparent sample leaves the pixel as it is.
+        return (transparent > 0).then_some(0.0);
     }
     let mean = sum / count as f32;
     mean.is_finite().then_some(mean)

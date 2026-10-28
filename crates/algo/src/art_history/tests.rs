@@ -60,6 +60,42 @@ fn tolerance_ignores_fully_transparent_samples() {
 }
 
 #[test]
+fn tolerance_skips_a_dab_whose_source_is_fully_transparent() {
+    for ch in [2, 4, 5] {
+        for opaque in [1.0, 0.0] {
+            let (w, h) = (4, 4);
+            let src = vec![0.0; w * h * ch];
+            let before = fill(w, h, ch, |_, _, c| if c + 1 == ch { opaque } else { 0.5 });
+            let mut dest = before.clone();
+            let dab = Dab { x: 2.0, y: 2.0, theta: 0.0, radius: 2.0, pressure: 1.0 };
+            let written = stamp(&mut StampParams {
+                dest: &mut dest,
+                dest_w: w,
+                dest_h: h,
+                dest_origin: (0, 0),
+                src: &src,
+                src_w: w,
+                src_h: h,
+                src_origin: (0, 0),
+                ch,
+                dabs: std::slice::from_ref(&dab),
+                hardness: 1.0,
+                opacity: 1.0,
+                flow: 1.0,
+                tolerance: 0.1,
+                tile: 0,
+                selection: None,
+                lock_transparent: false,
+                alpha: Some(ch - 1),
+            })
+            .unwrap();
+            assert_eq!(written, 0, "channels={ch}, opaque={opaque}");
+            assert_eq!(dest, before);
+        }
+    }
+}
+
+#[test]
 fn rotated_dabs_preserve_color_at_transparent_edges() {
     for ch in [2, 4, 5] {
         for hidden in [0.0, 1.0] {
