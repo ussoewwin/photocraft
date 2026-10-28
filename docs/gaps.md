@@ -396,7 +396,7 @@ what an agent can't finish alone.
 
 | Date | Change | Summary |
 |---|---|---|
-| 2026-10-28 | minor | G10: JPEG Options shows the size the file will have ("152.3K"), worked out off the UI thread as Quality and Format Options change; FILE-215-19 stays partial (Matte, progressive Scans); no readiness percentage or estimate changed |
+| 2026-10-28 | minor | G10: JPEG Options shows the size the file will have ("152.3K"), worked out as Quality and Format Options change (on a worker thread on desktop, in the frame on the web); FILE-215-19 stays partial (Matte, progressive Scans); no readiness percentage or estimate changed |
 | 2026-10-27 | minor | G9: 12 of 181 preferences do nothing, the scorecard's count with integration batch 9 (#9775) on main; no estimate changed |
 | 2026-10-26 | minor | Expand/Contract/Border distance work, mask reads and replacement cropped to nonzero bounds; bounded distances for radii ≤5; 36 MP exact-output comparisons improve 1.54–37.82× across eight cases; percentages, estimates and scorecard budgets unchanged |
 | 2026-10-25 | minor | G9: the count of preferences that do nothing is the scorecard's again, 12 of 178 (it still said 24 of 171, from 2026-10-15); no estimate changed |

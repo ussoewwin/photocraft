@@ -5,9 +5,12 @@
 //!
 //! The encode runs on a worker thread in the native app, so the dialog never waits for it; the web
 //! build has no threads and encodes in the frame, so its limit is lower. One encode runs at a time,
-//! and its answer is kept for its settings: a frame that changes nothing encodes nothing, and
-//! while a new size is worked out the last one for the same document stays up. Documents over
-//! [`MAX_PX`] aren't encoded and read "—".
+//! and the last few answers are kept for their settings: a frame that changes nothing encodes
+//! nothing, and going back to settings already worked out shows their size at once. While a new
+//! size is worked out, the last one for the same document stays up marked as pending ("152.3K…").
+//! Documents over [`MAX_PX`] aren't encoded and read "—".
+
+use std::collections::VecDeque;
 
 use std::sync::{Arc, Mutex, PoisonError};
 
@@ -53,49 +56,83 @@ pub(super) struct Key {
     format: JpegFormat,
 }
 
+/// How many worked-out sizes are kept, so stepping between a few qualities and formats doesn't
+/// encode again.
+const KEPT: usize = 8;
+
+/// What the readout says for one set of settings.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Estimate {
+    /// The size for these settings (`None`: they couldn't be encoded).
+    Known(Option<u64>),
+    /// Still being worked out, with the last size of the same document as it is now, if any.
+    Pending(Option<u64>),
+}
+
+impl Estimate {
+    /// "152.3K" when known, "152.3K…" while the last size stands in, "…" with none yet, and "—"
+    /// when the settings couldn't be encoded.
+    pub(super) fn label(self) -> String {
+        match self {
+            Estimate::Known(Some(bytes)) => size_label(bytes),
+            Estimate::Known(None) => "—".into(),
+            Estimate::Pending(Some(bytes)) => format!("{}…", size_label(bytes)),
+            Estimate::Pending(None) => "…".into(),
+        }
+    }
+}
+
 /// Where a worker leaves its answer: `Some` once done (`Some(None)`: couldn't be encoded).
 type Slot = Arc<Mutex<Option<Option<u64>>>>;
 
 /// The readout between frames (kept in egui's temporary data).
 #[derive(Default)]
 pub(super) struct Readout {
-    /// The last size worked out, and what it is for.
-    shown: Option<(Key, Option<u64>)>,
+    /// The last [`KEPT`] sizes worked out and what each is for, newest last.
+    known: VecDeque<(Key, Option<u64>)>,
     /// The encode running, and what it is for.
     running: Option<(Key, Slot)>,
 }
 
 impl Readout {
-    /// The size to show for `key`. Unless `key`'s size is known or being worked out, starts the
-    /// job `make` returns, which calls `done` when it finishes; a change made while another
-    /// encode runs starts once that one is done. Until `key`'s size is known, the last size of
-    /// the same document as it is now shows (`None` if there is none).
-    pub(super) fn update<J>(&mut self, key: Key, make: impl FnOnce() -> J, done: impl FnOnce() + Send + 'static) -> Option<u64>
+    /// What to show for `key`. Unless `key`'s size is known or being worked out, starts the job
+    /// `make` returns, which calls `done` when it finishes; a change made while another encode
+    /// runs starts once that one is done.
+    pub(super) fn update<J>(&mut self, key: Key, make: impl FnOnce() -> J, done: impl FnOnce() + Send + 'static) -> Estimate
     where
         J: FnOnce() -> Option<u64> + Send + 'static,
     {
         self.collect();
-        if self.running.is_none() && !self.is_current(key) {
+        if self.running.is_none() && self.size_of(key).is_none() {
             let slot = Slot::default();
             run(make(), Arc::clone(&slot), done);
             self.running = Some((key, slot));
             // The web build encodes in the frame: its answer is already there.
             self.collect();
         }
-        self.shown.filter(|(k, _)| k.doc == key.doc && k.revision == key.revision).and_then(|(_, size)| size)
+        if let Some(size) = self.size_of(key) {
+            return Estimate::Known(size);
+        }
+        let same_doc = self.known.iter().rev().find(|(k, _)| k.doc == key.doc && k.revision == key.revision);
+        Estimate::Pending(same_doc.and_then(|&(_, size)| size))
     }
 
-    /// Whether the size shown is `key`'s.
-    pub(super) fn is_current(&self, key: Key) -> bool {
-        self.shown.is_some_and(|(k, _)| k == key)
+    /// `key`'s size if it has been worked out (`Some(None)`: it couldn't be).
+    fn size_of(&self, key: Key) -> Option<Option<u64>> {
+        self.known.iter().find(|(k, _)| *k == key).map(|&(_, size)| size)
     }
 
     /// Takes a finished encode's answer.
     fn collect(&mut self) {
         let Some((key, slot)) = &self.running else { return };
         let Some(size) = slot.lock().unwrap_or_else(PoisonError::into_inner).take() else { return };
-        self.shown = Some((*key, size));
+        let key = *key;
         self.running = None;
+        self.known.retain(|(k, _)| *k != key);
+        if self.known.len() == KEPT {
+            self.known.pop_front();
+        }
+        self.known.push_back((key, size));
     }
 }
 
@@ -148,7 +185,7 @@ impl Source {
         ExportSettings { jpeg_quality: Some(self.encoder_quality(quality)), jpeg_format: format, ..self.base.clone() }
     }
 
-    /// The readout for `quality` (0–12) and `format`: the size, or "—" while there is none.
+    /// The readout for `quality` (0–12) and `format` (see [`Estimate::label`]).
     fn text(&self, ctx: &egui::Context, quality: u8, format: JpegFormat) -> String {
         if !estimable(self.doc.size) {
             return "—".into();
@@ -161,7 +198,7 @@ impl Source {
             move || encoded_size(&doc, &settings)
         };
         let repaint = ctx.clone();
-        readout.update(key, make, move || repaint.request_repaint()).map_or_else(|| "—".into(), size_label)
+        readout.update(key, make, move || repaint.request_repaint()).label()
     }
 }
 

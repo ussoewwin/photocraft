@@ -69,8 +69,8 @@ fn the_files_own_quality_is_what_is_estimated() {
 fn answer(readout: &mut Readout, key: Key, job: impl Fn() -> Option<u64> + Send + Sync + Clone + 'static) -> Option<u64> {
     let deadline = Instant::now() + Duration::from_secs(20);
     loop {
-        if let Some(size) = readout.update(key, || job.clone(), || {}).filter(|_| readout.is_current(key)) {
-            return Some(size);
+        if let Estimate::Known(size) = readout.update(key, || job.clone(), || {}) {
+            return size;
         }
         assert!(Instant::now() < deadline, "no size arrived for {key:?}");
         std::thread::sleep(Duration::from_millis(2));
@@ -78,7 +78,8 @@ fn answer(readout: &mut Readout, key: Key, job: impl Fn() -> Option<u64> + Send 
 }
 
 /// A frame that changes nothing encodes nothing: the size is kept per settings. A change encodes
-/// once, showing the earlier size until the new one is ready, and only one encode runs at a time.
+/// once, showing the earlier size marked as pending until the new one is ready, and only one
+/// encode runs at a time.
 #[test]
 fn unchanged_settings_are_not_encoded_again() {
     let encodes = Arc::new(AtomicU32::new(0));
@@ -93,7 +94,7 @@ fn unchanged_settings_are_not_encoded_again() {
     let mut readout = Readout::default();
     assert_eq!(answer(&mut readout, key, counted(1000)), Some(1000));
     for _ in 0..10 {
-        assert_eq!(readout.update(key, || counted(1), || {}), Some(1000));
+        assert_eq!(readout.update(key, || counted(1), || {}), Estimate::Known(Some(1000)));
     }
     assert_eq!(encodes.load(Ordering::SeqCst), 1, "the same settings are encoded once");
 
@@ -108,16 +109,53 @@ fn unchanged_settings_are_not_encoded_again() {
             Some(2000)
         }
     };
-    assert_eq!(readout.update(progressive, || slow.clone(), || {}), Some(1000), "the earlier size shows meanwhile");
+    assert_eq!(readout.update(progressive, || slow.clone(), || {}), Estimate::Pending(Some(1000)), "the earlier size stands in, pending");
     let other = Key { quality: 92, ..key };
-    assert_eq!(readout.update(other, || counted(3), || {}), Some(1000), "a second encode waits for the first");
+    assert_eq!(readout.update(other, || counted(3), || {}), Estimate::Pending(Some(1000)), "a second encode waits for the first");
     gate.send(()).unwrap();
     assert_eq!(answer(&mut readout, progressive, slow), Some(2000));
-    assert_eq!(answer(&mut readout, key, counted(1)), Some(1), "another change encodes again");
+    assert_eq!(answer(&mut readout, other, counted(3)), Some(3), "the waiting change encodes next");
     assert_eq!(encodes.load(Ordering::SeqCst), 3);
 
     let edited = Key { revision: 4, ..key };
-    assert_eq!(readout.update(edited, || || None, || {}), None, "an edited document shows no size of the old one");
+    assert_eq!(readout.update(edited, || || None, || {}), Estimate::Pending(None), "an edited document shows no size of the old one");
+}
+
+/// Going back to settings already worked out shows their size at once, without encoding again;
+/// only the last [`KEPT`] are kept.
+#[test]
+fn earlier_settings_are_not_encoded_again() {
+    let encodes = Arc::new(AtomicU32::new(0));
+    let counted = |size: u64| {
+        let encodes = encodes.clone();
+        move || {
+            encodes.fetch_add(1, Ordering::SeqCst);
+            Some(size)
+        }
+    };
+    let at = |quality: u8| Key { doc: photocraft_doc::DocId(1), revision: 3, quality, format: JpegFormat::Baseline };
+    let mut readout = Readout::default();
+    assert_eq!(answer(&mut readout, at(84), counted(1000)), Some(1000));
+    assert_eq!(answer(&mut readout, at(92), counted(2000)), Some(2000));
+    assert_eq!(readout.update(at(84), || counted(1), || {}), Estimate::Known(Some(1000)), "back to 84: its size, at once");
+    assert_eq!(readout.update(at(92), || counted(1), || {}), Estimate::Known(Some(2000)));
+    assert_eq!(encodes.load(Ordering::SeqCst), 2);
+
+    for q in 1..=KEPT as u8 {
+        assert_eq!(answer(&mut readout, at(q), counted(u64::from(q))), Some(u64::from(q)));
+    }
+    assert_eq!(encodes.load(Ordering::SeqCst), 2 + KEPT as u32);
+    assert_eq!(answer(&mut readout, at(84), counted(1000)), Some(1000), "the oldest sizes make room");
+    assert_eq!(encodes.load(Ordering::SeqCst), 3 + KEPT as u32);
+}
+
+/// The readout marks a size that stands in for one still being worked out.
+#[test]
+fn a_pending_size_is_marked() {
+    assert_eq!(Estimate::Known(Some(155_955)).label(), "152.3K");
+    assert_eq!(Estimate::Pending(Some(155_955)).label(), "152.3K…");
+    assert_eq!(Estimate::Pending(None).label(), "…");
+    assert_eq!(Estimate::Known(None).label(), "—");
 }
 
 /// Documents larger than the limit are not encoded: the readout is a dash.
