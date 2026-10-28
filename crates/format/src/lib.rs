@@ -86,7 +86,8 @@ pub struct SaveOptions {
     pub thumbnail: Option<Rgba8Image>,
     pub composite: Option<Rgba8Image>,
     /// The flattened document at its canvas size, for other apps that read `.pcraft` files. A ZIP
-    /// save leaves it out when it would take the archive past 4 GiB or 65,535 entries.
+    /// save leaves it out when it would take the archive past 4 GiB or 65,535 entries, and every
+    /// save leaves it out when it cannot be encoded.
     pub full_composite: Option<Rgba8Image>,
     /// The ICC profile of `full_composite`'s pixels, embedded in its PNG.
     pub full_composite_icc: Option<Vec<u8>>,

@@ -41,5 +41,10 @@ fn scripted_native_saves_write_the_full_size_composite_when_asked() {
     assert!(!has_full_composite(&std::fs::read(&path).unwrap()), "off by default");
     headless.handle("doc.save", json!({"path": path.to_str().unwrap(), "pcraftFullComposite": true})).unwrap();
     assert_eq!(full_composite(&std::fs::read(&path).unwrap()), ((40, 30), flattened));
+    for bad in [json!("true"), json!(1)] {
+        let err = headless.handle("doc.save", json!({"path": dir.join("Bad.pcraft").to_str().unwrap(), "pcraftFullComposite": bad})).unwrap_err();
+        assert!(format!("{err:?}").contains("`pcraftFullComposite` must be true or false"), "{bad}: {err:?}");
+        assert!(!dir.join("Bad.pcraft").exists(), "{bad}: nothing is written");
+    }
     std::fs::remove_dir_all(dir).unwrap();
 }

@@ -126,7 +126,9 @@ impl Headless {
                 let mut opts = photocraft_io::ExportOptions {
                     tiff_layers: p.get("tiffLayers").and_then(Value::as_bool).unwrap_or(false),
                     tga_bits,
-                    pcraft_full_composite: p.get("pcraftFullComposite").and_then(Value::as_bool).unwrap_or(false),
+                    pcraft_full_composite: photocraft_engine::file_cmds::pcraft_full_composite_param(&p, "doc.save")
+                        .map_err(|e| bad(e.to_string()))?
+                        .unwrap_or(false),
                     ..Default::default()
                 };
                 opts.encode.dpx_bits = photocraft_engine::file_cmds::dpx_bits_param(&p, "doc.save").map_err(|e| bad(e.to_string()))?;

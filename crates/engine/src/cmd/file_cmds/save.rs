@@ -75,7 +75,7 @@ impl SaveOpts {
             dds: dds_param(p, cmd)?.unwrap_or_default(),
             image_previews: file_handling.image_previews != crate::prefs::Ask::Never,
             psd_maximize_compatibility: file_handling.maximize_psd_compatibility != crate::prefs::Ask::Never,
-            pcraft_full_composite: p.get("pcraftFullComposite").and_then(Value::as_bool).unwrap_or(file_handling.pcraft_full_composite),
+            pcraft_full_composite: pcraft_full_composite_param(p, cmd)?.unwrap_or(file_handling.pcraft_full_composite),
         })
     }
 
@@ -102,6 +102,18 @@ pub fn tga_bits_param(p: &Value, cmd: &str) -> Result<Option<photocraft_io::TgaB
             .and_then(photocraft_io::TgaBits::from_bits)
             .map(Some)
             .ok_or_else(|| EngineError::BadParams { cmd: cmd.into(), msg: format!("`tgaBits` must be 24 or 32, got {v}") }),
+    }
+}
+
+/// Whether `p` asks a `.pcraft` save for the full-size composite (`"pcraftFullComposite": bool`;
+/// absent or null: `None`, the caller's default). Anything else is a bad parameter of command `cmd`.
+pub fn pcraft_full_composite_param(p: &Value, cmd: &str) -> Result<Option<bool>> {
+    match p.get("pcraftFullComposite") {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v
+            .as_bool()
+            .map(Some)
+            .ok_or_else(|| EngineError::BadParams { cmd: cmd.into(), msg: format!("`pcraftFullComposite` must be true or false, got {v}") }),
     }
 }
 

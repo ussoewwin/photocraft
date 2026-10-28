@@ -476,6 +476,15 @@ fn full_composite_preference_controls_the_pcraft_full_size_composite() {
         s.execute("file.saveACopy", json!({"path": out, "pcraftFullComposite": !on})).unwrap();
         assert_eq!(full(&out), !on, "preference {on}, param {}", !on);
     }
+    let out = join(&dir, "null param.pcraft");
+    s.execute("file.saveACopy", json!({"path": out, "pcraftFullComposite": null})).unwrap();
+    assert!(!full(&out), "null takes the preference");
+    for bad in [json!("true"), json!(1)] {
+        let out = join(&dir, "bad param.pcraft");
+        let err = s.execute("file.saveACopy", json!({"path": out, "pcraftFullComposite": bad})).unwrap_err().to_string();
+        assert!(err.contains("`pcraftFullComposite` must be true or false"), "{bad}: {err}");
+        assert!(!std::path::Path::new(&out).exists(), "{bad}: nothing is written");
+    }
 }
 
 #[test]

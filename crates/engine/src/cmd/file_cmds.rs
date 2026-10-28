@@ -50,7 +50,9 @@ pub(crate) use paths::{file_name, forward_slashes, is_windows_device_name, join,
 use processing::{conditional_mode_change, fit_image, flatten_all_effects, flatten_all_masks, image_processor, load_files_into_stack};
 use save::save_a_copy;
 pub(crate) use save::{SaveOpts, encode, save_doc};
-pub use save::{dds_param, dpx_bits_param, jpeg_format_param, jpeg_quality, tga_bits_param, tiff_compression_param, tiff_would_write_layers};
+pub use save::{
+    dds_param, dpx_bits_param, jpeg_format_param, jpeg_quality, pcraft_full_composite_param, tga_bits_param, tiff_compression_param, tiff_would_write_layers,
+};
 
 mod batch_naming;
 
