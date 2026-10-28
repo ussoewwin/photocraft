@@ -126,3 +126,25 @@ fn every_theme_puts_opacity_right_after_mode() {
         }
     }
 }
+
+/// #9784 moved the Hardness field beside Size outside the Pro themes. It still follows the
+/// Eraser's Mode: a Pencil or Block eraser is always hard (Photoshop), so Hardness is disabled
+/// there and enabled in Brush mode.
+#[test]
+fn the_eraser_hardness_field_follows_its_mode_outside_pro() {
+    for theme in ThemeKind::ALL.into_iter().filter(|k| !crate::theme::Tokens::for_kind(*k).pro) {
+        for (mode, enabled) in [("brush", true), ("pencil", false), ("block", false)] {
+            let mut h = options_bar(theme, Tool::Eraser);
+            h.state_mut().ui.tool_options.eraser_mode = mode.into();
+            h.run_steps(3);
+            let disabled: Vec<bool> = h
+                .root()
+                .children_recursive()
+                .filter(|n| n.accesskit_node().role() != egui::accesskit::Role::Label && n.accesskit_node().label().as_deref() == Some("Hardness"))
+                .map(|n| n.accesskit_node().is_disabled())
+                .collect();
+            assert!(!disabled.is_empty(), "{theme:?} {mode}: the Hardness field is shown");
+            assert!(disabled.iter().all(|d| *d != enabled), "{theme:?} {mode}: Hardness enabled = {enabled}, found disabled = {disabled:?}");
+        }
+    }
+}
