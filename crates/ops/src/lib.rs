@@ -632,7 +632,7 @@ impl History {
                 continue;
             }
             total = total.saturating_add(tile_bytes(&s.doc, &mut seen));
-            if total > self.max_bytes && keep >= 1 {
+            if total > self.max_bytes && (keep >= 1 || source == Some(undo.len() - 1)) {
                 break;
             }
             keep += 1;
