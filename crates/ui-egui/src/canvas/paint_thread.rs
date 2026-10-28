@@ -150,9 +150,11 @@ impl PaintThread {
         steps
     }
 
-    /// Is the stroke still painting points it was given?
+    /// Is the stroke still painting points it was given, or holding steps `catch_up` hasn't taken?
+    /// (A step can finish just after a frame's wait ran out; the next frame must collect it.)
     pub(super) fn busy(&self) -> bool {
-        !self.shared.lock().idle() && self.thread.as_ref().is_some_and(|t| !t.is_finished())
+        let st = self.shared.lock();
+        !st.steps.is_empty() || (!st.idle() && self.thread.as_ref().is_some_and(|t| !t.is_finished()))
     }
 
     pub(super) fn shown(&self) -> &Shown {
@@ -237,5 +239,19 @@ mod tests {
         let differ = (0..120).flat_map(|y| (0..400).map(move |x| (x, y))).filter(|&(x, y)| a.rgba(x, y) != b.rgba(x, y)).count();
         assert_eq!(differ, 0, "pixels differ from the inline stroke");
         assert!(b.rgba(200, 60 + (20.0 * (30.0f64 / 9.0).sin()) as i32)[3] > 0.5, "the stroke is there");
+    }
+
+    #[test]
+    fn a_painted_step_keeps_the_stroke_busy_until_the_canvas_takes_it() {
+        // The step finishes after the frame stopped waiting: the canvas must ask for another frame.
+        let mut s = Session::new();
+        s.execute("file.new", json!({"width": 200, "height": 100, "background": "white"})).unwrap();
+        let p = json!({"points": [[20, 50, 1.0]], "brush": {"size": 20}});
+        let mut thread = PaintThread::start(EngineStroke::Brush(Box::new(LiveStroke::begin(&s, &p).unwrap())));
+        thread.push(vec![StrokePoint::new(120.0, 50.0, 1.0)]);
+        thread.peek(|_| ());
+        assert!(thread.busy(), "a painted step nobody took yet");
+        assert_eq!(thread.catch_up(Duration::ZERO).len(), 1);
+        assert!(!thread.busy());
     }
 }
