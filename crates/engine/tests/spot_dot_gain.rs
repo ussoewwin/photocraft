@@ -54,6 +54,14 @@ fn spot_dot_gain_setting() {
         assert_eq!(spot_dot_gain(), SPOT_DOT_GAIN);
         assert!(in_sync(&s));
     }
+    // Only colour changes move the process-wide gain: another session's unrelated
+    // preferences leave this session's value alone.
+    s.execute("edit.colorSettings", json!({"spotDotGain": 30})).unwrap();
+    let mut other = Session::new();
+    other.execute("prefs.set", json!({"path": "unitsAndRulers.pointSize", "value": "traditional"})).unwrap();
+    other.execute("prefs.reset", json!({"path": "unitsAndRulers"})).unwrap();
+    assert_eq!(spot_dot_gain(), 30.0);
+    s.execute("prefs.reset", json!({"path": "colorSettings.spotDotGain"})).unwrap();
 
     // Saved with the preferences and applied when they load.
     s.execute("edit.colorSettings", json!({"spotDotGain": 38})).unwrap();
@@ -63,5 +71,15 @@ fn spot_dot_gain_setting() {
     again.load_prefs_json(&saved).unwrap();
     assert_eq!(again.color.settings.spot_dot_gain, 38.0);
     assert_eq!(spot_dot_gain(), 38.0);
+
+    // A saved gain out of range is reported and reset, so later Color Settings edits still pass.
+    let mut bad: serde_json::Value = serde_json::from_str(&saved).unwrap();
+    bad["colorSettings"]["spotDotGain"] = json!(80);
+    let mut third = Session::new();
+    let invalid = third.load_prefs_json(&bad.to_string()).unwrap();
+    assert!(invalid.iter().any(|p| p.path() == "colorSettings.spotDotGain"), "{:?}", invalid.iter().map(|p| p.path()).collect::<Vec<_>>());
+    assert_eq!(third.color.settings.spot_dot_gain, SPOT_DOT_GAIN);
+    assert_eq!(spot_dot_gain(), SPOT_DOT_GAIN);
+    third.execute("edit.colorSettings", json!({"intent": "relative"})).unwrap();
     photocraft_compose::multichannel::set_spot_dot_gain(SPOT_DOT_GAIN);
 }
