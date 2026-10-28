@@ -208,7 +208,10 @@ pub(crate) fn display_doc(app: &mut PhotocraftApp, idx: usize) -> Option<(Arc<Do
         app.shape_fill_preview = None;
         return None;
     };
-    if d.fields.get("color") == d.fields.get("__orig") {
+    // OK on the opening colour changes a paint that isn't solid yet (No Color, a gradient), so
+    // that one previews too.
+    let solid = d.fields.get("__shapePaintSolid").and_then(Value::as_bool).unwrap_or(true);
+    if solid && d.fields.get("color") == d.fields.get("__orig") {
         return None;
     }
     let layer = target(app, &d.fields, idx).ok()??;
@@ -228,8 +231,13 @@ pub(crate) fn display_doc(app: &mut PhotocraftApp, idx: usize) -> Option<(Arc<Do
     if let LayerContent::Shape(sh) = &mut doc.layer_mut(layer)?.content {
         match which {
             Paint::Fill => sh.fill = Some(Fill::Solid(color)),
-            // A stroke that is off (No Color) shows on OK, at its enabled width.
-            Paint::Stroke => sh.stroke.as_mut().filter(|s| s.width > 0.0)?.paint = Fill::Solid(color),
+            // A stroke that is off (none, or 0 px) previews as OK makes it: on, at its enabled
+            // width, with `shape.edit`'s default style when the shape has none.
+            Paint::Stroke => {
+                let stroke = sh.stroke.get_or_insert_with(Default::default);
+                stroke.width = crate::vector_ui::enabled_stroke_width(stroke.width);
+                stroke.paint = Fill::Solid(color);
+            }
         }
         photocraft_engine::vector_cmds::refresh_shape(&st.doc, sh);
     }

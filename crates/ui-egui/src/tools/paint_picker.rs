@@ -148,7 +148,7 @@ fn draw_no_color(ui: &egui::Ui, r: Rect, t: &Tokens) {
     let p = ui.painter();
     p.rect_filled(r, 0.0, Color32::WHITE);
     p.rect_stroke(r, 0.0, Stroke::new(1.0, t.field_border), StrokeKind::Inside);
-    p.line_segment([r.left_bottom() + vec2(1.5, -1.5), r.right_top() + vec2(-1.5, 1.5)], Stroke::new(1.5, Color32::from_rgb(220, 40, 40)));
+    p.line_segment([r.left_bottom() + vec2(1.5, -1.5), r.right_top() + vec2(-1.5, 1.5)], Stroke::new(1.5, t.danger));
 }
 
 fn draw_gradient(ui: &egui::Ui, r: Rect, t: &Tokens) {

@@ -77,7 +77,8 @@ pub(crate) fn swatch(
     let (r, resp) = ui.allocate_exact_size(vec2(30.0, 22.0), Sense::click());
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::ColorWell, ui.is_enabled(), tip));
     let current = fill.and_then(color_of);
-    crate::widgets::checker(ui.painter(), r.shrink(1.0), 4.0);
+    // Clipped to the rounded corners: square checker cells showed white past them (#8741, #3208).
+    crate::widgets::checker_rounded(ui.painter(), r.shrink(1.0), 4.0, t.radius_sm);
     match (current, fill) {
         (Some(c), _) => {
             ui.painter().rect_filled(r.shrink(1.0), t.radius_sm, rgba32(c));

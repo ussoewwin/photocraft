@@ -254,7 +254,7 @@ Paragraph; the rest open as in-app floating windows.
 
 | Date | Change | Summary |
 |---|---|---|
-| 2026-10-27 | minor | Shape Fill/Stroke popover as Photoshop's (paint types, Color Picker button, Recently Used Colors, swatch folders, with the Gradient tab) and every colour swatch opens the full Color Picker; rows added (partial, done); no percentage changed |
+| 2026-10-27 | minor | Shape Fill/Stroke popover as Photoshop's (paint types, Color Picker button, Recently Used Colors, swatch folders, with the Gradient tab) and every colour swatch opens the full Color Picker; rows added (partial, done); Recently Used Colors is a new preference, so 12 of 182 do nothing; no percentage changed |
 | 2026-10-27 | minor | Every preference takes effect: 12 of 181 do nothing, the scorecard's count with integration batch 9 (#9775) on main; new layers go above a group whose lock would refuse them (#4329) |
 | 2026-10-25 | minor | Every preference takes effect: 12 of 178 do nothing, the scorecard's count (it still said 46 of 149) |
 | 2026-10-25 | minor | Art History Brush is in the History group of the Y flyout (partial, TOOL-213-20, #1610) |

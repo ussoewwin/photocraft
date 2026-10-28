@@ -118,6 +118,26 @@ fn stroke_picker_previews_commits_and_rejects_stale_or_bad_targets() {
     assert!(display_doc(&mut app, 0).is_none());
 }
 
+/// A shape without a stroke, or with a 0 px one, previews the stroke the picker's OK turns on:
+/// the picked colour at the enabled width, even for the colour it opened on.
+#[test]
+fn stroke_picker_previews_a_stroke_that_is_off_as_ok_turns_it_on() {
+    for stroke in [json!(null), json!({"width": 0, "color": "#ff0000"})] {
+        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", json!({"width": 64, "height": 48})).unwrap();
+        let id = LayerId(app.run("shape.create", json!({"rect": [8, 8, 40, 30], "fill": "#336699", "stroke": stroke})).unwrap()["layer"].as_u64().unwrap());
+        let dialog = open_paint(&mut app, Paint::Stroke, Some(id), false, [0.0, 0.0, 0.0, 1.0]).unwrap();
+        let (shown, _) = display_doc(&mut app, 0).expect("the unchanged colour still previews the stroke OK adds");
+        let LayerContent::Shape(sh) = &shown.layer(id).unwrap().content else { panic!() };
+        let previewed = sh.stroke.clone().expect("a previewed stroke");
+        crate::dialogs::confirm(&mut app, dialog).unwrap();
+        let LayerContent::Shape(sh) = &app.session.active().unwrap().doc.layer(id).unwrap().content else { panic!() };
+        let committed = sh.stroke.clone().expect("OK turned the stroke on");
+        assert_eq!((previewed.paint, previewed.width), (committed.paint, committed.width), "{stroke}: the preview is what OK commits");
+        assert_eq!(committed.width, 3.0);
+    }
+}
+
 /// From the options bar without a selected shape, OK sets the next shape's colour and turns the
 /// paint on, and edits no document.
 #[test]
