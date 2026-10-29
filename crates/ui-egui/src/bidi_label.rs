@@ -1,22 +1,8 @@
-//! Visual order for single-line labels that contain right-to-left text (Arabic, Persian, Urdu,
-//! Hebrew, Kurdish …), such as layer names.
-//!
-//! Historical egui 0.36 shaped each font run with HarfRust, so an Arabic or Hebrew word is drawn right to
-//! left with its letters joined. What it lacks is paragraph bidi: it places a line's runs left to
-//! right in logical order, so `سلام عليكم` draws as `عليكم سلام`. [`for_egui`] puts the runs in
-//! visual order with the Unicode bidi algorithm, but leaves the letters of every stretch egui
-//! reverses by itself in logical order. Reversing those too (`reorder_line`) mirrors each word,
-//! picks joining forms from the wrong neighbours and loses the لا ligature.
-//!
-//! Only for painted, single-line text: wrapping and eliding happen on the logical string first
-//! (see [`crate::layer_row_ui::truncated`]), and editable text and accessibility labels keep the
-//! logical string. Known gap: Arabic-Indic digits written against Arabic letters with no space
-//! (`طبقة١`) share one egui run with them and land on the wrong side. Remove this once egui
-//! orders runs by bidi level itself (emilk/egui#8577).
+//! RTL label regression compatibility for native egui paragraph ordering.
+//! Keep logical text to prevent a second bidi pre-pass from reversing words twice.
 
 use std::borrow::Cow;
 
-use unicode_bidi::BidiInfo;
 
 /// Does `text` contain a character from a right-to-left script?
 pub fn has_rtl(text: &str) -> bool {
@@ -48,20 +34,8 @@ fn rtl_script(c: char) -> bool {
 /// is returned unchanged.
 /// Native egui 0.37 at the pinned revision owns UAX #9 ordering. A second pre-pass would
 /// reverse multiword RTL labels twice. Keep the logical text for shaping and accessibility.
-pub fn for_egui(text:&str)->Cow<'_,str>{Cow::Borrowed(text)}
-
-/// Append `s`, reversing each maximal stretch of right-to-left-script characters.
-fn push_unreversing_rtl_stretches(out: &mut String, s: &str) {
-    let mut stretch: Vec<char> = Vec::new();
-    for c in s.chars() {
-        if rtl_script(c) {
-            stretch.push(c);
-        } else {
-            out.extend(stretch.drain(..).rev());
-            out.push(c);
-        }
-    }
-    out.extend(stretch.into_iter().rev());
+pub fn for_egui(text: &str) -> Cow<'_, str> {
+    Cow::Borrowed(text)
 }
 
 #[cfg(test)]
