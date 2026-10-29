@@ -1334,7 +1334,6 @@
 	Italic	斜體
 	Join us on Discord	加入我們的 Discord
 	Justify all	全部齊行
-	Roman Hanging Punctuation	羅馬字懸掛標點
 	Justify last centered	最後一行置中齊行
 	Justify last left	最後一行靠左齊行
 	Justify last right	最後一行靠右齊行
@@ -1939,9 +1938,6 @@
 	Slice Select Tool	切片選取工具
 	Slice Tool	切片工具
 	Smart Filters	智慧型濾鏡
-	Move Up	上移
-	Move Down	下移
-	Delete Smart Filter	刪除智慧型濾鏡
 	Smudge Tool	指尖工具
 	Soft	柔邊
 	Soften	柔化
@@ -2080,7 +2076,6 @@
 	Image previews	影像預視
 	Integrations	整合
 	Interface	介面
-	Use PhotoCraft-native gradient icons	使用 PhotoCraft 原生漸層圖示
 	Jpeg quality	JPEG 品質
 	Jpg	JPG
 	Language	語言
@@ -2578,7 +2573,6 @@ fontWeight	Italic	斜體
 	Out of gamut for printing: click for the nearest printable colour	超出列印色域：按一下以使用最接近的可列印顏色
 	Not a web colour: click for the nearest web colour	不是網頁顏色：按一下以使用最接近的網頁顏色
 	Color to Alpha…	顏色轉為 Alpha…
-	Frequency Separation…	頻率分離…
 	Transparency Threshold	透明度臨界值
 	Opacity Threshold	不透明度臨界值
 	PhotoCraft — Screen Color Picker	PhotoCraft — 螢幕取色器
@@ -2880,8 +2874,6 @@ curves	Smooth	平滑
 	Reset All Locked Settings	重設所有鎖定的設定
 	Copy Texture to Other Tools	複製紋理至其他工具
 	Load Actions…	載入動作…
-	Load Default Actions	載入預設動作
-	Blur Background	模糊背景
 	Save Actions…	儲存動作…
 	New Action…	新增動作…
 	Start Recording	開始錄製
@@ -3141,10 +3133,6 @@ curves	Smooth	平滑
 	Font size presets	字體大小預設
 	Leading presets	行距預設
 	Tracking presets	字距調整預設
-	Selection / Layer Bounds	選取範圍 / 圖層邊界
-	No selection or layer	沒有選取範圍或圖層
-	{label}: empty	{label}：空
-	{label}: X {x}  Y {y}  W {w}  H {h}	{label}: X {x}  Y {y}  W {w}  H {h}
 	Clear Selection	清除選取範圍
 	Color Aware	顏色感知
 	Decontaminate Colors	淨化顏色
@@ -3162,10 +3150,4 @@ curves	Smooth	平滑
 	Refine Hair needs hair detection, which isn't available yet	調整毛髮需要毛髮偵測，目前尚無法使用
 	Select and Mask was closed: its document is no longer the active one	已關閉「選取並遮住」：其文件已不是使用中的文件
 	Select and Mask was closed: another layer was selected	已關閉「選取並遮住」：已選取另一個圖層
-	Import Shapes…	匯入形狀…
-	Choose a custom shape file (.csh).	請選擇自訂形狀檔案 (.csh)。
-@plural	Imported {n} shape from {file}|Imported {n} shapes from {file}	從 {file} 匯入的形狀數量：{n}
-@plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	從 {group} 匯入的形狀數量：{n}
-	Scrollbar Visibility	捲軸可見性
-	Hidden	隱藏
 	Drag to move the selected path	拖曳以移動選取的路徑

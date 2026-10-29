@@ -4,32 +4,6 @@ use egui_kittest::Harness;
 use serde_json::json;
 
 #[test]
-fn middle_drag_rotates_about_the_pointer_without_panning() {
-    let rect = Rect::from_min_size(pos2(0.0, 0.0), vec2(800.0, 600.0));
-    let pointer = pos2(600.0, 180.0);
-    for flip in [false, true] {
-        let mut view = View { zoom: 2.0, center: [130.0, 80.0], ..Default::default() };
-        let xf = ViewXform { rect, zoom: 2.0, center: view.center, flip, rotation: 0.0, aspect: 1.25 };
-        let original = xf.to_doc(pointer);
-        assert!(middle_drag(&mut view, &xf, pointer, 90.0));
-        assert!((view.rotation - 31.5).abs() < 0.001);
-        let next = ViewXform { center: view.center, rotation: view.rotation, ..xf }.to_doc(pointer);
-        assert!((next[0] - original[0]).abs() < 0.001 && (next[1] - original[1]).abs() < 0.001, "{original:?} {next:?}");
-    }
-}
-
-#[test]
-fn middle_drag_ignores_invalid_or_stationary_input() {
-    let mut view = View::default();
-    let xf =
-        ViewXform { rect: Rect::from_min_size(pos2(0.0, 0.0), vec2(600.0, 400.0)), zoom: 1.0, center: view.center, flip: false, rotation: 0.0, aspect: 1.0 };
-    assert!(!middle_drag(&mut view, &xf, pos2(200.0, 120.0), 0.0));
-    assert!(!middle_drag(&mut view, &xf, pos2(200.0, 120.0), f32::NAN));
-    assert!(!middle_drag(&mut view, &xf, pos2(f32::INFINITY, 120.0), 20.0));
-    assert_eq!(view.rotation, 0.0);
-}
-
-#[test]
 fn wrap_deg_folds_huge_and_hostile_angles() {
     assert_eq!(wrap_deg(0.0), 0.0);
     assert_eq!(wrap_deg(180.0), 180.0);

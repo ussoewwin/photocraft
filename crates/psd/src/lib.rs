@@ -49,7 +49,6 @@ pub mod atn;
 pub mod blend;
 pub mod builder;
 pub mod compression;
-pub mod csh;
 pub mod descriptor;
 pub mod error;
 pub mod file;

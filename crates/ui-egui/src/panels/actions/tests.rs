@@ -30,73 +30,6 @@ fn panel_menu_lists_load_save_and_existing_action_commands() {
 }
 
 #[test]
-fn loading_json_actions_uses_engine_import_and_selects_the_new_action() {
-    let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
-    let action = Action::new("Portable", vec![("select.all".into(), json!({}))]);
-    let file = actions_cmds::ActionsFile { version: 1, defaults_version: 0, actions: vec![action.clone()] };
-    let bytes = serde_json::to_vec(&file).unwrap();
-    assert_eq!(load_bytes(&mut app, "Actions.JSON", &bytes).unwrap()["imported"], 1);
-    assert_eq!(app.session.actions.list, [action]);
-    assert_eq!(app.ui.actions.selected, Some(0));
-    assert_eq!(app.ui.actions.selected_step, None);
-    assert!(app.ui.actions.expanded[0]);
-    assert!(!app.ui.status_error);
-    let before = app.session.actions.clone();
-    assert_eq!(load_bytes(&mut app, "Actions.json", &bytes).unwrap()["imported"], 0);
-    assert_eq!(app.session.actions, before);
-}
-
-#[test]
-fn default_actions_load_from_empty_panel_and_play() {
-    use egui_kittest::{Harness, kittest::Queryable};
-    let app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
-    let mut h = Harness::builder()
-        .with_size(vec2(360.0, 400.0))
-        .with_context_setup(|ctx| PhotocraftApp::setup_context(ctx, Default::default()))
-        .build_ui_state(|ui, app| panel(app, ui), app);
-    h.run_steps(3);
-    h.get_by_label("Load Default Actions").click();
-    h.run_steps(3);
-    assert!(h.query_by_label("PhotoCraft Essentials").is_some());
-    for name in ["Auto Tone", "Auto Contrast", "Auto Color", "Select Subject", "Blur Background"] {
-        assert!(h.query_by_label(name).is_some(), "missing preset {name}");
-    }
-    assert_eq!(h.state().ui.actions.selected, Some(0));
-    h.state_mut().run("file.new", json!({"width": 16, "height": 16})).unwrap();
-    h.run_steps(3);
-    h.get_by_label("Play selection").click();
-    h.run_steps(3);
-    assert!(!h.state().ui.status_error, "{}", h.state().ui.status);
-    assert!(h.state().session.journal.iter().any(|(id, _)| id == "image.autoTone"));
-}
-
-#[test]
-fn default_actions_flyout_preserves_custom_actions_and_reveals_restored_set() {
-    use egui_kittest::{Harness, kittest::Queryable};
-    let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
-    let custom = Action::new("Auto Tone", vec![("view.fitOnScreen".into(), json!({}))]);
-    app.session.actions.list.push(custom.clone());
-    app.ui.actions.collapsed_sets.push("PhotoCraft Essentials".into());
-    let mut h = Harness::builder().with_size(vec2(360.0, 400.0)).build_ui_state(
-        |ui, app| {
-            ui.menu_button("Actions menu", |ui| panel_menu(app, ui));
-            panel(app, ui);
-        },
-        app,
-    );
-    h.run_steps(3);
-    h.get_by_label("Actions menu").click();
-    h.run_steps(3);
-    h.get_by_label("Load Default Actions").click();
-    h.run_steps(3);
-    assert_eq!(h.state().session.actions.list[0], custom);
-    assert_eq!(h.state().session.actions.list.len(), 5);
-    assert_eq!(h.state().ui.actions.selected, Some(1));
-    assert!(h.state().ui.actions.collapsed_sets.is_empty());
-    assert!(h.query_by_label("Select Subject").is_some());
-}
-
-#[test]
 fn selected_layer_name_is_visible_during_recording_and_after_stop() {
     use egui_kittest::{Harness, kittest::Queryable};
     let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
@@ -170,31 +103,6 @@ fn a_function_key_with_shift_and_command_plays_its_action() {
     assert_eq!(layers(&app), before, "F2 and Shift+F2 alone don't play it");
     press(&mut app, Modifiers::SHIFT | Modifiers::COMMAND);
     assert_eq!(layers(&app), before + 1, "Cmd+Shift+F2 plays it");
-}
-
-#[test]
-fn actions_shortcut_undo_and_redo_edit_script_without_undoing_pixels() {
-    use egui_kittest::{Harness, kittest::Queryable};
-    let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
-    app.run("file.new", json!({"width": 8, "height": 8})).unwrap();
-    app.run("layer.new.layer", json!({})).unwrap();
-    app.session.actions.list.push(Action::new("A", vec![("select.all".into(), json!({}))]));
-    let doc = app.session.active().unwrap().doc.clone();
-    let mut h = Harness::builder().with_size(vec2(320.0, 260.0)).build_ui_state(|ui, app| panel(app, ui), app);
-    h.run_steps(3);
-    h.get_by_label("A").click();
-    h.run_steps(3);
-    assert!(h.state().ui.actions.focused);
-    h.state_mut().run("actions.delete", json!({"action": "A", "step": 0})).unwrap();
-    let ctx = egui::Context::default();
-    crate::shortcut_dispatch::dispatch(h.state_mut(), &ctx, "edit.undo");
-    assert_eq!(h.state().session.actions.list[0].steps.len(), 1);
-    assert_eq!(h.state().session.active().unwrap().doc, doc);
-    crate::shortcut_dispatch::dispatch(h.state_mut(), &ctx, "edit.redo");
-    assert!(h.state().session.actions.list[0].steps.is_empty());
-    h.state_mut().ui.actions.focused = false;
-    crate::shortcut_dispatch::dispatch(h.state_mut(), &ctx, "edit.undo");
-    assert_eq!(h.state().session.active().unwrap().doc.layers.len(), 1);
 }
 
 #[test]

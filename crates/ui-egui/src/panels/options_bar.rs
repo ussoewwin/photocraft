@@ -427,9 +427,16 @@ fn selection_specific_options(app: &mut PhotocraftApp, ui: &mut egui::Ui, tool: 
             widgets::vline(ui, 22.0);
             ui.spacing_mut().item_spacing.x = 2.0;
             let before = app.ui.tool_options.clone();
-            if let Some(style) = crate::gradient_ui::style_buttons(ui, &app.ui.tool_options.gradient_style, app.session.prefs().interface.native_gradient_icons)
-            {
-                app.ui.tool_options.gradient_style = style.into();
+            for (style, icon, tip) in [
+                ("linear", "gradient", tl!("Linear Gradient")),
+                ("radial", "circle", tl!("Radial Gradient")),
+                ("angle", "rotate-cw", tl!("Angle Gradient")),
+                ("reflected", "arrow-left-right", tl!("Reflected Gradient")),
+                ("diamond", "diamond", tl!("Diamond Gradient")),
+            ] {
+                if icons::button(ui, icon, 24.0, app.ui.tool_options.gradient_style == style, tip).clicked() {
+                    app.ui.tool_options.gradient_style = style.into();
+                }
             }
             ui.spacing_mut().item_spacing.x = 8.0;
             widgets::vline(ui, 22.0);

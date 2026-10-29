@@ -1891,9 +1891,6 @@
 	Slice Select Tool	Herramienta Selección de sector
 	Slice Tool	Herramienta Sector
 	Smart Filters	Filtros inteligentes
-	Move Up	Mover arriba
-	Move Down	Mover abajo
-	Delete Smart Filter	Eliminar filtro inteligente
 	Smudge Tool	Herramienta Dedo
 	Soft	Suave
 	Soften	Suavizar
@@ -2032,7 +2029,6 @@
 	Image previews	Vistas previas de imagen
 	Integrations	Integraciones
 	Interface	Interfaz
-	Use PhotoCraft-native gradient icons	Usar iconos nativos de degradado de PhotoCraft
 	Jpeg quality	Calidad JPEG
 	Jpg	JPG
 	Language	Idioma
@@ -2612,7 +2608,6 @@ fontWeight	Italic	Cursiva
 	Out of gamut for printing: click for the nearest printable colour	Fuera de la gama de impresión: haga clic para el color imprimible más cercano
 	Not a web colour: click for the nearest web colour	No es un color web: haga clic para el color web más cercano
 	Color to Alpha…	Color a alfa…
-	Frequency Separation…	Separación de frecuencias…
 	Transparency Threshold	Umbral de transparencia
 	Opacity Threshold	Umbral de opacidad
 	PhotoCraft — Screen Color Picker	PhotoCraft — Selector de color de pantalla
@@ -4176,8 +4171,6 @@ navigator	Zoom	Zoom
 	Reset All Locked Settings	Restaurar todos los ajustes bloqueados
 	Copy Texture to Other Tools	Copiar textura en otras herramientas
 	Load Actions…	Cargar acciones…
-	Load Default Actions	Cargar acciones predeterminadas
-	Blur Background	Desenfocar fondo
 	Save Actions…	Guardar acciones…
 	New Action…	Nueva acción…
 	Start Recording	Iniciar grabación
@@ -4414,10 +4407,6 @@ navigator	Zoom	Zoom
 	Font size presets	Valores predefinidos de tamaño de fuente
 	Leading presets	Valores predefinidos de interlineado
 	Tracking presets	Valores predefinidos de tracking
-	Selection / Layer Bounds	Límites de selección / capa
-	No selection or layer	Sin selección ni capa
-	{label}: empty	{label}: vacío
-	{label}: X {x}  Y {y}  W {w}  H {h}	{label}: X {x}  Y {y}  W {w}  H {h}
 	Color Aware	Según color
 	Decontaminate Colors	Descontaminar colores
 	Edge Detection	Detección de bordes
@@ -4435,9 +4424,4 @@ navigator	Zoom	Zoom
 	Select and Mask was closed: its document is no longer the active one	Se cerró Seleccionar y aplicar máscara: su documento ya no es el activo
 	Select and Mask was closed: another layer was selected	Se cerró Seleccionar y aplicar máscara: se seleccionó otra capa
 	Select Layer Under Cursor	Seleccionar capa bajo el cursor
-	Import Shapes…	Importar formas…
-	Choose a custom shape file (.csh).	Selecciona un archivo de formas personalizadas (.csh).
-@plural	Imported {n} shape from {file}|Imported {n} shapes from {file}	Cantidad de formas importadas de {file}: {n}|Cantidad de formas importadas de {file}: {n}
-@plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	Cantidad de formas importadas de {group}: {n}|Cantidad de formas importadas de {group}: {n}
-	Scrollbar Visibility	Visibilidad de las barras de desplazamiento
 	Drag to move the selected path	Arrastre para mover el trazado seleccionado

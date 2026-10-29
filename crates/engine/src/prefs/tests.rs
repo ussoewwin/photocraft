@@ -7,28 +7,6 @@ fn session() -> Session {
 }
 
 #[test]
-fn native_gradient_icons_persist_reset_and_preserve_legacy_defaults() {
-    let mut s = session();
-    let history = s.active().unwrap().history.past_len();
-    assert!(!s.prefs().interface.native_gradient_icons);
-    s.execute("prefs.set", json!({"path": "interface.nativeGradientIcons", "value": true})).unwrap();
-    let mut restarted = Session::new();
-    restarted.load_prefs_json(&s.prefs_to_json()).unwrap();
-    assert!(restarted.prefs().interface.native_gradient_icons);
-    assert_eq!(s.active().unwrap().history.past_len(), history);
-    s.execute("prefs.reset", json!({"path": "interface.nativeGradientIcons"})).unwrap();
-    assert!(!s.prefs().interface.native_gradient_icons);
-    let before = s.prefs().to_json();
-    for invalid in [json!("true"), json!(1), Value::Null] {
-        assert!(s.execute("prefs.set", json!({"values": {"interface.showTooltips": false, "interface.nativeGradientIcons": invalid}})).is_err());
-        assert_eq!(s.prefs().to_json(), before, "invalid updates are atomic");
-    }
-    restarted.load_prefs_json(r#"{"interface":{"showTooltips":false}}"#).unwrap();
-    assert!(!restarted.prefs().interface.native_gradient_icons);
-    assert!(!restarted.prefs().interface.show_tooltips);
-}
-
-#[test]
 fn defaults_match_photoshop() {
     let p = Preferences::default();
     assert_eq!(p.performance.history_states, 50);
@@ -1054,24 +1032,4 @@ fn a_wrongly_typed_section_or_colour_setting_resets_only_that_part() {
     let deep = format!("{{\"general\": {}1{}}}", "{\"a\":".repeat(100), "}".repeat(100));
     assert!(s.load_prefs_json(&deep).is_ok());
     assert!(s.load_prefs_json(r#"{"interface": {"theme": 3, "uiScale": [1]}, "workspaces": {"x": 1}, "menus": 1}"#).is_ok());
-}
-
-#[test]
-fn scrollbar_visibility_round_trips_and_old_preferences_keep_the_theme_default() {
-    let old = serde_json::from_value::<Preferences>(json!({"interface": {"uiFontSize": "small"}})).unwrap();
-    assert_eq!(old.interface.scrollbar_visibility, ScrollbarVisibility::Default);
-    assert_eq!(choices("interface.scrollbarVisibility"), Some(ScrollbarVisibility::NAMES));
-    let mut s = Session::new();
-    for mode in ScrollbarVisibility::NAMES {
-        s.execute("prefs.set", json!({"values": {"interface.scrollbarVisibility": mode}})).unwrap();
-        let saved = s.prefs().to_json();
-        let loaded: Preferences = serde_json::from_value(saved.clone()).unwrap();
-        assert_eq!(loaded.interface.scrollbar_visibility, s.prefs().interface.scrollbar_visibility);
-        assert_eq!(saved["interface"]["scrollbarVisibility"], json!(mode));
-    }
-    let before = s.prefs().to_json();
-    assert!(s.execute("prefs.set", json!({"values": {"interface.scrollbarVisibility": "sometimes"}})).is_err());
-    assert_eq!(s.prefs().to_json(), before);
-    s.execute("prefs.reset", json!({"path": "interface.scrollbarVisibility"})).unwrap();
-    assert_eq!(s.prefs().interface.scrollbar_visibility, ScrollbarVisibility::Default);
 }

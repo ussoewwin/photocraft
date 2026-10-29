@@ -1353,7 +1353,6 @@
 	Italic	斜体
 	Join us on Discord	加入我们的 Discord 社区
 	Justify all	全部两端对齐
-	Roman Hanging Punctuation	罗马字悬挂标点
 	Justify last centered	两端对齐，末行居中
 	Justify last left	两端对齐，末行左对齐
 	Justify last right	两端对齐，末行右对齐
@@ -1969,9 +1968,6 @@
 	Slice Select Tool	切片选择工具
 	Slice Tool	切片工具
 	Smart Filters	智能滤镜
-	Move Up	上移
-	Move Down	下移
-	Delete Smart Filter	删除智能滤镜
 	Smudge Tool	涂抹工具
 	Soft	软
 	Soften	柔化
@@ -2112,7 +2108,6 @@
 	Image previews	图像预览
 	Integrations	集成
 	Interface	界面
-	Use PhotoCraft-native gradient icons	使用 PhotoCraft 原生渐变图标
 	Jpeg quality	JPEG 品质
 	Jpg	JPG
 	Language	语言
@@ -2631,7 +2626,6 @@ fontWeight	Italic	斜体
 	Out of gamut for printing: click for the nearest printable colour	超出打印色域：单击使用最接近的可打印颜色
 	Not a web colour: click for the nearest web colour	不是 Web 颜色：单击使用最接近的 Web 颜色
 	Color to Alpha…	颜色转为 Alpha…
-	Frequency Separation…	频率分离…
 	Transparency Threshold	透明度阈值
 	Opacity Threshold	不透明度阈值
 	PhotoCraft — Screen Color Picker	PhotoCraft — 屏幕取色器
@@ -2919,8 +2913,6 @@ curves	Smooth	平滑
 	Reset All Locked Settings	复位所有锁定的设置
 	Copy Texture to Other Tools	将纹理复制到其他工具
 	Load Actions…	载入动作…
-	Load Default Actions	载入默认动作
-	Blur Background	模糊背景
 	Save Actions…	存储动作…
 	New Action…	新建动作…
 	Start Recording	开始录制
@@ -3185,10 +3177,6 @@ curves	Smooth	平滑
 	Font size presets	字号预设
 	Leading presets	行距预设
 	Tracking presets	字距调整预设
-	Selection / Layer Bounds	选区 / 图层边界
-	No selection or layer	无选区或图层
-	{label}: empty	{label}：空
-	{label}: X {x}  Y {y}  W {w}  H {h}	{label}: X {x}  Y {y}  W {w}  H {h}
 	Clear Selection	清除选区
 	Color Aware	颜色识别
 	Decontaminate Colors	净化颜色
@@ -3206,10 +3194,4 @@ curves	Smooth	平滑
 	Refine Hair needs hair detection, which isn't available yet	调整细线需要毛发检测，目前尚不可用
 	Select and Mask was closed: its document is no longer the active one	已关闭“选择与蒙版”：其文档不再是当前文档
 	Select and Mask was closed: another layer was selected	已关闭“选择与蒙版”：已选择另一个图层
-	Import Shapes…	导入形状…
-	Choose a custom shape file (.csh).	请选择自定义形状文件 (.csh)。
-@plural	Imported {n} shape from {file}|Imported {n} shapes from {file}	从 {file} 导入的形状数量：{n}
-@plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	从 {group} 导入的形状数量：{n}
-	Scrollbar Visibility	滚动条可见性
-	Hidden	隐藏
 	Drag to move the selected path	拖动以移动选中的路径

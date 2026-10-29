@@ -420,11 +420,6 @@
 	New Video Layer from File…	Новый видеослой из файла…
 	New Blank Video Layer	Новый пустой видеослой
 	Smart Filters	Смарт-фильтры
-# Smart Filter row actions (#1265)
-	Move Up	Переместить вверх
-	Move Down	Переместить вниз
-	Delete Smart Filter	Удалить смарт-фильтр
-
 	Delete Smart Filters	Удалить смарт-фильтры
 	Enable Smart Filters	Включить смарт-фильтры
 	Disable Smart Filters	Отключить смарт-фильтры
@@ -2498,7 +2493,6 @@
 	Image previews	Предпросмотр изображений
 	Integrations	Интеграции
 	Interface	Интерфейс
-	Use PhotoCraft-native gradient icons	Использовать собственные значки градиента PhotoCraft
 	Jpeg quality	Качество JPEG
 	Jpg	JPEG
 	Large tabs	Крупные вкладки
@@ -2867,7 +2861,6 @@ fontWeight	Italic	Курсив
 	Out of gamut for printing: click for the nearest printable colour	Вне цветового охвата печати: щёлкните, чтобы выбрать ближайший печатаемый цвет
 	Not a web colour: click for the nearest web colour	Не веб-цвет: щёлкните, чтобы выбрать ближайший веб-цвет
 	Color to Alpha…	Цвет в альфа-канал…
-	Frequency Separation…	Частотное разложение…
 	Transparency Threshold	Порог прозрачности
 	Opacity Threshold	Порог непрозрачности
 	PhotoCraft — Screen Color Picker	PhotoCraft — Пипетка цвета экрана
@@ -3227,8 +3220,6 @@ curves	Smooth	Сгладить
 	Reset All Locked Settings	Сбросить все заблокированные параметры
 	Copy Texture to Other Tools	Скопировать текстуру в другие инструменты
 	Load Actions…	Загрузить операции…
-	Load Default Actions	Загрузить действия по умолчанию
-	Blur Background	Размыть фон
 	Save Actions…	Сохранить операции…
 	New Action…	Новая операция…
 	Start Recording	Начать запись
@@ -3259,8 +3250,6 @@ curves	Smooth	Сгладить
 	Remember to turn off the printer's own colour management in Print Settings…	Не забудьте отключить управление цветом самого принтера в параметрах печати…
 	Sent to {printer}	Отправлено на {printer}
 	set in Print Settings…	задаётся в параметрах печати…
-	Scrollbar Visibility	Видимость полос прокрутки
-	Hidden	Скрыто
 	ICO is limited to 256 × 256 pixels	ICO ограничен размером 256 × 256 пикселей
 	Calibration	Калибровка
 	Red Primary	Красный основной
@@ -3318,14 +3307,6 @@ curves	Smooth	Сгладить
 	Slab Serif	С брусковыми засечками
 	TrueType font	Шрифт TrueType
 	Variable font	Вариативный шрифт
-
-# Custom shape set import
-	Import Shapes…	Импортировать фигуры…
-	Choose a custom shape file (.csh).	Выберите файл произвольных фигур (.csh).
-@plural	Imported {n} shape from {file}|Imported {n} shapes from {file}	Количество фигур, импортированных из {file}: {n}|Количество фигур, импортированных из {file}: {n}|Количество фигур, импортированных из {file}: {n}
-@plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	Количество фигур, импортированных из {group}: {n}|Количество фигур, импортированных из {group}: {n}|Количество фигур, импортированных из {group}: {n}
-
-# Bevel & Emboss shading controls.
 	Highlight Mode	Режим светлых тонов
 	Highlight Color	Цвет светлых тонов
 	Highlight Opacity	Непрозрачность светлых тонов
@@ -4713,10 +4694,6 @@ shape	Appearance	Оформление
 	Font size presets	Наборы размеров шрифта
 	Leading presets	Наборы интерлиньяжа
 	Tracking presets	Наборы трекинга
-	Selection / Layer Bounds	Границы выделения / слоя
-	No selection or layer	Нет выделения или слоя
-	{label}: empty	{label}: пусто
-	{label}: X {x}  Y {y}  W {w}  H {h}	{label}: X {x}  Y {y}  W {w}  H {h}
 	Color Aware	С учетом цвета
 	Decontaminate Colors	Очистить цвета
 	Edge Detection	Обнаружение краев

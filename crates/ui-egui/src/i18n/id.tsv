@@ -1907,11 +1907,6 @@
 	Slice Select Tool	Alat Slice Select
 	Slice Tool	Alat Slice
 	Smart Filters	Smart Filter
-# Smart Filter row actions (#1265)
-	Move Up	Pindah ke atas
-	Move Down	Pindah ke bawah
-	Delete Smart Filter	Hapus Smart Filter
-
 	Smudge Tool	Alat Smudge
 	Soft	Lembut
 	Soften	Lembutkan
@@ -2048,7 +2043,6 @@
 	Image previews	Pratinjau gambar
 	Integrations	Integrasi
 	Interface	Antarmuka
-	Use PhotoCraft-native gradient icons	Gunakan ikon gradien bawaan PhotoCraft
 	Jpeg quality	Kualitas JPEG
 	Jpg	JPG
 	Language	Bahasa
@@ -3011,7 +3005,6 @@ fontWeight	Italic	Miring
 	Out of gamut for printing: click for the nearest printable colour	Di luar gamut cetak: klik untuk warna cetak terdekat
 	Not a web colour: click for the nearest web colour	Bukan warna web: klik untuk warna web terdekat
 	Color to Alpha…	Warna ke Alpha…
-	Frequency Separation…	Pemisahan Frekuensi…
 	Transparency Threshold	Ambang transparansi
 	Opacity Threshold	Ambang opasitas
 	PhotoCraft — Screen Color Picker	PhotoCraft — Pemilih Warna Layar
@@ -3275,8 +3268,6 @@ curves	Smooth	Haluskan
 	Reset All Locked Settings	Atur Ulang Semua Pengaturan Terkunci
 	Copy Texture to Other Tools	Salin Tekstur ke Alat Lain
 	Load Actions…	Muat Tindakan…
-	Load Default Actions	Muat Aksi Default
-	Blur Background	Buramkan Latar Belakang
 	Save Actions…	Simpan Tindakan…
 	New Action…	Tindakan Baru…
 	Start Recording	Mulai Rekaman
@@ -3524,10 +3515,6 @@ curves	Smooth	Haluskan
 	Font size presets	Preset ukuran font
 	Leading presets	Preset leading
 	Tracking presets	Preset tracking
-	Selection / Layer Bounds	Batas Seleksi / Layer
-	No selection or layer	Tidak ada seleksi atau layer
-	{label}: empty	{label}: kosong
-	{label}: X {x}  Y {y}  W {w}  H {h}	{label}: X {x}  Y {y}  W {w}  H {h}
 	Clear Selection	Hapus Seleksi
 	Color Aware	Berbasis Warna
 	Decontaminate Colors	Dekontaminasi Warna
@@ -3546,9 +3533,3 @@ curves	Smooth	Haluskan
 	Select and Mask was closed: its document is no longer the active one	Seleksi dan Mask ditutup: dokumennya tidak lagi aktif
 	Select and Mask was closed: another layer was selected	Seleksi dan Mask ditutup: layer lain dipilih
 	Select Layer Under Cursor	Pilih Lapisan di Bawah Kursor
-	Import Shapes…	Impor Bentuk…
-	Choose a custom shape file (.csh).	Pilih berkas bentuk khusus (.csh).
-@plural	Imported {n} shape from {file}|Imported {n} shapes from {file}	Jumlah bentuk yang diimpor dari {file}: {n}
-@plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	Jumlah bentuk yang diimpor dari {group}: {n}
-	Scrollbar Visibility	Visibilitas bilah gulir
-	Hidden	Tersembunyi

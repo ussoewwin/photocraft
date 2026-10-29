@@ -287,9 +287,6 @@ pub(crate) fn invoke_unguarded(app: &mut PhotocraftApp, ctx: &egui::Context, id:
     if id == "layer.selectUnderCursor" {
         return select_layer_under_cursor(app, ctx);
     }
-    if let Some(command) = crate::actions::undo_command(app, id) {
-        return app.run(command, params);
-    }
     if let Some(result) = invoke_early_commands(app, ctx, id, &params) {
         return result;
     }

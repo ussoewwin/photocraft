@@ -130,7 +130,6 @@ store expose and persist the same setting; scripts keep using canonical command 
 | `channel.target` / `channel.setVisible` | Channels panel target and eyes (`"composite"`, colour name, alpha index or name, `"quickMask"`). `document.inspect` (and `channel.list`) report `channels`: composite/colour/alpha rows with visibility, channel options, `quickMask`, `target`. Pixel commands without a `target` param follow the targeted channel |
 | `channel.options` | `{"channel":index\|name\|"quickMask"\|"mask",…}`: Channel Options (name, `indicates`, overlay `color`, `opacity`/`solidity`). On `"mask"` it is Layer Mask Display Options: the `color` and `opacity` of every layer mask's rubylith (`\`, ⇧⌥-click), kept in the preferences as `layerMaskOverlay` (not an undo step) and returned under that key |
 | `layer.setProps` | `{"layer":id?,"name":…,"visible":…,"opacity":0..1,"blend":"Multiply"}` |
-| `layer.blurBackground` | `{"layer":id\|name?,"radius":0.1..1000=8}`. Detect the subject on a pixel layer and blur its background within the current selection in one undo step. Preserves transparency, selection, masks and other layers. No subject or cancellation leaves the document unchanged. |
 | `layer.fill.solidColor.set` | `{"layer":id?,"document":id?,"color":"#rrggbb"}`: edit a Solid Color Fill in one undo step; RGB without alpha preserves the fill's alpha. Float RGB arrays and a stored `Color` are also accepted. `document` rejects stale dialog targets. |
 | `layer.fill.pattern.set` | `{"layer":id?,"document":id?,"pattern":id\|name?,"scale":1..1000?,"angle":-180..180?,"link":bool?,"phase":[x,y]?}`: edit a Pattern Fill (the Pattern Fill dialog's OK) in one undo step; omitted values keep the layer's, `phase` `[0,0]` is Snap to Origin. `layer.newFillLayer.pattern` from a menu (no params) and `layer.layerContentOptions` on a Pattern Fill layer open the Pattern Fill dialog. |
 | `layer.layerMask.edit` | `{"layer":id?,"document":id?,"density":0..100?,"feather":0..1000?}`: edit pixel-mask Density (%) and Feather (px) without changing mask pixels, including adjustment masks. At least one setting is required; `document` rejects stale targets. A shared `coalesce` key groups slider updates into one undo step. |
@@ -151,7 +150,6 @@ store expose and persist the same setting; scripts keep using canonical command 
 | `type.caret` | `{"layer":id?,"index":char}`: caret segment in document pixels, `{"index","line","segment":[[x,y],[x,y]]}` (rotated and vertical type included) |
 | `type.navigate` | `{"layer":id?,"index":char,"move":"wordPrev\|wordNext\|linePrev\|lineNext\|lineStart\|lineEnd\|start\|end","x":px?}`: neighbouring caret. `x` keeps the column across line moves. Result `{"index"}` |
 | `actions.list` | `{}` → `{actions:[{name, steps}], recording}` (the name being recorded, or null) |
-| `actions.loadDefaults` | `{}` → `{added:[names], set}`. Append missing PhotoCraft Essentials actions without replacing same-name actions. Available without a document; refused while recording or playing an action. |
 | `actions.get` | `{"action": name or index}` → `{name, steps:[[id, params], …], disabled:[step, …]}`. `steps` is the shape `file.automate.batch` and droplets take; `disabled` lists the 0-based steps playback skips |
 | `actions.record` | `{"name":"Red"}` starts a new action (default name `Action N`). `{"action": name or index}` appends to one that exists |
 | `actions.stop` | `{}` → `{action, steps}`. Copies replayable journal entries since `actions.record` (queries and action-editing commands omitted) |
@@ -161,30 +159,7 @@ store expose and persist the same setting; scripts keep using canonical command 
 | `actions.toggle` | `{"action": name or index, "step": index?, "enabled": bool?}` → `{action, disabled}`. Switches one 0-based step (pending recorded steps included) on or off; omitting `enabled` flips it. Without `step`, switches every step: on unless all already are. Playback, Batch and droplets skip steps that are off. In the desktop panel, click a step's check box |
 | `actions.rename` | `{"action": name or index, "name": str}` → `{action, index}`. Empty, whitespace-only or duplicate names are rejected and keep the old name. Nested `actions.play` steps that call the action by name and its function key follow the new name. In the desktop panel, double-click an action's name to rename it in place (Enter commits, Esc cancels) |
 
-The Actions list fills the resizable dock group. **PhotoCraft Essentials** supplies Auto Tone,
-Auto Contrast, Auto Color, Select Subject, and Blur Background. These are original, editable
-single-step actions. The three auto adjustments work on the active pixel layer
-and respect the selection; Select Subject samples the visible image using PhotoCraft's current
-subject-detection heuristic. Blur Background uses that detector on the active pixel layer and
-blurs only its background within the current selection, with an 8-pixel radius. Fully detected
-subject pixels are excluded from blur sampling; partial edge coverage can still contribute.
-It preserves the layer's transparency and masks, other layers and the existing selection, and
-fails without an edit when no subject is found. This is a Gaussian blur using the current
-heuristic detector, not depth-aware lens blur. Each successful edit can be undone normally.
-Actions playback currently runs synchronously; job progress and cancellation are available
-when `layer.blurBackground` is invoked directly through the UI command dispatcher.
-
-The set is added once when the desktop or web preset store opens, including for existing users.
-Saved actions keep their order and definitions; a same-name action is preserved. Deleting or
-renaming a default stays that way after restart. **Load Default Actions** in the Actions panel's
-menu (also offered by an empty panel) adds missing defaults again. CLI/MCP sessions can use
-`actions.loadDefaults` explicitly. Blur Background calls a dedicated atomic command; it does
-not compose selection-changing steps that could act on an old selection after detection fails.
-
-`actions.undo` and `actions.redo` undo/redo edits to action definitions (reordering,
-deleting, renaming, creating and recording), independently of document History. Ctrl/Cmd+Z and
-Ctrl/Cmd+Shift+Z target this history while the Actions panel has focus. Playing an
-action returns Undo to document edits.
+The Actions list fills the resizable dock group.
 
 Newly recorded Layers eye gestures resolve their targets by layer name and duplicate-name
 ordinal during playback rather than retaining a document-local layer id. A missing target
@@ -260,20 +235,6 @@ Filtering narrows the same array without changing its elements: `serve`'s `engin
 (case-insensitive), and the MCP tool's `enabled_only` keeps those with `enabled: true`. The
 desktop control channel's `engine.commands` takes no filter and always returns every command.
 The shape is pinned by a test in `crates/automation/src/rpc.rs` (#3684).
-
-### Smart Filter row actions (#1265)
-
-Smart Filter rows offer Move Up, Move Down and Delete Smart Filter from their context menu.
-They use the existing `layer.smartFilter.move {layer,index,to}` and
-`layer.smartFilter.delete {layer,index}` commands. The displayed stack is reversed: moving
-visually up uses `to:index+1`, down uses `to:index-1`. Explicit `layer` targets the clicked
-Smart Object while preserving the active layer and selection.
-
-Popup actions close when the captured document snapshot or revision changes, and cannot
-edit while a modal dialog or a job locks the document. CLI/MCP commands retain their existing
-validation and Undo/Redo behavior. These context actions provide PhotoCraft convenience
-controls. Existing Smart Filter selection, transfer between Smart Objects and drag-to-Trash
-behavior is retained, including current drag-to-reorder.
 
 ### Background jobs (#210)
 
@@ -358,13 +319,6 @@ Set `general.automaticallyCheckUpdates` with `prefs.set` to enable or disable th
 desktop startup's single check (enabled by default). Manual checks still work when automatic checks are off.
 `ui.inspect` includes `updates` and `updatesOpen`; `ui.set {"updatesOpen": false}` closes
 the non-modal update window.
-
-
-## Shape tools
-
-Paint JSON retains solid alpha/model colours; gradient `opacityStops`, `midpoints`, `offset`,
-`dither`, `align`; pattern `id`, `angle`, `link`, `phase` alongside legacy stops/name/scale.
-Shape create/edit resolves document or preset pattern tiles and embeds them in the same undo step.
 
 ## Snapping
 

@@ -1320,7 +1320,6 @@
 	Italic	Kursiv
 	Join us on Discord	Tritt unserem Discord bei
 	Justify all	Alles im Blocksatz
-	Roman Hanging Punctuation	Römisch überhängende Zeichensetzung
 	Justify last centered	Letzte Zeile zentriert
 	Justify last left	Letzte Zeile links
 	Justify last right	Letzte Zeile rechts
@@ -1919,11 +1918,6 @@
 	Slice Select Tool	Slice-Auswahl-Werkzeug
 	Slice Tool	Slice-Werkzeug
 	Smart Filters	Smart-Filter
-# Smart Filter row actions (#1265)
-	Move Up	Nach oben
-	Move Down	Nach unten
-	Delete Smart Filter	Smartfilter löschen
-
 	Smudge Tool	Wischfinger-Werkzeug
 	Soft	Weich
 	Soften	Erweichen
@@ -2062,7 +2056,6 @@
 	Image previews	Bildvorschauen
 	Integrations	Integrationen
 	Interface	Benutzeroberfläche
-	Use PhotoCraft-native gradient icons	PhotoCraft-native Symbole für Verläufe verwenden
 	Jpeg quality	JPEG-Qualität
 	Jpg	JPG
 	Language	Sprache
@@ -2640,7 +2633,6 @@ fontWeight	Italic	Kursiv
 	Out of gamut for printing: click for the nearest printable colour	Außerhalb des Druckfarbumfangs: Klicken für die nächstliegende druckbare Farbe
 	Not a web colour: click for the nearest web colour	Keine Webfarbe: Klicken für die nächstliegende Webfarbe
 	Color to Alpha…	Farbe zu Alpha…
-	Frequency Separation…	Frequenztrennung…
 	Transparency Threshold	Transparenz-Schwellenwert
 	Opacity Threshold	Deckkraft-Schwellenwert
 	PhotoCraft — Screen Color Picker	PhotoCraft — Bildschirmfarbenauswahl
@@ -3280,8 +3272,6 @@ curves	Smooth	Glätten
 	Reset All Locked Settings	Alle gesperrten Einstellungen zurücksetzen
 	Copy Texture to Other Tools	Struktur auf andere Werkzeuge kopieren
 	Load Actions…	Aktionen laden…
-	Load Default Actions	Standardaktionen laden
-	Blur Background	Hintergrund weichzeichnen
 	Save Actions…	Aktionen speichern…
 	New Action…	Neue Aktion…
 	Start Recording	Aufnahme starten
@@ -3525,10 +3515,6 @@ curves	Smooth	Glätten
 	Font size presets	Schriftgrößen-Vorgaben
 	Leading presets	Zeilenabstand-Vorgaben
 	Tracking presets	Laufweiten-Vorgaben
-	Selection / Layer Bounds	Auswahl / Ebenengrenzen
-	No selection or layer	Keine Auswahl oder Ebene
-	{label}: empty	{label}: leer
-	{label}: X {x}  Y {y}  W {w}  H {h}	{label}: X {x}  Y {y}  W {w}  H {h}
 	Clear Selection	Auswahl löschen
 	Color Aware	Farbbezogen
 	Decontaminate Colors	Farben dekontaminieren
@@ -3546,9 +3532,3 @@ curves	Smooth	Glätten
 	Refine Hair needs hair detection, which isn't available yet	Haare verbessern benötigt eine Haarerkennung, die noch nicht verfügbar ist
 	Select and Mask was closed: its document is no longer the active one	Auswählen und maskieren wurde geschlossen: Das zugehörige Dokument ist nicht mehr aktiv
 	Select and Mask was closed: another layer was selected	Auswählen und maskieren wurde geschlossen: Es wurde eine andere Ebene ausgewählt
-	Import Shapes…	Formen importieren…
-	Choose a custom shape file (.csh).	Wählen Sie eine Datei mit eigenen Formen (.csh).
-@plural	Imported {n} shape from {file}|Imported {n} shapes from {file}	Anzahl der aus {file} importierten Formen: {n}|Anzahl der aus {file} importierten Formen: {n}
-@plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	Anzahl der aus {group} importierten Formen: {n}|Anzahl der aus {group} importierten Formen: {n}
-	Scrollbar Visibility	Sichtbarkeit der Scrollleisten
-	Hidden	Ausgeblendet

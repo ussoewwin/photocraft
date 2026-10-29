@@ -7,7 +7,6 @@
 #![forbid(unsafe_code)]
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
-pub mod action_defaults;
 pub mod adjust_params;
 mod allocation;
 pub mod build_info;
@@ -68,7 +67,6 @@ pub use cmd::analysis_cmds;
 pub use cmd::artboard_cmds;
 pub use cmd::atn_cmds;
 pub use cmd::automate_cmds;
-pub use cmd::background_blur_cmds;
 pub use cmd::background_cmds;
 pub use cmd::brush_cmds;
 pub use cmd::brush_key_cmds;
@@ -94,7 +92,6 @@ pub use cmd::fill_key_cmds;
 pub use cmd::float_cmds;
 pub use cmd::font_library_cmds;
 use cmd::frame_cmds;
-pub use cmd::frequency_separation_cmds;
 pub use cmd::fx_view_cmds;
 pub use cmd::fx_visibility_cmds;
 pub use cmd::gallery_cmds;
@@ -207,9 +204,6 @@ pub struct Session {
     /// Shape path context menu: copied vector fill and stroke styles.
     pub path_fill_clipboard: Option<photocraft_doc::Fill>,
     pub path_stroke_clipboard: Option<photocraft_doc::ShapeStroke>,
-    /// Pattern tiles referenced by copied paints; surfaces retain their COW snapshots.
-    pub(crate) path_fill_pattern: Option<photocraft_doc::Pattern>,
-    pub(crate) path_stroke_pattern: Option<photocraft_doc::Pattern>,
     /// Colour management: proofing state, monitor profile, display transforms.
     pub color: color_cmds::ColorState,
     /// Open Edit Contents documents and the smart objects they update.

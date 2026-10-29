@@ -28,8 +28,6 @@ pub struct ActionsUi {
     #[serde(default)]
     pub button_mode: bool,
     #[serde(skip)]
-    pub(crate) focused: bool,
-    #[serde(skip)]
     reveal_recording: Option<(usize, usize)>,
     /// The action whose name is being edited in place (double-click on its name).
     #[serde(skip)]
@@ -98,7 +96,6 @@ pub(crate) fn assign_shortcut(app: &mut PhotocraftApp, name: &str, shortcut: &st
 /// Replay edits synchronously, with view steps handled by the shell in the same order.
 /// Engine steps keep the headless action semantics (no dialogs or background jobs).
 pub(crate) fn play(app: &mut PhotocraftApp, params: &Value) -> Result<Value, String> {
-    app.ui.actions.focused = false;
     play_owned(app, params, None)
 }
 
@@ -375,13 +372,7 @@ fn source(name: &str, bytes: &[u8]) -> Value {
 
 /// Load a `.atn` file's bytes into the Actions panel (the panel menu's Load Actions…).
 pub fn load_bytes(app: &mut PhotocraftApp, name: &str, bytes: &[u8]) -> Result<Value, String> {
-    let is_json = std::path::Path::new(name).extension().and_then(|ext| ext.to_str()).is_some_and(|ext| ext.eq_ignore_ascii_case("json"));
-    let r = if is_json {
-        let data = std::str::from_utf8(bytes).map_err(|e| e.to_string())?;
-        app.run("actions.import", json!({"data": data}))?
-    } else {
-        app.run("actions.load", source(name, bytes))?
-    };
+    let r = app.run("actions.load", source(name, bytes))?;
     let n = r["actions"].as_array().map_or(0, Vec::len) as u64;
     let unsupported = r["unsupported"].as_array().map_or(0, Vec::len);
     let shown = crate::file_open::display_name(name);
@@ -402,7 +393,7 @@ pub fn load_bytes(app: &mut PhotocraftApp, name: &str, bytes: &[u8]) -> Result<V
     };
     // Show what arrived: select the first loaded action, expanded.
     let list = &app.session.actions.list;
-    if let Some(first) = r["actions"].as_array().and_then(|a| a.first()).and_then(Value::as_str)
+    if let Some(first) = r["actions"][0].as_str()
         && let Some(i) = list.iter().position(|a| a.name == first)
     {
         app.ui.actions.selected = Some(i);
@@ -417,22 +408,7 @@ pub fn load_bytes(app: &mut PhotocraftApp, name: &str, bytes: &[u8]) -> Result<V
 }
 
 fn load_dialog(app: &mut PhotocraftApp) -> Result<Value, String> {
-    app.pick_file_bytes_filtered(&["atn", "json"], |app, name, bytes| load_bytes(app, &name, &bytes))
-}
-
-fn save_json_dialog(app: &mut PhotocraftApp) -> Result<Value, String> {
-    let r = app.run("actions.export", json!({}))?;
-    let data = r["data"].as_str().ok_or("the export returned no JSON data")?.to_string();
-    let n = r["count"].as_u64().unwrap_or(0);
-    app.pick_save("Actions.json", move |app, path| {
-        let write = app.services.write.as_mut().ok_or("no writer configured")?;
-        write(&path, data.as_bytes())?;
-        let shown = crate::file_open::display_name(&path);
-        app.ui.status =
-            crate::i18n::fmt(&crate::i18n::trn(crate::i18n::current(), n, "Saved {n} action to {file}", "Saved {n} actions to {file}"), &[("file", &shown)]);
-        app.ui.status_error = false;
-        Ok(json!({"path": path, "actions": n}))
-    })
+    app.pick_file_bytes_filtered(&["atn"], |app, name, bytes| load_bytes(app, &name, &bytes))
 }
 
 /// Save Actions…: the selected action's set (every action of it), or every action when none
@@ -657,9 +633,6 @@ pub fn stopped(app: &mut PhotocraftApp, fields: &serde_json::Map<String, Value>)
 /// The Actions entries of the panel group's menu ("…").
 pub fn panel_menu(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     let mut act: Option<&str> = None;
-    if ui.add_enabled(app.session.is_enabled("actions.loadDefaults"), egui::Button::new(tl!("Load Default Actions"))).clicked() {
-        act = Some("defaults");
-    }
     let recording = app.session.actions.recording.is_some();
     let any = !app.session.actions.list.is_empty();
     let selected = app.ui.actions.selected.is_some_and(|i| i < app.session.actions.list.len());
@@ -691,13 +664,9 @@ pub fn panel_menu(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     if ui.add_enabled(any, egui::Button::new(tl!("Save Actions…"))).clicked() {
         act = Some("save");
     }
-    if ui.add_enabled(any, egui::Button::new(format!("{} (.json)", tl!("Save Actions…")))).clicked() {
-        act = Some("save-json");
-    }
     let Some(a) = act else { return };
     ui.close();
     let r = match a {
-        "defaults" => load_defaults(app),
         "new" => {
             begin_recording(app, false);
             Ok(Value::Null)
@@ -717,7 +686,6 @@ pub fn panel_menu(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
             Ok(Value::Null)
         }
         "load" => load_dialog(app),
-        "save-json" => save_json_dialog(app),
         "stop" => insert_stop_dialog(app),
         _ => save_dialog(app, None),
     };
@@ -727,21 +695,6 @@ pub fn panel_menu(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
         app.ui.status = e;
         app.ui.status_error = true;
     }
-}
-
-fn load_defaults(app: &mut PhotocraftApp) -> Result<Value, String> {
-    let result = app.run("actions.loadDefaults", json!({}))?;
-    if let Some(name) = result["added"].as_array().and_then(|names| names.first()).and_then(Value::as_str)
-        && let Some(index) = app.session.actions.list.iter().position(|action| action.name == name)
-    {
-        app.ui.actions.selected = Some(index);
-        app.ui.actions.selected_step = None;
-        app.ui.actions.renaming = None;
-        if let Some(set) = result["set"].as_str() {
-            app.ui.actions.collapsed_sets.retain(|collapsed| collapsed != set);
-        }
-    }
-    Ok(result)
 }
 
 #[derive(Clone, Copy)]
@@ -960,22 +913,8 @@ fn action_context_menu(app: &mut PhotocraftApp, response: &egui::Response, index
     });
 }
 
-pub(crate) fn undo_command(app: &PhotocraftApp, id: &str) -> Option<&'static str> {
-    if !app.ui.actions.focused {
-        return None;
-    }
-    match id {
-        "edit.undo" => Some("actions.undo"),
-        "edit.redo" => Some("actions.redo"),
-        _ => None,
-    }
-}
-
 pub fn panel(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     let t = Tokens::get(ui.ctx());
-    if ui.input(|i| i.pointer.any_pressed()) {
-        app.ui.actions.focused = ui.input(|i| i.pointer.interact_pos()).is_some_and(|p| ui.max_rect().contains(p));
-    }
     let recording = app.session.actions.recording;
     let rows: Vec<Row> = app
         .session
@@ -1026,12 +965,6 @@ pub fn panel(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     }
     egui::ScrollArea::vertical().id_salt("actions-rows").max_height(max_h).min_scrolled_height(max_h).auto_shrink([false, false]).show(ui, |ui| {
         if rows.is_empty() {
-            if ui.button(tl!("Load Default Actions")).clicked()
-                && let Err(error) = load_defaults(app)
-            {
-                app.ui.status = error;
-                app.ui.status_error = true;
-            }
             ui.label(egui::RichText::new(tl!("Record ● a sequence of edits, then play ▶ it on any document.")).color(t.text_faint).size(11.5));
         }
         scroll_actions_during_drag(ui);

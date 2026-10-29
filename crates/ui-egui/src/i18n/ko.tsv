@@ -1318,7 +1318,6 @@
 	Italic	기울임꼴
 	Join us on Discord	Discord 참여
 	Justify all	모든 줄 양쪽 정렬
-	Roman Hanging Punctuation	로마자 매달림 문장 부호
 	Justify last centered	마지막 줄 가운데 정렬
 	Justify last left	마지막 줄 왼쪽 정렬
 	Justify last right	마지막 줄 오른쪽 정렬
@@ -1920,9 +1919,6 @@
 	Slice Select Tool	분할 영역 선택 도구
 	Slice Tool	분할 영역 도구
 	Smart Filters	스마트 필터
-	Move Up	위로 이동
-	Move Down	아래로 이동
-	Delete Smart Filter	스마트 필터 삭제
 	Smudge Tool	손가락 도구
 	Soft	부드럽게
 	Soften	부드럽게 하기
@@ -2059,7 +2055,6 @@
 	Image previews	이미지 미리 보기
 	Integrations	연동
 	Interface	인터페이스
-	Use PhotoCraft-native gradient icons	PhotoCraft 기본 그레이디언트 아이콘 사용
 	Jpeg quality	JPEG 품질
 	Jpg	JPG
 	Language	언어
@@ -3191,7 +3186,6 @@ fontWeight	Italic	기울임
 	Out of gamut for printing: click for the nearest printable colour	인쇄 색역 밖: 클릭하면 가장 가까운 인쇄 가능한 색상으로 바뀝니다
 	Not a web colour: click for the nearest web colour	웹 색상이 아님: 클릭하면 가장 가까운 웹 색상으로 바뀝니다
 	Color to Alpha…	색상을 알파로…
-	Frequency Separation…	주파수 분리…
 	Transparency Threshold	투명도 한계값
 	Opacity Threshold	불투명도 한계값
 	PhotoCraft — Screen Color Picker	PhotoCraft — 화면 색상 선택기
@@ -3469,8 +3463,6 @@ curves	Smooth	매끄럽게
 	Reset All Locked Settings	모든 잠긴 설정 재설정
 	Copy Texture to Other Tools	다른 도구로 텍스처 복사
 	Load Actions…	액션 불러오기…
-	Load Default Actions	기본 액션 불러오기
-	Blur Background	배경 흐리게
 	Save Actions…	액션 저장…
 	New Action…	새 액션…
 	Start Recording	기록 시작
@@ -3721,10 +3713,6 @@ curves	Smooth	매끄럽게
 	Font size presets	글꼴 크기 사전 설정
 	Leading presets	행간 사전 설정
 	Tracking presets	자간 사전 설정
-	Selection / Layer Bounds	선택 영역 / 레이어 경계
-	No selection or layer	선택 영역 또는 레이어 없음
-	{label}: empty	{label}: 비어 있음
-	{label}: X {x}  Y {y}  W {w}  H {h}	{label}: X {x}  Y {y}  W {w}  H {h}
 	Clear Selection	선택 영역 지우기
 	Color Aware	색상 인식
 	Decontaminate Colors	색상 정화
@@ -3743,10 +3731,4 @@ curves	Smooth	매끄럽게
 	Select and Mask was closed: its document is no longer the active one	선택 및 마스크가 닫혔습니다: 해당 문서가 더 이상 활성 문서가 아닙니다
 	Select and Mask was closed: another layer was selected	선택 및 마스크가 닫혔습니다: 다른 레이어가 선택되었습니다
 	Select Layer Under Cursor	커서 아래 레이어 선택
-	Import Shapes…	모양 가져오기…
-	Choose a custom shape file (.csh).	사용자 정의 모양 파일 (.csh)을 선택하세요.
-@plural	Imported {n} shape from {file}|Imported {n} shapes from {file}	{file}에서 가져온 모양 수: {n}
-@plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	{group}에서 가져온 모양 수: {n}
-	Scrollbar Visibility	스크롤 막대 표시
-	Hidden	숨김
 	Drag to move the selected path	드래그하여 선택한 패스 이동

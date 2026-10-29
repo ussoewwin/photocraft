@@ -102,7 +102,6 @@ pub use canvas::zoom_levels;
 pub use canvas::zoom_window_fit;
 pub use dialogs::adjust_dialog;
 pub use dialogs::adjust_editors;
-pub(crate) use dialogs::adjust_presets;
 pub use dialogs::adjust_preview;
 pub(crate) use dialogs::bitmap_dialog;
 pub use dialogs::blur_pins;
@@ -864,5 +863,3 @@ mod saved_path_edit_tests;
 
 #[cfg(test)]
 mod pen_path_ownership_tests;
-
-pub mod bidi_label;

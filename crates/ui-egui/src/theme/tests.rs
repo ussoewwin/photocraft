@@ -1,58 +1,5 @@
 use super::*;
 
-#[test]
-fn scrollbar_visibility_applies_in_every_theme_and_survives_theme_changes() {
-    use photocraft_engine::prefs::ScrollbarVisibility as Mode;
-    let ctx = egui::Context::default();
-    for kind in ThemeKind::ALL {
-        apply(&ctx, kind);
-        let original = ctx.global_style().spacing.scroll;
-        sync_scrollbars(&ctx, Mode::Default);
-        assert_eq!(ctx.global_style().spacing.scroll, original);
-        sync_scrollbars(&ctx, Mode::Always);
-        assert!(!ctx.global_style().spacing.scroll.floating);
-        assert!(ctx.global_style().spacing.scroll.bar_width > 0.0);
-        sync_scrollbars(&ctx, Mode::AutoHide);
-        assert!(ctx.global_style().spacing.scroll.floating);
-        assert_eq!(ctx.global_style().spacing.scroll.dormant_handle_opacity, 0.0);
-        sync_scrollbars(&ctx, Mode::Hidden);
-        assert_eq!(ctx.global_style().spacing.scroll.bar_width, 0.0);
-        apply(&ctx, kind);
-        sync_scrollbars(&ctx, Mode::Hidden);
-        assert_eq!(ctx.global_style().spacing.scroll.bar_width, 0.0, "theme changes retain the saved override");
-        sync_scrollbars(&ctx, Mode::Default);
-        assert_eq!(ctx.global_style().spacing.scroll, original);
-    }
-}
-
-#[test]
-fn hidden_scrollbars_keep_wheel_scrolling_available() {
-    let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(300.0, 120.0)).build_ui_state(
-        |ui, offset: &mut f32| {
-            let area = egui::ScrollArea::vertical().max_height(100.0).show(ui, |ui| {
-                for i in 0..30 {
-                    ui.label(format!("Row {i}"));
-                }
-            });
-            *offset = area.state.clamped_offset().y;
-        },
-        0.0,
-    );
-    sync_scrollbars(&h.ctx, photocraft_engine::prefs::ScrollbarVisibility::Hidden);
-    h.run();
-    h.hover_at(egui::pos2(30.0, 40.0));
-    h.event(egui::Event::MouseWheel {
-        source: egui::MouseWheelSource::Unknown,
-        unit: egui::MouseWheelUnit::Line,
-        delta: egui::vec2(0.0, -3.0),
-        phase: egui::TouchPhase::Move,
-        modifiers: egui::Modifiers::NONE,
-    });
-    h.run();
-    assert!(*h.state() > 0.0);
-    assert_eq!(h.ctx.global_style().spacing.scroll.allocated_width(), 0.0);
-}
-
 fn text_sizes(ctx: &egui::Context) -> Vec<egui::Vec2> {
     let mut sizes = Vec::new();
     // The plugin queues changed fonts at the end of a pass; egui applies them next pass.

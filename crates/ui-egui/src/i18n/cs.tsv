@@ -1358,7 +1358,6 @@
 	Italic	Kurzíva
 	Join us on Discord	Přidejte se k nám na Discordu
 	Justify all	Do bloku vše
-	Roman Hanging Punctuation	Římská převislá interpunkce
 	Justify last centered	Do bloku, poslední řádek na střed
 	Justify last left	Do bloku, poslední řádek vlevo
 	Justify last right	Do bloku, poslední řádek vpravo
@@ -1960,9 +1959,6 @@
 	Slice Select Tool	Nástroj výběr řezu
 	Slice Tool	Nástroj řez
 	Smart Filters	Chytré filtry
-	Move Up	Přesunout nahoru
-	Move Down	Přesunout dolů
-	Delete Smart Filter	Odstranit chytrý filtr
 	Smudge Tool	Nástroj rozmazání
 	Soft	Měkké
 	Soften	Změkčení
@@ -2101,7 +2097,6 @@
 	Image previews	Náhledy obrázků
 	Integrations	Integrace
 	Interface	Rozhraní
-	Use PhotoCraft-native gradient icons	Používat nativní ikony přechodů PhotoCraft
 	Jpeg quality	Kvalita JPEG
 	Jpg	JPG
 	Language	Jazyk
@@ -2601,7 +2596,6 @@ fontWeight	Italic	Kurzíva
 	Out of gamut for printing: click for the nearest printable colour	Mimo gamut tisku: klepnutím zvolíte nejbližší tisknutelnou barvu
 	Not a web colour: click for the nearest web colour	Není webová barva: klepnutím zvolíte nejbližší webovou barvu
 	Color to Alpha…	Barva na alfu…
-	Frequency Separation…	Frekvenční separace…
 	Transparency Threshold	Práh průhlednosti
 	Opacity Threshold	Práh krytí
 	PhotoCraft — Screen Color Picker	PhotoCraft — Výběr barvy obrazovky
@@ -3880,8 +3874,6 @@ navigator	Zoom	Zvětšení
 	Reset All Locked Settings	Obnovit všechna zamknutá nastavení
 	Copy Texture to Other Tools	Kopírovat texturu do jiných nástrojů
 	Load Actions…	Načíst akce…
-	Load Default Actions	Načíst výchozí akce
-	Blur Background	Rozostřit pozadí
 	Save Actions…	Uložit akce…
 	New Action…	Nová akce…
 	Start Recording	Zahájit nahrávání
@@ -4250,10 +4242,6 @@ cameraRaw	Dehaze	Odstranění oparu
 	Font size presets	Předvolby velikosti písma
 	Leading presets	Předvolby prokladu
 	Tracking presets	Předvolby prostrkání
-	Selection / Layer Bounds	Výběr / Hranice vrstvy
-	No selection or layer	Žádný výběr ani vrstva
-	{label}: empty	{label}: prázdné
-	{label}: X {x}  Y {y}  W {w}  H {h}	{label}: X {x}  Y {y}  W {w}  H {h}
 	Color Aware	Podle barev
 	Decontaminate Colors	Dekontaminovat barvy
 	Edge Detection	Detekce okraje
@@ -4270,9 +4258,4 @@ cameraRaw	Dehaze	Odstranění oparu
 	Refine Hair needs hair detection, which isn't available yet	Upřesnit vlasy vyžaduje detekci vlasů, která zatím není k dispozici
 	Select and Mask was closed: its document is no longer the active one	Vybrat a maskovat bylo zavřeno: jeho dokument již není aktivní
 	Select and Mask was closed: another layer was selected	Vybrat a maskovat bylo zavřeno: byla vybrána jiná vrstva
-	Import Shapes…	Importovat tvary…
-	Choose a custom shape file (.csh).	Vyberte soubor vlastních tvarů (.csh).
-@plural	Imported {n} shape from {file}|Imported {n} shapes from {file}	Počet tvarů importovaných z {file}: {n}|Počet tvarů importovaných z {file}: {n}|Počet tvarů importovaných z {file}: {n}
-@plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	Počet tvarů importovaných z {group}: {n}|Počet tvarů importovaných z {group}: {n}|Počet tvarů importovaných z {group}: {n}
-	Scrollbar Visibility	Viditelnost posuvníků
 	Drag to move the selected path	Tažením přesunete vybranou cestu

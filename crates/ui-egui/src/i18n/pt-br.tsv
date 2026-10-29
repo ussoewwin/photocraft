@@ -1893,9 +1893,6 @@
 	Slice Select Tool	Ferramenta Seleção de fatia
 	Slice Tool	Ferramenta Fatia
 	Smart Filters	Filtros inteligentes
-	Move Up	Mover para cima
-	Move Down	Mover para baixo
-	Delete Smart Filter	Excluir filtro inteligente
 	Smudge Tool	Ferramenta Borrar
 	Soft	Suave
 	Soften	Suavizar
@@ -2032,7 +2029,6 @@
 	Image previews	Visualizações de imagem
 	Integrations	Integrações
 	Interface	Interface
-	Use PhotoCraft-native gradient icons	Usar ícones nativos de gradiente do PhotoCraft
 	Jpeg quality	Qualidade JPEG
 	Jpg	JPG
 	Language	Idioma
@@ -3017,7 +3013,6 @@ fontWeight	Italic	Itálico
 	Out of gamut for printing: click for the nearest printable colour	Fora da gama de impressão: clique para a cor imprimível mais próxima
 	Not a web colour: click for the nearest web colour	Não é uma cor da Web: clique para a cor da Web mais próxima
 	Color to Alpha…	Cor para alfa…
-	Frequency Separation…	Separação de frequências…
 	Transparency Threshold	Limiar de transparência
 	Opacity Threshold	Limiar de opacidade
 	PhotoCraft — Screen Color Picker	PhotoCraft — Seletor de cor da tela
@@ -4061,8 +4056,6 @@ layerLabel	No Color	Sem cor
 	Reset All Locked Settings	Redefinir todas as configurações bloqueadas
 	Copy Texture to Other Tools	Copiar textura para outras ferramentas
 	Load Actions…	Carregar ações…
-	Load Default Actions	Carregar ações padrão
-	Blur Background	Desfocar plano de fundo
 	Save Actions…	Salvar ações…
 	New Action…	Nova ação…
 	Start Recording	Iniciar gravação
@@ -4279,6 +4272,7 @@ layerLabel	No Color	Sem cor
 	Layer Mask Hides Effects	A máscara de camada oculta os efeitos
 	Vector Mask Hides Effects	A máscara vetorial oculta os efeitos
 	This Layer:	Esta camada:
+	Underlying Layer:	Camada subjacente:
 	Dark Gray	Cinza-escuro
 	Medium Gray	Cinza médio
 	Select Custom Color…	Selecionar cor personalizada…
@@ -4430,10 +4424,6 @@ layerLabel	No Color	Sem cor
 	Font size presets	Predefinições de tamanho da fonte
 	Leading presets	Predefinições de entrelinha
 	Tracking presets	Predefinições de tracking
-	Selection / Layer Bounds	Limites da seleção / camada
-	No selection or layer	Nenhuma seleção ou camada
-	{label}: empty	{label}: vazio
-	{label}: X {x}  Y {y}  W {w}  H {h}	{label}: X {x}  Y {y}  W {w}  H {h}
 	Color Aware	Com reconhecimento de cor
 	Decontaminate Colors	Descontaminar cores
 	Edge Detection	Detecção de borda
@@ -4450,9 +4440,4 @@ layerLabel	No Color	Sem cor
 	Refine Hair needs hair detection, which isn't available yet	Refinar cabelo requer detecção de cabelo, ainda não disponível
 	Select and Mask was closed: its document is no longer the active one	Selecionar e mascarar foi fechado: o documento dele não está mais ativo
 	Select and Mask was closed: another layer was selected	Selecionar e mascarar foi fechado: outra camada foi selecionada
-	Import Shapes…	Importar formas…
-	Choose a custom shape file (.csh).	Escolha um arquivo de formas personalizadas (.csh).
-@plural	Imported {n} shape from {file}|Imported {n} shapes from {file}	Quantidade de formas importadas de {file}: {n}|Quantidade de formas importadas de {file}: {n}
-@plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	Quantidade de formas importadas de {group}: {n}|Quantidade de formas importadas de {group}: {n}
-	Scrollbar Visibility	Visibilidade das barras de rolagem
 	Drag to move the selected path	Arraste para mover o demarcador selecionado

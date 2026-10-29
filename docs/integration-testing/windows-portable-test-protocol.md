@@ -1,3 +1,5 @@
+> HISTORICAL 108-PR BUILD: this record describes the earlier source and artifact. The current branch has 21 requested PRs removed. See [trimmed integration](trimmed-integration-2026-10-29.md) for current scope and validation. Do not use the old portable artifact to validate these removals.
+
 # PhotoCraft Windows portable test protocol
 
 TEST BUILD — manual results are NOT RUN until a tester records them. This sheet is the entry point; the per-PR appendix remains the detailed regression specification.

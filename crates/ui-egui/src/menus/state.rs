@@ -9,9 +9,6 @@ pub fn is_enabled(app: &PhotocraftApp, id: &str) -> bool {
     if crate::tool_shortcuts::tool(id).is_some() {
         return true;
     }
-    if let Some(command) = crate::actions::undo_command(app, id) {
-        return photocraft_engine::commands::find(command).is_some_and(|spec| (spec.enabled)(&app.session).is_ok());
-    }
     if id == "ui.symmetryTransform" {
         return crate::symmetry_ui::can_transform(app);
     }

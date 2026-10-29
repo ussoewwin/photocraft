@@ -22,8 +22,6 @@ use serde_json::{Value, json};
 use crate::commands::CommandSpec;
 use crate::{EngineError, Result, Session};
 
-mod json_file;
-
 fn bad(cmd: &str, msg: impl Into<String>) -> EngineError {
     EngineError::BadParams { cmd: cmd.into(), msg: msg.into() }
 }
@@ -80,9 +78,6 @@ impl Action {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ActionsFile {
     pub version: u32,
-    /// Starter set last seeded. Older stores default to zero; deletions after seeding persist.
-    #[serde(default)]
-    pub defaults_version: u32,
     pub actions: Vec<Action>,
 }
 
@@ -118,84 +113,6 @@ pub struct ActionState {
     /// started in is still the one running when its result lands.
     #[serde(skip)]
     pub take: u64,
-    #[serde(skip)]
-    pub(crate) undo: Vec<ActionEdit>,
-    #[serde(skip)]
-    pub(crate) redo: Vec<ActionEdit>,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) struct ActionEdit {
-    list: Vec<Action>,
-    recording: Option<(usize, usize)>,
-    shortcuts: std::collections::BTreeMap<String, String>,
-}
-
-fn snapshot(s: &Session) -> ActionEdit {
-    let mut list = s.actions.list.clone();
-    if let Some((_, idx)) = s.actions.recording {
-        let pending: Vec<_> = pending_steps(s, idx).cloned().collect();
-        if let Some(action) = list.get_mut(idx) {
-            action.steps.extend(pending);
-        }
-    }
-    ActionEdit {
-        list,
-        recording: s.actions.recording.map(|(_, idx)| (s.journal.len(), idx)),
-        shortcuts: s.prefs().shortcuts.iter().filter(|(key, _)| key.starts_with(PLAY_SHORTCUT_PREFIX)).map(|(k, v)| (k.clone(), v.clone())).collect(),
-    }
-}
-
-fn edit_action(s: &mut Session, p: &Value, run: fn(&mut Session, &Value) -> Result<Value>, include_pending: bool) -> Result<Value> {
-    let mut before = snapshot(s);
-    if !include_pending {
-        before.list = s.actions.list.clone();
-    }
-    let result = run(s, p)?;
-    if before.list != snapshot(s).list {
-        s.actions.undo.push(before);
-        if s.actions.undo.len() > 100 {
-            s.actions.undo.remove(0);
-        }
-        s.actions.redo.clear();
-    }
-    Ok(result)
-}
-
-pub fn can_undo(s: &Session) -> bool {
-    s.actions.playing == 0 && !s.actions.undo.is_empty()
-}
-pub fn can_redo(s: &Session) -> bool {
-    s.actions.playing == 0 && !s.actions.redo.is_empty()
-}
-
-fn undo_edit(s: &mut Session, redo: bool) -> Result<Value> {
-    not_playing(s, if redo { "actions.redo" } else { "actions.undo" })?;
-    let current = snapshot(s);
-    let prior = if redo { s.actions.redo.pop() } else { s.actions.undo.pop() };
-    let Some(prior) = prior else { return Ok(json!(false)) };
-    if redo {
-        s.actions.undo.push(current);
-    } else {
-        s.actions.redo.push(current);
-    }
-    let old_names: std::collections::BTreeSet<_> = s.actions.list.iter().map(|a| a.name.as_str()).collect();
-    let new_names: std::collections::BTreeSet<_> = prior.list.iter().map(|a| a.name.as_str()).collect();
-    let changed_bindings: Vec<_> = old_names.symmetric_difference(&new_names).map(|name| format!("{PLAY_SHORTCUT_PREFIX}{name}")).collect();
-    s.actions.list = prior.list;
-    s.actions.recording = s.actions.recording.and(prior.recording).map(|(_, idx)| (s.journal.len(), idx));
-    if !changed_bindings.is_empty() {
-        s.edit_prefs(|prefs| {
-            for key in changed_bindings {
-                prefs.shortcuts.remove(&key);
-                if let Some(value) = prior.shortcuts.get(&key) {
-                    prefs.shortcuts.insert(key, value.clone());
-                }
-            }
-        });
-    }
-    s.actions.touch();
-    Ok(json!(true))
 }
 
 /// Visibility gestures name a layer for replay, since document-local ids change on another image.
@@ -806,53 +723,13 @@ fn set_color(s: &mut Session, p: &Value) -> Result<Value> {
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         CommandSpec {
-            id: "actions.import",
-            label: "Load Actions…",
-            menu: &[],
-            shortcut: None,
-            params: r##"{"data":str} → {imported, skipped, actions:[names]}. Append version 1 Actions JSON, retarget nested calls, and rename conflicts; unchanged reimports do nothing."##,
-            enabled: always,
-            run: json_file::import,
-            journal: false,
-        },
-        CommandSpec {
-            id: "actions.export",
-            label: "Save Actions…",
-            menu: &[],
-            shortcut: None,
-            params: r##"{"path":str?} → {count, bytes, data?:JSON string, path?}. Export version 1 Actions JSON, preserving disabled steps, dialog toggles and sets."##,
-            enabled: always,
-            run: json_file::export,
-            journal: false,
-        },
-        CommandSpec {
-            id: "actions.undo",
-            label: "Undo Action Edit",
-            menu: &[],
-            shortcut: None,
-            params: "{} → bool. Undo an action definition edit without changing the document.",
-            enabled: |s| if can_undo(s) { Ok(()) } else { Err("nothing to undo".into()) },
-            run: |s, _| undo_edit(s, false),
-            journal: false,
-        },
-        CommandSpec {
-            id: "actions.redo",
-            label: "Redo Action Edit",
-            menu: &[],
-            shortcut: None,
-            params: "{} → bool. Redo an action definition edit without changing the document.",
-            enabled: |s| if can_redo(s) { Ok(()) } else { Err("nothing to redo".into()) },
-            run: |s, _| undo_edit(s, true),
-            journal: false,
-        },
-        CommandSpec {
             id: "actions.move",
             label: "Move Action or Step",
             menu: &[],
             shortcut: None,
             params: r##"{"action":name|index, "step":index?, "to":index}. Move a step within its action, or the action itself. to is the final zero-based index. Pending recorded steps can be moved."##,
             enabled: always,
-            run: |s, p| edit_action(s, p, move_item, true),
+            run: move_item,
             journal: false,
         },
         CommandSpec {
@@ -882,7 +759,7 @@ pub fn specs() -> Vec<CommandSpec> {
             shortcut: None,
             params: r##"{"name":str? (new action, default "Action N")} or {"action":name|index} (append) → {action, index}"##,
             enabled: always,
-            run: |s, p| edit_action(s, p, record, true),
+            run: record,
             journal: false,
         },
         CommandSpec {
@@ -892,7 +769,7 @@ pub fn specs() -> Vec<CommandSpec> {
             shortcut: None,
             params: "{} → {action, steps:count} (steps recorded since actions.record, queries and action-editing commands omitted)",
             enabled: always,
-            run: |s, p| edit_action(s, p, stop, false),
+            run: stop,
             journal: false,
         },
         CommandSpec {
@@ -912,7 +789,7 @@ pub fn specs() -> Vec<CommandSpec> {
             shortcut: None,
             params: r##"{"action":name|index, "step":index?} → {deleted:name} or {action, deletedStep, steps:count}. step is 0-based, including pending recorded steps. Whole-action deletion is refused while recording."##,
             enabled: always,
-            run: |s, p| edit_action(s, p, delete, true),
+            run: delete,
             journal: false,
         },
         CommandSpec {
@@ -922,7 +799,7 @@ pub fn specs() -> Vec<CommandSpec> {
             shortcut: None,
             params: r##"{"action":name|index, "step":index?, "enabled":bool?} → {action, disabled:[step…]}. Switch one 0-based step (including pending recorded steps) on or off for playback, Batch and droplets; omitted enabled flips it. Without step, switch every step: on unless all already are, or as enabled says."##,
             enabled: always,
-            run: |s, p| edit_action(s, p, toggle, true),
+            run: toggle,
             journal: false,
         },
         CommandSpec {
@@ -932,7 +809,7 @@ pub fn specs() -> Vec<CommandSpec> {
             shortcut: None,
             params: r##"{"action":name|index, "name":str} → {action, index}. The name must not be empty or whitespace-only and must be unique. Nested Play Action steps and the action's function key follow the rename."##,
             enabled: always,
-            run: |s, p| edit_action(s, p, rename, true),
+            run: rename,
             journal: false,
         },
         CommandSpec {

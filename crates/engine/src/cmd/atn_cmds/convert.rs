@@ -222,7 +222,7 @@ pub fn export(
                     _ => format!("`{id}`"),
                 };
                 return Err(format!(
-                    "step {} of `{}` ({step_name}) has no Photoshop equivalent event or has a setting its event cannot hold; pass \"skipUnsupported\": true to leave it out",
+                    "step {} of `{}` ({step_name}) has no Photoshop equivalent; pass \"skipUnsupported\": true to leave it out",
                     i + 1,
                     a.name
                 ));

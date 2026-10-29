@@ -400,11 +400,6 @@
 	New Video Layer from File…	Новий відеошар із файлу…
 	New Blank Video Layer	Новий порожній відеошар
 	Smart Filters	Смартфільтри
-# Smart Filter row actions (#1265)
-	Move Up	Перемістити вгору
-	Move Down	Перемістити вниз
-	Delete Smart Filter	Видалити смарт-фільтр
-
 	Delete Smart Filters	Видалити смартфільтри
 	Enable Smart Filters	Увімкнути смартфільтри
 	Disable Smart Filters	Вимкнути смартфільтри
@@ -2462,7 +2457,6 @@
 	Image previews	Перегляд зображень
 	Integrations	Інтеграції
 	Interface	Інтерфейс
-	Use PhotoCraft-native gradient icons	Використовувати власні піктограми градієнта PhotoCraft
 	Jpeg quality	Якість JPEG
 	Jpg	JPG
 	Large tabs	Великі вкладки
@@ -3685,7 +3679,6 @@ cameraRaw	Masking	Маскування
 	101 by 101 Average	Середнє 101 × 101
 	All Layers No Adjustments	Усі шари без коригувань
 	Color to Alpha…	Колір у прозорість…
-	Frequency Separation…	Частотне розкладання…
 	Current & Below No Adjustments	Поточний і нижчі без коригувань
 	Not a web colour: click for the nearest web colour	Колір поза вебпалітрою: клацніть, щоб вибрати найближчий колір із неї
 	Now drag the selection onto another area	Тепер перетягніть виділення на іншу ділянку
@@ -3966,8 +3959,6 @@ curves	Smooth	Згладити
 	Reset All Locked Settings	Скинути всі заблоковані параметри
 	Copy Texture to Other Tools	Скопіювати текстуру в інші інструменти
 	Load Actions…	Завантажити операції…
-	Load Default Actions	Завантажити типові дії
-	Blur Background	Розмити тло
 	Save Actions…	Зберегти операції…
 	New Action…	Нова операція…
 	Start Recording	Почати запис
@@ -4215,10 +4206,6 @@ curves	Smooth	Згладити
 	Font size presets	Набори розмірів шрифту
 	Leading presets	Набори інтерліньяжу
 	Tracking presets	Набори трекінгу
-	Selection / Layer Bounds	Межі виділення / шару
-	No selection or layer	Немає виділення або шару
-	{label}: empty	{label}: порожньо
-	{label}: X {x}  Y {y}  W {w}  H {h}	{label}: X {x}  Y {y}  W {w}  H {h}
 	Clear Selection	Очистити виділення
 	Color Aware	З урахуванням кольору
 	Decontaminate Colors	Очистити кольори
@@ -4236,9 +4223,3 @@ curves	Smooth	Згладити
 	Refine Hair needs hair detection, which isn't available yet	Для уточнення волосся потрібне розпізнавання волосся, яке ще недоступне
 	Select and Mask was closed: its document is no longer the active one	Вікно «Виділити та маскувати» закрито: його документ більше не активний
 	Select and Mask was closed: another layer was selected	Вікно «Виділити та маскувати» закрито: вибрано інший шар
-	Import Shapes…	Імпортувати фігури…
-	Choose a custom shape file (.csh).	Виберіть файл довільних фігур (.csh).
-@plural	Imported {n} shape from {file}|Imported {n} shapes from {file}	Кількість фігур, імпортованих із {file}: {n}|Кількість фігур, імпортованих із {file}: {n}|Кількість фігур, імпортованих із {file}: {n}
-@plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	Кількість фігур, імпортованих із {group}: {n}|Кількість фігур, імпортованих із {group}: {n}|Кількість фігур, імпортованих із {group}: {n}
-	Scrollbar Visibility	Видимість смуг прокручування
-	Hidden	Приховано

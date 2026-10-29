@@ -404,22 +404,6 @@ fn rasterize_and_fonts() {
     assert!(!faces["faces"].as_array().unwrap().is_empty());
 }
 
-#[test]
-fn set_style_paragraph_hanging_round_trips() {
-    let mut s = session();
-    let id = s.execute("type.create", json!({"x": 10, "y": 10, "text": "Hello, world."})).unwrap()["layer"].as_u64().unwrap();
-    let info = s.execute("type.setStyle", json!({"layer": id, "hanging": true})).unwrap();
-    assert_eq!(info["paragraphs"][0]["style"]["hanging"], true, "the report exposes the flag");
-    let t = text_layer(&s, id);
-    assert!(t.paragraphs[0].style.hanging);
-    // Off again.
-    let info = s.execute("type.setStyle", json!({"layer": id, "hanging": false})).unwrap();
-    assert_eq!(info["paragraphs"][0]["style"]["hanging"], false);
-    // A junk value is ignored (like a junk `align`), not coerced or a crash.
-    let _ = s.execute("type.setStyle", json!({"layer": id, "hanging": "yes"})).unwrap();
-    assert!(!text_layer(&s, id).paragraphs[0].style.hanging);
-}
-
 /// #124: a type edit damages only the layer's old and new pixels (the canvas recomposites
 /// that, not the document), and a drag's coalesced steps are one history step.
 #[test]

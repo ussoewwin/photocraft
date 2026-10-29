@@ -283,8 +283,6 @@ what an agent can't finish alone.
 - **Progress (2026-10-14, #5556):** Character and Paragraph controls stay available without
   a type target, editing persisted Type tool defaults inherited by new text. Formatting existing
   selected text keeps its current command and undo scope. Other panel gaps remain open.
-- **Progress (2026-10-13):** scrollbar visibility can follow the theme, stay expanded, auto-hide
-  or be hidden; panel and canvas scrolling remain available (#3262).
 - **Progress (2026-10-12):** toolbar tool shortcuts can be reassigned, removed and reset (#4086),
   with saved bindings, matching toolbar hints and regression coverage (`ui-egui/src/tool_shortcuts.rs`).
 - **Progress (2026-10-15):** the Color panel has Photoshop's panel-menu modes (Hue Cube, Brightness
@@ -343,9 +341,7 @@ what an agent can't finish alone.
   DICOM, EPS/DCS, Pixar, WBMP, MPO/JPS, PICT, Scitex CT, Photoshop
   Raw; spot plates beyond PSD and TIFF: spot ink preview in RGB/CMYK documents and PDF Separation
   (FILE-215-17); .atn,
-  .shc presets and .csh export (.asl landed 2026-10-20) (FILE-215-15); C2PA (#1050).
-- **CSH import:** Version 2 custom-shape sets load into persistent Shapes groups (#5359).
-  Original synthetic geometry is independently cross-read; Photoshop-written fixture verification remains open.
+  .shc, .csh presets (.asl landed 2026-10-20) (FILE-215-15); C2PA (#1050).
 - **Detail:** [`file-format-parity.md`](file-format-parity.md).
 - **Progress (2026-10-23, #7415 split):** PSD stores and reads spot channels as Photoshop does (ink
   0 = solid) and writes their identifiers (1053); PSDs from PhotoCraft 0.1.0–0.16.0, which stored
@@ -438,7 +434,6 @@ what an agent can't finish alone.
 | 2026-10-15 | minor | G9: Animated Zoom preference takes effect (hold the Zoom tool to zoom continuously, #6210); prefs that do nothing 25 of 166; no estimate changed |
 | 2026-10-16 | minor | G7: Content-Aware Move's live preview covers every selection the command takes (over 256 × 256: a coarse result solved scaled down, then the exact one); TOOL-213-4 done (#6680) |
 | 2026-10-15 | minor | G9: Save in Background off saves in the foreground under a modal progress dialog (#6207); preferences that do nothing 25 → 24 of 169 |
-| 2026-10-14 | minor | CSH custom-shape set import (#5359, FILE-215-15); export and Photoshop-written fixture verification remain open; no estimate changed |
 | 2026-10-14 | minor | G1: PSD smart objects keep Transform Warp's Cylinder through Replace Contents, Relink, Edit Contents and re-saves (#4112) |
 | 2026-10-15 | minor | G8: area type: Type tool click inside a closed path or shape wraps text inside it (TYPE-218-10); Type tool click on a path's outline (TYPE-218-1); Type scorecard 5 done, 4 partial, 1 missing |
 | 2026-10-14 | minor | G14: the Nikon D4 profile's white level follows the sample depth, so 12-bit D4 NEFs no longer open 2.6 stops dark (#5978); gap remains open |
@@ -471,7 +466,6 @@ what an agent can't finish alone.
 | 2026-10-13 | minor | G14: lossy DNG (#5112), `.xmp` sidecars, Camera Raw Defaults wired, Calibration panel and Auto; CR3 sensor decode ruled out under the clean-room rule |
 | 2026-10-13 | minor | G4: Hue Jitter amount-track appearance (#3825, partial); no readiness percentage or estimate changed |
 | 2026-10-13 | minor | G2: Content-Aware Scale (P28) measured: carve 2013 → 556 ms, row 3.28 → 1.64 s on a 4-core VM, output unchanged; baseline, budgets and estimate unchanged |
-| 2026-10-13 | minor | Scrollbar visibility preference for panels and the canvas (#3262), with live application, theme retention and wheel-scrolling coverage |
 | 2026-10-13 | minor | G4: minimum inputs in Shape Dynamics and Transfer follow their Control (#3825, partial); no readiness percentage or estimate changed |
 | 2026-10-12 | minor | G5: Free Transform options bar H/V skew fields done |
 | 2026-10-12 | minor | G11: `.atn` import maps 112 events (Select and Mask, Spatter, Ripple, Crystallize, Pattern Fill, mask targeting, Step Backward, points, Bitmap) |

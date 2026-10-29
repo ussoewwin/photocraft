@@ -85,8 +85,6 @@ pub(crate) fn paragraph_properties(p: &ParagraphStyle, k: f32) -> E {
         ("SpaceBefore".into(), real(p.space_before_pt / k)),
         ("SpaceAfter".into(), real(p.space_after_pt / k)),
         ("AutoHyphenate".into(), E::Bool(p.hyphenate)),
-        // Roman Hanging Punctuation; right after the leading keys, as Photoshop writes it.
-        ("Hanging".into(), E::Bool(p.hanging)),
         ("AutoLeading".into(), real(p.auto_leading)),
         ("LeadingType".into(), E::Int(0)),
     ])

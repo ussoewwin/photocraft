@@ -158,9 +158,6 @@
 # Art History Brush (#213).
 
 # Egui 0.37 migration controls (Aspect Ratio, Category, Color Table, Gamma, Interpolation, Profile, Target, Units, Demosaic)
-
-# Custom shape set import
-
 	Mask Options…	Tùy chọn mặt nạ…
 	Layer Mask Display Options…	Tùy chọn hiển thị mặt nạ lớp…
 	Channel Color	Màu kênh
@@ -1202,7 +1199,6 @@
 	Justify last centered	Căn đều, dòng cuối giữa
 	Justify last right	Căn đều, dòng cuối phải
 	Justify all	Căn đều tất cả
-	Roman Hanging Punctuation	Dấu câu treo kiểu La Mã
 	Indent left margin	Thụt lề trái
 	Indent right margin	Thụt lề phải
 	Indent first line	Thụt dòng đầu
@@ -1586,7 +1582,6 @@ cameraRaw	Shadows	Vùng tối
 	Inches	Inch
 	Integrations	Tích hợp
 	Interface	Giao diện
-	Use PhotoCraft-native gradient icons	Dùng biểu tượng chuyển sắc riêng của PhotoCraft
 	Jpeg quality	Chất lượng JPEG
 	Jpg	JPG
 	Language	Ngôn ngữ
@@ -2118,7 +2113,6 @@ layers	Fill:	Độ tô:
 	Color Picker (Layer Style Color)	Ống hút màu (Màu kiểu lớp)
 	Color Picker (Text Color)	Ống hút màu (Màu chữ)
 	Color to Alpha…	Màu sang alpha…
-	Frequency Separation…	Tách tần số…
 	Corner radius	Bán kính góc
 	Create new shape from the current path	Tạo hình mới từ đường dẫn hiện tại
 	Create new style from the selected layer	Tạo kiểu mới từ lớp đã chọn
@@ -2730,11 +2724,6 @@ shape	Appearance	Diện mạo
 	SemiBold	Nửa đậm
 	Show Extras Options	Tuỳ chọn hiện phụ
 	Smart Filters	Các bộ lọc thông minh
-# Smart Filter row actions.
-	Move Up	Di chuyển lên
-	Move Down	Di chuyển xuống
-	Delete Smart Filter	Xóa bộ lọc thông minh
-
 	Soft	Mềm
 	Source: set	Nguồn: bộ
 	Square, 12 x 12	Vuông, 12 x 12
@@ -3726,8 +3715,6 @@ curves	Smooth	Làm mượt
 	Reset All Locked Settings	Đặt lại tất cả cài đặt đã khóa
 	Copy Texture to Other Tools	Sao chép họa tiết sang các công cụ khác
 	Load Actions…	Nạp hành động…
-	Load Default Actions	Tải thao tác mặc định
-	Blur Background	Làm mờ nền
 	Save Actions…	Lưu hành động…
 	New Action…	Hành động mới…
 	Start Recording	Bắt đầu ghi
@@ -3806,10 +3793,6 @@ curves	Smooth	Làm mượt
 	Could not write {name}: {error}	Không thể ghi {name}: {error}
 	Kept {name}: written by another application	Đã giữ {name}: do ứng dụng khác ghi
 	Shadow Tint	Sắc độ bóng tối
-	Import Shapes…	Nhập hình dạng…
-	Choose a custom shape file (.csh).	Chọn tệp hình dạng tùy chỉnh (.csh).
-@plural	Imported {n} shape from {file}|Imported {n} shapes from {file}	Số hình dạng đã nhập từ {file}: {n}
-@plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	Số hình dạng đã nhập từ {group}: {n}
 	Check for Updates…	Kiểm tra bản cập nhật…
 	PhotoCraft Updates	Bản cập nhật PhotoCraft
 	Checking for updates…	Đang kiểm tra bản cập nhật…
@@ -4009,10 +3992,6 @@ curves	Smooth	Làm mượt
 	Font size presets	Cỡ chữ đặt sẵn
 	Leading presets	Giãn dòng đặt sẵn
 	Tracking presets	Khoảng cách chữ đặt sẵn
-	Selection / Layer Bounds	Giới hạn vùng chọn / lớp
-	No selection or layer	Không có vùng chọn hoặc lớp
-	{label}: empty	{label}: trống
-	{label}: X {x}  Y {y}  W {w}  H {h}	{label}: X {x}  Y {y}  W {w}  H {h}
 	Clear Selection	Xóa vùng chọn
 	Color Aware	Nhận biết màu
 	Decontaminate Colors	Khử nhiễm màu
@@ -4031,5 +4010,3 @@ curves	Smooth	Làm mượt
 	Select and Mask was closed: its document is no longer the active one	Đã đóng Chọn và Mặt nạ: tài liệu của nó không còn là tài liệu đang hoạt động
 	Select and Mask was closed: another layer was selected	Đã đóng Chọn và Mặt nạ: một lớp khác đã được chọn
 	Select Layer Under Cursor	Chọn lớp dưới con trỏ
-	Scrollbar Visibility	Hiển thị thanh cuộn
-	Hidden	Ẩn

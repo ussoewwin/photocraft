@@ -1,6 +1,6 @@
 use super::*;
 use photocraft_color::BlendMode;
-use photocraft_doc::{FxCommon, GlowSource, GlowTechnique};
+use photocraft_doc::FxCommon;
 
 /// Filled-shape identity survives integer moves, including fractional anchors and handles.
 #[test]

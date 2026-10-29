@@ -1930,11 +1930,6 @@
 	Slice Select Tool	Narzędzie Zaznaczanie plasterków
 	Slice Tool	Narzędzie Plasterek
 	Smart Filters	Filtry inteligentne
-# Smart Filter row actions (#1265)
-	Move Up	Przesuń w górę
-	Move Down	Przesuń w dół
-	Delete Smart Filter	Usuń filtr inteligentny
-
 	Smudge Tool	Narzędzie Palec
 	Soft	Miękkie
 	Soften	Zmiękcz
@@ -2073,7 +2068,6 @@
 	Image previews	Podglądy obrazów
 	Integrations	Integracje
 	Interface	Interfejs
-	Use PhotoCraft-native gradient icons	Używaj natywnych ikon gradientów PhotoCraft
 	Jpeg quality	Jakość JPEG
 	Jpg	JPG
 	Language	Język
@@ -3622,7 +3616,6 @@ cameraRaw	Roughness	Chropowatość
 	Out of gamut for printing: click for the nearest printable colour	Poza gamą druku: kliknij, aby wybrać najbliższy kolor do druku
 	Not a web colour: click for the nearest web colour	To nie jest kolor internetowy: kliknij, aby wybrać najbliższy kolor internetowy
 	Color to Alpha…	Kolor na alfę…
-	Frequency Separation…	Separacja częstotliwości…
 	Transparency Threshold	Próg przezroczystości
 	Opacity Threshold	Próg krycia
 	PhotoCraft — Screen Color Picker	PhotoCraft — Próbnik kolorów ekranu
@@ -3880,8 +3873,6 @@ curves	Smooth	Wygładź
 	Reset All Locked Settings	Resetuj wszystkie zablokowane ustawienia
 	Copy Texture to Other Tools	Kopiuj teksturę do innych narzędzi
 	Load Actions…	Wczytaj operacje…
-	Load Default Actions	Wczytaj domyślne operacje
-	Blur Background	Rozmyj tło
 	Save Actions…	Zapisz operacje…
 	New Action…	Nowa operacja…
 	Start Recording	Rozpocznij nagrywanie
@@ -4122,10 +4113,6 @@ curves	Smooth	Wygładź
 	Font size presets	Ustawienia wstępne rozmiaru czcionki
 	Leading presets	Ustawienia wstępne interlinii
 	Tracking presets	Ustawienia wstępne światła
-	Selection / Layer Bounds	Granice zaznaczenia / warstwy
-	No selection or layer	Brak zaznaczenia lub warstwy
-	{label}: empty	{label}: puste
-	{label}: X {x}  Y {y}  W {w}  H {h}	{label}: X {x}  Y {y}  W {w}  H {h}
 	Clear Selection	Wyczyść zaznaczenie
 	Color Aware	Według kolorów
 	Decontaminate Colors	Odkażanie kolorów
@@ -4144,9 +4131,3 @@ curves	Smooth	Wygładź
 	Select and Mask was closed: its document is no longer the active one	Zamknięto Zaznacz i maskuj: jego dokument nie jest już aktywny
 	Select and Mask was closed: another layer was selected	Zamknięto Zaznacz i maskuj: wybrano inną warstwę
 	Select Layer Under Cursor	Zaznacz warstwę pod kursorem
-	Import Shapes…	Importuj kształty…
-	Choose a custom shape file (.csh).	Wybierz plik kształtów własnych (.csh).
-@plural	Imported {n} shape from {file}|Imported {n} shapes from {file}	Liczba kształtów zaimportowanych z {file}: {n}|Liczba kształtów zaimportowanych z {file}: {n}|Liczba kształtów zaimportowanych z {file}: {n}
-@plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	Liczba kształtów zaimportowanych z {group}: {n}|Liczba kształtów zaimportowanych z {group}: {n}|Liczba kształtów zaimportowanych z {group}: {n}
-	Scrollbar Visibility	Widoczność pasków przewijania
-	Hidden	Ukryte

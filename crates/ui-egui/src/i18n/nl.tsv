@@ -1866,11 +1866,6 @@
 	Slice Select Tool	Segmentselectiegereedschap
 	Slice Tool	Segmentgereedschap
 	Smart Filters	Slimme filters
-# Smart Filter row actions (#1265)
-	Move Up	Omhoog
-	Move Down	Omlaag
-	Delete Smart Filter	Slim filter verwijderen
-
 	Smudge Tool	Uitsmeergereedschap
 	Soft	Zacht
 	Soften	Verzachten
@@ -2009,7 +2004,6 @@
 	Image previews	Afbeeldingsvoorvertoningen
 	Integrations	Integraties
 	Interface	Interface
-	Use PhotoCraft-native gradient icons	Eigen PhotoCraft-verlooppictogrammen gebruiken
 	Jpeg quality	JPEG-kwaliteit
 	Jpg	JPG
 	Language	Taal
@@ -3755,7 +3749,6 @@ cameraRaw	Whites	Witten
 	101 by 101 Average	Gemiddelde van 101 bij 101
 	All Layers No Adjustments	Alle lagen zonder aanpassingen
 	Color to Alpha…	Kleur naar alfa…
-	Frequency Separation…	Frequentiescheiding…
 	Current & Below No Adjustments	Huidige en onderliggende zonder aanpassingen
 	Now drag the selection onto another area	Sleep de selectie nu naar een ander gebied
 	Point Sample	Puntmonster
@@ -4023,8 +4016,6 @@ curves	Smooth	Vloeiend maken
 	Reset All Locked Settings	Alle vergrendelde instellingen opnieuw instellen
 	Copy Texture to Other Tools	Structuur kopiëren naar andere gereedschappen
 	Load Actions…	Handelingen laden…
-	Load Default Actions	Standaardacties laden
-	Blur Background	Achtergrond vervagen
 	Save Actions…	Handelingen opslaan…
 	New Action…	Nieuwe handeling…
 	Start Recording	Opname starten
@@ -4262,10 +4253,6 @@ curves	Smooth	Vloeiend maken
 	Font size presets	Voorinstellingen lettergrootte
 	Leading presets	Voorinstellingen interlinie
 	Tracking presets	Voorinstellingen spatiëring
-	Selection / Layer Bounds	Selectie- / laaggrenzen
-	No selection or layer	Geen selectie of laag
-	{label}: empty	{label}: leeg
-	{label}: X {x}  Y {y}  W {w}  H {h}	{label}: X {x}  Y {y}  W {w}  H {h}
 	Color Aware	Kleurbewust
 	Decontaminate Colors	Kleuren zuiveren
 	Edge Detection	Randdetectie
@@ -4283,8 +4270,3 @@ curves	Smooth	Vloeiend maken
 	Select and Mask was closed: its document is no longer the active one	Selecteren en maskeren is gesloten: het document is niet meer het actieve document
 	Select and Mask was closed: another layer was selected	Selecteren en maskeren is gesloten: er is een andere laag geselecteerd
 	Select Layer Under Cursor	Laag onder cursor selecteren
-	Import Shapes…	Vormen importeren…
-	Choose a custom shape file (.csh).	Kies een bestand met aangepaste vormen (.csh).
-@plural	Imported {n} shape from {file}|Imported {n} shapes from {file}	Aantal uit {file} geïmporteerde vormen: {n}|Aantal uit {file} geïmporteerde vormen: {n}
-@plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	Aantal uit {group} geïmporteerde vormen: {n}|Aantal uit {group} geïmporteerde vormen: {n}
-	Scrollbar Visibility	Zichtbaarheid van schuifbalken

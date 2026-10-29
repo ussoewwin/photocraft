@@ -491,20 +491,6 @@ fn effects_switch() {
 }
 
 #[test]
-fn tysh_fallback_cannot_reintroduce_unusable_finite_or_nonfinite_transform() {
-    let mut tysh = vec![0u8; 52];
-    tysh[..2].copy_from_slice(&1u16.to_be_bytes());
-    for (i, value) in [1.0f64, 0.0, 0.0, 1.0, 30.0, 40.0].iter().enumerate() {
-        tysh[2 + 8 * i..10 + 8 * i].copy_from_slice(&value.to_be_bytes());
-    }
-    assert!(parse_tysh(&tysh).is_some(), "normal matrices still import");
-    for value in [1e62f64, -1e62, f64::INFINITY, f64::NAN] {
-        tysh[2..10].copy_from_slice(&value.to_be_bytes());
-        assert!(parse_tysh(&tysh).is_none(), "invalid matrix {value} cannot reach UI");
-    }
-}
-
-#[test]
 fn tysh_garbage_is_none() {
     assert!(parse_tysh(&[0; 10]).is_none());
 }

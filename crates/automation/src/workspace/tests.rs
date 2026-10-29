@@ -449,7 +449,6 @@ fn automation_rejects_ambient_path_commands_and_preferences() {
         ("swatches.export", serde_json::json!({"path": "/outside/set.ase"})),
         ("actions.load", serde_json::json!({"path": "/outside/set.atn"})),
         ("actions.save", serde_json::json!({"path": "/outside/set.atn"})),
-        ("actions.export", serde_json::json!({"path": "/outside/actions.json"})),
         ("style.presets.importAsl", serde_json::json!({"path": "/outside/set.asl"})),
         ("style.presets.exportAsl", serde_json::json!({"path": "/outside/set.asl"})),
         ("style.presets.exportAsl", serde_json::json!({"path": 5})),
@@ -467,8 +466,6 @@ fn automation_rejects_ambient_path_commands_and_preferences() {
         ("swatches.export", serde_json::json!({"format": "ase"})),
         ("actions.load", serde_json::json!({"data": "QUJD"})),
         ("actions.save", serde_json::json!({"set": "S"})),
-        ("actions.import", serde_json::json!({"data": "{\"version\":1,\"actions\":[]}"})),
-        ("actions.export", serde_json::json!({})),
         ("style.presets.importAsl", serde_json::json!({"data": "QUJD"})),
         ("style.presets.exportAsl", serde_json::json!({"group": "Basics"})),
         ("layer.layerStyle.contours.load", serde_json::json!({"data": "QUJD"})),
@@ -880,22 +877,4 @@ fn absolute_paths_are_checked_against_the_authority_s_own_root() {
     assert!(workspace.read(&target.to_string_lossy()).is_err(), "not under the read root");
     let none = AuthorizedWorkspace::default();
     assert!(none.read(&target.to_string_lossy()).is_err());
-}
-
-#[test]
-fn csh_import_requires_inline_data_in_automation() {
-    let id = "shape.presets.importCsh";
-    for path in ["/outside/set.csh", "set.csh", "../set.csh", ""] {
-        let params = serde_json::json!({"path": path});
-        assert!(authorize_engine_command(id, &params).is_err(), "{path}");
-        assert!(authorize_desktop_engine_command(id, &params).is_err(), "{path}");
-    }
-    // The importer gives inline data precedence, even when a path is also supplied.
-    for params in [serde_json::json!({"data": "QUJD"}), serde_json::json!({"data": "QUJD", "path": "/outside/set.csh"})] {
-        assert!(authorize_engine_command(id, &params).is_ok());
-        assert!(authorize_desktop_engine_command(id, &params).is_ok());
-    }
-    let mut headless = crate::headless::Headless::new();
-    let error = headless.command_run(id, serde_json::json!({"path": "/outside/set.csh"})).unwrap_err();
-    assert!(error.to_string().contains("uses ambient filesystem paths and is disabled"), "{error}");
 }

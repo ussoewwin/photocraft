@@ -1936,11 +1936,6 @@
 	Slice Select Tool	Strumento Selezione sezioni
 	Slice Tool	Strumento Sezione
 	Smart Filters	Filtri avanzati
-# Smart Filter row actions (#1265)
-	Move Up	Sposta su
-	Move Down	Sposta giù
-	Delete Smart Filter	Elimina filtro avanzato
-
 	Smudge Tool	Strumento Sfumino
 	Soft	Morbido
 	Soften	Ammorbidisci
@@ -2079,7 +2074,6 @@
 	Image previews	Anteprime immagine
 	Integrations	Integrazioni
 	Interface	Interfaccia
-	Use PhotoCraft-native gradient icons	Usa le icone native delle sfumature di PhotoCraft
 	Jpeg quality	Qualità JPEG
 	Jpg	JPG
 	Language	Lingua
@@ -2660,7 +2654,6 @@ fontWeight	Italic	Corsivo
 	Out of gamut for printing: click for the nearest printable colour	Fuori gamma di stampa: fai clic per il colore stampabile più vicino
 	Not a web colour: click for the nearest web colour	Non è un colore web: fai clic per il colore web più vicino
 	Color to Alpha…	Colore ad alfa…
-	Frequency Separation…	Separazione delle frequenze…
 	Transparency Threshold	Soglia di trasparenza
 	Opacity Threshold	Soglia di opacità
 	PhotoCraft — Screen Color Picker	PhotoCraft — Selettore colore schermo
@@ -4227,8 +4220,6 @@ navigator	Zoom	Zoom
 	Reset All Locked Settings	Ripristina tutte le impostazioni bloccate
 	Copy Texture to Other Tools	Copia texture su altri strumenti
 	Load Actions…	Carica azioni…
-	Load Default Actions	Carica azioni predefinite
-	Blur Background	Sfoca sfondo
 	Save Actions…	Salva azioni…
 	New Action…	Nuova azione…
 	Start Recording	Avvia registrazione
@@ -4618,10 +4609,6 @@ shape	Appearance	Aspetto
 	Font size presets	Predefiniti dimensione font
 	Leading presets	Predefiniti interlinea
 	Tracking presets	Predefiniti spaziatura
-	Selection / Layer Bounds	Limiti selezione / livello
-	No selection or layer	Nessuna selezione o livello
-	{label}: empty	{label}: vuoto
-	{label}: X {x}  Y {y}  W {w}  H {h}	{label}: X {x}  Y {y}  W {w}  H {h}
 	Color Aware	In base al colore
 	Decontaminate Colors	Decontamina colori
 	Edge Detection	Rilevamento bordi
@@ -4638,8 +4625,3 @@ shape	Appearance	Aspetto
 	Refine Hair needs hair detection, which isn't available yet	Migliora capelli richiede il rilevamento dei capelli, non ancora disponibile
 	Select and Mask was closed: its document is no longer the active one	Seleziona e maschera è stato chiuso: il suo documento non è più quello attivo
 	Select and Mask was closed: another layer was selected	Seleziona e maschera è stato chiuso: è stato selezionato un altro livello
-	Import Shapes…	Importa forme…
-	Choose a custom shape file (.csh).	Scegli un file di forme personalizzate (.csh).
-@plural	Imported {n} shape from {file}|Imported {n} shapes from {file}	Numero di forme importate da {file}: {n}|Numero di forme importate da {file}: {n}
-@plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	Numero di forme importate da {group}: {n}|Numero di forme importate da {group}: {n}
-	Scrollbar Visibility	Visibilità delle barre di scorrimento

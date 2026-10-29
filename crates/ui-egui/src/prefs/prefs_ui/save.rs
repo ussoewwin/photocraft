@@ -11,7 +11,6 @@ pub fn tick(app: &mut PhotocraftApp, ctx: &egui::Context) {
     sync_rulers(app);
     sync_display_scale(app, ctx);
     sync_appearance(app, ctx);
-    crate::theme::sync_scrollbars(ctx, app.session.prefs().interface.scrollbar_visibility);
     crate::theme::set_ui_font_size(ctx, app.session.prefs().interface.ui_font_size);
     presets_store(app);
     sync_tooltips(app, ctx);

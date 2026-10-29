@@ -233,7 +233,6 @@
 	Settings	Ρυθμίσεις
 	General	Γενικά
 	Interface	Περιβάλλον
-	Use PhotoCraft-native gradient icons	Χρήση εγγενών εικονιδίων διαβάθμισης PhotoCraft
 	Language	Γλώσσα
 	Auto	Αυτόματα
 	Cancel	Ακύρωση
@@ -554,11 +553,6 @@
 	Smart Object	Έξυπνο αντικείμενο
 	Smart Objects	Έξυπνα αντικείμενα
 	Smart Filters	Έξυπνα φίλτρα
-# Smart Filter row actions (#1265)
-	Move Up	Μετακίνηση επάνω
-	Move Down	Μετακίνηση κάτω
-	Delete Smart Filter	Διαγραφή έξυπνου φίλτρου
-
 	Adjustment Layer	Επίπεδο προσαρμογής
 	Adjustment Layers	Επίπεδα προσαρμογής
 	Pixel Layer	Επίπεδο εικονοστοιχείων
@@ -3695,7 +3689,6 @@ fontWeight	Thin	Πολύ λεπτά
 	Out of gamut for printing: click for the nearest printable colour	Εκτός γκάμας εκτύπωσης: κάντε κλικ για το πλησιέστερο εκτυπώσιμο χρώμα
 	Not a web colour: click for the nearest web colour	Δεν είναι χρώμα web: κάντε κλικ για το πλησιέστερο χρώμα web
 	Color to Alpha…	Χρώμα σε άλφα…
-	Frequency Separation…	Διαχωρισμός συχνοτήτων…
 	Transparency Threshold	Κατώφλι διαφάνειας
 	Opacity Threshold	Κατώφλι αδιαφάνειας
 	PhotoCraft — Screen Color Picker	PhotoCraft — Επιλογή χρώματος οθόνης
@@ -3964,8 +3957,6 @@ curves	Smooth	Εξομάλυνση
 	Reset All Locked Settings	Επαναφορά όλων των κλειδωμένων ρυθμίσεων
 	Copy Texture to Other Tools	Αντιγραφή υφής σε άλλα εργαλεία
 	Load Actions…	Φόρτωση ενεργειών…
-	Load Default Actions	Φόρτωση προεπιλεγμένων ενεργειών
-	Blur Background	Θόλωση φόντου
 	Save Actions…	Αποθήκευση ενεργειών…
 	New Action…	Νέα ενέργεια…
 	Start Recording	Έναρξη εγγραφής
@@ -4205,10 +4196,6 @@ curves	Smooth	Εξομάλυνση
 	Font size presets	Προεπιλογές μεγέθους γραμματοσειράς
 	Leading presets	Προεπιλογές διάστιχου
 	Tracking presets	Προεπιλογές διαστήματος χαρακτήρων
-	Selection / Layer Bounds	Όρια επιλογής / επιπέδου
-	No selection or layer	Δεν υπάρχει επιλογή ή επίπεδο
-	{label}: empty	{label}: κενό
-	{label}: X {x}  Y {y}  W {w}  H {h}	{label}: X {x}  Y {y}  W {w}  H {h}
 	Color Aware	Με βάση το χρώμα
 	Decontaminate Colors	Απολύμανση χρωμάτων
 	Edge Detection	Ανίχνευση άκρης
@@ -4226,8 +4213,3 @@ curves	Smooth	Εξομάλυνση
 	Select and Mask was closed: its document is no longer the active one	Η Επιλογή και μάσκα έκλεισε: το έγγραφό της δεν είναι πλέον το ενεργό
 	Select and Mask was closed: another layer was selected	Η Επιλογή και μάσκα έκλεισε: επιλέχθηκε άλλο επίπεδο
 	Select Layer Under Cursor	Επιλογή επιπέδου κάτω από τον δρομέα
-	Import Shapes…	Εισαγωγή σχημάτων…
-	Choose a custom shape file (.csh).	Επιλέξτε ένα αρχείο προσαρμοσμένων σχημάτων (.csh).
-@plural	Imported {n} shape from {file}|Imported {n} shapes from {file}	Αριθμός σχημάτων που εισήχθησαν από {file}: {n}|Αριθμός σχημάτων που εισήχθησαν από {file}: {n}
-@plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	Αριθμός σχημάτων που εισήχθησαν από {group}: {n}|Αριθμός σχημάτων που εισήχθησαν από {group}: {n}
-	Scrollbar Visibility	Ορατότητα γραμμών κύλισης

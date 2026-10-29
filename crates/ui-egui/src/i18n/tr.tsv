@@ -1578,7 +1578,6 @@
 	Update layer comp (visibility, position and appearance)	Katman kompozisyonunu güncelleyin (görünürlük, konum ve görünüm)
 	Use Default	Varsayılanı Kullan
 	Use Legacy	Eskiyi Kullan
-	Use PhotoCraft-native gradient icons	PhotoCraft'ın kendi gradyan simgelerini kullan
 	Use Measurement Scale	Ölçüm Ölçeğini Kullan
 	Variables bind a layer's visibility, text or pixels to a named data slot.	Değişkenler bir katmanın görünürlüğünü, metnini veya piksellerini adlandırılmış bir veri yuvasına bağlar.
 	Vertical scale	Dikey ölçek
@@ -1820,11 +1819,6 @@
 	Slice Select Tool	Dilim Seçme Aracı
 	Slice Tool	Dilim Aracı
 	Smart Filters	Akıllı Filtreler
-# Smart Filter row actions.
-	Move Up	Yukarı taşı
-	Move Down	Aşağı taşı
-	Delete Smart Filter	Akıllı Filtreyi Sil
-
 	Smudge Tool	Leke Aracı
 	Soft	Yumuşak
 	Soften	Yumuşat
@@ -3944,12 +3938,9 @@ cameraData	Lens	Lens
 	Response curve	Yanıt eğrisi
 	Show home recent files	Ana ekranda son dosyaları göster
 	Clear Brush Controls	Fırça Denetimlerini Temizle
-	Frequency Separation…	Frekans Ayırma…
 	Reset All Locked Settings	Tüm Kilitli Ayarları Sıfırla
 	Copy Texture to Other Tools	Dokuyu Diğer Araçlara Kopyala
 	Load Actions…	Eylemleri Yükle…
-	Load Default Actions	Varsayılan Eylemleri Yükle
-	Blur Background	Arka Planı Bulanıklaştır
 	Save Actions…	Eylemleri Kaydet…
 	New Action…	Yeni Eylem…
 	Start Recording	Kaydı Başlat
@@ -4225,10 +4216,6 @@ cameraData	Lens	Lens
 	Font size presets	Yazı tipi boyutu hazır ayarları
 	Leading presets	Satır aralığı hazır ayarları
 	Tracking presets	İzleme hazır ayarları
-	Selection / Layer Bounds	Seçim / Katman Sınırları
-	No selection or layer	Seçim veya katman yok
-	{label}: empty	{label}: boş
-	{label}: X {x}  Y {y}  W {w}  H {h}	{label}: X {x}  Y {y}  W {w}  H {h}
 	Color Aware	Renge Duyarlı
 	Decontaminate Colors	Renkleri Arındır
 	Edge Detection	Kenar Algılama
@@ -4250,9 +4237,4 @@ cameraData	Lens	Lens
 	Delete effect	Efekti sil
 	Current Layer:	Geçerli Katman:
 	Underlying Layer:	Alttaki Katman:
-	Import Shapes…	Şekilleri İçe Aktar…
-	Choose a custom shape file (.csh).	Özel şekil dosyası (.csh) seçin.
-@plural	Imported {n} shape from {file}|Imported {n} shapes from {file}	{file} kaynağından içe aktarılan şekil sayısı: {n}
-@plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	{group} kaynağından içe aktarılan şekil sayısı: {n}
-	Scrollbar Visibility	Kaydırma çubuklarının görünürlüğü
 	Drag to move the selected path	Seçili yolu taşımak için sürükleyin

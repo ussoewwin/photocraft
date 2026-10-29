@@ -1656,14 +1656,7 @@ fn finish_canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, view: &mut Vie
     // Scrollbars (scrollbars.rs): drawn over the canvas edges, they take the pointer there.
     let t0 = crate::gpu_canvas::now_ms();
     let before = view.center;
-    let mode = app.session.prefs().interface.scrollbar_visibility;
-    let visible = match mode {
-        photocraft_engine::prefs::ScrollbarVisibility::Hidden => false,
-        photocraft_engine::prefs::ScrollbarVisibility::AutoHide => ui.rect_contains_pointer(rect) || ui.input(|i| i.pointer.any_down()),
-        _ => true,
-    };
-    let over_bars = visible
-        && app.ui.view.shows_scrollbars()
+    let over_bars = app.ui.view.shows_scrollbars()
         && crate::scrollbars::show(ui, rect, view, flip, aspect, app.session.prefs().tools.overscroll, egui::Id::unique(("pc-canvas", idx)));
     ctx.data_mut(|d| d.insert_temp(bars_id, over_bars));
     if view.center != before {
@@ -1962,8 +1955,7 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
     // (Space) and a middle-button drag still pan, and a secondary window's Hand never stops, as the
     // box is only drawn and driven on the primary canvas.
     let transform_owns_pointer = primary && app.ui.transform.is_some() && temporary.is_none() && !middle;
-    let middle_rotate = middle && ui.input(|i| i.modifiers.shift);
-    let hand_pan = tool == Tool::Hand && !transform_owns_pointer && !middle_rotate;
+    let hand_pan = tool == Tool::Hand && !transform_owns_pointer;
     // Preferences › Tools › Enable Flick Panning: a Hand drag let go while moving glides on.
     let flick_id = egui::Id::unique(("pc-flick-pan", idx, primary, ctx.viewport_id()));
     let flick_on = app.session.prefs().tools.enable_flick_panning;
@@ -1980,14 +1972,7 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
             ctx.data_mut(|m| m.get_temp_mut_or_default::<crate::flick_pan::Flick>(flick_id).stop());
         }
     }
-    if middle_rotate && response.dragged() && !stroke_dismissal {
-        if let Some(pointer) = response.interact_pointer_pos()
-            && crate::rotate_view::middle_drag(&mut view, &xf, pointer, response.drag_delta().x)
-        {
-            ctx.request_repaint();
-        }
-        ctx.set_cursor_icon(crate::rotate_view::cursor(true));
-    } else if hand_pan && response.dragged() && !stroke_dismissal {
+    if hand_pan && response.dragged() && !stroke_dismissal {
         let d = xf.unmap_vec(response.drag_delta()) / (view.zoom / ppp);
         view.center[0] -= d.x;
         view.center[1] -= d.y;
@@ -1995,7 +1980,7 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
         ctx.set_cursor_icon(crate::tool_cursor::hand(&ctx, true));
     } else if primary && !stroke_dismissal && temporary.is_none() && !middle && crate::layer_picker::armed(app).is_some() {
         layer_picker_eyedropper(app, ui, &ctx, &response, &xf);
-    } else if primary && !stroke_dismissal && !middle_rotate {
+    } else if primary && !stroke_dismissal {
         let input = CanvasToolInput {
             ctx: &ctx,
             response: &response,

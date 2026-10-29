@@ -10,18 +10,6 @@ pub(crate) fn layer_id(s: &Session, p: &Value) -> Result<LayerId> {
     }
 }
 
-pub(super) fn check_clipboard_pattern_collision(s: &Session, patterns: &[photocraft_doc::Pattern]) -> Result<()> {
-    let st = s.active().ok_or(EngineError::NoDocument)?;
-    for pattern in patterns {
-        if let Some(existing) = st.doc.patterns.iter().find(|p| p.id == pattern.id)
-            && (existing.width != pattern.width || existing.height != pattern.height || existing.surface != pattern.surface)
-        {
-            return Err(EngineError::Other("A different pattern with the copied pattern's id already exists in this document".into()));
-        }
-    }
-    Ok(())
-}
-
 pub(super) fn f64p(p: &Value, k: &str) -> Option<f64> {
     p.get(k).and_then(Value::as_f64)
 }
@@ -157,44 +145,12 @@ pub fn path_json(p: &Path) -> Value {
 
 pub(super) fn fill_json(f: &Fill) -> Value {
     match f {
-        Fill::Solid(c) => paint_color_json(c),
+        Fill::Solid(c) => json!(hex(c)),
         Fill::Gradient { stops, angle, scale, style, reverse, opacity_stops, midpoints, offset, dither, align } => json!({ "gradient": {
-            "stops": stops.iter().map(|(t, c)| json!([t, paint_color_json(c)])).collect::<Vec<_>>(),
-            "angle": angle, "scale": f64::from(*scale) * 100.0, "style": format!("{style:?}").to_ascii_lowercase(), "reverse": reverse,
-            "opacityStops": opacity_stops, "midpoints": midpoints, "offset": offset, "dither": dither, "align": align } }),
-        Fill::Pattern { name, scale, id, angle, link, phase } => json!({ "pattern": name, "scale": f64::from(*scale) * 100.0,
-            "id":id, "angle":angle, "link":link, "phase":phase }),
-    }
-}
-
-fn fill_pair(v: &Value, key: &str) -> std::result::Result<(f32, f32), String> {
-    let Some(value) = v.get(key) else { return Ok((0.0, 0.0)) };
-    let Some(values) = value.as_array().filter(|a| a.len() == 2) else { return Err(format!("{key} must contain two numbers")) };
-    let mut values = values.iter();
-    let a = values.next().ok_or_else(|| format!("{key} needs an x value"))?;
-    let b = values.next().ok_or_else(|| format!("{key} needs a y value"))?;
-    Ok((fill_number(a, key, -1_000_000.0, 1_000_000.0)?, fill_number(b, key, -1_000_000.0, 1_000_000.0)?))
-}
-
-fn fill_bool(v: &Value, key: &str, default: bool) -> std::result::Result<bool, String> {
-    v.get(key).map_or(Ok(default), |v| v.as_bool().ok_or_else(|| format!("{key} must be a boolean")))
-}
-
-fn fill_number(v: &Value, label: &str, lo: f64, hi: f64) -> std::result::Result<f32, String> {
-    v.as_f64()
-        .filter(|n| n.is_finite() && (lo..=hi).contains(n))
-        .map(|n| n as f32)
-        .ok_or_else(|| format!("{label} must be a finite number between {lo} and {hi}"))
-}
-
-fn paint_color_json(c: &Color) -> Value {
-    if c.mode != photocraft_color::ColorMode::Rgb || c.c[3] != 0.0 {
-        return json!({"color":c});
-    }
-    if c.alpha == 1.0 && c.c.iter().take(3).all(|v| (0.0..=1.0).contains(v) && (v * 255.0).round() / 255.0 == *v) {
-        json!(hex(c))
-    } else {
-        json!([c.c[0], c.c[1], c.c[2], c.alpha])
+            "stops": stops.iter().map(|(t, c)| json!([t, hex(c)])).collect::<Vec<_>>(),
+            "angle": angle, "scale": scale * 100.0, "style": format!("{style:?}").to_ascii_lowercase(), "reverse": reverse,
+            "opacityStops": opacity_stops, "midpoints": midpoints, "offset": [offset.0, offset.1], "dither": dither, "align": align } }),
+        Fill::Pattern { name, scale, .. } => json!({ "pattern": name, "scale": scale * 100.0 }),
     }
 }
 
@@ -202,166 +158,83 @@ fn paint_color_json(c: &Color) -> Value {
 /// edits (`gradient.fill.stop`, `gradient.presets.stop`) cap them.
 const MAX_GRADIENT_STOPS: usize = 1024;
 
-/// Legacy colour/gradient/pattern forms plus complete geometry and opacity metadata.
-/// Gradient locations, opacity stops and midpoints are fractions; scale is percent.
+/// `"#rrggbb"` / `[r,g,b,a]` / `{"gradient":{"stops":[[t,"#hex"|[r,g,b,a]],…],"angle","scale","style","reverse",
+/// "opacityStops":[[t,0..1],…],"midpoints":[0..1,…],"offset":[x,y],"dither","align"}}` / `{"pattern":name,"scale"}`.
+/// `null` → `Ok(None)` (no fill).
 pub(super) fn parse_fill(v: &Value) -> std::result::Result<Option<Fill>, String> {
-    if let Some(g) = v.get("gradient") {
-        for key in ["stops", "opacityStops", "midpoints"] {
-            if g.get(key).and_then(Value::as_array).is_some_and(|a| a.len() > MAX_GRADIENT_STOPS) {
-                return Err(format!("too many gradient {key} (max {MAX_GRADIENT_STOPS})"));
-            }
-        }
-    }
-
     if v.is_null() {
         return Ok(None);
     }
-    if v.is_array() || v.is_string() || v.get("color").is_some() || (v.get("mode").is_some() && v.get("c").is_some()) {
-        return Ok(Some(Fill::Solid(paint_color(v)?)));
+    if let Some(c) = color(v) {
+        return Ok(Some(Fill::Solid(c)));
     }
     if let Some(g) = v.get("gradient") {
-        if !g.is_object() {
-            return Err("gradient must be an object".into());
-        }
-        let stops = match g.get("stops") {
-            None => vec![(0.0, Color::BLACK), (1.0, Color::WHITE)],
-            Some(Value::Array(stops)) if stops.len() <= 4096 => stops
-                .iter()
-                .map(|stop| {
-                    let values = stop.as_array().filter(|a| a.len() == 2).ok_or("gradient stop must contain a location and colour")?;
-                    let t = values.first().ok_or("missing stop location")?;
-                    let c = values.get(1).ok_or("missing stop colour")?;
-                    let location = fill_number(t, "stop location", 0.0, 1.0)?;
-                    Ok(paint_color(c).ok().map(|color| (location, color)))
-                })
-                .collect::<std::result::Result<Vec<_>, String>>()?
-                .into_iter()
-                .flatten()
-                .collect(),
-            _ => return Err("gradient stops must contain at most 4096 location/colour pairs".into()),
+        // Stop lists are capped as `gradient.fill.stop` caps them: more is an error, not a cut.
+        let list = |key: &str, what: &str| match g.get(key) {
+            None | Some(Value::Null) => Ok(None),
+            Some(Value::Array(a)) if a.len() > MAX_GRADIENT_STOPS => Err(format!("too many {what} (max {MAX_GRADIENT_STOPS})")),
+            Some(Value::Array(a)) => Ok(Some(a)),
+            Some(_) => Err(format!("gradient `{key}` must be an array")),
         };
-        let style = match g.get("style").map_or(Some("linear"), Value::as_str).ok_or("gradient style must be a string")? {
-            "linear" => GradientStyle::Linear,
+        let stops: Vec<(f32, Color)> = list("stops", "colour stops")?
+            .map(|a| a.iter().filter_map(|s| Some((s.get(0)?.as_f64()? as f32, color(s.get(1)?)?))).collect())
+            .unwrap_or_else(|| vec![(0.0, Color::BLACK), (1.0, Color::WHITE)]);
+        let style = match g.get("style").and_then(Value::as_str).unwrap_or("linear") {
             "radial" => GradientStyle::Radial,
             "angle" => GradientStyle::Angle,
             "reflected" => GradientStyle::Reflected,
             "diamond" => GradientStyle::Diamond,
-            _ => return Err("unknown gradient style".into()),
+            _ => GradientStyle::Linear,
         };
-        let mut opacity_stops = match g.get("opacityStops") {
-            None => Vec::new(),
-            Some(Value::Array(stops)) if stops.len() <= 4096 => stops
-                .iter()
-                .map(|stop| {
-                    let values = stop.as_array().filter(|a| a.len() == 2).ok_or("opacity stop must contain a location and opacity")?;
-                    Ok((
-                        fill_number(values.first().ok_or("missing opacity location")?, "opacity location", 0.0, 1.0)?,
-                        fill_number(values.get(1).ok_or("missing opacity value")?, "opacity value", 0.0, 1.0)?,
-                    ))
-                })
-                .collect::<std::result::Result<Vec<_>, String>>()?,
-            _ => return Err("opacityStops must contain at most 4096 location/opacity pairs".into()),
-        };
-        opacity_stops.sort_by(|a, b| a.0.total_cmp(&b.0));
-        let midpoints = match g.get("midpoints") {
-            None => Vec::new(),
-            Some(Value::Array(values)) if values.len() <= 4096 => {
-                values.iter().map(|v| fill_number(v, "midpoint", 0.0, 1.0)).collect::<std::result::Result<Vec<_>, _>>()?
-            }
-            _ => return Err("midpoints must contain at most 4096 fractions".into()),
-        };
-        return Ok(Some(Fill::Gradient {
+        let mut fill = Fill::gradient(
             stops,
-            angle: g.get("angle").map_or(Ok(90.0), |v| fill_number(v, "angle", -1_000_000.0, 1_000_000.0))?,
-            scale: fill_scale(g)?,
+            f64p(g, "angle").unwrap_or(90.0) as f32,
+            f64p(g, "scale").unwrap_or(100.0) as f32 / 100.0,
             style,
-            reverse: fill_bool(g, "reverse", false)?,
-            opacity_stops,
-            midpoints,
-            offset: fill_pair(g, "offset")?,
-            dither: fill_bool(g, "dither", false)?,
-            align: fill_bool(g, "align", true)?,
-        }));
-    }
-    if let Some(pattern) = v.get("pattern") {
-        let name = pattern.as_str().filter(|s| s.len() <= 65536).ok_or("pattern must be a string of at most 65536 bytes")?;
-        let id = v.get("id").map_or(Some(""), Value::as_str).filter(|s| s.len() <= 65536).ok_or("pattern id must be a string of at most 65536 bytes")?;
-        return Ok(Some(Fill::Pattern {
-            name: name.into(),
-            scale: fill_scale(v)?,
-            id: id.into(),
-            angle: v.get("angle").map_or(Ok(0.0), |v| fill_number(v, "angle", -1_000_000.0, 1_000_000.0))?,
-            link: fill_bool(v, "link", true)?,
-            phase: fill_pair(v, "phase")?,
-        }));
-    }
-    Err("unrecognised fill".into())
-}
-
-fn paint_color(v: &Value) -> std::result::Result<Color, String> {
-    let c = if let Some(raw) = v.get("color").or_else(|| (v.get("mode").is_some() && v.get("c").is_some()).then_some(v)) {
-        serde_json::from_value::<Color>(raw.clone()).map_err(|e| format!("invalid model colour: {e}"))?
-    } else {
-        if let Some(values) = v.as_array() {
-            if !matches!(values.len(), 3 | 4) {
-                return Err("colour must contain three or four numbers".into());
+            g.get("reverse").and_then(Value::as_bool).unwrap_or(false),
+        );
+        // The rest of a gradient, so a read-modify-write (the shape swatches) loses nothing.
+        if let Fill::Gradient { opacity_stops, midpoints, offset, dither, align, .. } = &mut fill {
+            let unit = |v: &Value| v.as_f64().map(|n| n.clamp(0.0, 1.0) as f32);
+            if let Some(a) = list("opacityStops", "opacity stops")? {
+                *opacity_stops = a.iter().filter_map(|s| Some((unit(s.get(0)?)?, unit(s.get(1)?)?))).collect();
+                opacity_stops.sort_by(|a, b| a.0.total_cmp(&b.0));
             }
-            for value in values.iter().take(3) {
-                fill_number(value, "colour component", -1_000_000.0, 1_000_000.0)?;
+            if let Some(a) = list("midpoints", "midpoints")? {
+                *midpoints = a.iter().filter_map(unit).collect();
             }
-            if let Some(alpha) = values.get(3) {
-                fill_number(alpha, "colour alpha", 0.0, 1.0)?;
+            if let Some(o) = g.get("offset") {
+                let at = |i: usize| o.get(i).and_then(Value::as_f64).map(|n| n.clamp(-1000.0, 1000.0) as f32);
+                *offset = (at(0).ok_or("gradient offset must be [x, y]")?, at(1).ok_or("gradient offset must be [x, y]")?);
+            }
+            if let Some(d) = g.get("dither").and_then(Value::as_bool) {
+                *dither = d;
+            }
+            if let Some(a) = g.get("align").and_then(Value::as_bool) {
+                *align = a;
             }
         }
-        color(v).ok_or("colour must be hex, RGB(A) numbers or a model colour object")?
-    };
-    if !c.c.iter().all(|n| n.is_finite() && n.abs() <= 1_000_000.0) || !c.alpha.is_finite() || !(0.0..=1.0).contains(&c.alpha) {
-        return Err("colour components must be finite and within ±1000000; alpha must be 0..1".into());
+        return Ok(Some(fill));
     }
-    Ok(c)
-}
-
-fn fill_scale(v: &Value) -> std::result::Result<f32, String> {
-    let Some(value) = v.get("scale") else { return Ok(1.0) };
-    let n = value.as_f64().filter(|n| n.is_finite() && *n > 0.0 && *n <= 1_000_000.0).ok_or("scale must be greater than 0 and at most 1000000 percent")?;
-    let scale = (n / 100.0) as f32;
-    if scale <= 0.0 {
-        return Err("scale is too small".into());
+    if let Some(name) = v.get("pattern").and_then(Value::as_str) {
+        return Ok(Some(Fill::Pattern {
+            name: name.into(),
+            scale: f64p(v, "scale").unwrap_or(100.0) as f32 / 100.0,
+            id: String::new(),
+            angle: 0.0,
+            link: true,
+            phase: (0.0, 0.0),
+        }));
     }
-    Ok(scale)
+    Err(format!("unrecognised fill {v}"))
 }
 
 pub(super) fn stroke_json(s: &ShapeStroke) -> Value {
     json!({
-        "width": s.width, "fill": fill_json(&s.paint), "opacity": f64::from(s.opacity) * 100.0,
+        "width": s.width, "fill": fill_json(&s.paint), "opacity": s.opacity * 100.0,
         "align": format!("{:?}", s.align).to_ascii_lowercase(), "cap": format!("{:?}", s.cap).to_ascii_lowercase(),
         "join": format!("{:?}", s.join).to_ascii_lowercase(), "miterLimit": s.miter_limit, "dashes": s.dashes, "dashOffset": s.dash_offset,
     })
-}
-
-pub(super) fn pattern_for_fill(s: &Session, fill: &mut Fill) -> Result<Option<photocraft_doc::Pattern>> {
-    let Fill::Pattern { name, id, .. } = fill else { return Ok(None) };
-    let by_id = (!id.is_empty()).then(|| crate::pattern_cmds::resolve(s, id)).flatten();
-    let by_name = (!name.is_empty()).then(|| crate::pattern_cmds::resolve(s, name)).flatten();
-    if let (Some(a), Some(b)) = (&by_id, &by_name)
-        && a.id != b.id
-    {
-        return Err(EngineError::Other("pattern id and name refer to different tiles".into()));
-    }
-    let pattern = by_id.or(by_name).ok_or_else(|| EngineError::Other(format!("no pattern \"{name}\" (see pattern.list)")))?;
-    if pattern.is_empty() {
-        return Err(EngineError::Other("the pattern is empty".into()));
-    }
-    if id.is_empty() {
-        *name = pattern.name.clone();
-    }
-    *id = pattern.id.clone();
-    Ok(Some(pattern))
-}
-
-/// Shape-tool creation uses the paint displayed for the active shape, including gradients.
-pub fn shape_paint_params(fill: Option<&Fill>, stroke: Option<&ShapeStroke>) -> Value {
-    json!({"fill":fill.map_or(Value::Null,fill_json),"stroke":stroke.map_or(Value::Null,stroke_json)})
 }
 
 /// Applies stroke keys onto `base` (`null` → no stroke).
@@ -441,15 +314,6 @@ pub fn parse_stroke(v: &Value, base: Option<ShapeStroke>, fg: Color) -> std::res
     }
     s.validate()?;
     Ok(Some(s))
-}
-
-/// Validate a shape paint without changing the document, resolving catalog pattern references.
-pub fn shape_fill(s: &Session, value: &Value) -> Result<Option<Fill>> {
-    let mut fill = parse_fill(value).map_err(EngineError::Other)?;
-    if let Some(fill) = &mut fill {
-        pattern_for_fill(s, fill)?;
-    }
-    Ok(fill)
 }
 
 pub(super) fn live_json(l: &LiveShape) -> Value {

@@ -128,7 +128,6 @@ fn perturbed_para() -> ParagraphStyle {
         auto_leading: -1.0,
         direction: TextDirection::Rtl,
         hyphenate: true,
-        hanging: true,
         style_sheet: None,
     }
 }

@@ -105,7 +105,6 @@ fn inactive_blend_rows(ui: &mut egui::Ui, pro: bool) {
 }
 
 pub(super) fn layers(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
-    crate::smart_ui::context_menu::close_stale(app, ui.ctx());
     // A new active layer opens its parent groups and is scrolled into view (#152).
     let reveal = crate::layer_reveal::track(app, ui.ctx());
     let Some(st) = app.session.active() else {
@@ -549,12 +548,7 @@ pub(super) fn layers(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
             }
             continue;
         }
-        let selection = crate::smart_ui::context_menu::selection_update(app, ui.ctx(), &id, &p);
-        if app.run(&id, p).is_ok()
-            && let Some(selection) = selection
-        {
-            selection.apply(ui.ctx());
-        }
+        let _ = app.run(&id, p);
     }
 }
 

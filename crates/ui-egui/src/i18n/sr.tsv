@@ -1908,9 +1908,6 @@
 	Slice Select Tool	Alatka za izbor isečka
 	Slice Tool	Alatka za isecanje na isečke
 	Smart Filters	Pametni filteri
-	Move Up	Pomeri nagore
-	Move Down	Pomeri nadole
-	Delete Smart Filter	Obriši pametni filter
 	Smudge Tool	Alatka za razmazivanje
 	Soft	Meko
 	Soften	Omekšaj
@@ -3015,7 +3012,6 @@ fontWeight	Italic	Kurziv
 	Out of gamut for printing: click for the nearest printable colour	Van gamuta za štampu: kliknite za najbližu boju koja može da se odštampa
 	Not a web colour: click for the nearest web colour	Nije veb boja: kliknite za najbližu veb boju
 	Color to Alpha…	Boja u alfu…
-	Frequency Separation…	Razdvajanje frekvencija…
 	Transparency Threshold	Prag providnosti
 	Opacity Threshold	Prag neprozirnosti
 	PhotoCraft — Screen Color Picker	PhotoCraft — birač boja sa ekrana
@@ -4286,8 +4282,6 @@ shape	Appearance	Izgled
 	Reset All Locked Settings	Vrati sva zaključana podešavanja
 	Copy Texture to Other Tools	Kopiraj teksturu u druge alatke
 	Load Actions…	Učitaj radnje…
-	Load Default Actions	Učitaj podrazumevane radnje
-	Blur Background	Zamuti pozadinu
 	Save Actions…	Sačuvaj radnje…
 	New Action…	Nova radnja…
 	Start Recording	Započni snimanje
@@ -4318,7 +4312,6 @@ shape	Appearance	Izgled
 	set in Print Settings…	podešava se u podešavanjima štampanja…
 	Paper Width	Širina papira
 	Paper Height	Visina papira
-	Scrollbar Visibility	Vidljivost traka za pomeranje
 	ICO is limited to 256 × 256 pixels	ICO je ograničen na 256 × 256 piksela
 	Mask Options…	Opcije maske…
 	Layer Mask Display Options…	Opcije prikaza maske sloja…
@@ -4572,10 +4565,6 @@ shape	Appearance	Izgled
 	Font size presets	Unapred podešene veličine fonta
 	Leading presets	Unapred podešeni proredi
 	Tracking presets	Unapred podešeni razmaci slova
-	Selection / Layer Bounds	Границе избора / слоја
-	No selection or layer	Нема избора или слоја
-	{label}: empty	{label}: празно
-	{label}: X {x}  Y {y}  W {w}  H {h}	{label}: X {x}  Y {y}  W {w}  H {h}
 	Color Aware	Prema boji
 	Decontaminate Colors	Dekontaminiraj boje
 	Edge Detection	Detekcija ivice
@@ -4593,9 +4582,4 @@ shape	Appearance	Izgled
 	Select and Mask was closed: its document is no longer the active one	Izaberi i maskiraj je zatvoren: njegov dokument više nije aktivan
 	Select and Mask was closed: another layer was selected	Izaberi i maskiraj je zatvoren: izabran je drugi sloj
 	Select Layer Under Cursor	Izaberi sloj ispod kursora
-	Import Shapes…	Uvezi oblike…
-	Choose a custom shape file (.csh).	Izaberite datoteku prilagođenih oblika (.csh).
-@plural	Imported {n} shape from {file}|Imported {n} shapes from {file}	Broj oblika uvezenih iz {file}: {n}|Broj oblika uvezenih iz {file}: {n}|Broj oblika uvezenih iz {file}: {n}
-@plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	Broj oblika uvezenih iz {group}: {n}|Broj oblika uvezenih iz {group}: {n}|Broj oblika uvezenih iz {group}: {n}
 	Drag to move the selected path	Prevucite da pomerite izabranu putanju
-	Use PhotoCraft-native gradient icons	Koristi sopstvene PhotoCraft ikone gradijenta

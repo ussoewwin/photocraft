@@ -1944,9 +1944,6 @@
 	Slice Select Tool	スライス選択ツール
 	Slice Tool	スライスツール
 	Smart Filters	スマートフィルター
-	Move Up	上へ移動
-	Move Down	下へ移動
-	Delete Smart Filter	スマートフィルターを削除
 	Smudge Tool	指先ツール
 	Soft	ソフト
 	Soften	ぼかし
@@ -2085,7 +2082,6 @@
 	Image previews	画像のプレビュー
 	Integrations	連携
 	Interface	インターフェイス
-	Use PhotoCraft-native gradient icons	PhotoCraft 標準のグラデーションアイコンを使用
 	Jpeg quality	JPEG 品質
 	Jpg	JPG
 	Language	言語
@@ -3612,7 +3608,6 @@ fontWeight	Italic	斜体
 	↑↓ navigate   ↵ run   esc close	↑↓ 移動   ↵ 実行   esc 閉じる
 @id	select.all	すべてを選択
 	Color to Alpha…	カラーを透明に…
-	Frequency Separation…	周波数分離…
 	Transparency Threshold	透明のしきい値
 	Opacity Threshold	不透明度のしきい値
 	PhotoCraft — Screen Color Picker	PhotoCraft — スクリーンカラーピッカー
@@ -3880,8 +3875,6 @@ curves	Smooth	スムーズ
 	Saved contours to {file}	カーブを {file} に保存しました
 	Show home recent files	ホーム画面に最近使ったファイルを表示
 	Load Actions…	アクションを読み込み…
-	Load Default Actions	既定のアクションを読み込み
-	Blur Background	背景をぼかす
 	Save Actions…	アクションを保存…
 	New Action…	新規アクション…
 	Start Recording	記録を開始
@@ -3968,8 +3961,6 @@ curves	Smooth	スムーズ
 	Clear Brush Controls	ブラシのコントロールを消去
 	Reset All Locked Settings	ロックされた設定をすべて初期化
 	Copy Texture to Other Tools	テクスチャを他のツールにコピー
-	Scrollbar Visibility	スクロールバーの表示
-	Hidden	非表示
 	ICO is limited to 256 × 256 pixels	ICO は 256 × 256 ピクセルまでです
 	Show Favorite Fonts	お気に入りのフォントを表示
 	No favorite fonts yet: click the star beside a font to add it.	お気に入りのフォントはまだありません。フォントの横の星をクリックして追加してください。
@@ -4180,10 +4171,6 @@ curves	Smooth	スムーズ
 	Font size presets	フォントサイズのプリセット
 	Leading presets	行送りのプリセット
 	Tracking presets	トラッキングのプリセット
-	Selection / Layer Bounds	選択範囲 / レイヤーの境界
-	No selection or layer	選択範囲またはレイヤーがありません
-	{label}: empty	{label}: 空
-	{label}: X {x}  Y {y}  W {w}  H {h}	{label}: X {x}  Y {y}  W {w}  H {h}
 	Clear Selection	選択範囲をクリア
 	Color Aware	カラー認識
 	Decontaminate Colors	不要なカラーの除去
@@ -4201,8 +4188,4 @@ curves	Smooth	スムーズ
 	Refine Hair needs hair detection, which isn't available yet	髪の毛を調整には髪の毛の検出が必要ですが、まだ利用できません
 	Select and Mask was closed: its document is no longer the active one	「選択とマスク」を閉じました: 対象のドキュメントがアクティブではなくなりました
 	Select and Mask was closed: another layer was selected	「選択とマスク」を閉じました: 別のレイヤーが選択されました
-	Import Shapes…	シェイプを読み込み…
-	Choose a custom shape file (.csh).	カスタムシェイプファイル (.csh) を選択してください。
-@plural	Imported {n} shape from {file}|Imported {n} shapes from {file}	{file} から読み込んだシェイプ数: {n}
-@plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	{group} から読み込んだシェイプ数: {n}
 	Drag to move the selected path	ドラッグして選択したパスを移動

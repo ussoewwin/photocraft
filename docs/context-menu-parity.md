@@ -37,10 +37,6 @@ The “PhotoCraft at branch point” column records behavior before this PR. Pic
 
 The layer-list menu on an empty pixel or all-hidden hit should be empty/closed; it must not select a transparent or hidden layer. The right-erase preference is an alternate PhotoCraft behavior, and its selected state takes precedence over the Brush picker only for Brush/Eraser.
 
-### Crop canvas menu (#6561, 2026-10-25)
-
-With the Crop tool and a pending frame, a canvas right-click opens the crop menu: the options-bar ratios (Original Ratio, 1 : 1, 4 : 5, 5 : 7, 2 : 3, 16 : 9; the current one checked), the saved crop presets, the gear options Use Classic Mode / Show Cropped Area / Auto Center Preview (checked; the last two greyed in Classic Mode), and Reset / Cancel / Commit. The rows route through the same functions as the options bar, so the menu and the bar cannot disagree. No menu on the untouched default frame or outside the image (the pasteboard menu wins), and the menu closes when the crop stops being pending.
-
 ## Pen canvas reference capture (2026-10-07)
 
 The user supplied a Photoshop screenshot of a closed path in Path mode. The table preserves every row in its order; separator boundaries appear between the groups. Gray rows in that capture remain visible but disabled for a plain work path. Enablement changes with the active shape layer, saved path, copied style, and symmetry state. Ellipsis rows open a parameter dialog before changing the document.
@@ -82,7 +78,6 @@ Photoshop's Generative Fill and Delete and Fill Selection rows are left out: Pho
 |---|---|---|---|
 | Layers panel row | Blending Options, Duplicate/Delete, Group, export, convert/rasterize, mask, clipping, link, style copy/paste/clear, merge/flatten, Rename; filter by layer kind and selection | Implemented in layer_menu_ui.rs; item enablement uses menu commands | PhotoCraft inventory. Adobe documents layer rename/delete, color tagging, rasterization, and flattening [here](https://helpx.adobe.com/photoshop/using/layers.html); exact combined ordering **inferred** without a live capture |
 | Layers panel color label / thumbnail / mask thumbnail / effect row | Color label; context actions specific to hit icon | Layer-mask thumbnail: Disable/Delete/Apply Layer Mask, Add/Subtract/Intersect Mask with Selection, Select and Mask… (layer_menu_ui.rs `show_mask`, #4575; Mask Options… missing). Generic row on the other targets; inspect before extending | Adobe explicitly documents right-click on layer/group to assign a color ([layers](https://helpx.adobe.com/photoshop/using/layers.html)); other icon menus need capture |
-| Smart Filter row | Reorder or remove the clicked filter | Move Up, Move Down and Delete Smart Filter invoke the existing engine commands, preserve inactive-layer targeting and Undo/Redo, and refuse a stale popup or modal/job edits; edge moves are disabled | **Partial gesture parity.** Adobe [documents dragging filters to reorder and to the Delete icon](https://helpx.adobe.com/uk/photoshop/using/applying-smart-filters.html), with bottom-up evaluation. These context actions are PhotoCraft convenience controls. Existing selection, transfer between Smart Objects and drag-to-Trash behavior is retained; drag-to-reorder remains open. |
 | Channels panel row | Duplicate/Delete/Rename, channel display and overlay color, spot conversion; new/split/merge | Implemented in channels_panel.rs | PhotoCraft inventory; exact Photoshop order **inferred** |
 | Brushes and preset panels | Rename/Delete brush or group, export selected brushes, view/reset preset choices | Rename/Delete, and preset group/item menus exist | Adobe explicitly documents Export Selected Brushes from brush/group right-click ([brushes](https://helpx.adobe.com/photoshop/desktop/apply-painting-techniques/brushes-presets/create-brush-set-painting-options.html)); Photoshop pop-up-panel rename/delete/reset/view options are [documented](https://helpx.adobe.com/photoshop/using/panels-menus.html), though some are panel-button menus |
 | Paths, History, Actions, Swatches, Gradients, Patterns, Styles, Libraries, Properties | Target-specific duplicate/delete/rename and panel operations where a panel exists | Paths row menu added in this PR; other panels need audit | **Inferred** catalog; record a Photoshop capture before claiming parity |
@@ -108,11 +103,8 @@ Each slice needs pure model tests (including every item dispatching a known comm
 | 2026-10-21 | minor | Crop tool menu on a pending crop (#6561) |
 | 2026-10-20 | trivial | Zoom tool menu order (#6005) |
 | 2026-10-18 | minor | Type tool menu over committed type (#7324) |
-| 2026-10-16 | minor | Crop canvas menu on a pending frame (#6561) |
 | 2026-10-15 | trivial | Pasteboard row: the colour menu exists since #2462 |
 | 2026-10-13 | minor | Layer-mask thumbnail menu (#4575) |
-| 2026-10-13 | minor | Retain main's Smart Filter selection, transfer and drag-to-Trash behavior alongside the context actions; drag-to-reorder remains a separate gap |
-| 2026-10-12 | minor | Smart Filter rows expose bounded move/delete actions through existing commands, with captured document/revision guards; Adobe drag/trash gesture parity remains partial (#1265) |
 | 2026-10-10 | trivial | Status line, revision history |
 | 2026-10-09 | minor | Selection canvas reference and tool matrix updates |
 | 2026-10-07 | minor | Pen canvas reference capture |

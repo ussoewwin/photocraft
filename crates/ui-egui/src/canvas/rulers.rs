@@ -108,22 +108,17 @@ pub struct GuideDrag {
     /// Whether the pointer was over a ruler when the guide was let go (#6286): a guide released
     /// there is removed, whatever its own axis reads.
     pub over_ruler: bool,
-    pub flipped: bool,
+    pub flipped:bool,
 }
 
 impl GuideDrag {
-    pub fn shows_vertical(&self) -> bool {
-        self.vertical != self.flipped
-    }
-    pub fn track(&mut self, at: [f64; 2], alt: bool) {
-        self.flipped = alt;
-        self.pos = if self.shows_vertical() { at[0] } else { at[1] };
-    }
+    pub fn shows_vertical(&self)->bool {self.vertical!=self.flipped}
+    pub fn track(&mut self,at:[f64;2],alt:bool) {self.flipped=alt;self.pos=if self.shows_vertical(){at[0]}else{at[1]};}
 
     /// An existing guide taken at document point `p`.
     pub fn existing(vertical: bool, index: usize, p: [f64; 2]) -> Self {
         let at = if vertical { p[0] } else { p[1] };
-        Self { vertical, index: Some(index), pos: at, press: at, over_ruler: false, flipped: false }
+        Self { vertical, index: Some(index), pos: at, press: at, over_ruler: false, flipped:false }
     }
 }
 
@@ -302,14 +297,13 @@ pub fn finish_drag(app: &mut PhotocraftApp, d: GuideDrag) {
     // A drop on a ruler removes the guide even when the drag held its own axis, which otherwise
     // reads as a click: dragged sideways onto the left ruler, a horizontal guide never moves in y.
     if let Some(i) = d.index
-        && !d.over_ruler
-        && !d.flipped
+        && !d.over_ruler && !d.flipped
         && (d.pos - d.press).abs() * f64::from(app.point_zoom().max(0.01)) < 0.5
     {
         crate::guide_select::select(app, d.vertical, i);
         return;
     }
-    let shows = d.shows_vertical();
+    let shows=d.shows_vertical();
     let extent = if shows { size.width } else { size.height } as f64;
     let orientation = if d.vertical { "vertical" } else { "horizontal" };
     let inside = !d.over_ruler && d.pos >= 0.0 && d.pos <= extent;
@@ -318,14 +312,7 @@ pub fn finish_drag(app: &mut PhotocraftApp, d: GuideDrag) {
         (None, true) => app.run("view.newGuide", json!({"orientation": if shows {"vertical"}else{"horizontal"}, "position": pos})),
         (Some(i), true) => app
             .run("view.moveGuide", json!({"orientation": orientation,"toOrientation":if shows {"vertical"}else{"horizontal"}, "index": i, "position": pos}))
-            .inspect(|_| {
-                let index = if d.flipped {
-                    app.session.active().map_or(0, |st| if shows { st.doc.guides.vertical.len() } else { st.doc.guides.horizontal.len() }).saturating_sub(1)
-                } else {
-                    i
-                };
-                crate::guide_select::select(app, shows, index);
-            }),
+            .inspect(|_| {let index=if d.flipped {app.session.active().map_or(0,|st|if shows {st.doc.guides.vertical.len()}else{st.doc.guides.horizontal.len()}).saturating_sub(1)} else {i};crate::guide_select::select(app,shows,index);}),
         (Some(i), false) => app.run("view.deleteGuide", json!({"orientation": orientation, "index": i})),
         (None, false) => Ok(serde_json::Value::Null),
     };
@@ -537,7 +524,7 @@ pub fn draw_rulers(app: &mut PhotocraftApp, ui: &mut egui::Ui, full: Rect, xf: &
             let d = xf.to_doc(pos);
             let along = if vertical { d[0] } else { d[1] };
             let pos = if ui.input(|i| i.modifiers.shift) { snap_to_tick(app, xf, vertical, along) } else { crate::snap_ui::snap_guide(app, vertical, along) };
-            app.guide_drag = Some(GuideDrag { vertical, index: None, pos, press: pos, over_ruler: false, flipped: false });
+            app.guide_drag = Some(GuideDrag { vertical, index: None, pos, press: pos, over_ruler: false, flipped:false });
         }
         if resp.drag_stopped()
             && let Some(mut d) = app.guide_drag.take()

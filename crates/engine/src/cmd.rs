@@ -58,7 +58,6 @@ pub mod analysis_cmds;
 pub mod artboard_cmds;
 pub mod atn_cmds;
 pub mod automate_cmds;
-pub mod background_blur_cmds;
 pub mod background_cmds;
 pub mod brush_cmds;
 pub mod brush_key_cmds;
@@ -85,7 +84,6 @@ pub mod fill_key_cmds;
 pub mod float_cmds;
 pub mod font_library_cmds;
 pub(super) mod frame_cmds;
-pub mod frequency_separation_cmds;
 pub mod fx_view_cmds;
 pub mod fx_visibility_cmds;
 pub mod gallery_cmds;
@@ -801,20 +799,17 @@ fn build() -> Vec<CommandSpec> {
             "Gradient…",
             ["Layer", "New Fill Layer"],
             None,
-            r##"{"from":"#rrggbb"=foreground,"to":"#rrggbb"? (none: Foreground to Transparent),"angle":deg=90,"style":"linear|radial|angle|reflected|diamond","reverse":bool,"path":"work"|saved path name|{…path}? (the active path: becomes the vector mask; else the selection is the layer mask)}"##,
+            r##"{"from":"#rrggbb","to":"#rrggbb","angle":deg=90,"style":"linear|radial|angle|reflected|diamond","reverse":bool,"path":"work"|saved path name|{…path}? (the active path: becomes the vector mask; else the selection is the layer mask)}"##,
             has_doc,
             |s, p| {
                 let a = color_param("layer.newFillLayer.gradient", p, "from", s.tools.foreground)?;
-                // Without a `to`, Photoshop's default Foreground to Transparent (#8708): the
-                // `from` colour at both ends, fading out through the transparency stops.
-                let to_transparent = p.get("to").is_none_or(Value::is_null);
-                let b = if to_transparent { a } else { color_param("layer.newFillLayer.gradient", p, "to", s.tools.background)? };
+                let b = color_param("layer.newFillLayer.gradient", p, "to", s.tools.background)?;
                 let angle = crate::gradient_fill_cmds::angle_param("layer.newFillLayer.gradient", p, 90.0)?;
                 let style = crate::layer_style::gradient_style(p.get("style").and_then(Value::as_str).unwrap_or("linear"));
                 let reverse = p.get("reverse").and_then(Value::as_bool).unwrap_or(false);
                 let default_mask = layer_panel_option(s, "useDefaultMasksOnFillLayers", true);
                 let id = s.edit("New Gradient Fill Layer", |doc, active| {
-                    let mut fill = Fill::gradient(
+                    let fill = Fill::gradient(
                         vec![(0.0, Color::rgba(a[0], a[1], a[2], a[3])), (1.0, Color::rgba(b[0], b[1], b[2], b[3]))],
                         angle,
                         1.0,
@@ -822,9 +817,6 @@ fn build() -> Vec<CommandSpec> {
                         reverse,
                     )
                     .in_mode(doc.mode);
-                    if to_transparent && let Fill::Gradient { opacity_stops, .. } = &mut fill {
-                        *opacity_stops = vec![(0.0, 1.0), (1.0, 0.0)];
-                    }
                     let mut l = Layer::new(doc.next_layer_name("Gradient Fill"), LayerContent::Fill(fill));
                     mask_new_layer(doc, &mut l, p, "layer.newFillLayer.gradient", default_mask)?;
                     let id = crate::layer_place::insert_new(doc, *active, l, crate::layer_place::Place::Auto);
@@ -1224,7 +1216,6 @@ fn build() -> Vec<CommandSpec> {
     v.extend(crate::filters::specs());
     v.extend(crate::filters_ext::specs());
     v.extend(crate::color_to_alpha_cmds::specs());
-    v.extend(crate::frequency_separation_cmds::specs());
     v.extend(crate::gallery_cmds::specs());
     v.extend(crate::gradient_fill_cmds::specs());
     v.extend(crate::solid_fill_cmds::specs());
@@ -1237,7 +1228,6 @@ fn build() -> Vec<CommandSpec> {
     v.extend(crate::path_edit_cmds::specs());
     v.extend(crate::smartselect_cmds::specs());
     v.extend(crate::cutout_cmds::specs());
-    v.extend(crate::background_blur_cmds::specs());
     v.extend(crate::symmetry_cmds::specs());
     v.extend(crate::edit_cmds::specs());
     v.extend(crate::color_cmds::specs());
@@ -1330,7 +1320,6 @@ fn build() -> Vec<CommandSpec> {
     v.extend(crate::mask_view_cmds::specs());
     v.extend(crate::layer_mask_props_cmds::specs());
     v.extend(crate::actions_cmds::specs());
-    v.extend(crate::action_defaults::specs());
     // The dispatch guard's unit test needs a command that panics on purpose (REL-3).
     #[cfg(test)]
     v.push(test_panic_command());
