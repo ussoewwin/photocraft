@@ -34,6 +34,7 @@ pub(super) fn humanize(key: &str) -> String {
         "darkTheme" => return "Dark Theme".into(),
         "lightTheme" => return "Light Theme".into(),
         "automaticallyCheckUpdates" => return "Automatically Check for Updates".into(),
+        "scrollbarVisibility" => return "Scrollbar Visibility".into(),
         _ => {}
     }
     // These controls appear only for WebP, so reuse the existing translated labels.
@@ -96,6 +97,7 @@ pub(super) fn humanize(key: &str) -> String {
 
 pub(super) fn choice_label(v: &str) -> String {
     match v {
+        "autoHide" => "Auto Hide".into(),
         "exr" => "EXR".into(),
         "cm" => "Centimeters".into(),
         "mm" => "Millimeters".into(),

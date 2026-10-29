@@ -283,6 +283,8 @@ what an agent can't finish alone.
 - **Progress (2026-10-14, #5556):** Character and Paragraph controls stay available without
   a type target, editing persisted Type tool defaults inherited by new text. Formatting existing
   selected text keeps its current command and undo scope. Other panel gaps remain open.
+- **Progress (2026-10-13):** scrollbar visibility can follow the theme, stay expanded, auto-hide
+  or be hidden; panel and canvas scrolling remain available (#3262).
 - **Progress (2026-10-12):** toolbar tool shortcuts can be reassigned, removed and reset (#4086),
   with saved bindings, matching toolbar hints and regression coverage (`ui-egui/src/tool_shortcuts.rs`).
 - **Progress (2026-10-15):** the Color panel has Photoshop's panel-menu modes (Hue Cube, Brightness
@@ -469,6 +471,7 @@ what an agent can't finish alone.
 | 2026-10-13 | minor | G14: lossy DNG (#5112), `.xmp` sidecars, Camera Raw Defaults wired, Calibration panel and Auto; CR3 sensor decode ruled out under the clean-room rule |
 | 2026-10-13 | minor | G4: Hue Jitter amount-track appearance (#3825, partial); no readiness percentage or estimate changed |
 | 2026-10-13 | minor | G2: Content-Aware Scale (P28) measured: carve 2013 → 556 ms, row 3.28 → 1.64 s on a 4-core VM, output unchanged; baseline, budgets and estimate unchanged |
+| 2026-10-13 | minor | Scrollbar visibility preference for panels and the canvas (#3262), with live application, theme retention and wheel-scrolling coverage |
 | 2026-10-13 | minor | G4: minimum inputs in Shape Dynamics and Transfer follow their Control (#3825, partial); no readiness percentage or estimate changed |
 | 2026-10-12 | minor | G5: Free Transform options bar H/V skew fields done |
 | 2026-10-12 | minor | G11: `.atn` import maps 112 events (Select and Mask, Spatter, Ripple, Crystallize, Pattern Fill, mask targeting, Step Backward, points, Bitmap) |

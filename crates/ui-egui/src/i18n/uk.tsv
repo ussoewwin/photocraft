@@ -4236,3 +4236,5 @@ curves	Smooth	Згладити
 	Choose a custom shape file (.csh).	Виберіть файл довільних фігур (.csh).
 @plural	Imported {n} shape from {file}|Imported {n} shapes from {file}	Кількість фігур, імпортованих із {file}: {n}|Кількість фігур, імпортованих із {file}: {n}|Кількість фігур, імпортованих із {file}: {n}
 @plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	Кількість фігур, імпортованих із {group}: {n}|Кількість фігур, імпортованих із {group}: {n}|Кількість фігур, імпортованих із {group}: {n}
+	Scrollbar Visibility	Видимість смуг прокручування
+	Hidden	Приховано

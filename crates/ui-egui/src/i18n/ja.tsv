@@ -3963,6 +3963,8 @@ curves	Smooth	スムーズ
 	Clear Brush Controls	ブラシのコントロールを消去
 	Reset All Locked Settings	ロックされた設定をすべて初期化
 	Copy Texture to Other Tools	テクスチャを他のツールにコピー
+	Scrollbar Visibility	スクロールバーの表示
+	Hidden	非表示
 	ICO is limited to 256 × 256 pixels	ICO は 256 × 256 ピクセルまでです
 	Show Favorite Fonts	お気に入りのフォントを表示
 	No favorite fonts yet: click the star beside a font to add it.	お気に入りのフォントはまだありません。フォントの横の星をクリックして追加してください。

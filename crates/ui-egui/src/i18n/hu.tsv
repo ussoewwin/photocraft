@@ -4434,3 +4434,4 @@ cameraRaw	Yellow	Sárga
 	Choose a custom shape file (.csh).	Válasszon egy egyéni alakzatfájlt (.csh).
 @plural	Imported {n} shape from {file}|Imported {n} shapes from {file}	A(z) {file} forrásból importált alakzatok száma: {n}
 @plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	A(z) {group} forrásból importált alakzatok száma: {n}
+	Scrollbar Visibility	Görgetősávok láthatósága

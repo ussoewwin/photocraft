@@ -4226,3 +4226,4 @@ curves	Smooth	Εξομάλυνση
 	Choose a custom shape file (.csh).	Επιλέξτε ένα αρχείο προσαρμοσμένων σχημάτων (.csh).
 @plural	Imported {n} shape from {file}|Imported {n} shapes from {file}	Αριθμός σχημάτων που εισήχθησαν από {file}: {n}|Αριθμός σχημάτων που εισήχθησαν από {file}: {n}
 @plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	Αριθμός σχημάτων που εισήχθησαν από {group}: {n}|Αριθμός σχημάτων που εισήχθησαν από {group}: {n}
+	Scrollbar Visibility	Ορατότητα γραμμών κύλισης

@@ -4144,3 +4144,5 @@ curves	Smooth	Wygładź
 	Choose a custom shape file (.csh).	Wybierz plik kształtów własnych (.csh).
 @plural	Imported {n} shape from {file}|Imported {n} shapes from {file}	Liczba kształtów zaimportowanych z {file}: {n}|Liczba kształtów zaimportowanych z {file}: {n}|Liczba kształtów zaimportowanych z {file}: {n}
 @plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	Liczba kształtów zaimportowanych z {group}: {n}|Liczba kształtów zaimportowanych z {group}: {n}|Liczba kształtów zaimportowanych z {group}: {n}
+	Scrollbar Visibility	Widoczność pasków przewijania
+	Hidden	Ukryte

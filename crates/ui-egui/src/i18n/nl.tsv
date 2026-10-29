@@ -4283,3 +4283,4 @@ curves	Smooth	Vloeiend maken
 	Choose a custom shape file (.csh).	Kies een bestand met aangepaste vormen (.csh).
 @plural	Imported {n} shape from {file}|Imported {n} shapes from {file}	Aantal uit {file} geïmporteerde vormen: {n}|Aantal uit {file} geïmporteerde vormen: {n}
 @plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	Aantal uit {group} geïmporteerde vormen: {n}|Aantal uit {group} geïmporteerde vormen: {n}
+	Scrollbar Visibility	Zichtbaarheid van schuifbalken

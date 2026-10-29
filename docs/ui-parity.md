@@ -170,6 +170,7 @@ Triangle and Curvature Pen (minus legacy Rounded Rectangle and Targeted Adjustme
 | Ruler corner and gaps drawn as Photoshop | partial | #2600, #2601, #2551 |
 | Guides stored as f64 | missing | `Vec<f32>` (UI-217-20) |
 | Geometry precision | partial | `geom::Point` f64, paths f64; paint internals mostly f32 |
+| Scrollbar visibility preference | done | Default, Always, Auto Hide and Hidden apply to panels and the canvas; live settings, theme changes and scrolling are covered (#3262) |
 | Numeric fields: arithmetic, scrubby labels | partial | units in expressions and double-click reset missing (UI-217-13) |
 | Wheel steps a value field, ⇧ ×10: clicked into, wherever the pointer is; not clicked, a gesture that starts over it | partial | `field_wheel.rs` (#5473, #4061). Photoshop: a field takes the wheel once clicked into (shortcut guides, user reports); whether the pointer must stay over it is unconfirmed. Stepping on hover alone is Photopea's, kept deliberately |
 | Type options bar: drag the "T" icon to change the font size | done | `type_tool.rs` `options_bar`: the icon scrubs the size field like the Character panel's icons (Shift x10, Alt fine), at layer or selection scope, one history step per drag, within 1–1296 pt (#6437) |
@@ -286,6 +287,7 @@ Paragraph; the rest open as in-app floating windows.
 | 2026-10-14 | minor | ⌥ while dragging a guide turns it horizontal ↔ vertical, as in Photoshop; a guide dropped on either ruler is deleted (#5034) |
 | 2026-10-13 | minor | Stale "missing tool" rows corrected against main: Color Replacement (`paint.colorReplacement`), Red Eye (`paint.redEye`) and Add/Delete Anchor Point (the P flyout cycle) are live toolbar tools, so only Art History Brush is missing; no percentage or estimate changed |
 | 2026-10-13 | minor | Smart object perspective (non-affine) corrected to done: #426 landed four-corner placements with PSD round trip; scorecard FILE-215-6 flipped |
+| 2026-10-13 | minor | Scrollbar visibility preference for panels and the canvas (#3262), with live application, theme retention and wheel-scrolling coverage |
 | 2026-10-10 | major | First version, from a source audit against Photoshop 2026 27.11.0's shortcuts file and the open issues |
 | 2026-10-12 | minor | New Group button groups two or more selected layers (CC 2014+); New Group dialog (Layer › New, Layers panel menu, row menu, ⌥-click); ⌘-click New Group adds the group below; groups made from layers start collapsed (#2561) |
 | 2026-10-12 | minor | New layers go into an open active group (or the artboard their content is on) and join the clip group they land in (#2203); ⌘-click New Layer adds below |

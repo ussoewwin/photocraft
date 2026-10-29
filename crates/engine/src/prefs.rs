@@ -84,6 +84,7 @@ choice!(
     LinuxDisplayServer { Auto = "auto", X11 = "x11" } default Auto
 );
 choice!(UiFontSize { Tiny = "tiny", Small = "small", Medium = "medium", Large = "large" } default Small);
+choice!(ScrollbarVisibility { Default = "default", Always = "always", AutoHide = "autoHide", Hidden = "hidden" } default Default);
 choice!(LogDestination { Metadata = "metadata", TextFile = "textFile", Both = "both" } default Metadata);
 choice!(LogDetail { SessionsOnly = "sessionsOnly", Concise = "concise", Detailed = "detailed" } default Concise);
 choice!(Ask { Always = "always", Never = "never", Ask = "ask" } default Always);
@@ -279,6 +280,8 @@ pub struct Interface {
     /// Command ids and the control protocol stay English.
     pub language: String,
     pub ui_font_size: UiFontSize,
+    /// Default follows the theme; other modes apply to panel and canvas scrollbars (#3262).
+    pub scrollbar_visibility: ScrollbarVisibility,
     pub show_channels_in_color: bool,
     pub dynamic_color_sliders: bool,
     /// Draw menu item colours set with Edit › Menus.
@@ -324,6 +327,7 @@ impl Default for Interface {
             ui_scale: UiScale::Auto,
             language: "auto".into(),
             ui_font_size: UiFontSize::Small,
+            scrollbar_visibility: ScrollbarVisibility::Default,
             show_channels_in_color: false,
             dynamic_color_sliders: true,
             show_menu_colors: true,

@@ -4271,3 +4271,4 @@ cameraRaw	Dehaze	Odstranění oparu
 	Choose a custom shape file (.csh).	Vyberte soubor vlastních tvarů (.csh).
 @plural	Imported {n} shape from {file}|Imported {n} shapes from {file}	Počet tvarů importovaných z {file}: {n}|Počet tvarů importovaných z {file}: {n}|Počet tvarů importovaných z {file}: {n}
 @plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	Počet tvarů importovaných z {group}: {n}|Počet tvarů importovaných z {group}: {n}|Počet tvarů importovaných z {group}: {n}
+	Scrollbar Visibility	Viditelnost posuvníků

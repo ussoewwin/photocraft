@@ -3253,6 +3253,8 @@ curves	Smooth	Сгладить
 	Remember to turn off the printer's own colour management in Print Settings…	Не забудьте отключить управление цветом самого принтера в параметрах печати…
 	Sent to {printer}	Отправлено на {printer}
 	set in Print Settings…	задаётся в параметрах печати…
+	Scrollbar Visibility	Видимость полос прокрутки
+	Hidden	Скрыто
 	ICO is limited to 256 × 256 pixels	ICO ограничен размером 256 × 256 пикселей
 	Calibration	Калибровка
 	Red Primary	Красный основной

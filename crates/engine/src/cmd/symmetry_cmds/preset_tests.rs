@@ -160,6 +160,7 @@ fn selection_transparency_lock_and_mask_targets_apply_to_all_passes() {
     assert!(s.active().unwrap().doc.layer(s.active().unwrap().active_layer.unwrap()).unwrap().surface().unwrap().content_bounds().is_empty());
 }
 
+
 #[test]
 fn streaming_across_dual_axes_keeps_one_opacity_and_matches_commit() {
     let points = [[40.0, 30.0], [40.0, 20.0], [35.0, 20.0], [45.0, 40.0]];

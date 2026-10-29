@@ -3546,3 +3546,5 @@ curves	Smooth	Glätten
 	Choose a custom shape file (.csh).	Wählen Sie eine Datei mit eigenen Formen (.csh).
 @plural	Imported {n} shape from {file}|Imported {n} shapes from {file}	Anzahl der aus {file} importierten Formen: {n}|Anzahl der aus {file} importierten Formen: {n}
 @plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	Anzahl der aus {group} importierten Formen: {n}|Anzahl der aus {group} importierten Formen: {n}
+	Scrollbar Visibility	Sichtbarkeit der Scrollleisten
+	Hidden	Ausgeblendet
