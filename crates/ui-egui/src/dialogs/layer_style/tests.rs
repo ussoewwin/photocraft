@@ -148,6 +148,30 @@ fn effect_row_of_another_layer_opens_that_layers_style() {
     assert!(fx[0]["fx"].is_object(), "the existing drop shadow, not a new instance");
 }
 
+/// Make Default (#9477): a stroke added afterwards, by opening the dialog on it or with the
+/// list's checkbox or +, starts from the saved values; other kinds keep the factory ones.
+#[test]
+fn new_effects_start_from_the_made_default() {
+    let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({"width": 32, "height": 32})).unwrap();
+    app.run("layer.new.layer", json!({})).unwrap();
+    app.run("layer.layerStyle.makeDefault", json!({"kind": "stroke", "params": {"size": 7, "position": "outside"}})).unwrap();
+
+    let id = open(&mut app, Some("stroke")).unwrap();
+    let mut f = app.ui.dialogs.iter().find(|d| d.id == id).unwrap().fields.clone();
+    add_instance(&mut f, "stroke");
+    add_instance(&mut f, "dropShadow");
+    let fx = effects_of(&f);
+    let strokes: Vec<_> = fx.iter().filter(|e| e["kind"] == json!("stroke")).collect();
+    assert_eq!(strokes.len(), 2);
+    for e in strokes {
+        assert_eq!((&e["params"]["size"], &e["params"]["position"]), (&json!(7), &json!("outside")));
+        assert_eq!(e["params"]["opacity"], defaults("stroke")["opacity"], "unsaved keys keep the factory value");
+    }
+    let shadow = fx.iter().find(|e| e["kind"] == json!("dropShadow")).unwrap();
+    assert_eq!(shadow["params"]["size"], defaults("dropShadow")["size"]);
+}
+
 #[test]
 fn every_kind_has_spec_and_defaults() {
     for &(kind, _) in KINDS {
