@@ -3,7 +3,6 @@
 
 use std::borrow::Cow;
 
-
 /// Does `text` contain a character from a right-to-left script?
 pub fn has_rtl(text: &str) -> bool {
     text.chars().any(rtl_script)

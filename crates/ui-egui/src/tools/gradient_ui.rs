@@ -1045,7 +1045,9 @@ fn stop_strip(ui: &mut egui::Ui, key: egui::Id, f: &Fill, midpoints: bool, pendi
 #[cfg(test)]
 mod tests;
 
-fn stops_editor(app:&mut PhotocraftApp,ui:&mut egui::Ui,sink:Sink,f:Fill,picker:bool) {
- if picker {preset_browser::layer_picker(app,ui,sink);}
- stops_editor_for(app,ui,sink,f);
+fn stops_editor(app: &mut PhotocraftApp, ui: &mut egui::Ui, sink: Sink, f: Fill, picker: bool) {
+    if picker {
+        preset_browser::layer_picker(app, ui, sink);
+    }
+    stops_editor_for(app, ui, sink, f);
 }

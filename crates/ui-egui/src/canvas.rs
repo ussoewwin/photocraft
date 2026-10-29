@@ -1811,10 +1811,17 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
     let doc = app.session.documents()[idx].doc.clone();
     let size = [doc.size.width, doc.size.height];
     let aspect = sync_view_to_document(app, &ctx, &mut view, &doc, rect, ppp);
-    let previous_center=view.center;
-    if primary {polygon_cancel_stale(app);polygon_edge_scroll(app,&ctx,idx,rect,&mut view,ppp);}
-    if !app.session.prefs().tools.overscroll {crate::scrollbars::clamp_view_with_aspect(&mut view,rect.size(),ppp,aspect);}
-    if view.center!=previous_center {ctx.request_repaint();}
+    let previous_center = view.center;
+    if primary {
+        polygon_cancel_stale(app);
+        polygon_edge_scroll(app, &ctx, idx, rect, &mut view, ppp);
+    }
+    if !app.session.prefs().tools.overscroll {
+        crate::scrollbars::clamp_view_with_aspect(&mut view, rect.size(), ppp, aspect);
+    }
+    if view.center != previous_center {
+        ctx.request_repaint();
+    }
 
     let flip = app.ui.view.flip_horizontal;
     // Document rendering follows the target; only shader uniforms and overlay geometry ease.
@@ -2658,7 +2665,7 @@ fn polygon_edge_scroll(app: &PhotocraftApp, ctx: &egui::Context, idx: usize, rec
         || app.camera_raw.is_some()
         || app.discard.is_some()
         || app.drag.is_some()
-        || !crate::menus::modal_allows(app,"select.lasso")
+        || !crate::menus::modal_allows(app, "select.lasso")
         || app.ui.transform.is_some()
         || crate::distort_ui::modal_workspace(app).is_some()
         || ctx.text_edit_focused()

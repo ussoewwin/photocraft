@@ -713,7 +713,7 @@ fn gradient_browser(app: &mut PhotocraftApp, ui: &mut egui::Ui, panel: &str, pla
 /// Editor/popup selection recolours the current target, never creates another layer.
 /// The sidebar retains its separate double-click and canvas-drop Apply behavior.
 pub(crate) fn gradient_picker(app: &mut PhotocraftApp, ui: &mut egui::Ui, panel: &str, apply_to_layer: bool, new_params: Value) -> bool {
-    let place = Place { canvas: Rect::NOTHING, max_h: 220.0, new_tip: tl!("Create new gradient"), flush:false };
+    let place = Place { canvas: Rect::NOTHING, max_h: 220.0, new_tip: tl!("Create new gradient"), flush: false };
     let events = gradient_browser(app, ui, panel, place);
     let mut changed = false;
     for e in events {

@@ -298,5 +298,3 @@ pub(super) fn sync_display_lut(app: &mut PhotocraftApp, doc: &photocraft_doc::Do
 pub(super) fn hdr_preview(app: &PhotocraftApp, doc: &photocraft_doc::Document) -> Option<[f32; 2]> {
     app.session.color.hdr_preview(doc).map(|h| [h.exposure, h.gamma])
 }
-
-
