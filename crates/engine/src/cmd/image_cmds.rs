@@ -336,8 +336,15 @@ fn bad(cmd: &str, msg: impl Into<String>) -> EngineError {
 fn flatten_whole(doc: &Document, cmd: &str) -> Result<photocraft_compose::Buffer> {
     let (w, h) = (doc.size.width, doc.size.height);
     let count = u64::from(w) * u64::from(h);
-    let operation = if cmd == "image.trim" { "trim" } else if cmd == "image.duplicate" { "duplicate merged" } else { "flatten" };
-    let too_large = || bad(cmd, format!("the document ({w} x {h} px) is too large to {operation} (flatten limit {} pixels)", photocraft_compose::MAX_RENDER_PIXELS));
+    let operation = if cmd == "image.trim" {
+        "trim"
+    } else if cmd == "image.duplicate" {
+        "duplicate merged"
+    } else {
+        "flatten"
+    };
+    let too_large =
+        || bad(cmd, format!("the document ({w} x {h} px) is too large to {operation} (flatten limit {} pixels)", photocraft_compose::MAX_RENDER_PIXELS));
     if count > photocraft_compose::MAX_RENDER_PIXELS {
         return Err(too_large());
     }
