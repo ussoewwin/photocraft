@@ -462,5 +462,8 @@ mod cancellation_tests {
         // The first check is at entry; more than CANCEL_EVERY active nodes ensure the
         // second is the periodic poll, before the solver can finish.
         assert_eq!(calls.get(), 2);
+        // Without the periodic poll the final check would be the second call. The poll stops the
+        // run with the last queued node unprocessed, still marked active.
+        assert!(graph.active[CANCEL_EVERY as usize], "periodic cancel must stop before the last queued node is processed");
     }
 }
