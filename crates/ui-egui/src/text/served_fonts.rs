@@ -246,7 +246,12 @@ mod tests {
     #[test]
     fn the_interface_languages_served_face_comes_first_in_the_ui_stack() {
         let (jpan, hans) = ("Served Test Jpan", "Served Test Hans");
-        photocraft_text::served::add_fonts(&parse_manifest(&format!("{jpan} | Regular | fonts/j/J.ttf | Jpan\n{hans} | Regular | fonts/h/H.ttf | Hans\n")).0);
+        {
+            let _catalog = changing_catalog();
+            photocraft_text::served::add_fonts(
+                &parse_manifest(&format!("{jpan} | Regular | fonts/j/J.ttf | Jpan\n{hans} | Regular | fonts/h/H.ttf | Hans\n")).0,
+            );
+        }
         crate::i18n::set_current(crate::i18n::Lang::from_code("zh-hans").expect("Simplified Chinese"));
         let ctx = egui::Context::default();
         crate::theme::install_fonts(&ctx);
