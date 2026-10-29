@@ -226,3 +226,35 @@ report a zero-match filtered test as passing coverage. All individual regression
 | [#9597](https://github.com/storytold/photocraft/pull/9597) | fix(ui): the layer list doesn't move with no layer selected | NOT RUN |
 | [#9598](https://github.com/storytold/photocraft/pull/9598) | fix(ui): Liquify's Twirl Counterclockwise gets a mirrored twirl icon | NOT RUN |
 | [#9606](https://github.com/storytold/photocraft/pull/9606) | fix(ui): the Color panel remembers its options across restarts | NOT RUN |
+
+## Frozen execution record and acceptance
+
+- Upstream base: `5f9b4391874aabc9deb2fcb905267613e4d93ec8`.
+- Current partial integration/checkpoint SHA: `46c1347951eac7f62d4be317c915f73ec6ee5d43` (41 selected heads).
+- Final complete integration SHA: **PENDING**. Freeze it before acceptance testing; a later code change invalidates affected outcomes.
+- PR heads and approval receipts: `approved-selection.json`; current per-head ancestry/status: `integration-status.json`.
+- Dependencies: Cutout #8191 → #8192 → #8193 → #7903; Layer Style #4938 → #5010; #7848 prerequisite #7281 is merged upstream.
+- Executable per-PR cases and blank result fields: [per-pr-regressions.md](per-pr-regressions.md) and [regression-results.json](regression-results.json).
+
+Entry: exact frozen build; all selected heads ancestors; no unresolved integration conflicts; fixtures, fonts, corpus pins and adapter available. The current partial branch does not meet entry.
+Exit: relevant automated gates PASSED; P0 manual cases PASSED; no crash/data-loss regression; residual exclusions, unsupported cases and skipped stages explicitly listed. Do not lower corpus/parity floors or tolerances. PASSED means executed with supporting output; FAILED means an assertion or expected result failed; BLOCKED means a prerequisite prevented execution; SKIPPED needs a deliberate reason; NOT RUN means no execution was attempted.
+
+P0 scenarios are M01 file exchange, M02 profile fidelity, M03 combined precision/Fill, M04 Blend If, M09 bounded/authorized automation and M11 real engine rerender. Also prioritize these combined flows on synthetic/public fixtures:
+
+- Selection → mask → transform → PNG: preserve target ownership, selection geometry, cancellation and one-step Undo/Redo across the selected path/marquee/mask fixes.
+- Retouch → adjustment → export: preserve Smudge/Pencil results, mask coverage, HDR/Fill blending and captured output profile; Undo/Redo restores each step.
+- Preview Cancel across layer styles, transforms and filters: source document, history and cached previews return to the pre-preview state.
+- Actions replay on a second document with different IDs and duplicate layer names: intended named targets change, unrelated layers and source files remain unchanged.
+- Native save/reopen and malformed inputs: keep valid work intact on refusal, duplicate layer IDs, extreme type geometry, occupied control port and invalid plugin/automation input. Recovery behavior beyond the selected fixes is an exploratory gap, not a claimed new capability.
+- CPU/GPU comparison plus large-document zoom/pan/brush: record actual adapter/backend, fallback reasons, output differences, latency and peak memory; GPU early-return skips do not establish parity.
+- Workspace/modal focus with repeated key/pointer input: no background command edits, stale gesture ownership or unexpected shortcut history routing.
+
+For Photoshop acceptance, record Photoshop version/platform, reference fixture identity, profiles and depth, rendering/export options, expected tolerance and its exact repository-document source, and actual image/diff evidence. Use the repository's established oracle thresholds for the specific path; do not invent one universal tolerance. A PhotoCraft CPU/GPU comparison is a separate test from a Photoshop oracle. Reopen exported PSD/PSB in Photoshop before claiming Photoshop acceptance.
+
+## Actual checkpoint outcomes
+
+- Formatting: PASSED on the 41-head partial tree.
+- Local dependency/build gate: BLOCKED. Default cache was unwritable; workspace-local cache fetched git dependencies but crates.io access repeatedly failed with the host Schannel credential/TLS error. The metadata check was stopped after recording that failure; no credentials or global settings changed.
+- Hosted partial-tree CI: RUNNING at `46c1347951eac7f62d4be317c915f73ec6ee5d43`: https://github.com/FredApps/photocraft/actions/runs/40807734803 . This is a checkpoint run, not final 108-head validation.
+- Full sweep, pinned corpus engine rerender, performance and all manual cases: NOT RUN locally.
+- CI selection-morphology comparison and optional fuzz were SKIPPED by the existing manual workflow inputs; record remaining job outcomes when finished.
