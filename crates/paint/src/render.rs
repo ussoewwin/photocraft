@@ -1089,13 +1089,7 @@ impl StrokeRenderer {
         let (t1x, t1y) = ((r.x1 - 1).div_euclid(COV_TILE), (r.y1 - 1).div_euclid(COV_TILE));
         let span = (i64::from(t1x) - i64::from(t0x) + 1).saturating_mul(i64::from(t1y) - i64::from(t0y) + 1);
         if span > self.cov.tiles.len() as i64 {
-            return self
-                .cov
-                .tiles
-                .keys()
-                .copied()
-                .map(tile_coords)
-                .any(|(tx, ty)| (t0x..=t1x).contains(&tx) && (t0y..=t1y).contains(&ty));
+            return self.cov.tiles.keys().copied().map(tile_coords).any(|(tx, ty)| (t0x..=t1x).contains(&tx) && (t0y..=t1y).contains(&ty));
         }
         (t0y..=t1y).any(|ty| (t0x..=t1x).any(|tx| self.cov.tiles.contains_key(&tile_key((tx, ty)))))
     }
