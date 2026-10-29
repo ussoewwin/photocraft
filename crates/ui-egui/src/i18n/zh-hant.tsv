@@ -3124,3 +3124,4 @@ curves	Smooth	平滑
 	Font size presets	字體大小預設
 	Leading presets	行距預設
 	Tracking presets	字距調整預設
+	Invalid numeric entry. An integer between {min}% and {max}% is required. Previous value was inserted.	數值輸入無效。需要介於 {min}% 和 {max}% 之間的整數。已插入先前的值。

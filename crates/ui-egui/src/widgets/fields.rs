@@ -413,17 +413,26 @@ fn number_edit(
     // Esc, Tab, a click on the pasteboard, the title bar or an open menu, and a window that lost the
     // keyboard leave what was typed unapplied (zoom_field.rs). This runs before the field registers its interest in
     // the focus: Tab would otherwise already have handed the focus on to the next widget.
-    let guard = if hold_typed {
-        let shown = match decimals {
-            Some(d) => fmt_num_prec(f64::from(*value), d),
-            None if fine => fmt_num2(f64::from(*value)),
-            None => fmt_num(f64::from(*value)),
+    // A zoom field shows its number with the system's decimal separator (`12,5` on a German
+    // Windows), as Photoshop does, so the text it shows is one that can be typed.
+    let format = move |v: f64| {
+        let text = match decimals {
+            Some(d) => fmt_num_prec(v, d),
+            None if fine => fmt_num2(v),
+            None => fmt_num(v),
         };
+        if hold_typed { crate::zoom_field::localize(text) } else { text }
+    };
+    let guard = if hold_typed {
+        let shown = format(f64::from(*value));
         // The zoom field reads the keys here, before the check below: oversized events go first.
         if ui.memory(|m| m.has_focus(id)) {
             drop_oversized_input(ui);
         }
-        crate::zoom_field::before(ui, id, &shown)
+        // Tab and a click that keeps the typed number write it as the zoom Enter would make of it.
+        let (lo, hi) = (f64::from(*range.start()), f64::from(*range.end()));
+        let canon = move |t: &str| zoom_number(t, units).filter(|v| v.is_finite()).map(|v| format(if lo <= hi { v.clamp(lo, hi) } else { v }));
+        crate::zoom_field::before(ui, id, &shown, &canon)
     } else {
         Default::default()
     };
@@ -457,11 +466,7 @@ fn number_edit(
             .clamp_existing_to_range(false)
             // A warp is an absolute-position jump. The scoped scrub below removes that jump.
             .speed(if wrapped_drag { 0.0 } else { speed })
-            .custom_formatter(move |v, _| match decimals {
-                Some(d) => fmt_num_prec(v, d),
-                None if fine => fmt_num2(v),
-                None => fmt_num(v),
-            })
+            .custom_formatter(move |v, _| format(v))
             .update_while_editing(!math && !hold_typed)
             // Focus is read when parsing, not above: Tab hands it on inside `ui.add`.
             .custom_parser(move |s| {
@@ -469,21 +474,24 @@ fn number_edit(
                 if s.chars().nth(NUMERIC_INPUT_LIMIT).is_some() {
                     return None;
                 }
-                // A zoom field takes `,` as a decimal point (`100,90` is `100.90`), and no `.` next
-                // to a `/` (`100/5.0` is invalid, `100/5,0` is 2000 %), as Photoshop does.
+                // A zoom field takes `,` or `.` as its decimal point (`100,90` is `100.90`) and reads
+                // a division as a ratio (`1/2` is 50 %, `100/5,0` is 2000 %), as Photoshop does. With
+                // a second separator (`80,,2`) it says the entry is invalid and takes the number
+                // before it (80 %).
                 let ready = if hold_typed {
-                    let Some(ready) = crate::zoom_field::parse_ready(s) else {
-                        ctx.data_mut(|d| d.insert_temp(held, false));
-                        return None;
-                    };
-                    ready
+                    match crate::zoom_field::read(s) {
+                        crate::zoom_field::Entry::Number(ready) => ready,
+                        crate::zoom_field::Entry::Invalid(lead) => {
+                            crate::zoom_field::note_invalid(&ctx, id);
+                            ctx.data_mut(|d| d.insert_temp(held, false));
+                            return lead.and_then(|lead| zoom_number(&lead, units));
+                        }
+                    }
                 } else {
                     s.to_owned()
                 };
                 let s = ready.as_str();
-                let v = parse_num_in(s, units);
-                // A zoom field reads a division as a ratio, as Photoshop does: 1/2 is 50 %, 5/2 is 250 %.
-                let v = if hold_typed && s.contains('/') { v.map(|r| r * 100.0) } else { v };
+                let v = if hold_typed { zoom_number(s, units) } else { parse_num_in(s, units) };
                 if ctx.memory(|m| m.has_focus(id)) && plain(s).is_none() {
                     // Still typing arithmetic: hold it, and stop applying keystrokes once it parses.
                     ctx.data_mut(|d| d.insert_temp(held, v.is_some()));
@@ -498,6 +506,10 @@ fn number_edit(
         if typed != before && (scrub || !guard.vetoes_typed()) {
             *value = typed;
         }
+        // An invalid entry that was applied (not one a vetoed commit read) gets Photoshop's message.
+        if crate::zoom_field::take_invalid(ui.ctx(), id) && !guard.vetoes_typed() {
+            crate::zoom_field::request_invalid_entry(ui.ctx(), (*range.start(), *range.end()));
+        }
         crate::zoom_field::after(ui, id, guard);
     }
     if wrap_drag {
@@ -510,6 +522,15 @@ fn number_edit(
     }
     resp.flags.set(egui::response::Flags::CHANGED, *value != before);
     resp
+}
+
+/// The zoom a zoom field's text stands for, with at most one decimal separator (`,` or `.`): a
+/// number, or a ratio (`1/2` is 50 %, `5/2` is 250 %). `None` when it is neither, or holds a
+/// second separator (`zoom_field::read` takes that apart).
+fn zoom_number(text: &str, units: crate::numeric_expression::Units) -> Option<f64> {
+    let crate::zoom_field::Entry::Number(ready) = crate::zoom_field::read(text) else { return None };
+    let v = parse_num_in(&ready, units);
+    if ready.contains('/') { v.map(|r| r * 100.0) } else { v }
 }
 
 /// Increments a numerical field with the up/down arrow keys. Increments by 1 by default, 10 with shift, and 0.1 with ctrl/cmd.

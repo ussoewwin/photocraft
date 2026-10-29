@@ -4164,3 +4164,4 @@ curves	Smooth	スムーズ
 	Font size presets	フォントサイズのプリセット
 	Leading presets	行送りのプリセット
 	Tracking presets	トラッキングのプリセット
+	Invalid numeric entry. An integer between {min}% and {max}% is required. Previous value was inserted.	無効な数値です。{min}% から {max}% までの整数が必要です。以前の値が挿入されました。

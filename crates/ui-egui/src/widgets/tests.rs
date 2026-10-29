@@ -977,128 +977,230 @@ fn a_zoom_field_reads_a_division_as_a_ratio() {
     }
 }
 
-/// `,` is a decimal point in a zoom field, like `.`: `100,90` is `100.90`.
+/// Where the system's decimal separator is not known, `,` and `.` are both a decimal point in a
+/// zoom field: `100,90` is `100.90`.
 #[test]
 fn a_zoom_field_reads_a_comma_as_a_decimal_point() {
-    for (typed, after) in [("100,90", 100.9), ("100.90", 100.9), ("12,5", 12.5), ("200,", 200.0)] {
+    for (typed, after) in [("100,90", 100.9), ("100.90", 100.9), ("12,5", 12.5), ("200,", 200.0), ("100/5,0", 2000.0), ("100/5.0", 2000.0)] {
         let mut h = zoom_harness(50.0, EscEater::Shortcuts, false);
         click_and_type(&mut h, typed);
+        assert!(!crate::zoom_field::alert_pending(&h.ctx), "{typed}: silent");
         h.key_press(egui::Key::Enter);
         h.run();
         assert_eq!(*h.state(), (after, 1), "{typed}");
     }
 }
 
-/// With a `/`, only `,` is a decimal point: `100/5,0` is 2000 %, `100/5.0` is not a number.
+/// The system's decimal separator is the zoom field's, as in Photoshop: on a German Windows a typed
+/// `.` is refused with the alert (and not inserted) and `,` is the decimal point; on an English one
+/// the other way round. Ratios follow it (`100/5,0` is 2000 % on German).
 #[test]
-fn a_zoom_field_takes_a_comma_but_no_point_in_a_ratio() {
-    let mut h = zoom_harness(100.0, EscEater::Shortcuts, false);
-    click_and_type(&mut h, "100/5,0");
-    assert!(!crate::zoom_field::alert_pending(&h.ctx), "a comma in a ratio is silent");
+fn a_zoom_field_takes_only_the_systems_decimal_separator() {
+    // (system separator, typed, alert, zoom after Enter)
+    let cases = [
+        (',', "12,5", false, 12.5),
+        (',', "12.5", true, 125.0),
+        (',', "100/5,0", false, 2000.0),
+        (',', "100/5.0", true, 200.0),
+        ('.', "12.5", false, 12.5),
+        ('.', "12,5", true, 125.0),
+        ('.', "100/5.0", false, 2000.0),
+        ('.', "100/5,0", true, 200.0),
+    ];
+    for (sep, typed, alert, after) in cases {
+        crate::i18n::with_decimal_separator(Some(sep), || {
+            let mut h = zoom_harness(50.0, EscEater::Shortcuts, false);
+            click_and_type(&mut h, typed);
+            assert_eq!(crate::zoom_field::alert_pending(&h.ctx), alert, "{sep} {typed}: alert");
+            h.key_press(egui::Key::Enter);
+            h.run();
+            assert_eq!(*h.state(), (after, 1), "{sep} {typed}");
+            assert_eq!(crate::zoom_field::invalid_entry_pending(&h.ctx), None, "{sep} {typed}: a valid entry");
+        });
+    }
+}
+
+/// The field shows its zoom with the system's decimal separator (Photoshop's `12,5%`), so its own
+/// text is one that can be typed.
+#[test]
+fn a_zoom_field_shows_the_systems_decimal_separator() {
+    use egui_kittest::kittest::Queryable;
+    for (sep, shown) in [(Some(','), "12,5"), (Some('.'), "12.5"), (None, "12.5")] {
+        crate::i18n::with_decimal_separator(sep, || {
+            let mut h = zoom_harness(12.5, EscEater::Shortcuts, false);
+            h.run();
+            let text = h.get_by_role(egui::accesskit::Role::SpinButton).value();
+            assert!(text.as_deref().is_some_and(|t| t.contains(shown)), "{sep:?}: {text:?}");
+        });
+    }
+}
+
+/// A second separator can be typed (`80,,2`), silently. Enter asks for Photoshop's "Invalid numeric
+/// entry" message, with the field's range, and applies the number before the second separator.
+#[test]
+fn a_second_separator_is_typed_and_enter_applies_the_number_before_it_with_the_message() {
+    // (system separator, typed, zoom after Enter)
+    let cases = [
+        (Some(','), "80,,2", 80.0),
+        (Some(','), "1,5,2", 1.5),
+        (Some(','), "100/5,0,1", 2000.0),
+        (Some('.'), "80..2", 80.0),
+        (None, "1,000.5", 1.0),
+        (None, "12.5,", 12.5),
+    ];
+    for (sep, typed, after) in cases {
+        crate::i18n::with_decimal_separator(sep, || {
+            let mut h = zoom_harness(50.0, EscEater::Shortcuts, false);
+            click_and_type(&mut h, typed);
+            assert!(!crate::zoom_field::alert_pending(&h.ctx), "{typed}: typed, silently");
+            assert_eq!(crate::zoom_field::invalid_entry_pending(&h.ctx), None, "{typed}: no message before Enter");
+            h.key_press(egui::Key::Enter);
+            h.run();
+            assert_eq!(*h.state(), (after, 1), "{typed}: the number before the second separator");
+            assert_eq!(crate::zoom_field::invalid_entry_pending(&h.ctx), Some((0.0, 12800.0)), "{typed}: the message, with the range");
+        });
+    }
+    // The number before it is the zoom already: nothing changes, but the message still comes.
+    let mut h = zoom_harness(80.0, EscEater::Shortcuts, false);
+    click_and_type(&mut h, "80,,2");
     h.key_press(egui::Key::Enter);
     h.run();
-    assert_eq!(*h.state(), (2000.0, 1));
+    assert_eq!(*h.state(), (80.0, 0));
+    assert!(crate::zoom_field::invalid_entry_pending(&h.ctx).is_some());
+    // No number before it at all: the zoom stays, with the message.
+    let mut h = zoom_harness(80.0, EscEater::Shortcuts, false);
+    click_and_type(&mut h, ",,5");
+    h.key_press(egui::Key::Enter);
+    h.run();
+    assert_eq!(*h.state(), (80.0, 0));
+    assert!(crate::zoom_field::invalid_entry_pending(&h.ctx).is_some());
 }
 
-/// At most one `.` or `,`, never both, and no `.` next to a `/`: the key is dropped, with the alert.
+/// Esc, or Tab, with a second separator typed: no message, nothing applied.
 #[test]
-fn a_zoom_field_types_away_a_second_separator_and_a_point_in_a_ratio() {
-    // (typed, zoom after Enter)
-    for (typed, after) in
-        [("1.5.2", 1.52), ("1,5,2", 1.52), ("1,5.2", 1.52), ("1.5,2", 1.52), ("1,000.5", 1.0005), ("1.5/2", 1.52), ("100/5.0", 200.0), ("100/5,0", 2000.0)]
-    {
+fn esc_and_tab_with_a_second_separator_show_no_message() {
+    for key in [egui::Key::Escape, egui::Key::Tab] {
         let mut h = zoom_harness(50.0, EscEater::Shortcuts, false);
-        click_and_type(&mut h, typed);
+        click_and_type(&mut h, "80,,2");
+        h.key_press(key);
+        h.run_steps(2);
+        assert_eq!(*h.state(), (50.0, 0), "{key:?}");
+        assert_eq!(crate::zoom_field::invalid_entry_pending(&h.ctx), None, "{key:?}");
+    }
+}
+
+/// A paste is filtered like typing: the other separator is dropped with the alert (`100/5.0` on a
+/// German system is `100/50`), and a second separator stays for Enter's message.
+#[test]
+fn a_paste_follows_the_typing_rules() {
+    crate::i18n::with_decimal_separator(Some(','), || {
+        let mut h = zoom_harness(150.0, EscEater::Shortcuts, false);
+        zoom_field_node(&h).click();
+        h.run();
+        h.event(egui::Event::Paste("100/5.0".into()));
+        h.run();
+        assert!(crate::zoom_field::alert_pending(&h.ctx), "the `.` asks for the alert");
+        assert_eq!(*h.state(), (150.0, 0), "and the paste applies nothing yet");
         h.key_press(egui::Key::Enter);
         h.run();
-        assert_eq!(*h.state(), (after, 1), "{typed}");
-    }
-    let mut h = zoom_harness(50.0, EscEater::Shortcuts, false);
-    click_and_type(&mut h, "1,5");
-    assert!(!crate::zoom_field::alert_pending(&h.ctx), "the first separator is silent");
-    h.event(egui::Event::Text(".".into()));
-    h.run();
-    assert!(crate::zoom_field::alert_pending(&h.ctx), "a `.` next to the `,` asks for the alert");
+        assert_eq!(*h.state(), (200.0, 1), "100/50");
+        assert_eq!(crate::zoom_field::invalid_entry_pending(&h.ctx), None);
+
+        let mut h = zoom_harness(150.0, EscEater::Shortcuts, false);
+        zoom_field_node(&h).click();
+        h.run();
+        h.event(egui::Event::Paste("80,,2".into()));
+        h.run();
+        assert!(!crate::zoom_field::alert_pending(&h.ctx), "a second separator is pasted silently, as it is typed");
+        h.key_press(egui::Key::Enter);
+        h.run();
+        assert_eq!(*h.state(), (80.0, 1));
+        assert!(crate::zoom_field::invalid_entry_pending(&h.ctx).is_some(), "Enter's message");
+    });
 }
 
-/// The rules follow the text through Backspace and the cursor: with the `.` deleted, a new one is
-/// silent; with it still there, it is typed away.
+/// Tab writes the typed number as the field shows a zoom (`045` is `45`, `45,0` is `45`, `1/2` is
+/// `50`, past the range is its end) and selects it, without applying it.
 #[test]
-fn a_zoom_field_follows_backspace_and_the_cursor_when_it_checks_the_separators() {
-    let mut h = zoom_harness(50.0, EscEater::Shortcuts, false);
-    click_and_type(&mut h, "1.5");
-    h.key_press(egui::Key::ArrowLeft);
-    h.run();
+fn tab_writes_the_typed_number_as_the_zoom_it_makes() {
+    use egui_kittest::kittest::Queryable;
+    for (typed, shown) in [("045", "45"), ("45,0", "45"), ("45.50", "45.5"), ("1/2", "50"), ("99999", "12800"), ("80,,2", "80,,2")] {
+        let mut h = zoom_harness(100.0, EscEater::Shortcuts, false);
+        click_and_type(&mut h, typed);
+        h.key_press(egui::Key::Tab);
+        h.run_steps(2);
+        assert_eq!(*h.state(), (100.0, 0), "{typed}: Tab applies nothing");
+        let text = h.get_by_role(egui::accesskit::Role::SpinButton).value();
+        assert_eq!(text.as_deref(), Some(shown), "{typed}");
+        // Selected: a digit replaces it.
+        h.event(egui::Event::Text("7".into()));
+        h.run();
+        h.key_press(egui::Key::Enter);
+        h.run();
+        assert_eq!(*h.state(), (7.0, 1), "{typed}: the text was selected");
+    }
+    // With the system's comma, the comma is kept.
+    crate::i18n::with_decimal_separator(Some(','), || {
+        let mut h = zoom_harness(100.0, EscEater::Shortcuts, false);
+        click_and_type(&mut h, "045,50");
+        h.key_press(egui::Key::Tab);
+        h.run_steps(2);
+        assert_eq!(h.get_by_role(egui::accesskit::Role::SpinButton).value().as_deref(), Some("45,5"));
+    });
+    // The copy follows Backspace: `450` with the `0` deleted is `45`.
+    let mut h = zoom_harness(100.0, EscEater::Shortcuts, false);
+    click_and_type(&mut h, "0450");
     h.key_press(egui::Key::Backspace);
     h.run();
-    h.event(egui::Event::Text(".".into()));
-    h.run();
-    assert!(!crate::zoom_field::alert_pending(&h.ctx), "the `.` was deleted, so the new one is silent");
+    h.key_press(egui::Key::Tab);
+    h.run_steps(2);
+    assert_eq!(h.get_by_role(egui::accesskit::Role::SpinButton).value().as_deref(), Some("45"));
     h.key_press(egui::Key::Enter);
     h.run();
-    assert_eq!(*h.state(), (1.5, 1));
-
-    let mut h = zoom_harness(50.0, EscEater::Shortcuts, false);
-    click_and_type(&mut h, "1.5");
-    h.key_press(egui::Key::ArrowLeft);
-    h.run();
-    h.event(egui::Event::Text(".".into()));
-    h.run();
-    assert!(crate::zoom_field::alert_pending(&h.ctx), "the `.` is still there, so a second one is typed away");
-    h.key_press(egui::Key::Enter);
-    h.run();
-    assert_eq!(*h.state(), (1.5, 1));
+    assert_eq!(*h.state(), (45.0, 1), "Enter then applies it");
 }
 
-/// When the value changes under the focused field (ArrowUp, another zoom), the field shows the new
-/// number, and the separator rules check that number, not the text typed before it.
+/// After a key the field's copy of the text can't follow (a word deletion, an undo), Tab only
+/// selects the text: it never writes the digits typed since over the whole of it.
 #[test]
-fn a_zoom_field_checks_the_separators_against_a_value_that_changed_under_it() {
-    let mut h = zoom_harness(100.0, EscEater::Shortcuts, false);
-    click_and_type(&mut h, "1.5");
-    h.key_press(egui::Key::ArrowUp);
-    h.run();
-    assert_eq!(h.state().0, 101.0, "ArrowUp steps the zoom");
-    h.key_press(egui::Key::End);
-    h.run();
-    h.event(egui::Event::Text(".".into()));
-    h.run();
-    assert!(!crate::zoom_field::alert_pending(&h.ctx), "101 has no `.` yet: the new one is silent");
-
-    let mut h = zoom_harness(100.0, EscEater::Shortcuts, false);
-    click_and_type(&mut h, "1.5");
-    h.state_mut().0 = 400.0;
-    h.run();
-    h.key_press(egui::Key::End);
-    h.run();
-    h.event(egui::Event::Text(".".into()));
-    h.run();
-    assert!(!crate::zoom_field::alert_pending(&h.ctx), "another zoom made it 400: the new `.` is silent");
+fn tab_after_a_word_deletion_leaves_the_text_as_it_is() {
+    use egui_kittest::kittest::Queryable;
+    for (mods, key) in [(egui::Modifiers::COMMAND, egui::Key::Backspace), (egui::Modifiers::COMMAND, egui::Key::Z)] {
+        let mut h = zoom_harness(100.0, EscEater::Shortcuts, false);
+        click_and_type(&mut h, "450");
+        h.key_press(egui::Key::End);
+        h.run();
+        h.key_press_modifiers(mods, key);
+        h.run();
+        h.key_press(egui::Key::End);
+        h.run();
+        for c in "05".chars() {
+            h.event(egui::Event::Text(c.to_string()));
+            h.run();
+        }
+        let typed = h.get_by_role(egui::accesskit::Role::SpinButton).value();
+        h.key_press(egui::Key::Tab);
+        h.run_steps(2);
+        assert_eq!(h.get_by_role(egui::accesskit::Role::SpinButton).value(), typed, "{key:?}: Tab leaves {typed:?} as it is");
+        assert_eq!(*h.state(), (100.0, 0), "{key:?}");
+    }
 }
 
-/// A pasted `100/5.0` stays in the field and asks for the alert; Enter puts the zoom back.
+/// A click on the pasteboard writes the typed number like Tab does.
 #[test]
-fn a_pasted_ratio_with_a_point_alerts_and_enter_restores_the_zoom() {
-    let mut h = zoom_harness(150.0, EscEater::Shortcuts, false);
-    zoom_field_node(&h).click();
-    h.run();
-    assert!(!crate::zoom_field::alert_pending(&h.ctx));
-    h.event(egui::Event::Paste("100/5.0".into()));
-    h.run();
-    assert!(crate::zoom_field::alert_pending(&h.ctx), "the paste asks for the alert");
-    assert_eq!(*h.state(), (150.0, 0), "and applies nothing");
+fn a_click_on_the_pasteboard_writes_the_typed_number_as_the_zoom_it_makes() {
+    use egui_kittest::kittest::Queryable;
+    let mut h = zoom_harness(40.0, EscEater::Shortcuts, true);
+    click_and_type(&mut h, "045,0");
+    click_at(&mut h, egui::pos2(250.0, 80.0), egui::PointerButton::Primary);
+    assert_eq!(*h.state(), (40.0, 0), "the zoom stays");
+    assert_eq!(h.get_by_role(egui::accesskit::Role::SpinButton).value().as_deref(), Some("45"));
     h.key_press(egui::Key::Enter);
     h.run();
-    assert_eq!(*h.state(), (150.0, 0), "Enter keeps the zoom it had");
-    // Nothing of the paste is left to come back with the next click and Enter.
-    zoom_field_node(&h).click();
-    h.run();
-    h.key_press(egui::Key::Enter);
-    h.run();
-    assert_eq!(*h.state(), (150.0, 0));
+    assert_eq!(*h.state(), (45.0, 1));
 }
 
-/// Only digits, the two separators and `/` go into a zoom field: any other key (`%` too, which
+/// Only digits, the decimal separator and `/` go into a zoom field: any other key (`%` too, which
 /// is drawn beside the field) asks for the alert and leaves the text as it was.
 #[test]
 fn a_zoom_field_takes_digits_and_separators_only() {

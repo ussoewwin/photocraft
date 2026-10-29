@@ -4527,3 +4527,4 @@ shape	Appearance	Apparence
 	Font size presets	Tailles de police prédéfinies
 	Leading presets	Interlignages prédéfinis
 	Tracking presets	Approches prédéfinies
+	Invalid numeric entry. An integer between {min}% and {max}% is required. Previous value was inserted.	Entrée numérique non valide. Un entier compris entre {min}% et {max}% est requis. La valeur précédente a été insérée.
