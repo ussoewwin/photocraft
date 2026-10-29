@@ -4321,6 +4321,21 @@ curves	Smooth	Jämna ut
 	Select Data Points	Markera datapunkter
 	Select Layer	Markera lager
 	Select and Mask	Markera och maskera
+	Color Aware	Färgmedveten
+	Decontaminate Colors	Sanera färger
+	Edge Detection	Kantidentifiering
+	Global Refinements	Globala förfiningar
+	High Quality Preview	Förhandsgranskning med hög kvalitet
+	Object Aware	Objektmedveten
+	Object Aware needs a segmentation model, which isn't available yet	Objektmedveten behöver en segmenteringsmodell, som inte är tillgänglig än
+	Real-Time Refinement	Förfining i realtid
+	Refine Edge Brush Tool	Kantförfiningspenselverktyg
+	Refine Hair	Förfina hår
+	Refine Hair needs hair detection, which isn't available yet	Förfina hår behöver håridentifiering, som inte är tillgänglig än
+	Refine Mode	Förfiningsläge
+	Select and Mask was closed: another layer was selected	Markera och maskera stängdes: ett annat lager markerades
+	Select and Mask was closed: its document is no longer the active one	Markera och maskera stängdes: dess dokument är inte längre det aktiva
+	View Mode	Visningsläge
 	Selected at launch: {backend}	Valdes vid start: {backend}
 	SemiBold	Halvfet
 	Sensitivity	Känslighet
