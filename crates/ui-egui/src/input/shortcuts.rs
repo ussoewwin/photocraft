@@ -488,6 +488,7 @@ fn preflight_keys(app: &mut PhotocraftApp, ctx: &egui::Context) -> bool {
     // However the tool was picked (toolbar, flyout, shortcut, automation), its group's key brings
     // it back later (#2608).
     app.ui.remember_group_tool();
+    crate::canvas::polygon_cancel_stale(app);
     // Camera Raw is modal like Photoshop's filter dialog: no application shortcut (Save, Undo,
     // tools) runs beneath it, and it handles its own keys (Y, U, O, S). Unlike the other dialogs
     // below it covers the canvas, so canvas zoom keys are blocked too.
@@ -814,6 +815,7 @@ fn handle_registry_and_tool_keys(app: &mut PhotocraftApp, ctx: &egui::Context, f
         if !untouched && pressed(Key::Escape) {
             app.ui.polygon.clear();
             app.ui.polygon_mode.clear();
+            app.ui.polygon_doc = None;
             crate::crop_ui::cancel(app);
             return true;
         }

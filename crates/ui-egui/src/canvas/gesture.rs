@@ -179,6 +179,7 @@ pub(crate) fn constrained_polygon_point(from: [f64; 2], point: [f64; 2]) -> [f64
 /// first click fixes the selection mode; a new-selection polygon hides the old outline while it is
 /// drawn, and replaces it in one history step when it closes.
 pub(super) fn polygon_click(app: &mut PhotocraftApp, x: f64, y: f64, mods: egui::Modifiers) {
+    polygon_cancel_stale(app);
     let close = app
         .ui
         .polygon
@@ -209,6 +210,7 @@ pub fn polygon_retract(app: &mut PhotocraftApp) -> bool {
     }
     if app.ui.polygon.is_empty() {
         app.ui.polygon_mode.clear();
+        app.ui.polygon_doc = None;
     }
     true
 }
@@ -216,13 +218,13 @@ pub fn polygon_retract(app: &mut PhotocraftApp) -> bool {
 /// The polygon in progress belongs to the document it was started on (`UiState::polygon_doc`):
 /// once another document becomes active it is dropped, so its outline doesn't show on (or get
 /// committed to) the other document, and the selection it would have replaced is shown again.
-/// Switching tools is handled in `PhotocraftApp::sync_views`. Like the Lasso's
+/// Runs before canvas input and shortcuts as well as in `PhotocraftApp::sync_views`. Like the Lasso's
 /// ([`crate::lasso_ui::cancel_stale`]) and the Magnetic Lasso's ([`crate::magnetic_lasso_ui::frame`]).
 pub fn polygon_cancel_stale(app: &mut PhotocraftApp) {
     let active = app.session.active().map(|st| st.doc.id);
     if app.ui.polygon.is_empty() {
         app.ui.polygon_doc = None;
-    } else if app.ui.polygon_doc.is_some_and(|d| Some(d) != active) {
+    } else if app.ui.tool != Tool::PolygonLasso || app.ui.polygon_doc.is_some_and(|d| Some(d) != active) {
         app.ui.polygon.clear();
         app.ui.polygon_mode.clear();
         app.ui.polygon_doc = None;
@@ -237,8 +239,10 @@ pub fn polygon_replaces_selection(app: &PhotocraftApp) -> bool {
 
 /// Close the polygonal lasso and make the selection in the mode it started in.
 pub fn commit_polygon(app: &mut PhotocraftApp) {
+    polygon_cancel_stale(app);
     let pts = std::mem::take(&mut app.ui.polygon);
     let mode = std::mem::take(&mut app.ui.polygon_mode);
+    app.ui.polygon_doc = None;
     if pts.len() >= 3 {
         let mode = if mode.is_empty() { selection_mode(app, egui::Modifiers::NONE).to_owned() } else { mode };
         let o = &app.ui.tool_options;
