@@ -35,6 +35,7 @@ pub(super) fn humanize(key: &str) -> String {
         "lightTheme" => return "Light Theme".into(),
         "automaticallyCheckUpdates" => return "Automatically Check for Updates".into(),
         "scrollbarVisibility" => return "Scrollbar Visibility".into(),
+        "nativeGradientIcons" => return "Use PhotoCraft-native gradient icons".into(),
         _ => {}
     }
     // These controls appear only for WebP, so reuse the existing translated labels.

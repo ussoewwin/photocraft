@@ -924,3 +924,5 @@ mod tests {
         assert_eq!(crate::retouch_ui::source_marker_point(&app), None);
     }
 }
+
+pub(crate) use panels::gradient_picker;

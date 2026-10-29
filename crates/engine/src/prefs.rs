@@ -280,6 +280,8 @@ pub struct Interface {
     /// Command ids and the control protocol stay English.
     pub language: String,
     pub ui_font_size: UiFontSize,
+    /// Use PhotoCraft glyphs instead of gradient thumbnails in style controls.
+    pub native_gradient_icons: bool,
     /// Default follows the theme; other modes apply to panel and canvas scrollbars (#3262).
     pub scrollbar_visibility: ScrollbarVisibility,
     pub show_channels_in_color: bool,
@@ -327,6 +329,7 @@ impl Default for Interface {
             ui_scale: UiScale::Auto,
             language: "auto".into(),
             ui_font_size: UiFontSize::Small,
+            native_gradient_icons: false,
             scrollbar_visibility: ScrollbarVisibility::Default,
             show_channels_in_color: false,
             dynamic_color_sliders: true,

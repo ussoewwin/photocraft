@@ -8,6 +8,53 @@ fn app_with_gradient(style: &str) -> PhotocraftApp {
     app
 }
 
+#[test]
+fn opaque_ramp_has_no_checkerboard_fringe_at_fractional_pixel_edges() {
+    use egui_kittest::Harness;
+    for scale in [1.0, 2.0] {
+        let edge = 20.0 + 0.3 / scale;
+        let rect = Rect::from_min_size(pos2(edge, edge), vec2(96.0, 20.0));
+        let Ok(mut h) = std::panic::catch_unwind(|| {
+            Harness::builder().with_size(vec2(160.0, 80.0)).with_pixels_per_point(scale).wgpu().build_ui(move |ui| {
+                paint_ramp(ui.painter(), rect, |_| [0.1, 0.25, 0.2, 1.0]);
+            })
+        }) else {
+            eprintln!("skipping: no GPU adapter");
+            return;
+        };
+        h.run_steps(3);
+        let image = h.render().unwrap();
+        let background = image.get_pixel((8.0 * scale) as u32, (25.0 * scale) as u32);
+        let right = (rect.right() * scale).floor() as u32;
+        for y in ((rect.top() + 2.0) * scale) as u32..((rect.bottom() - 2.0) * scale) as u32 {
+            let pixel = image.get_pixel(right, y);
+            for channel in 0..3 {
+                assert!(pixel[channel].abs_diff(background[channel]) <= 2, "scale={scale} at ({right}, {y}): {pixel:?} vs {background:?}");
+            }
+        }
+    }
+}
+
+#[test]
+fn genuinely_transparent_ramp_still_shows_checkerboard_at_both_scales() {
+    use egui_kittest::Harness;
+    for scale in [1.0, 2.0] {
+        let Ok(mut h) = std::panic::catch_unwind(|| {
+            Harness::builder().with_size(vec2(160.0, 80.0)).with_pixels_per_point(scale).wgpu().build_ui(|ui| {
+                paint_ramp(ui.painter(), Rect::from_min_size(pos2(20.0, 20.0), vec2(96.0, 20.0)), |_| [0.1, 0.25, 0.2, 0.0]);
+            })
+        }) else {
+            eprintln!("skipping: no GPU adapter");
+            return;
+        };
+        h.run_steps(3);
+        let image = h.render().unwrap();
+        let a = image.get_pixel((32.0 * scale) as u32, (22.0 * scale) as u32);
+        let b = image.get_pixel((32.0 * scale) as u32, (27.0 * scale) as u32);
+        assert!(a[0].abs_diff(b[0]) >= 30, "scale={scale}: {a:?} vs {b:?}");
+    }
+}
+
 fn mods() -> egui::Modifiers {
     egui::Modifiers::NONE
 }
@@ -52,7 +99,8 @@ fn thumbnails_show_the_gradient() {
 #[test]
 fn options_bar_swatch_opens_the_editor_and_reaches_the_gradients_panel() {
     use egui_kittest::{Harness, kittest::Queryable};
-    let app = app_with_gradient("linear");
+    let mut app = app_with_gradient("linear");
+    app.ui.tool_options.gradient_classic = true;
     let mut h = Harness::builder().with_size(vec2(440.0, 560.0)).build_ui_state(
         |ui, app: &mut PhotocraftApp| {
             if preset_swatch(app, ui) {
@@ -69,7 +117,10 @@ fn options_bar_swatch_opens_the_editor_and_reaches_the_gradients_panel() {
     h.get_by_label("Gradient picker").click();
     h.run_steps(2);
     assert!(h.state().ui.panels.gradient_editor, "the swatch opened the editor window");
-    // Quick preset picking lives in the editor: its Gradients button shows the Gradients panel.
+    // Collapse the embedded browser to reach the sidebar shortcut on a small screen.
+    h.get_all_by_label("Presets").last().unwrap().click();
+    h.run_steps(8);
+    // The existing Gradients button still opens the sidebar.
     h.get_by_label("Gradients").click();
     h.run_steps(2);
     assert!(h.state().ui.panels.color, "the Gradients panel opened");
@@ -277,12 +328,9 @@ fn preview_shows_the_drag_before_commit() {
     assert!(display_doc(&mut app, 0).is_none());
 }
 
-/// Regression: the options bar's gradient swatch could not open anything. In live mode it
-/// sensed hover only, so `clicked()` was never true; in classic mode it sensed clicks and
-/// promised "Click to edit the gradient" but never read the response. Both now open the
-/// Gradient Editor window.
+/// Issue #2199: the Live ribbon is a preview; only Classic opens the editor.
 #[test]
-fn the_options_bar_swatch_opens_the_gradient_editor_in_both_modes() {
+fn the_options_bar_ribbon_opens_the_editor_only_in_classic_mode() {
     use egui_kittest::kittest::Queryable;
 
     for classic in [false, true] {
@@ -299,9 +347,13 @@ fn the_options_bar_swatch_opens_the_gradient_editor_in_both_modes() {
         PhotocraftApp::setup_context(&h.ctx, crate::theme::ThemeKind::ALL[0]);
         h.run_steps(4);
         assert!(!h.state().ui.panels.gradient_editor, "classic={classic}: starts closed");
-        h.get_by_label("Gradient picker").click();
+        if classic {
+            h.get_by_label("Gradient picker").click();
+        } else {
+            h.query_all_by_label("Gradient").find(|n| n.rect().width() == 96.0).unwrap().click();
+        }
         h.run_steps(3);
-        assert!(h.state().ui.panels.gradient_editor, "classic={classic}: the swatch opened the editor");
+        assert_eq!(h.state().ui.panels.gradient_editor, classic, "classic={classic}: ribbon behavior follows the mode");
     }
 }
 
@@ -416,7 +468,8 @@ fn the_ramp_covers_its_checkerboard_at_half_pixel_offsets() {
         let mut painted_at = 0.0;
         let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
             painted_at = ui.ctx().pixels_per_point();
-            paint_ramp(ui.painter(), r, |u| [u, u, u, 1.0]);
+            // Translucent, so the checkerboard is drawn under it.
+            paint_ramp(ui.painter(), r, |u| [u, u, u, 0.5]);
         });
         out.textures_delta.clear();
         assert_eq!(painted_at, ppp);

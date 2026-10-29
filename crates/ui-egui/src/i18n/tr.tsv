@@ -1578,6 +1578,7 @@
 	Update layer comp (visibility, position and appearance)	Katman kompozisyonunu güncelleyin (görünürlük, konum ve görünüm)
 	Use Default	Varsayılanı Kullan
 	Use Legacy	Eskiyi Kullan
+	Use PhotoCraft-native gradient icons	PhotoCraft'ın kendi gradyan simgelerini kullan
 	Use Measurement Scale	Ölçüm Ölçeğini Kullan
 	Variables bind a layer's visibility, text or pixels to a named data slot.	Değişkenler bir katmanın görünürlüğünü, metnini veya piksellerini adlandırılmış bir veri yuvasına bağlar.
 	Vertical scale	Dikey ölçek

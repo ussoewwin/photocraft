@@ -693,3 +693,42 @@ pub fn clone_sample_point(app: &PhotocraftApp, at: Option<[f64; 2]>) -> Option<[
         _ => Some(src),
     }
 }
+
+fn gradient_browser(app: &mut PhotocraftApp, ui: &mut egui::Ui, panel: &str, place: Place<'_>) -> Vec<Ev> {
+    let (fg, bg) = (app.session.tools.foreground, app.session.tools.background);
+    let groups_src = app.session.presets.gradients.clone();
+    let groups: Vec<GroupView> = groups_src
+        .iter()
+        .map(|g| GroupView { name: g.name.clone(), items: g.items.iter().map(|i| ItemView { key: i.name.clone(), name: i.name.clone() }).collect() })
+        .collect();
+    let mut st = std::mem::take(&mut app.ui.presets_ui);
+    let events = browser(ui, &mut st, panel, &groups, place, &mut |ui, r, gi, ii| {
+        let stops = groups_src[gi].items[ii].resolve(fg, bg);
+        paint_gradient(ui, r, &stops);
+    });
+    app.ui.presets_ui = st;
+    events
+}
+
+/// Editor/popup selection recolours the current target, never creates another layer.
+/// The sidebar retains its separate double-click and canvas-drop Apply behavior.
+pub(crate) fn gradient_picker(app: &mut PhotocraftApp, ui: &mut egui::Ui, panel: &str, apply_to_layer: bool, new_params: Value) -> bool {
+    let place = Place { canvas: Rect::NOTHING, max_h: 220.0, new_tip: tl!("Create new gradient"), flush:false };
+    let events = gradient_browser(app, ui, panel, place);
+    let mut changed = false;
+    for e in events {
+        match &e {
+            Ev::Select(k) | Ev::Activate(k) => {
+                if run(app, "gradient.presets.select", json!({"preset": k, "applyToLayer": apply_to_layer})).is_some() {
+                    app.ui.presets_ui.selected.insert(panel.into(), k.clone());
+                    app.ui.presets_ui.selected.insert("gradients".into(), k.clone());
+                    changed = true;
+                }
+            }
+            _ => {
+                generic(app, panel, "gradient.presets", &e, new_params.clone());
+            }
+        }
+    }
+    changed
+}

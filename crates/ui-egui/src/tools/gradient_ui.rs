@@ -29,6 +29,9 @@ use crate::widgets;
 
 #[cfg(test)]
 mod editor_tests;
+mod preset_browser;
+#[cfg(test)]
+mod preset_browser_tests;
 mod properties_panel;
 
 /// Id of the temporary layer previewing a new gradient while it is drawn.
@@ -518,12 +521,16 @@ pub(crate) fn paint_ramp(p: &egui::Painter, r: Rect, sample: impl Fn(f32) -> [f3
     // The tessellator snaps the checker's rects to pixels but not the mesh: snap both alike, or a
     // half-pixel offset leaves a row of checker showing under the ramp (#4577).
     let r = r.round_to_pixels(p.pixels_per_point());
-    widgets::checker(p, r, 5.0);
     let n = 64;
+    let samples: Vec<_> = (0..=n).map(|k| sample(k as f32 / n as f32)).collect();
+    // Opaque previews need no transparency background, including at subpixel edges.
+    let painter = p.with_clip_rect(r);
+    if samples.iter().any(|c| c[3] < 1.0) {
+        widgets::checker(&painter, r, 5.0);
+    }
     let mut mesh = egui::Mesh::default();
-    for k in 0..=n {
+    for (k, c) in samples.into_iter().enumerate() {
         let u = k as f32 / n as f32;
-        let c = sample(u);
         let q = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
         let col = Color32::from_rgba_unmultiplied(q(c[0]), q(c[1]), q(c[2]), q(c[3]));
         let x = r.left() + u * r.width();
@@ -535,7 +542,7 @@ pub(crate) fn paint_ramp(p: &egui::Painter, r: Rect, sample: impl Fn(f32) -> [f3
             mesh.add_triangle(i - 1, i + 1, i);
         }
     }
-    p.add(mesh);
+    painter.add(mesh);
 }
 
 /// Side, in pixels, of a gradient fill layer's thumbnail texture.
@@ -588,17 +595,10 @@ pub fn paint_thumbnail(ui: &egui::Ui, layer: LayerId, f: &Fill, rect: Rect) -> b
 }
 
 /// Options-bar swatch of the current gradient. Both live and classic modes use the same
-/// engine-owned preset (#1651). Clicking it opens the Gradient Editor window, as Photoshop's
-/// swatch does. Returns whether it was clicked.
+/// engine-owned preset (#1651). The Classic ribbon opens the editor; Live is a preview.
+/// Both modes provide a separate preset dropdown. Returns whether to open the editor.
 pub fn preset_swatch(app: &mut PhotocraftApp, ui: &mut egui::Ui) -> bool {
-    let t = Tokens::get(ui.ctx());
-    let stops = app.session.presets.gradient.resolve(app.session.tools.foreground, app.session.tools.background);
-    let (r, resp) = ui.allocate_exact_size(vec2(96.0, 20.0), Sense::click());
-    paint_ramp(ui.painter(), r, |u| photocraft_algo::paint::sample_stops(&stops, u));
-    ui.painter().rect_stroke(r, 0.0, Stroke::new(1.0, t.field_border), StrokeKind::Outside);
-    // Name the control for accessibility (and so tests and agents can find it).
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, tl!("Gradient picker")));
-    resp.on_hover_text(tl!("Click to edit the gradient")).clicked()
+    preset_browser::swatch(app, ui)
 }
 
 /// The selected layer when it is a gradient fill layer. Unlike [`active_gradient`] it does not
@@ -621,32 +621,40 @@ pub fn editor_window(app: &mut PhotocraftApp, ctx: &egui::Context) {
     let mut open = true;
     let mut show_panel = false;
     // Resolved before the closure so `app` is borrowed only once inside it.
-    let layer = selected_gradient(app);
+    let layer = (!app.ui.tool_options.gradient_classic).then(|| selected_gradient(app)).flatten();
     egui::Window::new(tl!("Gradient Editor"))
         .id(egui::Id::unique("gradient-editor"))
         .open(&mut open)
         .collapsible(false)
         .resizable(true)
         .default_width(330.0)
-        .show(ctx, |ui| match &layer {
-            Some(l) => properties_panel::editor(app, ui, l),
-            None => {
-                // Photoshop's editor edits the gradient the tool paints with, so with no gradient
-                // fill layer around the strip edits the current gradient in place.
-                let t = Tokens::get(ui.ctx());
-                ui.label(egui::RichText::new(tl!("The gradient the Gradient tool paints with")).color(t.text_dim));
-                ui.add_space(6.0);
-                preset_stops_editor(app, ui);
-                ui.add_space(6.0);
-                ui.horizontal(|ui| {
-                    if widgets::secondary_button(ui, tl!("Save As Preset"), 0.0)
-                        .on_hover_text(tl!("Adds the current gradient to the Gradients panel"))
-                        .clicked()
-                    {
-                        let _ = app.run("gradient.presets.new", json!({}));
-                    }
-                    show_panel = widgets::secondary_button(ui, tl!("Gradients"), 0.0).clicked();
-                });
+        .default_height(if layer.is_some() { 850.0 } else { 650.0 })
+        .vscroll(true)
+        .show(ctx, |ui| {
+            egui::CollapsingHeader::new(tl!("Presets")).id_salt("gradient-editor-presets").default_open(true).show(ui, |ui| {
+                preset_browser::show(app, ui, "gradient-editor-presets");
+            });
+            ui.separator();
+            match &layer {
+                Some(l) => properties_panel::editor(app, ui, l),
+                None => {
+                    // Photoshop's editor edits the gradient the tool paints with, so with no gradient
+                    // fill layer around the strip edits the current gradient in place.
+                    let t = Tokens::get(ui.ctx());
+                    ui.label(egui::RichText::new(tl!("The gradient the Gradient tool paints with")).color(t.text_dim));
+                    ui.add_space(6.0);
+                    preset_stops_editor(app, ui);
+                    ui.add_space(6.0);
+                    ui.horizontal(|ui| {
+                        if widgets::secondary_button(ui, tl!("Save As Preset"), 0.0)
+                            .on_hover_text(tl!("Adds the current gradient to the Gradients panel"))
+                            .clicked()
+                        {
+                            let _ = app.run("gradient.presets.new", json!({}));
+                        }
+                        show_panel = widgets::secondary_button(ui, tl!("Gradients"), 0.0).clicked();
+                    });
+                }
             }
         });
     if show_panel {
@@ -655,6 +663,11 @@ pub fn editor_window(app: &mut PhotocraftApp, ctx: &egui::Context) {
     if !open {
         app.ui.panels.gradient_editor = false;
     }
+}
+
+/// Shared style previews for the options bar and Gradient Fill controls.
+pub fn style_buttons(ui: &mut egui::Ui, current: &str, native_icons: bool) -> Option<&'static str> {
+    properties_panel::style_buttons(ui, current, native_icons)
 }
 
 /// Live mode: style, reverse, dither and blend mode changes in the options bar also edit the selected
@@ -1031,3 +1044,8 @@ fn stop_strip(ui: &mut egui::Ui, key: egui::Id, f: &Fill, midpoints: bool, pendi
 
 #[cfg(test)]
 mod tests;
+
+fn stops_editor(app:&mut PhotocraftApp,ui:&mut egui::Ui,sink:Sink,f:Fill,picker:bool) {
+ if picker {preset_browser::layer_picker(app,ui,sink);}
+ stops_editor_for(app,ui,sink,f);
+}
