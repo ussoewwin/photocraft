@@ -334,10 +334,16 @@ fn bad(cmd: &str, msg: impl Into<String>) -> EngineError {
 /// The flattened document, or an error when the canvas is over the compositor's render cap
 /// ([`photocraft_compose::MAX_RENDER_PIXELS`]; `flatten` returns an empty buffer then).
 fn flatten_whole(doc: &Document, cmd: &str) -> Result<photocraft_compose::Buffer> {
-    let buf = photocraft_compose::flatten(doc);
     let (w, h) = (doc.size.width, doc.size.height);
-    if buf.px.len() as u64 != u64::from(w) * u64::from(h) {
-        return Err(bad(cmd, format!("the document ({w} x {h} px) is too large to flatten (limit {} pixels)", photocraft_compose::MAX_RENDER_PIXELS)));
+    let count = u64::from(w) * u64::from(h);
+    let operation = if cmd == "image.trim" { "trim" } else if cmd == "image.duplicate" { "duplicate merged" } else { "flatten" };
+    let too_large = || bad(cmd, format!("the document ({w} x {h} px) is too large to {operation} (flatten limit {} pixels)", photocraft_compose::MAX_RENDER_PIXELS));
+    if count > photocraft_compose::MAX_RENDER_PIXELS {
+        return Err(too_large());
+    }
+    let buf = photocraft_compose::flatten(doc);
+    if buf.px.len() as u64 != count {
+        return Err(too_large());
     }
     Ok(buf)
 }
