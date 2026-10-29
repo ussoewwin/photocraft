@@ -26,12 +26,15 @@
 //! Tracing reads the whole image and runs once; filling runs per tile and gives the same pixels
 //! whatever the tiling.
 //!
-//! Each stage is its own module: [`colour`] (steps 1–2) and [`regions`] (step 3) so far.
+//! Each stage is its own module: [`colour`] (steps 1–2), [`regions`] (3), [`edges`] (4) and
+//! [`curves`] (5) so far.
 
 // The stages land one at a time; the Filter Gallery uses them once the last one is in.
 #![allow(dead_code)]
 
 mod colour;
+mod curves;
+mod edges;
 mod regions;
 mod util;
 
