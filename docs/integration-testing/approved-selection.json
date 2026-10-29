@@ -134,7 +134,7 @@
         }
       },
       "manual_status": "NOT RUN",
-      "subsystem": "Compositing and filters",
+      "subsystem": "UI and workflow",
       "new_test_names": [
         "adjustment_names_target_contents_instead_of_masks"
       ],
@@ -1085,7 +1085,7 @@
         }
       },
       "manual_status": "NOT RUN",
-      "subsystem": "Type and typography",
+      "subsystem": "File fidelity and colour",
       "new_test_names": [
         "a_kept_txt2_goes_with_the_last_type_layer"
       ],
@@ -3134,7 +3134,7 @@
         }
       },
       "manual_status": "NOT RUN",
-      "subsystem": "Type and typography",
+      "subsystem": "File fidelity and colour",
       "new_test_names": [
         "new",
         "change",
@@ -3452,7 +3452,7 @@
         }
       },
       "manual_status": "NOT RUN",
-      "subsystem": "UI and workflow",
+      "subsystem": "File fidelity and colour",
       "new_test_names": [
         "inferred_3dl_scale",
         "mesh_3dl",
@@ -4967,7 +4967,7 @@
         }
       },
       "manual_status": "NOT RUN",
-      "subsystem": "UI and workflow",
+      "subsystem": "Platform and reliability",
       "new_test_names": [
         "rejects_numeric_prerelease_identifiers_with_leading_zeroes"
       ],
@@ -5293,7 +5293,7 @@
         }
       },
       "manual_status": "NOT RUN",
-      "subsystem": "File fidelity and colour",
+      "subsystem": "Selection, paths and transforms",
       "new_test_names": [
         "app",
         "square",
@@ -5427,7 +5427,7 @@
         }
       },
       "manual_status": "NOT RUN",
-      "subsystem": "Platform and reliability",
+      "subsystem": "UI and workflow",
       "new_test_names": [
         "field_marker_stays_inside_the_field",
         "color_field_cursor_stays_inside_the_field"
@@ -5578,7 +5578,7 @@
         }
       },
       "manual_status": "NOT RUN",
-      "subsystem": "UI and workflow",
+      "subsystem": "Compositing and filters",
       "new_test_names": [
         "the_description_is_the_cpus_blur",
         "an_impulse_spreads_no_further_than_the_reach",
@@ -6607,7 +6607,7 @@
         }
       },
       "manual_status": "NOT RUN",
-      "subsystem": "File fidelity and colour",
+      "subsystem": "UI and workflow",
       "new_test_names": [],
       "regression_source": "https://github.com/storytold/photocraft/pull/8892"
     },
@@ -9610,7 +9610,7 @@
         }
       },
       "manual_status": "NOT RUN",
-      "subsystem": "Selection, paths and transforms",
+      "subsystem": "Actions and automation",
       "new_test_names": [
         "canonical_windows_prefixes_match_without_ambient_resolution",
         "windows_root_case_variants_keep_io_inside_the_grant",
@@ -10049,7 +10049,7 @@
         }
       },
       "manual_status": "NOT RUN",
-      "subsystem": "UI and workflow",
+      "subsystem": "File fidelity and colour",
       "new_test_names": [
         "tiff_pages",
         "write_tiff",
@@ -10246,7 +10246,7 @@
         }
       },
       "manual_status": "NOT RUN",
-      "subsystem": "File fidelity and colour",
+      "subsystem": "Platform and reliability",
       "new_test_names": [],
       "regression_source": "https://github.com/storytold/photocraft/pull/6383"
     },
@@ -10384,7 +10384,7 @@
         }
       },
       "manual_status": "NOT RUN",
-      "subsystem": "Selection, paths and transforms",
+      "subsystem": "Painting",
       "new_test_names": [
         "rgb_color",
         "hue_strip_mesh",
@@ -11852,7 +11852,7 @@
         }
       },
       "manual_status": "NOT RUN",
-      "subsystem": "Painting",
+      "subsystem": "Selection, paths and transforms",
       "new_test_names": [
         "entry_bytes",
         "split_cache_does_not_pin_pattern_tiles_over_its_budget",
@@ -12902,7 +12902,7 @@
         }
       },
       "manual_status": "NOT RUN",
-      "subsystem": "Selection, paths and transforms",
+      "subsystem": "UI and workflow",
       "new_test_names": [
         "sizing_of",
         "layer_style_on_bevel",
@@ -14962,7 +14962,7 @@
         }
       },
       "manual_status": "NOT RUN",
-      "subsystem": "UI and workflow",
+      "subsystem": "File fidelity and colour",
       "new_test_names": [
         "plain_cmyk_layer",
         "copy_inks",
@@ -15075,7 +15075,7 @@
         }
       },
       "manual_status": "NOT RUN",
-      "subsystem": "Compositing and filters",
+      "subsystem": "UI and workflow",
       "new_test_names": [],
       "regression_source": "https://github.com/storytold/photocraft/pull/4023"
     },
@@ -16154,7 +16154,7 @@
         }
       },
       "manual_status": "NOT RUN",
-      "subsystem": "File fidelity and colour",
+      "subsystem": "Selection, paths and transforms",
       "new_test_names": [
         "session",
         "appended_work_and_saved_components_preserve_existing_geometry_and_undo",
@@ -16354,7 +16354,7 @@
         }
       },
       "manual_status": "NOT RUN",
-      "subsystem": "UI and workflow",
+      "subsystem": "Actions and automation",
       "new_test_names": [
         "recorded_eye_visibility_replays_on_another_document_and_duplicate_names",
         "shell_playback_resolves_recorded_eye_target_on_new_document"
@@ -17377,7 +17377,7 @@
         }
       },
       "manual_status": "NOT RUN",
-      "subsystem": "File fidelity and colour",
+      "subsystem": "Actions and automation",
       "new_test_names": [
         "idle",
         "validate",

@@ -124,7 +124,7 @@
     {
       "id": "PR-4023",
       "pr": 4023,
-      "subsystem": "Compositing and filters",
+      "subsystem": "UI and workflow",
       "fixture_setup": "Select Spanish UI; open a synthetic document and the filter/video menus affected by this PR.",
       "action": "Inspect Interpret/Replace Footage, Tilt-Shift, Mezzotint and Smart Sharpen; exercise labels containing parameter placeholders.",
       "expected": "All affected labels use the intended reviewed Spanish terminology; placeholders retain their values and no missing-key fallback appears.",
@@ -340,7 +340,7 @@
     {
       "id": "PR-9703",
       "pr": 9703,
-      "subsystem": "Compositing and filters",
+      "subsystem": "UI and workflow",
       "fixture_setup": "[`adjustment_names_target_contents_instead_of_masks`](https://github.com/storytold/photocraft/blob/3605d30c38294c4d970e52f4a02f44f97e8bc1a9/crates/ui-egui/src/mask_thumbs_ui/tests.rs); use its checked-in synthetic inputs and setup unchanged.",
       "action": "cargo test -p photocraft-ui-egui --locked adjustment_names_target_contents_instead_of_masks -- --nocapture",
       "expected": "Matching regression executes and all assertions pass; Fix adjustment layer name clicks targeting masks. Preserve source/document immutability and expected history assertions where present.",
@@ -352,7 +352,7 @@
     {
       "id": "PR-1991",
       "pr": 1991,
-      "subsystem": "File fidelity and colour",
+      "subsystem": "Actions and automation",
       "fixture_setup": "[`json_actions_round_trip_preserves_metadata`](https://github.com/storytold/photocraft/blob/202266b90613280e16ae285b53dd4e10d5f0c7ac/crates/engine/src/actions_cmds/json_file.rs); use its checked-in synthetic inputs and setup unchanged.",
       "action": "cargo test -p photocraft-engine --locked json_actions_round_trip_preserves_metadata -- --nocapture",
       "expected": "Matching regression executes and all assertions pass; feat(actions): import and export reusable Actions JSON files. Preserve source/document immutability and expected history assertions where present.",
@@ -388,7 +388,7 @@
     {
       "id": "PR-3464",
       "pr": 3464,
-      "subsystem": "File fidelity and colour",
+      "subsystem": "Selection, paths and transforms",
       "fixture_setup": "[`appended_work_and_saved_components_preserve_existing_geometry_and_undo`](https://github.com/storytold/photocraft/blob/1eecd00b2dff4ae4c642269cec211cd06ce1c3aa/crates/engine/tests/pen_path_append.rs); use its checked-in synthetic inputs and setup unchanged.",
       "action": "cargo test -p photocraft-engine --locked appended_work_and_saved_components_preserve_existing_geometry_and_undo -- --nocapture",
       "expected": "Matching regression executes and all assertions pass; fix(vector): target selected saved paths and own Pen gestures. Preserve source/document immutability and expected history assertions where present.",
@@ -424,7 +424,7 @@
     {
       "id": "PR-6383",
       "pr": 6383,
-      "subsystem": "File fidelity and colour",
+      "subsystem": "Platform and reliability",
       "fixture_setup": "Use an existing Windows release build and its symbols artifact from the same immutable build; record both artifact identities.",
       "action": "Inspect the symbols ZIP and load a representative PDB with its matching executable in a debugger/profiler. Do not publish a release to run this case.",
       "expected": "The ZIP contains the release build PDBs and symbol identity matches the executable; missing artifacts make this case BLOCKED.",
@@ -436,7 +436,7 @@
     {
       "id": "PR-8892",
       "pr": 8892,
-      "subsystem": "File fidelity and colour",
+      "subsystem": "UI and workflow",
       "fixture_setup": "Open a layered synthetic document in Move tool and Save for Web; capture initial dialog geometry.",
       "action": "Inspect alignment and overflow controls; enter an invalid Matte value and compare dialog width before/after.",
       "expected": "Alignment and overflow controls keep the reviewed larger dimensions, and invalid Matte input does not change Save for Web width.",
@@ -460,7 +460,7 @@
     {
       "id": "PR-8986",
       "pr": 8986,
-      "subsystem": "File fidelity and colour",
+      "subsystem": "Selection, paths and transforms",
       "fixture_setup": "[`direct_selection_drags_an_anchor_of_the_selected_saved_path`](https://github.com/storytold/photocraft/blob/390dfbbcb026b33d46c52c62360b65deca00f258/crates/ui-egui/src/saved_path_edit_tests.rs); use its checked-in synthetic inputs and setup unchanged.",
       "action": "cargo test -p photocraft-ui-egui --locked direct_selection_drags_an_anchor_of_the_selected_saved_path -- --nocapture",
       "expected": "Matching regression executes and all assertions pass; Path tools: edit the saved path selected in the Paths panel (#8478). Preserve source/document immutability and expected history assertions where present.",
@@ -580,7 +580,7 @@
     {
       "id": "PR-5453",
       "pr": 5453,
-      "subsystem": "Painting",
+      "subsystem": "Selection, paths and transforms",
       "fixture_setup": "[`split_cache_does_not_pin_pattern_tiles_over_its_budget`](https://github.com/storytold/photocraft/blob/e22a9baedceefd97daffe84403b23c99c56d6919/crates/compose/src/shape_split.rs); use its checked-in synthetic inputs and setup unchanged.",
       "action": "cargo test -p photocraft-compose --locked split_cache_does_not_pin_pattern_tiles_over_its_budget -- --nocapture",
       "expected": "Matching regression executes and all assertions pass; Shapes: independent fill and stroke paints (solid, gradient, pattern), part 1. Preserve source/document immutability and expected history assertions where present.",
@@ -676,7 +676,7 @@
     {
       "id": "PR-8985",
       "pr": 8985,
-      "subsystem": "Platform and reliability",
+      "subsystem": "UI and workflow",
       "fixture_setup": "[`field_marker_stays_inside_the_field`](https://github.com/storytold/photocraft/blob/8e695caf885b529f01f482b3f0c90cdb34df1915/crates/ui-egui/src/color_picker_ui.rs); use its checked-in synthetic inputs and setup unchanged.",
       "action": "cargo test -p photocraft-ui-egui --locked field_marker_stays_inside_the_field -- --nocapture",
       "expected": "Matching regression executes and all assertions pass; Color panel and Color Picker: clip the round cursor to the colour field. Preserve source/document immutability and expected history assertions where present.",
@@ -736,7 +736,7 @@
     {
       "id": "PR-5010",
       "pr": 5010,
-      "subsystem": "Selection, paths and transforms",
+      "subsystem": "UI and workflow",
       "fixture_setup": "[`layer_style_keeps_one_size_on_every_page`](https://github.com/storytold/photocraft/blob/cc865221894e21f846d92b721cce7421ea338363/crates/ui-egui/src/dialogs.rs); use its checked-in synthetic inputs and setup unchanged.",
       "action": "cargo test -p photocraft-ui-egui --locked layer_style_keeps_one_size_on_every_page -- --nocapture",
       "expected": "Matching regression executes and all assertions pass; Layer Style: Photoshop's layout (three columns, OK/Cancel/New Style/Preview on the right, one-line rows) [depends on #4938]. Preserve source/document immutability and expected history assertions where present.",
@@ -796,7 +796,7 @@
     {
       "id": "PR-6236",
       "pr": 6236,
-      "subsystem": "Selection, paths and transforms",
+      "subsystem": "Painting",
       "fixture_setup": "[`shift_alt_right_press_opens_the_hud_not_the_picker`](https://github.com/storytold/photocraft/blob/ce546dd4b5451a17b843ef1e129bdb40fbfe3160/crates/ui-egui/src/color_hud.rs); use its checked-in synthetic inputs and setup unchanged.",
       "action": "cargo test -p photocraft-ui-egui --locked shift_alt_right_press_opens_the_hud_not_the_picker -- --nocapture",
       "expected": "Matching regression executes and all assertions pass; Shift+Alt+right-click opens Photoshop's HUD Color Picker (#6098). Preserve source/document immutability and expected history assertions where present.",
@@ -808,7 +808,7 @@
     {
       "id": "PR-6510",
       "pr": 6510,
-      "subsystem": "Selection, paths and transforms",
+      "subsystem": "Actions and automation",
       "fixture_setup": "[`canonical_windows_prefixes_match_without_ambient_resolution`](https://github.com/storytold/photocraft/blob/8bb0a5e67474d36ae08d565251edb1ae780dd044/crates/automation/src/workspace/tests.rs); use its checked-in synthetic inputs and setup unchanged.",
       "action": "cargo test -p photocraft-automation --locked canonical_windows_prefixes_match_without_ambient_resolution -- --nocapture",
       "expected": "Matching regression executes and all assertions pass; Automation: resolve configured root aliases for absolute paths (#6426). Preserve source/document immutability and expected history assertions where present.",
@@ -916,7 +916,7 @@
     {
       "id": "PR-9457",
       "pr": 9457,
-      "subsystem": "Type and typography",
+      "subsystem": "File fidelity and colour",
       "fixture_setup": "[`gauss_gives_the_bits_of_the_tap_loop`](https://github.com/storytold/photocraft/blob/2863c3281c2a22dade0ce92d42bf8900074f76c6/crates/raw/src/tone.rs); use its checked-in synthetic inputs and setup unchanged.",
       "action": "cargo test -p photocraft-raw --locked gauss_gives_the_bits_of_the_tap_loop -- --nocapture",
       "expected": "Matching regression executes and all assertions pass; raw: faster tone stage (Shadows, Highlights, Clarity, Texture, Dehaze), same bytes. Preserve source/document immutability and expected history assertions where present.",
@@ -964,7 +964,7 @@
     {
       "id": "PR-9596",
       "pr": 9596,
-      "subsystem": "Type and typography",
+      "subsystem": "File fidelity and colour",
       "fixture_setup": "[`a_kept_txt2_goes_with_the_last_type_layer`](https://github.com/storytold/photocraft/blob/e62013cfd652fa60470a0f7a185fbc8f3d2a2c92/crates/io/src/psd_export.rs); use its checked-in synthetic inputs and setup unchanged.",
       "action": "cargo test -p photocraft-io --locked a_kept_txt2_goes_with_the_last_type_layer -- --nocapture",
       "expected": "Matching regression executes and all assertions pass; fix(io): drop a kept Txt2 once no type layers are left. Preserve source/document immutability and expected history assertions where present.",
@@ -988,7 +988,7 @@
     {
       "id": "PR-3461",
       "pr": 3461,
-      "subsystem": "UI and workflow",
+      "subsystem": "Actions and automation",
       "fixture_setup": "[`recorded_eye_visibility_replays_on_another_document_and_duplicate_names`](https://github.com/storytold/photocraft/blob/5d8cb2a39ad70e31260f1f3fc2010ca132daff65/crates/engine/src/actions_cmds.rs); use its checked-in synthetic inputs and setup unchanged.",
       "action": "cargo test -p photocraft-engine --locked recorded_eye_visibility_replays_on_another_document_and_duplicate_names -- --nocapture",
       "expected": "Matching regression executes and all assertions pass; Replay recorded layer visibility on the intended named layer. Preserve source/document immutability and expected history assertions where present.",
@@ -1012,7 +1012,7 @@
     {
       "id": "PR-4035",
       "pr": 4035,
-      "subsystem": "UI and workflow",
+      "subsystem": "File fidelity and colour",
       "fixture_setup": "[`flatten_keeps_the_inks_of_a_single_layer_exactly`](https://github.com/storytold/photocraft/blob/15ebf8fc940031abdf772e5fdd687c8b55938639/crates/engine/tests/cmyk_flatten_profile.rs); use its checked-in synthetic inputs and setup unchanged.",
       "action": "cargo test -p photocraft-engine --locked flatten_keeps_the_inks_of_a_single_layer_exactly -- --nocapture",
       "expected": "Matching regression executes and all assertions pass; fix(cmyk): Flatten Image and merges keep the inks of a tagged CMYK document (#3778). Preserve source/document immutability and expected history assertions where present.",
@@ -1108,7 +1108,7 @@
     {
       "id": "PR-6387",
       "pr": 6387,
-      "subsystem": "UI and workflow",
+      "subsystem": "File fidelity and colour",
       "fixture_setup": "[`video_frames_to_layers_takes_every_tiff_page`](https://github.com/storytold/photocraft/blob/8bfbbf816025942b74130adf16fb07265817b691/crates/engine/src/video_cmds/tests.rs); use its checked-in synthetic inputs and setup unchanged.",
       "action": "cargo test -p photocraft-engine --locked video_frames_to_layers_takes_every_tiff_page -- --nocapture",
       "expected": "Matching regression executes and all assertions pass; Video Frames to Layers: every page of a multi-page TIFF (part of #6379). Preserve source/document immutability and expected history assertions where present.",
@@ -1144,7 +1144,7 @@
     {
       "id": "PR-8931",
       "pr": 8931,
-      "subsystem": "UI and workflow",
+      "subsystem": "Compositing and filters",
       "fixture_setup": "[`the_description_is_the_cpus_blur`](https://github.com/storytold/photocraft/blob/d42dd4c6302c77c1f9dc46b7b53ffa5eb0047a13/crates/algo/src/separable.rs); use its checked-in synthetic inputs and setup unchanged.",
       "action": "cargo test -p photocraft-algo --locked the_description_is_the_cpus_blur -- --nocapture",
       "expected": "Matching regression executes and all assertions pass; feat(algo): describe the Gaussian blur as data for other devices. Preserve source/document immutability and expected history assertions where present.",
@@ -1168,7 +1168,7 @@
     {
       "id": "PR-9015",
       "pr": 9015,
-      "subsystem": "UI and workflow",
+      "subsystem": "Platform and reliability",
       "fixture_setup": "[`rejects_numeric_prerelease_identifiers_with_leading_zeroes`](https://github.com/storytold/photocraft/blob/afb4364a8795c42e6353762891b4890d878f9a68/xtask/src/version.rs); use its checked-in synthetic inputs and setup unchanged.",
       "action": "cargo test -p xtask --locked rejects_numeric_prerelease_identifiers_with_leading_zeroes -- --nocapture",
       "expected": "Matching regression executes and all assertions pass; fix(xtask): reject leading zeroes in numeric prerelease identifiers. Preserve source/document immutability and expected history assertions where present.",
@@ -1216,7 +1216,7 @@
     {
       "id": "PR-9418",
       "pr": 9418,
-      "subsystem": "UI and workflow",
+      "subsystem": "File fidelity and colour",
       "fixture_setup": "[`three_dl_mesh_three_point_shaper_is_not_a_node`](https://github.com/storytold/photocraft/blob/da4b838e54f6073cda4798fa7b63b3b7214aaf93/crates/cms/src/lutfile.rs); use its checked-in synthetic inputs and setup unchanged.",
       "action": "cargo test -p photocraft-cms --locked three_dl_mesh_three_point_shaper_is_not_a_node -- --nocapture",
       "expected": "Matching regression executes and all assertions pass; Color Lookup: honour the .3dl Mesh header's cube edge and output depth (#9078, #9073). Preserve source/document immutability and expected history assertions where present.",
