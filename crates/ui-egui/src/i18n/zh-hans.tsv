@@ -3203,3 +3203,7 @@ curves	Smooth	平滑
 	Refine Hair needs hair detection, which isn't available yet	调整细线需要毛发检测，目前尚不可用
 	Select and Mask was closed: its document is no longer the active one	已关闭“选择与蒙版”：其文档不再是当前文档
 	Select and Mask was closed: another layer was selected	已关闭“选择与蒙版”：已选择另一个图层
+	Import Shapes…	导入形状…
+	Choose a custom shape file (.csh).	请选择自定义形状文件 (.csh)。
+@plural	Imported {n} shape from {file}|Imported {n} shapes from {file}	从 {file} 导入的形状数量：{n}
+@plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	从 {group} 导入的形状数量：{n}

@@ -4196,3 +4196,7 @@ curves	Smooth	スムーズ
 	Refine Hair needs hair detection, which isn't available yet	髪の毛を調整には髪の毛の検出が必要ですが、まだ利用できません
 	Select and Mask was closed: its document is no longer the active one	「選択とマスク」を閉じました: 対象のドキュメントがアクティブではなくなりました
 	Select and Mask was closed: another layer was selected	「選択とマスク」を閉じました: 別のレイヤーが選択されました
+	Import Shapes…	シェイプを読み込み…
+	Choose a custom shape file (.csh).	カスタムシェイプファイル (.csh) を選択してください。
+@plural	Imported {n} shape from {file}|Imported {n} shapes from {file}	{file} から読み込んだシェイプ数: {n}
+@plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	{group} から読み込んだシェイプ数: {n}

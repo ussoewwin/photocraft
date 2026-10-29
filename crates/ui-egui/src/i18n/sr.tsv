@@ -4589,3 +4589,7 @@ shape	Appearance	Izgled
 	Select and Mask was closed: its document is no longer the active one	Izaberi i maskiraj je zatvoren: njegov dokument više nije aktivan
 	Select and Mask was closed: another layer was selected	Izaberi i maskiraj je zatvoren: izabran je drugi sloj
 	Select Layer Under Cursor	Izaberi sloj ispod kursora
+	Import Shapes…	Uvezi oblike…
+	Choose a custom shape file (.csh).	Izaberite datoteku prilagođenih oblika (.csh).
+@plural	Imported {n} shape from {file}|Imported {n} shapes from {file}	Broj oblika uvezenih iz {file}: {n}|Broj oblika uvezenih iz {file}: {n}|Broj oblika uvezenih iz {file}: {n}
+@plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	Broj oblika uvezenih iz {group}: {n}|Broj oblika uvezenih iz {group}: {n}|Broj oblika uvezenih iz {group}: {n}

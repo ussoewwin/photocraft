@@ -4246,3 +4246,7 @@ cameraData	Lens	Lens
 	Delete effect	Efekti sil
 	Current Layer:	Geçerli Katman:
 	Underlying Layer:	Alttaki Katman:
+	Import Shapes…	Şekilleri İçe Aktar…
+	Choose a custom shape file (.csh).	Özel şekil dosyası (.csh) seçin.
+@plural	Imported {n} shape from {file}|Imported {n} shapes from {file}	{file} kaynağından içe aktarılan şekil sayısı: {n}
+@plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	{group} kaynağından içe aktarılan şekil sayısı: {n}

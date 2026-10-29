@@ -136,7 +136,8 @@ remaining gaps in #1606 stay tracked with per-sample corpus ceilings.
 | Actions `.atn` | R/W | R/W | `psd/src/atn.rs` (version 16 sets, exact round trip), `engine/src/atn_cmds.rs` (Photoshop events ↔ commands, including Apply Layer Comp by name, #7101; other steps kept verbatim; Save As maps to `file.saveAs`/`file.saveACopy` when its destination is a file, #7102). Panel menu, CLI `batch --actions set.atn`, `actions.load`/`actions.save`. Photoshop 5-era version 12 files unsupported (AUTO-219-2) |
 | Styles `.asl` | R/W | R/W | `psd/src/asl.rs`, `io/src/asl_map.rs`; Styles panel Import/Export Styles…, `style.presets.importAsl`/`exportAsl` (#1051) |
 | Contours `.shc` | R/W | R/W | `psd/src/shc.rs`; Contour Editor Load…/Save… (FILE-215-15). No user contour library; not yet checked against a Photoshop-written file |
-| Custom shapes `.csh`, tool presets `.tpl` | R/W | no | |
+| Custom shapes `.csh` | R/W | R | Version 2 sets through Shapes → Import Shapes… or File → Open; persistent groups via `shape.presets.importCsh`. Original generated geometry cross-read with ag-psd; not yet checked against a Photoshop-written file. No export |
+| Tool presets `.tpl` | R/W | no | |
 | Curves `.acv`, Levels `.alv`, other adjustment presets | R/W | not audited | |
 | C2PA Content Credentials | R/W | no | #1050 |
 
@@ -177,6 +178,7 @@ remaining gaps in #1606 stay tracked with per-sample corpus ceilings.
 | 2026-10-14 | minor | PSD smart objects warped with Transform Warp's Cylinder (`warpCylinder`, seven `warpValues`) are read and written: Replace Contents, Relink and Edit Contents re-render them wrapped instead of flat, and a regenerated `SoLd` no longer drops the warp (#4112). Vertical cylinders and ones with perspective are still unread |
 | 2026-10-15 | minor | Bevel & Emboss Gloss Contour › Anti-aliased (`antialiasGloss`) is read and written, set by `glossAntiAlias` and shown in the Layer Style dialog; a PSD whose bevel is edited no longer loses it. Rendering still ignores contour anti-aliasing, as for the other effects' contours |
 | 2026-10-15 | minor | Stroke › Overprint (`overprint`) is read and written, set by the stroke command's `overprint` and shown in the Layer Style dialog; an edited stroke no longer drops it. Rendering ignores it for now |
+| 2026-10-14 | minor | CSH custom-shape set import (#5359, FILE-215-15); export and Photoshop-written fixture verification remain open; no estimate changed |
 | 2026-10-14 | minor | Nikon NEF: the D4 profile's saturation level follows the sample depth (15520 at 14 bits, 3880 at 12), so 12-bit D4 files open as bright as their 14-bit twins instead of 2.6 stops darker (#5978) |
 | 2026-10-14 | minor | Animated WebP: New Video Layer from File, Replace Footage, Reload Frame and Video Frames to Layers take every frame, composited, with the timeline rate from the durations (#1198) |
 | 2026-10-14 | minor | PSD smart filter masks: Photoshop stores a smart object's filtered pixels without its filter mask and mixes the unfiltered ones (`FEid`) back in; import now mixes them and export writes them that way, so sf-filter-mask-hard, -gradient and sf-stack-blend-and-mask pass; Photoshop-oracle floor 185 → 188 of 258 |

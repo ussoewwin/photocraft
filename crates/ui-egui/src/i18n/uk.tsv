@@ -4232,3 +4232,7 @@ curves	Smooth	Згладити
 	Refine Hair needs hair detection, which isn't available yet	Для уточнення волосся потрібне розпізнавання волосся, яке ще недоступне
 	Select and Mask was closed: its document is no longer the active one	Вікно «Виділити та маскувати» закрито: його документ більше не активний
 	Select and Mask was closed: another layer was selected	Вікно «Виділити та маскувати» закрито: вибрано інший шар
+	Import Shapes…	Імпортувати фігури…
+	Choose a custom shape file (.csh).	Виберіть файл довільних фігур (.csh).
+@plural	Imported {n} shape from {file}|Imported {n} shapes from {file}	Кількість фігур, імпортованих із {file}: {n}|Кількість фігур, імпортованих із {file}: {n}|Кількість фігур, імпортованих із {file}: {n}
+@plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	Кількість фігур, імпортованих із {group}: {n}|Кількість фігур, імпортованих із {group}: {n}|Кількість фігур, імпортованих із {group}: {n}

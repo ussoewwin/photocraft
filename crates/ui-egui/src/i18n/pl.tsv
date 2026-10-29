@@ -4140,3 +4140,7 @@ curves	Smooth	Wygładź
 	Select and Mask was closed: its document is no longer the active one	Zamknięto Zaznacz i maskuj: jego dokument nie jest już aktywny
 	Select and Mask was closed: another layer was selected	Zamknięto Zaznacz i maskuj: wybrano inną warstwę
 	Select Layer Under Cursor	Zaznacz warstwę pod kursorem
+	Import Shapes…	Importuj kształty…
+	Choose a custom shape file (.csh).	Wybierz plik kształtów własnych (.csh).
+@plural	Imported {n} shape from {file}|Imported {n} shapes from {file}	Liczba kształtów zaimportowanych z {file}: {n}|Liczba kształtów zaimportowanych z {file}: {n}|Liczba kształtów zaimportowanych z {file}: {n}
+@plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	Liczba kształtów zaimportowanych z {group}: {n}|Liczba kształtów zaimportowanych z {group}: {n}|Liczba kształtów zaimportowanych z {group}: {n}

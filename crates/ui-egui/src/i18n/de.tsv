@@ -3542,3 +3542,7 @@ curves	Smooth	Glätten
 	Refine Hair needs hair detection, which isn't available yet	Haare verbessern benötigt eine Haarerkennung, die noch nicht verfügbar ist
 	Select and Mask was closed: its document is no longer the active one	Auswählen und maskieren wurde geschlossen: Das zugehörige Dokument ist nicht mehr aktiv
 	Select and Mask was closed: another layer was selected	Auswählen und maskieren wurde geschlossen: Es wurde eine andere Ebene ausgewählt
+	Import Shapes…	Formen importieren…
+	Choose a custom shape file (.csh).	Wählen Sie eine Datei mit eigenen Formen (.csh).
+@plural	Imported {n} shape from {file}|Imported {n} shapes from {file}	Anzahl der aus {file} importierten Formen: {n}|Anzahl der aus {file} importierten Formen: {n}
+@plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	Anzahl der aus {group} importierten Formen: {n}|Anzahl der aus {group} importierten Formen: {n}
