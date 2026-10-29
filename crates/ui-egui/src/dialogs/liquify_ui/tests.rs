@@ -743,7 +743,7 @@ fn smart_filter_double_click_edits_the_recorded_liquify() {
     crate::smart_ui::open_editor(&mut app, &ctx, layer.0, &sm, 0);
     assert!(app.ui.dialogs.is_empty(), "no generic parameter form");
     let d = app.distort.liquify.as_ref().expect("the Liquify workspace opens");
-    assert_eq!((d.smart_filter, d.cell), (Some(0), 3.0));
+    assert_eq!((d.smart_filter.as_ref().map(|(index, _)| *index), d.cell), (Some(0), 3.0));
     assert_eq!(d.strokes, recorded);
     assert_eq!(d.field, LiquifyField::from_strokes(d.canvas, 3.0, &recorded));
     // The preview starts from the pixels below the filter (no liquify, no blur).
@@ -812,8 +812,33 @@ fn smart_filter_edit_that_cannot_be_applied_reports_the_error() {
     let r = control(&mut app, &json!({"commit": true}));
     assert!(app.distort.liquify.is_none());
     assert!(app.ui.status_error);
-    assert!(app.ui.status.contains("no smart filters"), "{}", app.ui.status);
+    assert!(app.ui.status.contains("no longer exists"), "{}", app.ui.status);
     assert!(smart(&app, layer).smart_filters.is_empty());
+    assert_eq!(app.session.active().unwrap().history.past_len(), steps);
+    assert_eq!(r, Err(app.ui.status.clone()));
+}
+
+/// OK after the stack was reordered while the workspace was open: the filter now at the
+/// edited index (the Gaussian Blur) is left alone and the status bar asks to reopen.
+#[test]
+fn smart_filter_edit_after_the_stack_changed_updates_nothing() {
+    let ctx = egui::Context::default();
+    let (mut app, layer) = smart_liquify_app();
+    open_smart_filter(&mut app, &ctx, layer, 0).unwrap();
+    drag(&mut app, 70.0, 84.0);
+    app.session.execute("layer.smartFilter.move", json!({"layer": layer.0, "index": 0, "to": 1})).unwrap();
+    let before = smart(&app, layer).smart_filters;
+    assert_eq!(before[0].command, "filter.blur.gaussianBlur");
+    let steps = app.session.active().unwrap().history.past_len();
+    let r = control(&mut app, &json!({"commit": true}));
+    assert!(app.distort.liquify.is_none());
+    assert!(app.ui.status_error);
+    assert!(app.ui.status.contains("Reopen its dialog"), "{}", app.ui.status);
+    let after = smart(&app, layer).smart_filters;
+    assert_eq!(after.len(), before.len());
+    for (a, b) in after.iter().zip(&before) {
+        assert_eq!((&a.command, &a.params), (&b.command, &b.params));
+    }
     assert_eq!(app.session.active().unwrap().history.past_len(), steps);
     assert_eq!(r, Err(app.ui.status.clone()));
 }
