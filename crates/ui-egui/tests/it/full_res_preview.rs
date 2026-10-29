@@ -48,8 +48,15 @@ fn control(h: &mut Harness, method: &str, params: Value) {
 fn columns_document() -> Document {
     let mut doc = Document::with_background("columns", Size::new(W as u32, H as u32), ColorMode::Rgb, SampleType::U8, Color::WHITE);
     let s = doc.layers[0].surface_mut().expect("background pixels");
-    for x in (0..W).step_by(2) {
-        s.fill_rect(Rect::new(x, 0, x + 1, H), &[0.0, 0.0, 0.0, 1.0]);
+    let row: Vec<f32> = (0..W)
+        .flat_map(|x| {
+            let v = if x % 2 == 0 { 0.0 } else { 1.0 };
+            [v, v, v, 1.0]
+        })
+        .collect();
+    for y in (0..H).step_by(64) {
+        let end = (y + 64).min(H);
+        s.write_region(Rect::new(0, y, W, end), &row.repeat((end - y) as usize));
     }
     doc
 }

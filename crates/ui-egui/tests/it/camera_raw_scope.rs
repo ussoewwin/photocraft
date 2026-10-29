@@ -667,9 +667,13 @@ fn pixel_hover_tracks_displayed_rgb_before_after_and_keeps_analysis_cached() {
 #[test]
 fn pixel_hover_gpu_badge_single_band_and_crosshair_appear_and_clear_in_all_themes() {
     let _gpu = gpu_lock();
+    let mut h = fixture_render(ThemeKind::Pro, true);
     for theme in ThemeKind::ALL {
-        let mut h = fixture_render(theme, true);
         let ctx = h.ctx.clone();
+        h.state_mut().set_theme(&ctx, theme);
+        h.run_steps(3);
+        settle(&mut h);
+        assert_eq!(h.state().ui.theme, theme);
         menu(h.state_mut(), &ctx, json!({"ui":{"scope":{"vectorscope":true}}})).unwrap();
         h.run_steps(4);
         let histogram = rect(&h, "scopeRect");
