@@ -246,6 +246,43 @@ fn pencil_1px_line_is_the_same_whichever_way_and_however_smoothed() {
     assert_eq!(sampled, pixels((1.5, 1.5), (20.5, 9.5), 0.0));
 }
 
+#[test]
+fn pencil_1px_freehand_line_never_breaks_where_it_turns() {
+    // #8040: each segment of a freehand stroke samples its own line, so where the stroke turned
+    // the last pixel of one segment and the first of the next could sit two pixels apart.
+    let b = BrushSettings { aliased: true, hardness: 1.0, size: 1.0, ..brush() };
+    let mut seed = 0x2545_f491_4f6c_dd1du64;
+    let mut rnd = || {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        (seed >> 11) as f64 / (1u64 << 53) as f64
+    };
+    for _ in 0..300 {
+        let mut pts = vec![StrokePoint::new(20.0 + rnd() * 8.0, 20.0 + rnd() * 8.0, 1.0)];
+        for _ in 0..6 {
+            let l = *pts.last().unwrap();
+            let (dx, dy) = ((rnd() - 0.5) * 6.0, (rnd() - 0.5) * 6.0);
+            pts.push(StrokePoint::new((l.x + dx).clamp(1.0, 46.0), (l.y + dy).clamp(1.0, 46.0), 1.0));
+        }
+        let s = paint(&b, &pts, 48, 48);
+        let painted: Vec<(i32, i32)> = (0..48).flat_map(|y| (0..48).map(move |x| (x, y))).filter(|&(x, y)| s.rgba(x, y)[3] > 0.0).collect();
+        // Every painted pixel is reachable from the first through 8-connected neighbours.
+        let mut reached = vec![painted[0]];
+        let mut i = 0;
+        while i < reached.len() {
+            let (x, y) = reached[i];
+            for &q in &painted {
+                if (q.0 - x).abs() <= 1 && (q.1 - y).abs() <= 1 && !reached.contains(&q) {
+                    reached.push(q);
+                }
+            }
+            i += 1;
+        }
+        let path: Vec<(f64, f64)> = pts.iter().map(|p| (p.x, p.y)).collect();
+        assert_eq!(reached.len(), painted.len(), "the line breaks along {path:?}");
+    }
+}
 // ---------- spacing ----------
 
 #[test]
