@@ -365,6 +365,17 @@ pub(super) fn path_to_selection(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "selected": selected }))
 }
 
+/// `path.toSelection` with the combine mode fixed by the command (⌘⇧↩ adds, ⌘⌥↩ subtracts);
+/// a `mode` in the params is overridden, the rest is forwarded and validated as usual.
+pub(super) fn path_to_selection_with_mode(s: &mut Session, p: &Value, mode: &str) -> Result<Value> {
+    let mut q = match p {
+        Value::Object(_) => p.clone(),
+        _ => json!({}),
+    };
+    q["mode"] = json!(mode);
+    path_to_selection(s, &q)
+}
+
 pub(super) fn select_to_work_path(s: &mut Session, p: &Value) -> Result<Value> {
     let tol = f64p(p, "tolerance").unwrap_or(2.0).clamp(0.5, 10.0);
     let d = s.active().ok_or(EngineError::NoDocument)?;

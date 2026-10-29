@@ -218,6 +218,8 @@ impl PhotocraftApp {
                     | "select.loadSelection"
                     | "select.loadLuminosity"
                     | "path.toSelection"
+                    | "path.addToSelection"
+                    | "path.subtractFromSelection"
             )
             && self.session.active().is_some_and(|st| st.doc.selection.is_some())
         {
