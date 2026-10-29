@@ -1,3 +1,5 @@
+use std::sync::PoisonError;
+
 use super::{
     Arc, ColorMode, Document, Layer, LayerContent, LayerId, Metadata, Mutex, PixelFormat, Rect, Result, SampleType, Session, SmartObject, SmartSource, Surface,
     base_name, decode_source, json, other,
@@ -72,22 +74,35 @@ struct CacheEntry {
     key: CacheKey,
     image: SourceImage,
     decodes: u32,
+    /// The surface's real tile bytes, counted once when it is cached.
+    bytes: usize,
 }
 
 /// Decoded source composites by content hash, most recent last. Re-filtering or re-transforming
 /// a smart object never decodes its contents again.
 static SOURCE_CACHE: Mutex<Vec<CacheEntry>> = Mutex::new(Vec::new());
 
+#[cfg(not(target_arch = "wasm32"))]
 const CACHE_ENTRIES: usize = 32;
+#[cfg(target_arch = "wasm32")]
+const CACHE_ENTRIES: usize = 4;
 
+/// Accounted tile bytes; a source larger than this on its own isn't kept.
+#[cfg(not(target_arch = "wasm32"))]
 const CACHE_BYTES: usize = 1 << 30;
+#[cfg(target_arch = "wasm32")]
+const CACHE_BYTES: usize = 384 << 20;
+
+fn cache() -> std::sync::MutexGuard<'static, Vec<CacheEntry>> {
+    SOURCE_CACHE.lock().unwrap_or_else(PoisonError::into_inner)
+}
 
 pub(super) fn cache_key(bytes: &[u8], fmt: PixelFormat) -> CacheKey {
     (*blake3::hash(bytes).as_bytes(), fmt)
 }
 
 pub(super) fn cache_get(key: &CacheKey) -> Option<SourceImage> {
-    let mut c = SOURCE_CACHE.lock().ok()?;
+    let mut c = cache();
     let i = c.iter().position(|e| e.key == *key)?;
     let e = c.remove(i);
     let img = e.image.clone();
@@ -96,14 +111,22 @@ pub(super) fn cache_get(key: &CacheKey) -> Option<SourceImage> {
 }
 
 pub(super) fn cache_put(key: CacheKey, image: SourceImage) {
-    let Ok(mut c) = SOURCE_CACHE.lock() else { return };
+    cache_put_within(key, image, CACHE_BYTES);
+}
+
+/// [`cache_put`] with `limit` as the byte budget.
+fn cache_put_within(key: CacheKey, image: SourceImage, limit: usize) {
+    let bytes = super::stack_cache::surface_bytes(&image.surface);
+    let mut c = cache();
     let decodes = match c.iter().position(|e| e.key == key) {
         Some(i) => c.remove(i).decodes + 1,
         None => 1,
     };
-    c.push(CacheEntry { key, image, decodes });
-    let size = |e: &CacheEntry| e.image.bounds.width() as usize * e.image.bounds.height() as usize * e.key.1.channels() * 4;
-    while c.len() > CACHE_ENTRIES || (c.len() > 1 && c.iter().map(size).sum::<usize>() > CACHE_BYTES) {
+    if bytes > limit {
+        return;
+    }
+    c.push(CacheEntry { key, image, decodes, bytes });
+    while c.len() > CACHE_ENTRIES || c.iter().map(|e| e.bytes).sum::<usize>() > limit {
         c.remove(0);
     }
 }
@@ -111,7 +134,21 @@ pub(super) fn cache_put(key: CacheKey, image: SourceImage) {
 /// How many times these contents were decoded at this pixel format (0 = never / evicted).
 pub fn source_decode_count(bytes: &[u8], fmt: PixelFormat) -> u32 {
     let key = cache_key(bytes, fmt);
-    SOURCE_CACHE.lock().ok().and_then(|c| c.iter().find(|e| e.key == key).map(|e| e.decodes)).unwrap_or(0)
+    cache().iter().find(|e| e.key == key).map(|e| e.decodes).unwrap_or(0)
+}
+
+/// Bytes held by cached source composites.
+pub fn source_cache_bytes() -> usize {
+    cache().iter().map(|e| e.bytes).sum()
+}
+
+/// Drop every cached source composite (Edit › Purge › All, closing a document with smart
+/// objects). Returns the bytes released.
+pub fn purge_source_cache() -> usize {
+    let mut c = cache();
+    let freed = c.iter().map(|e| e.bytes).sum();
+    c.clear();
+    freed
 }
 
 pub(crate) fn take_caches(layers: &mut [Layer]) -> Vec<(LayerId, Surface)> {
@@ -261,4 +298,34 @@ pub fn source_image(file_name: &str, bytes: &[u8], fmt: PixelFormat) -> Result<S
     let img = SourceImage { surface: Arc::new(flattened_source(&doc, fmt)?), bounds: doc.bounds() };
     cache_put(key, img.clone());
     Ok(img)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn image(side: i32) -> SourceImage {
+        let mut s = Surface::new(PixelFormat::RGBA8);
+        s.fill_rect(Rect::new(0, 0, side, side), &[0.2, 0.4, 0.6, 1.0]);
+        SourceImage { surface: Arc::new(s), bounds: Rect::new(0, 0, side, side) }
+    }
+
+    #[test]
+    fn a_source_larger_than_the_limit_is_returned_but_not_cached() {
+        let key = cache_key(b"oversize", PixelFormat::RGBA8);
+        let img = image(256);
+        let bytes = super::super::stack_cache::surface_bytes(&img.surface);
+        cache_put_within(key, img.clone(), bytes - 1);
+        assert!(cache_get(&key).is_none(), "{bytes} bytes against a limit of {}", bytes - 1);
+        cache_put_within(key, img, bytes);
+        assert!(cache_get(&key).is_some());
+    }
+
+    #[test]
+    fn accounting_counts_the_real_tile_bytes() {
+        let img = image(256);
+        let bytes = super::super::stack_cache::surface_bytes(&img.surface);
+        // 8-bit RGBA is 4 bytes a pixel (plus the default pixel), not the 16 of an f32 estimate.
+        assert!((256 * 256 * 4..256 * 256 * 5).contains(&bytes), "{bytes}");
+    }
 }
