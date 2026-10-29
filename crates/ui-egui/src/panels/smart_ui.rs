@@ -203,6 +203,18 @@ pub fn filter_rows(app: &mut PhotocraftApp, ui: &mut egui::Ui, doc: &Document, l
         if let Some(i) = index
             && hit(egui::Response::double_clicked)
         {
+            // The editor captures the document's revision as its target, so the click's queued
+            // `layer.select` must not run after it opens (OK would refuse the edit): select first,
+            // as the Layers panel runs it.
+            if !active {
+                actions.retain(|(id, p)| !(id == "layer.select" && p.get("layer").and_then(Value::as_u64) == Some(l.id.0)));
+                if app.ui.text_edit.is_some() {
+                    crate::type_tool::commit(app);
+                }
+                if app.run("layer.select", json!({"layer": l.id.0})).is_err() {
+                    continue;
+                }
+            }
             open_editor(app, ui.ctx(), l.id.0, sm, i);
         }
         if let (Some(i), Some(r)) = (index, blend) {
