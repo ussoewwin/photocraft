@@ -415,6 +415,10 @@ pub(super) fn front(app: &mut PhotocraftApp, ctx: &egui::Context, id: &str, para
             let stem = name.rsplit_once('.').map_or(name.as_str(), |(a, _)| a).to_string();
             dialog(app, json!({"path": format!("{dir}/{stem}.pdf"), "quality": 10}), json!({}))
         }
+        "file.export.dataSetsAsFiles" => {
+            let (_, _, _) = doc?;
+            dialog(app, json!({"dir": dir, "naming": "{name}", "format": "png"}), json!({"format": ["png", "jpg", "psd", "tiff", "webp", "bmp"]}))
+        }
         "layer.new.artboard" => {
             let (w, h, _) = doc?;
             let presets: Vec<&str> = std::iter::once("").chain(photocraft_engine::artboard_cmds::PRESETS.iter().map(|p| p.0)).collect();

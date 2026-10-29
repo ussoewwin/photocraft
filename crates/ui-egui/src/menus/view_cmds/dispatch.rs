@@ -218,6 +218,7 @@ fn wraps(id: &str) -> bool {
             | "file.export.layerCompsToFiles"
             | "file.export.artboardsToFiles"
             | "file.export.artboardsToPdf"
+            | "file.export.dataSetsAsFiles"
             | "layer.new.artboard"
             | "file.export.colorLookupTables"
             | "view.newGuideLayout"
