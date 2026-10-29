@@ -246,7 +246,8 @@ fn inherited_parent_lock_refuses_content_edits() {
     let params = request(&mut s, id, BLUE);
     let doc = Arc::make_mut(&mut s.active_mut().unwrap().doc);
     let layer = doc.remove(id).unwrap();
-    let mut group = Layer::new("Locked parent", LayerContent::Group(photocraft_doc::Group { children: vec![layer], expanded: true, artboard: None }));
+    let mut group =
+        Layer::new("Locked parent", LayerContent::Group(photocraft_doc::Group { children: vec![layer], expanded: true, artboard: None, frame_stroke: None }));
     group.locks.pixels = true;
     doc.layers.push(group);
     fails_without_edit(&mut s, params);

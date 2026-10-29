@@ -17,49 +17,7 @@ use std::time::{Duration, Instant};
 fn original_format_real_editor_save_watcher_and_psd_roundtrip() {
     let editor = std::env::var_os("VECTORCRAFT_TEST_EDITOR").expect("VECTORCRAFT_TEST_EDITOR");
     let editor = Path::new(&editor);
-    let mut photo = photocraft_engine::Session::new();
-    let vector_path = std::env::var_os("PHOTO_NATIVE_VECTOR");
-    let vector_original = vector_path.as_ref().map(|path| std::fs::read(path).unwrap());
-    let original_path = std::env::var_os("PHOTO_NATIVE_LOGO_PSD");
-    let original = original_path.as_ref().map(|path| std::fs::read(path).unwrap());
-    let mut parent_before = None;
-    let id;
-    if let Some(bytes) = &original {
-        photo.add_document(photocraft_io::import("Logo.psd", bytes).unwrap().document, None);
-        if let Ok(name) = std::env::var("PHOTO_NATIVE_CONTAINER") {
-            parent_before = Some(photo.active().unwrap().doc.clone());
-            let layer = find_source(&photo.active().unwrap().doc, &name).expect("nested logo container");
-            photo.execute("layer.smartObjects.editContents", json!({"layer":layer.0})).unwrap();
-        }
-        let name = std::env::var("PHOTO_NATIVE_SOURCE").unwrap_or("Vector Smart Object.ai".into());
-        id = find_source(&photo.active().unwrap().doc, &name).expect("visible embedded vector");
-    } else {
-        photo.execute("file.new", json!({"width":32,"height":24})).unwrap();
-        let svg = br#"<svg xmlns="http://www.w3.org/2000/svg" width="8" height="6"><rect x="1" y="1" width="3" height="2" fill="red"/></svg>"#;
-        let placed = photocraft_engine::file_cmds::place_bytes(&mut photo, "Artwork.svg", svg.to_vec(), None, &json!({"smartObject":true})).unwrap();
-        id = LayerId(placed["layer"].as_u64().unwrap());
-        // Generate native sources with our writer, or use a read-only local vector fixture.
-        let (format, bytes) = if let Some(bytes) = &vector_original {
-            let extension = Path::new(vector_path.as_ref().unwrap()).extension().unwrap().to_str().unwrap().to_ascii_lowercase();
-            (extension, bytes.clone())
-        } else {
-            let owned = native::OwnedSvg::create(svg).unwrap();
-            let format = std::env::var("PHOTO_NATIVE_FORMAT").unwrap_or("ai".into());
-            let path = owned.root.join(format!("Input.{format}"));
-            run_commands(
-                editor,
-                &owned.root,
-                vec![
-                    ("document.open", json!({"path":owned.file})),
-                    ("document.export", json!({"path":path,"format":format,"preserveEditing":true,"useArtboards":true})),
-                ],
-            );
-            (format, std::fs::read(path).unwrap())
-        };
-        let state = photo.active_mut().unwrap();
-        let LayerContent::Smart(sm) = &mut Arc::make_mut(&mut state.doc).layer_mut(id).unwrap().content else { panic!("smart") };
-        sm.source = SmartSource::Embedded { file_name: format!("Artwork.{format}"), bytes: Arc::new(bytes) };
-    }
+    let Fixture { mut photo, id, parent_before, vector_path, vector_original, original_path, original } = fixture(editor);
     let handoff = photo.execute("layer.smartObjects.exportSvg", json!({"layer":id.0})).unwrap();
     let source = ExternalVectorSource {
         bytes: Arc::new(base64::engine::general_purpose::STANDARD.decode(handoff["sourceBase64"].as_str().unwrap()).unwrap()),
@@ -126,24 +84,8 @@ fn original_format_real_editor_save_watcher_and_psd_roundtrip() {
         "PSD corner reconstruction changed placement beyond floating-point tolerance"
     );
     assert!(photocraft_engine::smart_cmds::render(&reopened, sm).unwrap().as_ref() == changed.cache.as_ref(), "reopened native preview changed appearance");
-    if let Some(parent_before) = parent_before {
-        photo.execute("layer.smartObjects.saveContents", json!({})).unwrap();
-        photo.set_active(0);
-        let parent_after = photo.active().unwrap().doc.clone();
-        assert!(photo.undo());
-        assert!(photo.active().unwrap().doc == parent_before, "parent Undo changed original content");
-        assert!(photo.redo());
-        assert!(photo.active().unwrap().doc == parent_after, "parent Redo changed saved content");
-        let output = photocraft_io::export(&parent_after, "Roundtrip.psd", &Default::default()).unwrap();
-        let reopened = photocraft_io::import("Roundtrip.psd", &output.bytes).unwrap().document;
-        assert!(contains_source(&reopened, &saved, 0), "parent PSD lost its nested native vector");
-    }
-    if let Some(path) = vector_path {
-        assert!(std::fs::read(path).unwrap() == vector_original.unwrap(), "original vector changed")
-    }
-    if let Some(path) = original_path {
-        assert!(std::fs::read(path).unwrap() == original.unwrap(), "original PSD changed")
-    }
+    check_parent(&mut photo, parent_before, &saved);
+    check_unchanged(vector_path.as_ref(), vector_original, original_path.as_ref(), original);
 }
 
 fn run_commands(editor: &Path, root: &Path, commands: Vec<(&str, Value)>) {
@@ -218,4 +160,97 @@ fn contains_source(doc: &Document, saved: &[u8], depth: usize) -> bool {
             || ((bytes.starts_with(b"8BPS") || photocraft_format::is_pcraft(bytes))
                 && photocraft_io::import(&name, bytes).is_ok_and(|child| contains_source(&child.document, saved, depth + 1)))
     })
+}
+
+/// What the acceptance test starts from: a session with the embedded vector `id`, plus the
+/// read-only originals the environment named, to prove afterwards they were never written.
+struct Fixture {
+    photo: photocraft_engine::Session,
+    id: LayerId,
+    parent_before: Option<Arc<Document>>,
+    vector_path: Option<std::ffi::OsString>,
+    vector_original: Option<Vec<u8>>,
+    original_path: Option<std::ffi::OsString>,
+    original: Option<Vec<u8>>,
+}
+
+/// A logo PSD from `PHOTO_NATIVE_LOGO_PSD` (optionally inside `PHOTO_NATIVE_CONTAINER`), or a
+/// new document with an embedded AI/PDF/EPS made by `editor`'s CLI or read from `PHOTO_NATIVE_VECTOR`.
+fn fixture(editor: &Path) -> Fixture {
+    let mut photo = photocraft_engine::Session::new();
+    let vector_path = std::env::var_os("PHOTO_NATIVE_VECTOR");
+    let vector_original = vector_path.as_ref().map(|path| std::fs::read(path).unwrap());
+    let original_path = std::env::var_os("PHOTO_NATIVE_LOGO_PSD");
+    let original = original_path.as_ref().map(|path| std::fs::read(path).unwrap());
+    let mut parent_before = None;
+    let id = if let Some(bytes) = &original {
+        photo.add_document(photocraft_io::import("Logo.psd", bytes).unwrap().document, None);
+        if let Ok(name) = std::env::var("PHOTO_NATIVE_CONTAINER") {
+            parent_before = Some(photo.active().unwrap().doc.clone());
+            let layer = find_source(&photo.active().unwrap().doc, &name).expect("nested logo container");
+            photo.execute("layer.smartObjects.editContents", json!({"layer":layer.0})).unwrap();
+        }
+        let name = std::env::var("PHOTO_NATIVE_SOURCE").unwrap_or("Vector Smart Object.ai".into());
+        find_source(&photo.active().unwrap().doc, &name).expect("visible embedded vector")
+    } else {
+        photo.execute("file.new", json!({"width":32,"height":24})).unwrap();
+        let svg = br#"<svg xmlns="http://www.w3.org/2000/svg" width="8" height="6"><rect x="1" y="1" width="3" height="2" fill="red"/></svg>"#;
+        let placed = photocraft_engine::file_cmds::place_bytes(&mut photo, "Artwork.svg", svg.to_vec(), None, &json!({"smartObject":true})).unwrap();
+        let id = LayerId(placed["layer"].as_u64().unwrap());
+        // Generate native sources with our writer, or use a read-only local vector fixture.
+        let (format, bytes) = if let Some(bytes) = &vector_original {
+            let extension = Path::new(vector_path.as_ref().unwrap()).extension().unwrap().to_str().unwrap().to_ascii_lowercase();
+            (extension, bytes.clone())
+        } else {
+            let owned = native::OwnedSvg::create(svg).unwrap();
+            let format = std::env::var("PHOTO_NATIVE_FORMAT").unwrap_or("ai".into());
+            let path = owned.root.join(format!("Input.{format}"));
+            run_commands(
+                editor,
+                &owned.root,
+                vec![
+                    ("document.open", json!({"path":owned.file})),
+                    ("document.export", json!({"path":path,"format":format,"preserveEditing":true,"useArtboards":true})),
+                ],
+            );
+            (format, std::fs::read(path).unwrap())
+        };
+        let state = photo.active_mut().unwrap();
+        let LayerContent::Smart(sm) = &mut Arc::make_mut(&mut state.doc).layer_mut(id).unwrap().content else { panic!("smart") };
+        sm.source = SmartSource::Embedded { file_name: format!("Artwork.{format}"), bytes: Arc::new(bytes) };
+        id
+    };
+    Fixture { photo, id, parent_before, vector_path, vector_original, original_path, original }
+}
+
+/// For a nested container: saving its contents back is one undoable parent step, and the
+/// parent's PSD keeps the saved native bytes.
+fn check_parent(photo: &mut photocraft_engine::Session, parent_before: Option<Arc<Document>>, saved: &[u8]) {
+    if let Some(parent_before) = parent_before {
+        photo.execute("layer.smartObjects.saveContents", json!({})).unwrap();
+        photo.set_active(0);
+        let parent_after = photo.active().unwrap().doc.clone();
+        assert!(photo.undo());
+        assert!(photo.active().unwrap().doc == parent_before, "parent Undo changed original content");
+        assert!(photo.redo());
+        assert!(photo.active().unwrap().doc == parent_after, "parent Redo changed saved content");
+        let output = photocraft_io::export(&parent_after, "Roundtrip.psd", &Default::default()).unwrap();
+        let reopened = photocraft_io::import("Roundtrip.psd", &output.bytes).unwrap().document;
+        assert!(contains_source(&reopened, saved, 0), "parent PSD lost its nested native vector");
+    }
+}
+
+/// The files the environment named are byte-for-byte unchanged.
+fn check_unchanged(
+    vector_path: Option<&std::ffi::OsString>,
+    vector_original: Option<Vec<u8>>,
+    original_path: Option<&std::ffi::OsString>,
+    original: Option<Vec<u8>>,
+) {
+    if let Some(path) = vector_path {
+        assert!(std::fs::read(path).unwrap() == vector_original.unwrap(), "original vector changed")
+    }
+    if let Some(path) = original_path {
+        assert!(std::fs::read(path).unwrap() == original.unwrap(), "original PSD changed")
+    }
 }

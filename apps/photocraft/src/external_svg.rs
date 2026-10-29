@@ -11,7 +11,7 @@ pub(crate) fn open(editor: ExternalSvgEditor, source: photocraft_ui_egui::Extern
 }
 
 mod native {
-    use super::*;
+    use super::{ExternalSvgEditor, ExternalSvgSession, ExternalVectorSave};
     use std::fs::{Metadata, OpenOptions};
     use std::io::{Read, Write};
     use std::path::Path;
