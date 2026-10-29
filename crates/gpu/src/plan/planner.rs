@@ -469,7 +469,7 @@ impl<'a> Planner<'a> {
             p.a = Some(before);
             p.b = Some(adjusted);
             p.mode = layer.blend;
-            p.opacity = opacity;
+            (p.opacity, p.fill) = adjustment_fill(layer, opacity);
             p.mask = self.mask_use(layer);
             return Ok(self.emit(p));
         }
@@ -734,7 +734,8 @@ impl<'a> Planner<'a> {
             p.a = Some(before);
             p.b = Some(adjusted);
             p.mode = layer.blend;
-            p.opacity = opacity;
+            // A clipped adjustment takes Fill as coverage in every mode.
+            (p.opacity, p.fill) = (opacity, 1.0);
             p.mask = self.mask_use(layer);
             return Ok(self.emit(p));
         }
@@ -1411,5 +1412,14 @@ impl<'a> Planner<'a> {
         }
         p.extra[3] = knockout;
         self.emit(p)
+    }
+}
+
+/// Adjustment Fill belongs inside the special blend modes; other modes use it as coverage.
+fn adjustment_fill(layer: &Layer, opacity: f32) -> (f32, f32) {
+    if layer.fill_opacity < 1.0 && photocraft_compose::psblend::fill_is_special(layer.blend) {
+        (layer.opacity, layer.fill_opacity)
+    } else {
+        (opacity, 1.0)
     }
 }

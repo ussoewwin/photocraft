@@ -1000,8 +1000,21 @@ fn fs_adjmix(in: VOut) -> @location(0) vec4<f32> {
     if (op.mode == M_DISSOLVE) {
         return select(b, vec4(a.rgb, b.a), dissolve_noise(doc_px(p)) < k);
     }
-    let bl = blend_rgb(op.mode, b.rgb, a.rgb);
-    return vec4(b.rgb + (bl - b.rgb) * k, b.a);
+    // Fill below 100% in one of the special eight (compose::blend_back, psblend::blend_rgb_fill):
+    // the result pulled toward the mode's neutral colour; Hard Mix (cb - f(1 - cs)) / (1 - f).
+    let f = clamp(op.fill, 0.0, 1.0);
+    let special = f < 1.0 && fill_is_special(op.mode);
+    var cs = a.rgb;
+    if (special) {
+        var neutral = 0.0;
+        if (op.mode == 5 || op.mode == 6) { neutral = 1.0; }
+        if (op.mode == 16 || op.mode == 17) { neutral = 0.5; }
+        cs = vec3(neutral) + (a.rgb - vec3(neutral)) * f;
+    }
+    var bl = blend_rgb(op.mode, b.rgb, cs);
+    if (special && op.mode == 19) { bl = clamp((b.rgb - f * (vec3(1.0) - a.rgb)) / (1.0 - f), vec3(0.0), vec3(1.0)); }
+    // Keep bounded adjustment results exact at full coverage over HDR backdrops.
+    return vec4(b.rgb * (1.0 - k) + bl * k, b.a);
 }
 
 // Pass-through group coverage mixes premultiplied colour, then returns straight alpha.

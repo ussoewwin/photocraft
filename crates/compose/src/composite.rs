@@ -72,8 +72,10 @@ pub(crate) fn branchless_floor(x: f32) -> f32 {
 }
 
 /// Blend an adjustment layer's result (`adjusted`) back into the backdrop it was made from, each
-/// pixel by its coverage `ks` (opacity × mask) in blend mode `mode`.
-fn blend_back(backdrop: &mut [[f32; 4]], adjusted: &[[f32; 4]], ks: impl Iterator<Item = f32>, mode: BlendMode) {
+/// pixel by its coverage `ks` (opacity × mask) in blend mode `mode` at layer Fill `fill`: below
+/// 100% the special eight ([`psblend::fill_is_special`]) blend a result pulled toward the mode's
+/// neutral colour, as a pixel layer does (#9501); for every other mode Fill is in `ks`.
+fn blend_back(backdrop: &mut [[f32; 4]], adjusted: &[[f32; 4]], ks: impl Iterator<Item = f32>, mode: BlendMode, fill: f32) {
     for ((b, a), k) in backdrop.iter_mut().zip(adjusted).zip(ks) {
         if k <= 0.0 {
             continue;
@@ -81,7 +83,7 @@ fn blend_back(backdrop: &mut [[f32; 4]], adjusted: &[[f32; 4]], ks: impl Iterato
         let s = [a[0], a[1], a[2]];
         // Normal is the source as it is (`blend_rgb` gives exactly that), and most adjustment
         // layers are Normal: no per-pixel mode dispatch for them.
-        let blended = if mode == BlendMode::Normal { s } else { blend::blend_rgb(mode, [b[0], b[1], b[2]], s) };
+        let blended = if mode == BlendMode::Normal { s } else { blend::blend_rgb_fill(mode, [b[0], b[1], b[2]], s, fill) };
         // `b·(1−k) + s·k`, not `b + (s − b)·k`: with a huge 32-bit backdrop the difference loses a
         // small result to f32 rounding, so full coverage gave 0 instead of a lookup's 0.5 (#9483).
         let j = 1.0 - k;
@@ -439,9 +441,13 @@ pub(crate) fn composite_layer_plain(layer: &Layer, clipped: &[Layer], backdrop: 
                 }
             }
         } else {
+            // Fill below 100% in one of the special eight changes the blend itself and leaves
+            // coverage to Opacity, as for a pixel layer (psblend::composite_fill, #9501).
+            let (k, fill) =
+                if layer.fill_opacity < 1.0 && psblend::fill_is_special(layer.blend) { (layer.opacity, layer.fill_opacity) } else { (opacity, 1.0) };
             match &mv {
-                Some(m) => blend_back(&mut backdrop.px, &adjusted.px, m.iter().map(|v| opacity * v), layer.blend),
-                None => blend_back(&mut backdrop.px, &adjusted.px, std::iter::repeat(opacity), layer.blend),
+                Some(m) => blend_back(&mut backdrop.px, &adjusted.px, m.iter().map(|v| k * v), layer.blend, fill),
+                None => blend_back(&mut backdrop.px, &adjusted.px, std::iter::repeat(k), layer.blend, fill),
             }
         }
         recycle_buffer(adjusted);

@@ -629,6 +629,47 @@ fn special_eight_fill_matches_cpu() {
     }
 }
 
+/// The same for adjustment layers (#9501): the GPU's adjustment mix takes Fill inside the special
+/// eight's blend, as compose's adjustment branch does, with a mask and Opacity on top.
+#[test]
+fn special_eight_fill_on_adjustment_layers_matches_cpu() {
+    let Some(mut g) = gpu() else { return };
+    let special = [
+        BlendMode::ColorBurn,
+        BlendMode::LinearBurn,
+        BlendMode::ColorDodge,
+        BlendMode::LinearDodge,
+        BlendMode::VividLight,
+        BlendMode::LinearLight,
+        BlendMode::HardMix,
+        BlendMode::Difference,
+    ];
+    for mode in special {
+        for fill in [0.3, 0.6] {
+            let mut d = base_doc(64, 48);
+            d.layers[0] = noise_layer("bg", PixelFormat::RGBA8, Rect::from_xywh(0, 0, 64, 48), 5, 1.0);
+            let mut l = Layer::new("invert", LayerContent::Adjustment(Adjustment::Invert));
+            l.blend = mode;
+            l.opacity = 0.7;
+            l.fill_opacity = fill;
+            d.layers.push(l);
+            check(&mut g, &d, &format!("adjustment {mode:?} fill {fill}"));
+            // CodeRabbit on #9512: clipped to a pixel layer, the adjustment takes Fill as
+            // coverage on both paths (compose's clipped branch, the planner's `atop`).
+            let mut d = base_doc(64, 48);
+            d.layers[0] = noise_layer("bg", PixelFormat::RGBA8, Rect::from_xywh(0, 0, 64, 48), 5, 1.0);
+            d.layers.push(noise_layer("base", PixelFormat::RGBA8, Rect::from_xywh(8, 6, 40, 30), 9, 1.0));
+            let mut l = Layer::new("invert", LayerContent::Adjustment(Adjustment::Invert));
+            l.blend = mode;
+            l.opacity = 0.7;
+            l.fill_opacity = fill;
+            l.clipped = true;
+            d.layers.push(l);
+            check(&mut g, &d, &format!("clipped adjustment {mode:?} fill {fill}"));
+        }
+    }
+}
+
 #[test]
 fn xor_rounding_on_half_float_targets() {
     let Some((_adapter, device, queue, _lock)) = any_device() else { return };
@@ -3214,4 +3255,42 @@ fn dissolve_clipped_adjustment_matches_cpu() {
         check(&mut g, &d, &format!("clipped Dissolve adjustment {fmt:?}"));
         diff_rect(&mut g, &d, Rect::new(250, 1, 270, 20), "clipped adjustment offset region").unwrap_or_else(|e| panic!("{e}"));
     }
+}
+
+/// Integration of #9509 and #9512: coverage endpoints, Fill, masks and clipping share the CPU oracle.
+#[test]
+fn integration_adjustment_fill_opacity_masks_and_hdr_match_cpu() {
+    let Some(mut g) = gpu() else { return };
+    for clipped in [false, true] {
+        for mode in [BlendMode::Normal, BlendMode::ColorDodge, BlendMode::LinearBurn] {
+            for fill in [0.0, 0.5, 1.0] {
+                for opacity in [0.5, 1.0] {
+                    for coverage in [0.5, 1.0] {
+                        let mut d = Document::new("combined adjustment", Size::new(1, 1), ColorMode::Rgb, SampleType::F32);
+                        let mut base = Layer::raster("base", PixelFormat::RGBA32F);
+                        base.surface_mut().unwrap().write_pixel(0, 0, &[0.25, 0.5, 0.75, 1.0]);
+                        let look = Adjustment::ColorLookup { name: "half".into(), lut: Some(std::sync::Arc::new(vec![0.5; 24])), size: 2, tetrahedral: false, dither: false, source: None };
+                        let mut layer = Layer::new("adjust", LayerContent::Adjustment(look));
+                        layer.blend = mode;
+                        layer.clipped = clipped;
+                        layer.fill_opacity = fill;
+                        layer.opacity = opacity;
+                        let mut mask = LayerMask::reveal_all();
+                        mask.surface = photocraft_raster::Surface::with_default(PixelFormat::GRAY32F, &[coverage]);
+                        layer.mask = Some(mask);
+                        d.layers = vec![base, layer];
+                        check(&mut g, &d, &format!("combined {mode:?} fill={fill} opacity={opacity} mask={coverage} clipped={clipped}"));
+                    }
+                }
+            }
+        }
+    }
+    // The existing GPU harness requires float32 accumulation. The CPU regression separately
+    // covers 1e8 inputs, beyond the range of half-float source textures on some adapters.
+    let mut d = Document::new("HDR full coverage", Size::new(1, 1), ColorMode::Rgb, SampleType::F32);
+    let mut base = Layer::raster("HDR", PixelFormat::RGBA32F);
+    base.surface_mut().unwrap().write_pixel(0, 0, &[1.0e4, 1.0e4, 1.0e4, 1.0]);
+    let look = Adjustment::ColorLookup { name: "half".into(), lut: Some(std::sync::Arc::new(vec![0.5; 24])), size: 2, tetrahedral: false, dither: false, source: None };
+    d.layers = vec![base, Layer::new("lookup", LayerContent::Adjustment(look))];
+    check(&mut g, &d, "HDR full coverage with bounded result");
 }
