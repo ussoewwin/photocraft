@@ -70,7 +70,7 @@ pub(crate) fn set_op(app: &mut PhotocraftApp, op: &str) -> Result<(), String> {
     if heads.iter().all(|h| path.subpaths.get(*h).is_some_and(|s| op_value(s.op) == op)) {
         return Ok(());
     }
-    let mut params = r.params();
+    let mut params = r.params(app);
     params["subpaths"] = json!(heads);
     params["op"] = json!(op);
     app.run("path.setOperation", params).map(|_| ())
@@ -154,7 +154,7 @@ pub(crate) fn move_selected(app: &mut PhotocraftApp, d: [f64; 2]) -> Option<Resu
     if target(app).map(|(t, _)| t) != Some(r) || heads.len() >= path.components().len() {
         return None;
     }
-    let mut params = r.params();
+    let mut params = r.params(app);
     params["anchors"] = json!(app.ui.direct_selection.anchors);
     params["move"] = json!(d);
     Some(app.run("path.moveAnchors", params).map(|_| ()))

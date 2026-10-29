@@ -594,7 +594,7 @@ pub(crate) fn pen_path_op(o: &ToolOptions) -> Option<&'static str> {
 fn merge_target(app: &PhotocraftApp) -> Option<(&'static str, Value, usize)> {
     if app.ui.tool == Tool::PathSelection {
         let (r, p) = crate::direct_select::active_paths(app).into_iter().next()?;
-        return Some(("path.mergeShapeComponents", r.params(), p.components().len()));
+        return Some(("path.mergeShapeComponents", r.params(app), p.components().len()));
     }
     let st = app.session.active()?;
     if app.ui.tool_options.vector_mode == "shape" {

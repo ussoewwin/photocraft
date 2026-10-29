@@ -55,8 +55,6 @@ fn type_layers_offer_free_transform_but_not_distort_or_perspective() {
         type_layer: false,
         guide: false,
         spelling: None,
-        crop: false,
-        crop_presets: Vec::new(),
         crop: None,
     };
     assert!(crate::canvas_tool_menu::available(&app, &menu, "edit.freeTransform"));

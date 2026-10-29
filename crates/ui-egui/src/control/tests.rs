@@ -286,8 +286,9 @@ fn layer_style_picker_control_binds_previews_confirms_and_cancels() {
     let parent = call(&mut app, &ctx, "ui.dialog.open", json!({"kind":"layerStyle","effect":"gradientOverlay"}))["result"]["dialog"].as_u64();
     let parent = parent.unwrap();
     let before = app.ui.dialogs[0].fields.clone();
-    for field in ["from", "to"] {
-        let reply = call(&mut app, &ctx, "ui.dialog.open", json!({"kind":"colorPicker","parent":parent,"effect":"fx1","field":field}));
+    // The Gradient Overlay's colours are its stops (#5177): `stop` picks one.
+    for stop in [0, 1] {
+        let reply = call(&mut app, &ctx, "ui.dialog.open", json!({"kind":"colorPicker","parent":parent,"effect":"fx1","field":"stops","stop":stop}));
         assert_eq!(reply["ok"], true, "{reply}");
         let picker = app.ui.dialogs.last().unwrap().id;
         let inspected = call(&mut app, &ctx, "ui.inspect", json!({}));
@@ -295,10 +296,14 @@ fn layer_style_picker_control_binds_previews_confirms_and_cancels() {
         assert_eq!(call(&mut app, &ctx, "ui.dialog.confirm", json!({"dialog":parent}))["ok"], false);
         assert_eq!(call(&mut app, &ctx, "ui.dialog.set", json!({"dialog":picker,"field":"color","value":"#123456"}))["ok"], true);
         assert_eq!(call(&mut app, &ctx, "ui.dialog.confirm", json!({"dialog":picker}))["ok"], true);
-        assert_eq!(app.ui.dialogs[0].fields["effects"][0]["params"][field], "#123456");
+        assert_eq!(app.ui.dialogs[0].fields["effects"][0]["params"]["stops"][stop][1], "#123456");
     }
     assert_ne!(app.ui.dialogs[0].fields, before);
-    call(&mut app, &ctx, "ui.dialog.open", json!({"kind":"colorPicker","parent":parent,"effect":"fx1","field":"to"}));
+    let bad = call(&mut app, &ctx, "ui.dialog.open", json!({"kind":"colorPicker","parent":parent,"effect":"fx1","field":"stops","stop":"x"}));
+    assert_eq!(bad["ok"], false, "{bad}");
+    let bad = call(&mut app, &ctx, "ui.dialog.open", json!({"kind":"colorPicker","parent":parent,"effect":"fx1","field":"stops","stop":9}));
+    assert_eq!(bad["ok"], false, "{bad}");
+    call(&mut app, &ctx, "ui.dialog.open", json!({"kind":"colorPicker","parent":parent,"effect":"fx1","field":"stops","stop":1}));
     assert_eq!(call(&mut app, &ctx, "ui.dialog.cancel", json!({"dialog":parent}))["ok"], true);
     assert!(app.ui.dialogs.is_empty());
 }

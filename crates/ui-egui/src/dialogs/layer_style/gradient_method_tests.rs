@@ -51,7 +51,7 @@ fn method_picker_is_pending_until_confirm_and_survives_reopening() {
     assert_eq!(effect(app), &saved);
     let reopened = fields(app);
     assert_eq!(reopened["effects"][0]["params"]["method"], "smooth");
-    assert_eq!(reopened["effects"][0]["params"]["from"], "#ff0000");
+    assert_eq!(reopened["effects"][0]["params"]["stops"][0][1], "#ff0000");
     confirm(app, &reopened).unwrap();
     assert_eq!(effect(app), &saved, "OK without edits leaves the rendered curve exact");
 }

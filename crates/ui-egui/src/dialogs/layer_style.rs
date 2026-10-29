@@ -25,6 +25,7 @@ use crate::{PhotocraftApp, widgets};
 mod bevel_modes_tests;
 pub(crate) mod color_picker;
 mod contour;
+mod gradient_field;
 #[cfg(test)]
 mod gradient_method_tests;
 
@@ -35,6 +36,7 @@ enum P {
     Blend,
     Choice(&'static [(&'static str, &'static str)]),
     GradientMethod,
+    Gradient,
     Check,
     Angle,
     /// A pattern from the dialog's `patternList` field (`[[id, name], …]`).
@@ -78,7 +80,9 @@ fn kind_of(e: &Effect) -> &'static str {
 }
 
 fn defaults(kind: &str) -> Value {
-    photocraft_engine::layer_style::effect_defaults(kind)
+    let mut p = photocraft_engine::layer_style::effect_defaults(kind);
+    if kind == "gradientOverlay" { gradient_field::from_to_to_stops(&mut p); }
+    p
 }
 
 /// Params for a new instance: the user default saved by Make Default over the factory
@@ -167,8 +171,7 @@ fn spec(kind: &str) -> &'static [(&'static str, &'static str, P)] {
         "gradientOverlay" => &[
             ("blend", "Blend Mode", P::Blend),
             ("opacity", "Opacity", P::Slider(0.0, 100.0, "%")),
-            ("from", "From", P::Color),
-            ("to", "To", P::Color),
+            ("stops", "Gradient", P::Gradient),
             ("reverse", "Reverse", P::Check),
             ("style", "Style", P::Choice(GSTYLE)),
             ("angle", "Angle", P::Angle),
@@ -316,14 +319,8 @@ fn values_of(e: &Effect, light: f32) -> Value {
                 set(&mut v, "method", json!(source.method));
                 set(&mut v, "smoothness", json!(source.smoothness));
             }
-            // Endpoint colours and geometry always load into the dialog. Recorded
-            // interpolation exposes the original source ends; a baked curve without a
-            // record (PSD import) keeps its interior stops in `fx`, and an edit only
-            // retints its ends until a method is chosen.
-            if let (Some(first), Some(last)) = (stops.first(), stops.last()) {
-                set(&mut v, "from", json!(hex(&first.1)));
-                set(&mut v, "to", json!(hex(&last.1)));
-            }
+            set(&mut v, gradient_field::KEY, gradient_field::stops_json(stops));
+            set(&mut v, gradient_field::OPACITY_KEY, gradient_field::opacity_json(&g.opacity_stops));
             set(&mut v, "reverse", json!(g.reverse));
             set(
                 &mut v,
@@ -1680,6 +1677,7 @@ fn page(app: &mut PhotocraftApp, ui: &mut egui::Ui, f: &mut Map<String, Value>, 
                     }
                 });
             }
+            P::Gradient => gradient_field::row(app, ui, f, selected, label, &mut disp),
             P::Contour(aa) => contour::row(app, ui, f, selected, key, label, aa, &mut disp),
             P::Check => {
                 let mut b = disp.get(key).and_then(Value::as_bool).unwrap_or(false);
