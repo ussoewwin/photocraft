@@ -286,12 +286,16 @@ fn control_setup(
     cli_port: Option<u16>,
     auth: photocraft_automation::args::ControlArgs,
     automation: &photocraft_automation::args::AutomationArgs,
-) -> Option<(u16, String, photocraft_automation::workspace::AuthorizedWorkspace)> {
+) -> Option<(std::net::TcpListener, String, photocraft_automation::workspace::AuthorizedWorkspace)> {
     let (port, warning) = control_port_for(cli_port, &integrations(services::prefs_file().as_deref()));
     if let Some(warning) = &warning {
         eprint!("{warning}");
     }
     let port = port?;
+    let listener=match std::net::TcpListener::bind(("127.0.0.1",port)) {
+        Ok(listener)=>listener,
+        Err(error)=>{eprintln!("photocraft: control server failed to bind 127.0.0.1:{port}: {error}");std::process::exit(2);}
+    };
     let (supplied, token_file) = (auth.control_token, auth.control_token_file);
     let token = match photocraft_automation::security::server_token(supplied.as_deref(), token_file.as_deref()) {
         Ok(token) => token,
@@ -314,7 +318,7 @@ fn control_setup(
             std::process::exit(2);
         }
     };
-    Some((port, token, workspace))
+    Some((listener, token, workspace))
 }
 
 /// Record this start's backend in the GPU startup marker, if the marker is locked.
@@ -386,12 +390,14 @@ fn main() -> eframe::Result {
     #[cfg(target_os = "macos")]
     let _ = (new_instance, &launch_options);
 
+    // Bind and authenticate the authorized control listener before display/GPU initialization.
+    let control = control_setup(control_port, auth, &automation);
+
     #[cfg(target_os = "linux")]
     let native_session = linux_libs::session_from_env(|name| std::env::var(name).ok());
     #[cfg(target_os = "linux")]
     let session = linux_display_session();
 
-    let control = control_setup(control_port, auth, &automation);
     // Finder / Dock / Open With deliver files as Apple events, not arguments; catch the one that
     // launched us as well as later ones. Lives until the event loop returns.
     #[cfg(target_os = "macos")]
@@ -604,8 +610,8 @@ fn main() -> eframe::Result {
                     log::warn!("couldn't remember GPU backend {}: {e}", b.name());
                 }
             });
-            if let Some((port, token, _)) = control {
-                let rx = control_server::start(port, token, cc.egui_ctx.clone());
+            if let Some((listener, token, _)) = control {
+                let rx = control_server::start(listener, token, cc.egui_ctx.clone());
                 app = app.with_control(rx);
             }
             #[cfg(target_os = "macos")]
