@@ -30,6 +30,23 @@ fn panel_menu_lists_load_save_and_existing_action_commands() {
 }
 
 #[test]
+fn loading_json_actions_uses_engine_import_and_selects_the_new_action() {
+    let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+    let action = Action::new("Portable", vec![("select.all".into(), json!({}))]);
+    let file = actions_cmds::ActionsFile { version: 1, actions: vec![action.clone()] };
+    let bytes = serde_json::to_vec(&file).unwrap();
+    assert_eq!(load_bytes(&mut app, "Actions.JSON", &bytes).unwrap()["imported"], 1);
+    assert_eq!(app.session.actions.list, [action]);
+    assert_eq!(app.ui.actions.selected, Some(0));
+    assert_eq!(app.ui.actions.selected_step, None);
+    assert!(app.ui.actions.expanded[0]);
+    assert!(!app.ui.status_error);
+    let before = app.session.actions.clone();
+    assert_eq!(load_bytes(&mut app, "Actions.json", &bytes).unwrap()["imported"], 0);
+    assert_eq!(app.session.actions, before);
+}
+
+#[test]
 fn selected_layer_name_is_visible_during_recording_and_after_stop() {
     use egui_kittest::{Harness, kittest::Queryable};
     let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());

@@ -362,7 +362,13 @@ fn source(name: &str, bytes: &[u8]) -> Value {
 
 /// Load a `.atn` file's bytes into the Actions panel (the panel menu's Load Actions…).
 pub fn load_bytes(app: &mut PhotocraftApp, name: &str, bytes: &[u8]) -> Result<Value, String> {
-    let r = app.run("actions.load", source(name, bytes))?;
+    let is_json = std::path::Path::new(name).extension().and_then(|ext| ext.to_str()).is_some_and(|ext| ext.eq_ignore_ascii_case("json"));
+    let r = if is_json {
+        let data = std::str::from_utf8(bytes).map_err(|e| e.to_string())?;
+        app.run("actions.import", json!({"data": data}))?
+    } else {
+        app.run("actions.load", source(name, bytes))?
+    };
     let n = r["actions"].as_array().map_or(0, Vec::len) as u64;
     let unsupported = r["unsupported"].as_array().map_or(0, Vec::len);
     let shown = crate::file_open::display_name(name);
@@ -383,7 +389,7 @@ pub fn load_bytes(app: &mut PhotocraftApp, name: &str, bytes: &[u8]) -> Result<V
     };
     // Show what arrived: select the first loaded action, expanded.
     let list = &app.session.actions.list;
-    if let Some(first) = r["actions"][0].as_str()
+    if let Some(first) = r["actions"].as_array().and_then(|a| a.first()).and_then(Value::as_str)
         && let Some(i) = list.iter().position(|a| a.name == first)
     {
         app.ui.actions.selected = Some(i);
@@ -398,7 +404,22 @@ pub fn load_bytes(app: &mut PhotocraftApp, name: &str, bytes: &[u8]) -> Result<V
 }
 
 fn load_dialog(app: &mut PhotocraftApp) -> Result<Value, String> {
-    app.pick_file_bytes_filtered(&["atn"], |app, name, bytes| load_bytes(app, &name, &bytes))
+    app.pick_file_bytes_filtered(&["atn", "json"], |app, name, bytes| load_bytes(app, &name, &bytes))
+}
+
+fn save_json_dialog(app: &mut PhotocraftApp) -> Result<Value, String> {
+    let r = app.run("actions.export", json!({}))?;
+    let data = r["data"].as_str().ok_or("the export returned no JSON data")?.to_string();
+    let n = r["count"].as_u64().unwrap_or(0);
+    app.pick_save("Actions.json", move |app, path| {
+        let write = app.services.write.as_mut().ok_or("no writer configured")?;
+        write(&path, data.as_bytes())?;
+        let shown = crate::file_open::display_name(&path);
+        app.ui.status =
+            crate::i18n::fmt(&crate::i18n::trn(crate::i18n::current(), n, "Saved {n} action to {file}", "Saved {n} actions to {file}"), &[("file", &shown)]);
+        app.ui.status_error = false;
+        Ok(json!({"path": path, "actions": n}))
+    })
 }
 
 /// Save Actions…: the selected action's set (every action of it), or every action when none
@@ -654,6 +675,9 @@ pub fn panel_menu(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     if ui.add_enabled(any, egui::Button::new(tl!("Save Actions…"))).clicked() {
         act = Some("save");
     }
+    if ui.add_enabled(any, egui::Button::new(format!("{} (.json)", tl!("Save Actions…")))).clicked() {
+        act = Some("save-json");
+    }
     let Some(a) = act else { return };
     ui.close();
     let r = match a {
@@ -676,6 +700,7 @@ pub fn panel_menu(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
             Ok(Value::Null)
         }
         "load" => load_dialog(app),
+        "save-json" => save_json_dialog(app),
         "stop" => insert_stop_dialog(app),
         _ => save_dialog(app, None),
     };
