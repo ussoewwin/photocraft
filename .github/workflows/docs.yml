@@ -37,19 +37,3 @@ jobs:
         run: cargo install mdbook --version 0.4.52 --locked
       - name: Build documentation
         run: mdbook build book
-
-  regenerate-scorecard:
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec
-      - name: Regenerate scorecard and show exact patch
-        run: |
-          cargo xtask scorecard
-          git diff -- docs/scorecard.md
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-        with:
-          name: regenerated-scorecard
-          path: docs/scorecard.md
