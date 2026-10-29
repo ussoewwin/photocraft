@@ -1,3 +1,5 @@
+use crate::{EngineError, Result};
+
 use super::history::fix_selection;
 use super::{DocState, Document, Session, channel_cmds, smart_cmds};
 
