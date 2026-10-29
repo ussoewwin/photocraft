@@ -162,6 +162,22 @@ fn write_refuses_a_fifo_target_without_blocking() {
     assert!(temp_files(&inside).is_empty());
 }
 
+/// #9401 review: replacing a file through the automation path keeps its creation time, the
+/// same as a save through `atomic_write` does on macOS (#9388).
+#[cfg(target_os = "macos")]
+#[test]
+fn write_keeps_the_replaced_files_creation_time() {
+    use std::os::macos::fs::FileTimesExt;
+    let (inside, _, workspace) = roots("created");
+    let path = inside.join("doc.psd");
+    workspace.write("doc.psd", b"original").unwrap();
+    let born = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_600_000_000);
+    std::fs::OpenOptions::new().write(true).open(&path).unwrap().set_times(std::fs::FileTimes::new().set_created(born)).unwrap();
+    workspace.write("doc.psd", b"replacement").unwrap();
+    assert_eq!(std::fs::read(&path).unwrap(), b"replacement");
+    assert_eq!(std::fs::metadata(&path).unwrap().created().unwrap(), born, "the creation time survives the automation write");
+}
+
 /// #7095: replacing a file through the automation path keeps the old file's extended
 /// attributes, the same as a save through `atomic_write` does.
 #[cfg(any(target_os = "linux", target_os = "android", target_vendor = "apple"))]
