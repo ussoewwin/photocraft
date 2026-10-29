@@ -70,7 +70,7 @@ mod shape;
 mod vector_mask;
 
 pub(crate) use params::{layer_id, nums, op_from, pt};
-pub use params::{parse_path, parse_stroke, path_json};
+pub use params::{parse_path, parse_stroke, path_json, shape_fill, shape_paint_params};
 pub use paths::STROKE_PATH_TOOLS;
 use paths::{
     clipping_path_clear, clipping_path_set, path_delete, path_fill, path_rename, path_set, path_stroke, path_to_selection, path_transform, paths_list,
@@ -91,7 +91,7 @@ pub(crate) fn leak(s: String) -> &'static str {
 
 pub fn specs() -> Vec<CommandSpec> {
     let stroke = r##""stroke":{"width":px,"color":"#rrggbb"|fill,"opacity":0..100,"align":"inside|center|outside","cap":"butt|round|square","join":"miter|round|bevel","miterLimit":n,"dashes":[multiples of width],"dashOffset":n}|null"##;
-    let fill = r##""fill":"#rrggbb"|[r,g,b,a]|{"gradient":{"stops":[[t,"#hex"|[r,g,b,a]|stored Color]],"angle":deg,"scale":%,"style":"linear|radial|angle|reflected|diamond","reverse":bool,"opacityStops":[[t,0..1]]?,"midpoints":[0..1]?,"offset":[x,y]?,"dither":bool?,"align":bool?}}|{"pattern":name}|null (no fill)"##;
+    let fill = r##""fill":"#rrggbb[aa]"|[r,g,b,a]|{"color":{mode,c:[4 channels],alpha}}|{"gradient":{"stops":[[0..1,colour]],"angle":deg,"scale":%>0,"style":"linear|radial|angle|reflected|diamond","reverse":bool,"opacityStops":[[0..1,0..1]],"midpoints":[0..1],"offset":[fractionX,fractionY],"dither":bool,"align":bool}}|{"pattern":name|id,"id":str?,"scale":%>0,"angle":deg,"link":bool,"phase":[px,px]}|null (no fill)"##;
     vec![
         spec!(
             "shape.create",

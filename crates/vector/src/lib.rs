@@ -24,13 +24,14 @@ pub mod edit;
 pub mod feather;
 pub mod flatten;
 pub mod map;
+pub mod pattern;
 pub mod raster;
 pub mod shapes;
 pub mod stroke;
 pub mod trace;
 
 use photocraft_color::{ColorMode, PixelFormat};
-use photocraft_doc::{Fill, FillRule, GradientStyle, Path, PathOp, ShapeLayer, ShapeStroke, StrokeAlign, VectorMask};
+use photocraft_doc::{Fill, FillRule, GradientStyle, Path, PathOp, Pattern, ShapeLayer, ShapeStroke, StrokeAlign, VectorMask};
 use photocraft_geom::{Rect, TILE_SIZE};
 use photocraft_raster::Surface;
 
@@ -244,6 +245,10 @@ pub enum Paint {
     None,
     /// Straight RGBA.
     Solid([f32; 4]),
+    Pattern {
+        tile: std::sync::Arc<pattern::Tile>,
+        placement: pattern::Placement,
+    },
     Gradient {
         /// Colour stops sorted by location (straight RGBA).
         stops: Vec<(f32, [f32; 4])>,
@@ -268,9 +273,13 @@ impl Paint {
     /// gradient field is honoured (midpoints, opacity stops, centre offset, dither, unsorted
     /// stops), rendering the same pixels as the compositor's fill layers; the parity tests in
     /// `photocraft-compose` (which this crate cannot depend on) keep the two in step. Pattern
-    /// fills are not rendered (transparent): they need the document's pattern table, which
-    /// lives above this crate.
+    /// paints need [`Paint::from_fill_with_patterns`] and the document's pattern table.
     pub fn from_fill(f: &Fill, bounds: (f64, f64, f64, f64), canvas: (f64, f64, f64, f64)) -> Paint {
+        Self::from_fill_with_patterns(f, bounds, canvas, &[], ColorMode::Rgb)
+    }
+
+    /// Resolves pattern ids/names and samples them in the document's colour mode.
+    pub fn from_fill_with_patterns(f: &Fill, bounds: (f64, f64, f64, f64), canvas: (f64, f64, f64, f64), patterns: &[Pattern], mode: ColorMode) -> Paint {
         let rgba = |c: &photocraft_color::Color| {
             let v = c.to_rgb();
             [v[0], v[1], v[2], c.alpha]
@@ -296,7 +305,12 @@ impl Paint {
                     frame,
                 }
             }
-            Fill::Pattern { .. } => Paint::None,
+            Fill::Pattern { id, name, scale, angle, phase, link } => {
+                let tile = photocraft_doc::pattern::find(patterns, id, name).and_then(|p| pattern::Tile::new_in(p, mode)).map(std::sync::Arc::new);
+                let Some(tile) = tile else { return Paint::None };
+                let anchor = (bounds.0.floor(), bounds.1.floor());
+                Paint::Pattern { tile, placement: pattern::Placement::anchored(anchor, *link, *phase, *scale, *angle) }
+            }
         }
     }
 
@@ -305,6 +319,7 @@ impl Paint {
         match self {
             Paint::None => [0.0; 4],
             Paint::Solid(c) => *c,
+            Paint::Pattern { tile, placement } => tile.sample_area(placement, x, y),
             Paint::Gradient { stops, midpoints, opacity_stops, style, layout, reverse, dither: dith, frame } => {
                 let t = gradient_t(*style, layout.0, layout.1, *reverse, layout.2, *frame, x, y);
                 let mut c = sample_stops(stops, midpoints, opacity_stops, t);
@@ -569,6 +584,11 @@ impl CompiledShape {
     /// Compiles the shape at flattening tolerance `tol`. `canvas` is the frame gradients
     /// without "Align with layer" are laid out in.
     pub fn new(shape: &ShapeLayer, tol: f64, canvas: Rect) -> Self {
+        Self::with_patterns(shape, tol, canvas, &[], ColorMode::Rgb)
+    }
+
+    /// Compiles both paints against the document's embedded pattern table.
+    pub fn with_patterns(shape: &ShapeLayer, tol: f64, canvas: Rect, patterns: &[Pattern], mode: ColorMode) -> Self {
         let pb = shape.path.control_bounds().unwrap_or((0.0, 0.0, 0.0, 0.0));
         let cb = (f64::from(canvas.x0), f64::from(canvas.y0), f64::from(canvas.x1), f64::from(canvas.y1));
         let area = fill_rasterizer(&shape.path, tol);
@@ -576,7 +596,7 @@ impl CompiledShape {
         let fill = shape.fill.as_ref().map(|f| {
             let coverage = FillCoverage::new(shape, &area, canvas);
             bounds = coverage.bounds();
-            (coverage, Paint::from_fill(f, pb, cb))
+            (coverage, Paint::from_fill_with_patterns(f, pb, cb, patterns, mode))
         });
         let all_closed = shape.path.subpaths.iter().all(|s| s.closed);
         let mut align = None;
@@ -593,7 +613,7 @@ impl CompiledShape {
                 (Some(a), Some(b)) => Some(a.union(&b)),
                 (a, b) => a.or(b),
             };
-            (r, Paint::from_fill(&s.paint, pb, cb), s.opacity.clamp(0.0, 1.0))
+            (r, Paint::from_fill_with_patterns(&s.paint, pb, cb, patterns, mode), s.opacity.clamp(0.0, 1.0))
         });
         if shape.path.inverted && shape.fill.is_some() {
             bounds = Some(Rect::new(i32::MIN / 4, i32::MIN / 4, i32::MAX / 4, i32::MAX / 4));
@@ -676,6 +696,11 @@ impl CompiledShape {
 /// `clip` — the canvas, which also lays out gradients whose fill is not aligned with the layer.
 pub fn render_shape(shape: &ShapeLayer, format: PixelFormat, clip: Rect) -> Surface {
     CompiledShape::new(shape, DEFAULT_TOLERANCE, clip).render(format, clip)
+}
+
+/// Renders shape fill and stroke using the document's embedded patterns.
+pub fn render_shape_with_patterns(shape: &ShapeLayer, format: PixelFormat, clip: Rect, patterns: &[Pattern]) -> Surface {
+    CompiledShape::with_patterns(shape, DEFAULT_TOLERANCE, clip, patterns, format.mode).render(format, clip)
 }
 
 #[cfg(test)]

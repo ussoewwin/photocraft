@@ -1,5 +1,6 @@
 use super::params::{
-    f64p, fill_json, layer_id, live_from_params, live_json, nums, op_from, parse_fill, parse_path, parse_stroke, path_json, radii, stroke_json,
+    check_clipboard_pattern_collision, f64p, fill_json, layer_id, live_from_params, live_json, nums, op_from, parse_fill, parse_path, parse_stroke, path_json,
+    pattern_for_fill, radii, shape_fill, stroke_json,
 };
 use super::vector_mask::with;
 use super::{
@@ -36,21 +37,31 @@ pub(super) fn can_paste_shape_stroke(s: &Session) -> std::result::Result<(), Str
 }
 
 pub(super) fn copy_shape_fill(s: &mut Session, _p: &Value) -> Result<Value> {
-    let fill = active_shape(s).map_err(EngineError::Other)?.fill.clone().ok_or_else(|| EngineError::Other("shape has no fill".into()))?;
+    let mut fill = active_shape(s).map_err(EngineError::Other)?.fill.clone().ok_or_else(|| EngineError::Other("shape has no fill".into()))?;
+    let pattern = clipboard_pattern(s, &fill, None)?;
+    set_clipboard_pattern_id(&mut fill, pattern.as_ref());
     s.path_fill_clipboard = Some(fill);
+    s.path_fill_pattern = pattern;
     Ok(Value::Null)
 }
 
 pub(super) fn copy_shape_stroke(s: &mut Session, _p: &Value) -> Result<Value> {
-    let stroke = active_shape(s).map_err(EngineError::Other)?.stroke.clone().ok_or_else(|| EngineError::Other("shape has no stroke".into()))?;
+    let mut stroke = active_shape(s).map_err(EngineError::Other)?.stroke.clone().ok_or_else(|| EngineError::Other("shape has no stroke".into()))?;
+    let pattern = clipboard_pattern(s, &stroke.paint, None)?;
+    set_clipboard_pattern_id(&mut stroke.paint, pattern.as_ref());
     s.path_stroke_clipboard = Some(stroke);
+    s.path_stroke_pattern = pattern;
     Ok(Value::Null)
 }
 
 pub(super) fn paste_shape_fill(s: &mut Session, p: &Value) -> Result<Value> {
-    let fill = s.path_fill_clipboard.clone().ok_or_else(|| EngineError::Other("no shape fill copied".into()))?;
+    let mut fill = s.path_fill_clipboard.clone().ok_or_else(|| EngineError::Other("no shape fill copied".into()))?;
+    let pattern = clipboard_pattern(s, &fill, s.path_fill_pattern.as_ref())?;
+    set_clipboard_pattern_id(&mut fill, pattern.as_ref());
+    let patterns: Vec<_> = pattern.into_iter().collect();
+    check_clipboard_pattern_collision(s, &patterns)?;
     let id = layer_id(s, p)?;
-    with_shape(s, id, "Paste Fill", |shape, _| {
+    with_shape_patterns(s, id, "Paste Fill", &patterns, |shape, _| {
         shape.fill = Some(fill);
         Ok(())
     })?;
@@ -58,13 +69,37 @@ pub(super) fn paste_shape_fill(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 pub(super) fn paste_shape_stroke(s: &mut Session, p: &Value) -> Result<Value> {
-    let stroke = s.path_stroke_clipboard.clone().ok_or_else(|| EngineError::Other("no shape stroke copied".into()))?;
+    let mut stroke = s.path_stroke_clipboard.clone().ok_or_else(|| EngineError::Other("no shape stroke copied".into()))?;
+    let pattern = clipboard_pattern(s, &stroke.paint, s.path_stroke_pattern.as_ref())?;
+    set_clipboard_pattern_id(&mut stroke.paint, pattern.as_ref());
+    let patterns: Vec<_> = pattern.into_iter().collect();
+    check_clipboard_pattern_collision(s, &patterns)?;
     let id = layer_id(s, p)?;
-    with_shape(s, id, "Paste Complete Stroke", |shape, _| {
+    with_shape_patterns(s, id, "Paste Complete Stroke", &patterns, |shape, _| {
         shape.stroke = Some(stroke);
         Ok(())
     })?;
     shape_info(s, id)
+}
+
+fn clipboard_pattern(s: &Session, fill: &Fill, snapshot: Option<&photocraft_doc::Pattern>) -> Result<Option<photocraft_doc::Pattern>> {
+    let Fill::Pattern { id, name, .. } = fill else { return Ok(None) };
+    let find = |patterns| photocraft_doc::pattern::find(patterns, id, name).cloned();
+    let pattern = snapshot
+        .and_then(|p| find(std::slice::from_ref(p)))
+        .or_else(|| s.active().and_then(|st| find(&st.doc.patterns)))
+        .or_else(|| crate::pattern_cmds::resolve(s, id).or_else(|| crate::pattern_cmds::resolve(s, name)))
+        .ok_or_else(|| EngineError::Other(format!("no copied pattern \"{name}\" (see pattern.list)")))?;
+    if pattern.is_empty() {
+        return Err(EngineError::Other("the copied pattern is empty".into()));
+    }
+    Ok(Some(pattern))
+}
+
+fn set_clipboard_pattern_id(fill: &mut Fill, pattern: Option<&photocraft_doc::Pattern>) {
+    if let (Fill::Pattern { id, .. }, Some(pattern)) = (fill, pattern) {
+        *id = pattern.id.clone();
+    }
 }
 
 /// The path `shape.create` draws for live-shape params `p` (the Shape tools preview it while dragging).
@@ -86,7 +121,7 @@ fn live_kind(l: &LiveShape) -> &'static str {
 
 /// Re-renders a shape layer's cache for `doc` (canvas-clipped, document pixel format).
 pub fn refresh_shape(doc: &Document, sh: &mut ShapeLayer) {
-    sh.cache = Some(vector::render_shape(sh, doc.pixel_format(), doc.bounds()));
+    sh.cache = Some(vector::render_shape_with_patterns(sh, doc.pixel_format(), doc.bounds(), &doc.patterns));
 }
 
 /// A staged stroke edit rendered with the same validation and cache refresh as `shape.edit`.
@@ -263,6 +298,16 @@ pub(super) fn shape_info(s: &Session, id: LayerId) -> Result<Value> {
 }
 
 pub(crate) fn with_shape<R>(s: &mut Session, id: LayerId, label: &str, f: impl FnOnce(&mut ShapeLayer, &mut Layer) -> Result<R>) -> Result<R> {
+    with_shape_patterns(s, id, label, &[], f)
+}
+
+fn with_shape_patterns<R>(
+    s: &mut Session,
+    id: LayerId,
+    label: &str,
+    patterns: &[photocraft_doc::Pattern],
+    f: impl FnOnce(&mut ShapeLayer, &mut Layer) -> Result<R>,
+) -> Result<R> {
     if let Some(st) = s.active() {
         let locks = st.doc.effective_locks(id);
         if locks.all || locks.pixels {
@@ -270,6 +315,9 @@ pub(crate) fn with_shape<R>(s: &mut Session, id: LayerId, label: &str, f: impl F
         }
     }
     s.edit(label, |doc, _| {
+        for pattern in patterns {
+            crate::pattern_cmds::ensure_in_doc(doc, pattern);
+        }
         let snapshot = doc.clone();
         let l = doc.layer_mut(id).ok_or(EngineError::NoLayer(id))?;
         if !matches!(l.content, LayerContent::Shape(_)) {
@@ -311,14 +359,25 @@ pub(super) fn shape_create(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let fg = s.tools.foreground;
     let fgc = Color::rgba(fg[0], fg[1], fg[2], fg[3]);
-    let fill = match p.get("fill") {
+    let mut fill = match p.get("fill") {
         Some(v) => parse_fill(v).map_err(|e| bad(CMD, e))?,
         None => Some(Fill::Solid(fgc)),
     };
-    let stroke = match p.get("stroke") {
+    let mut stroke = match p.get("stroke") {
         Some(v) => parse_stroke(v, None, fgc).map_err(|e| bad(CMD, e))?,
         None => None,
     };
+    let mut patterns = Vec::new();
+    if let Some(fill) = &mut fill
+        && let Some(pattern) = pattern_for_fill(s, fill)?
+    {
+        patterns.push(pattern);
+    }
+    if let Some(stroke) = &mut stroke
+        && let Some(pattern) = pattern_for_fill(s, &mut stroke.paint)?
+    {
+        patterns.push(pattern);
+    }
     vector::flatten::validate_shape(&path, stroke.as_ref()).map_err(|e| bad(CMD, e))?;
     // Add to an existing shape layer with a path operation (Shape tool in combine/subtract… mode).
     if let Some(target) = p.get("addTo").and_then(Value::as_u64) {
@@ -339,6 +398,9 @@ pub(super) fn shape_create(s: &mut Session, p: &Value) -> Result<Value> {
     let name = p.get("name").and_then(Value::as_str).map(str::to_string);
     let mut sh = ShapeLayer { path, fill, stroke, live, ..Default::default() };
     let id = s.edit("New Shape Layer", |doc, active| {
+        for pattern in &patterns {
+            crate::pattern_cmds::ensure_in_doc(doc, pattern);
+        }
         refresh_shape(doc, &mut sh);
         let name = name.unwrap_or_else(|| doc.next_layer_name(default_name(kind)));
         let id = crate::layer_place::insert_new(doc, *active, Layer::new(name, LayerContent::Shape(sh)), crate::layer_place::Place::AutoEditable);
@@ -354,7 +416,21 @@ pub(super) fn shape_edit(s: &mut Session, p: &Value) -> Result<Value> {
     let fg = s.tools.foreground;
     let fgc = Color::rgba(fg[0], fg[1], fg[2], fg[3]);
     let name = p.get("name").and_then(Value::as_str).map(str::to_string);
-    with_shape(s, id, "Edit Shape", |sh, layer| {
+    let fill = p.get("fill").map(|value| shape_fill(s, value)).transpose()?;
+    let base = s.active().and_then(|st| st.doc.layer(id)).and_then(|l| if let LayerContent::Shape(sh) = &l.content { sh.stroke.clone() } else { None });
+    let mut stroke = p.get("stroke").map(|value| parse_stroke(value, base, fgc).map_err(|e| bad(CMD, e))).transpose()?;
+    let mut patterns = Vec::new();
+    if let Some(Some(mut fill)) = fill.clone()
+        && let Some(pattern) = pattern_for_fill(s, &mut fill)?
+    {
+        patterns.push(pattern);
+    }
+    if let Some(Some(stroke)) = &mut stroke
+        && let Some(pattern) = pattern_for_fill(s, &mut stroke.paint)?
+    {
+        patterns.push(pattern);
+    }
+    with_shape_patterns(s, id, "Edit Shape", &patterns, |sh, layer| {
         if let Some(v) = p.get("path") {
             sh.path = parse_path(v).map_err(|e| bad(CMD, e))?;
             sh.live = None;
@@ -394,11 +470,11 @@ pub(super) fn shape_edit(s: &mut Session, p: &Value) -> Result<Value> {
         if let Some(r) = p.get("fillRule").and_then(Value::as_str) {
             sh.path.fill_rule = if r.eq_ignore_ascii_case("evenodd") { FillRule::EvenOdd } else { FillRule::NonZero };
         }
-        if let Some(v) = p.get("fill") {
-            sh.fill = parse_fill(v).map_err(|e| bad(CMD, e))?;
+        if let Some(fill) = fill {
+            sh.fill = fill;
         }
-        if let Some(v) = p.get("stroke") {
-            sh.stroke = parse_stroke(v, sh.stroke.clone(), fgc).map_err(|e| bad(CMD, e))?;
+        if let Some(stroke) = stroke {
+            sh.stroke = stroke;
         }
         if let Some(n) = name {
             layer.name = n;

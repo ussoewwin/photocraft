@@ -343,6 +343,13 @@ desktop startup's single check (enabled by default). Manual checks still work wh
 `ui.inspect` includes `updates` and `updatesOpen`; `ui.set {"updatesOpen": false}` closes
 the non-modal update window.
 
+
+## Shape tools
+
+Paint JSON retains solid alpha/model colours; gradient `opacityStops`, `midpoints`, `offset`,
+`dither`, `align`; pattern `id`, `angle`, `link`, `phase` alongside legacy stops/name/scale.
+Shape create/edit resolves document or preset pattern tiles and embeds them in the same undo step.
+
 ## Snapping
 
 With View › Snap on, tool gestures snap to the View › Snap To targets (guides and grid while they
