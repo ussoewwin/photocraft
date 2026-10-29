@@ -566,6 +566,12 @@ pub const DEFAULT_MEMORY_USAGE_MB: u32 = 8192;
 /// 4 GiB, so a larger allowance (the desktop default is 8 GiB) would never trim anything.
 const WASM_MEMORY_USAGE_CAP_MB: u32 = 1536;
 
+/// The Memory Usage a build honours for a `stored` preference: capped on the web build (`web`).
+/// Separate from the target check so native tests exercise both.
+fn honoured_memory_usage_mb(stored: u32, web: bool) -> u32 {
+    if web { stored.min(WASM_MEMORY_USAGE_CAP_MB) } else { stored }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Performance {
@@ -624,7 +630,7 @@ impl Performance {
     /// [`Performance::memory_usage_mb`] as the build can honour it: capped on the web, where the
     /// stored preference (a saved 8192 still loads) is larger than the module's address space.
     pub fn effective_memory_usage_mb(&self) -> u32 {
-        if cfg!(target_arch = "wasm32") { self.memory_usage_mb.min(WASM_MEMORY_USAGE_CAP_MB) } else { self.memory_usage_mb }
+        honoured_memory_usage_mb(self.memory_usage_mb, cfg!(target_arch = "wasm32"))
     }
 
     /// Pixel memory a document and its History may hold (Memory Usage), in bytes: beyond it
