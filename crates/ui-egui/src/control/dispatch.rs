@@ -1110,6 +1110,9 @@ fn pointer(app: &mut PhotocraftApp, ctx: &egui::Context, p: &Value) -> Outcome {
         mods: modifiers_from(&parsed.modifiers),
     };
     for sample in parsed.events {
+        if crate::brush_mode_menu::blocks_control(app, ctx, sample.ev) {
+            continue;
+        }
         if !pointer_event_intercepted(app, ctx, &gesture, &sample) {
             forward_pointer_event(app, &gesture, sample);
         }

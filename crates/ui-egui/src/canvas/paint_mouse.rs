@@ -114,6 +114,10 @@ pub fn right_erases(app: &PhotocraftApp, tool: Tool) -> bool {
 /// brush with Alt held (#297), erases (Erase preference) or opens the Brush Preset picker. Arms
 /// `secondary_erase` or `brush_resize_armed` for this frame's `Down`.
 pub fn canvas_buttons(app: &mut PhotocraftApp, response: &Response, tool: Tool) -> Buttons {
+    if crate::brush_mode_menu::blocks_canvas(app, &response.ctx) {
+        app.secondary_erase = false;
+        return Buttons::default();
+    }
     let physical_right = app.services.right_button_down.as_ref().is_some_and(|f| f());
     let (mods, mut right_down) = response.ctx.input(|i| (i.modifiers, i.pointer.secondary_down()));
     right_down |= physical_right;
@@ -137,6 +141,22 @@ pub fn canvas_buttons(app: &mut PhotocraftApp, response: &Response, tool: Tool) 
     app.brush_resize_armed = resize_start || (physical_right && resizing);
     // ⌘/Ctrl+right-click lists the layers under the pointer instead (layer_pick_ui.rs, #307).
     let layer_menu = crate::layer_pick_ui::is_gesture(tool, mods);
+    // Decided by the modifiers held when the button went down, not by those of the release frame that reports the click.
+    let mode_menu = crate::brush_mode_menu::is_gesture(tool, crate::workspace_ui::sticky_mods(app, crate::brush_mode_menu::gesture_mods(&response.ctx, mods)));
+    if mode_menu && !resizing && app.drag.is_none() {
+        app.secondary_erase = false;
+        if response.secondary_clicked()
+            && let Some(p) = response.interact_pointer_pos()
+        {
+            crate::brush_mode_menu::open(app, &response.ctx, [p.x, p.y]);
+        }
+        return Buttons {
+            started: response.drag_started_by(PointerButton::Primary),
+            dragged: response.dragged_by(PointerButton::Primary),
+            stopped: response.drag_stopped_by(PointerButton::Primary),
+            clicked: response.clicked(),
+        };
+    }
     let erase = right_erases(app, tool) && !resize_start && !resizing && !layer_menu;
     let right_stroke = erase && app.drag.is_some();
     let right_start = erase && right_started;
@@ -169,6 +189,13 @@ pub fn pointer_secondary(app: &mut PhotocraftApp, ctx: &egui::Context, down: boo
     if crate::brush_resize::applies(tool) && (crate::brush_resize::is_right_gesture(mods) || app.brush_resize.is_some_and(|r| r.secondary)) {
         app.brush_resize_armed = down && app.drag.is_none();
         return true;
+    }
+    if crate::brush_mode_menu::is_gesture(tool, mods) && app.drag.is_none() && app.brush_resize.is_none() {
+        app.secondary_erase = false;
+        if down {
+            crate::brush_mode_menu::open(app, ctx, at);
+        }
+        return false;
     }
     if right_erases(app, tool) {
         app.secondary_erase = down;

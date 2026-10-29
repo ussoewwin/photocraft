@@ -980,6 +980,7 @@ fn handle_canvas_tool_stroke(
         && app.drag.is_none()
         && response.is_pointer_button_down_on()
         && ui.input(|i| i.pointer.primary_pressed())
+        && !crate::brush_mode_menu::blocks_canvas(app, ctx)
         && let Some(p) = ui.input(|i| i.pointer.press_origin()).filter(|p| rect.contains(*p))
     {
         let d = xf.to_doc(p);

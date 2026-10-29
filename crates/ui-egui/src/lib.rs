@@ -13,6 +13,7 @@ macro_rules! tl {
         $crate::i18n::t($s)
     };
 }
+mod brush_mode_menu;
 pub mod canvas;
 pub mod control;
 pub mod dialogs;

@@ -9,6 +9,74 @@ fn call(app: &mut PhotocraftApp, ctx: &egui::Context, method: &str, params: Valu
 }
 
 #[test]
+fn shift_right_brush_does_not_open_presets_or_paint() {
+    let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({"width": 64, "height": 64})).unwrap();
+    app.ui.tool = crate::state::Tool::Brush;
+    let ctx = egui::Context::default();
+    let before = app.session.journal.len();
+    call(
+        &mut app,
+        &ctx,
+        "ui.pointer",
+        json!({"button": "right", "shift": true,
+        "events": [{"kind": "down", "x": 20, "y": 20}, {"kind": "up", "x": 20, "y": 20}]}),
+    );
+    assert!(app.ui.brush_picker.is_none(), "Shift+right opens Mode, not Brush Presets");
+    assert!(app.drag.is_none());
+    assert_eq!(app.session.journal.len(), before, "opening a menu does not paint or journal");
+}
+
+#[test]
+fn brush_mode_control_routes_modifiers_and_reports_choices_without_history() {
+    let ctx = egui::Context::default();
+    for (tool, modifiers, expected) in [
+        ("brush", json!({"shift": true}), "mode"),
+        ("brush", json!({}), "erase"),
+        ("brush", json!({"shift": true, "alt": true}), "resize"),
+        ("brush", json!({"shift": true, "ctrl": true}), if cfg!(target_os = "macos") { "erase" } else { "layer" }),
+        ("brush", json!({"shift": true, "command": true}), "layer"),
+        ("pencil", json!({"shift": true}), "preset"),
+    ] {
+        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", json!({"width": 64, "height": 64, "background": "white"})).unwrap();
+        app.run("prefs.set", json!({"path": "tools.rightClickWithPaintingTools", "value": "erase"})).unwrap();
+        let history = app.session.active().unwrap().history.past_len();
+        call(
+            &mut app,
+            &ctx,
+            "ui.pointer",
+            json!({"tool": tool, "button": "right", "modifiers": modifiers,
+            "events": [{"kind": "down", "x": 20, "y": 20}]}),
+        );
+        assert_eq!(app.ui.brush_mode_menu.is_some(), expected == "mode", "{tool}: {modifiers}");
+        match expected {
+            "mode" => {
+                assert!(app.drag.is_none() && !app.secondary_erase);
+                assert_eq!(app.session.active().unwrap().history.past_len(), history);
+                let inspect = inspect(&app, &ctx);
+                assert_eq!(inspect["brushModeMenu"]["choices"], json!(crate::brush_mode_menu::choices().iter().map(|(_, label)| *label).collect::<Vec<_>>()));
+                let journal = app.session.journal.len();
+                call(
+                    &mut app,
+                    &ctx,
+                    "ui.pointer",
+                    json!({"events": [
+                    {"kind": "down", "x": 10, "y": 10}, {"kind": "move", "x": 30, "y": 30}, {"kind": "up", "x": 30, "y": 30}]}),
+                );
+                assert!(app.ui.brush_mode_menu.is_none() && app.drag.is_none());
+                assert_eq!(app.session.journal.len(), journal, "control dismissal cannot paint");
+            }
+            "preset" => assert!(app.ui.brush_picker.is_some()),
+            "layer" => assert!(app.ui.layer_menu.is_some()),
+            "resize" => assert!(app.brush_resize.is_some()),
+            "erase" => assert!(app.drag.as_ref().is_some_and(|d| d.erase)),
+            _ => panic!("unknown fixture route: {expected}"),
+        }
+    }
+}
+
+#[test]
 fn ui_set_turns_the_stroke_trace_on_and_off_at_runtime() {
     let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
     let ctx = egui::Context::default();
