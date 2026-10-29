@@ -84,6 +84,7 @@ pub mod fill_key_cmds;
 pub mod float_cmds;
 pub mod font_library_cmds;
 pub(super) mod frame_cmds;
+pub mod frequency_separation_cmds;
 pub mod fx_view_cmds;
 pub mod fx_visibility_cmds;
 pub mod gallery_cmds;
@@ -1222,6 +1223,7 @@ fn build() -> Vec<CommandSpec> {
     v.extend(crate::filters::specs());
     v.extend(crate::filters_ext::specs());
     v.extend(crate::color_to_alpha_cmds::specs());
+    v.extend(crate::frequency_separation_cmds::specs());
     v.extend(crate::gallery_cmds::specs());
     v.extend(crate::gradient_fill_cmds::specs());
     v.extend(crate::solid_fill_cmds::specs());
