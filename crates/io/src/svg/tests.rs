@@ -765,3 +765,15 @@ fn bounded_svg_rejects_nested_gzip_at_top_level_and_inside_data_urls() {
     }
     assert!(parse_bounded(b"\xff\xfe", 64).is_err(), "invalid XML encoding is refused");
 }
+
+/// Nested SVG images are parsed on top of their parent's recursion, so the bounded parser
+/// gives them one shared XML depth budget, as the ordinary parser does.
+#[test]
+fn bounded_nested_svg_images_share_the_xml_depth_budget() {
+    let nest = |inner: &str, levels: usize| format!("{}{inner}{}", "<g>".repeat(levels), "</g>".repeat(levels));
+    let child = image_svg(&nest("<rect width=\"1\" height=\"1\"/>", 300));
+    let fits = image_svg(&nest(&embedded_image("image/svg+xml", child.as_bytes()), 100));
+    assert!(rasterize_bounded(fits.as_bytes(), 1.0, 1_000_000).is_ok(), "400 levels in all fit the budget");
+    let deep = image_svg(&nest(&embedded_image("image/svg+xml", child.as_bytes()), 300));
+    assert!(rasterize_bounded(deep.as_bytes(), 1.0, 1_000_000).is_err(), "600 levels in all must not reach the parser");
+}

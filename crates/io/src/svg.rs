@@ -490,7 +490,14 @@ fn webp_frame_sizes(chunks: &[u8], dimensions: &mut (usize, usize), nested: bool
 /// budget up to [`MAX_EMBEDDED_SVG_DEPTH`], and PNG/JPEG/GIF/WebP images are charged their
 /// largest declared frame before decoding. Anything else, or any overrun, records an error and
 /// resolves to no image so the enclosing parse fails.
-fn bounded_data_image(mime: &str, data: Arc<Vec<u8>>, options: &usvg::Options, budget: &Arc<Mutex<ImageBudget>>, depth: usize) -> Option<usvg::ImageKind> {
+fn bounded_data_image(
+    mime: &str,
+    data: Arc<Vec<u8>>,
+    options: &usvg::Options,
+    budget: &Arc<Mutex<ImageBudget>>,
+    depth: usize,
+    xml_left: usize,
+) -> Option<usvg::ImageKind> {
     if budget.lock().unwrap_or_else(std::sync::PoisonError::into_inner).error.is_some() {
         return None;
     }
@@ -500,7 +507,7 @@ fn bounded_data_image(mime: &str, data: Arc<Vec<u8>>, options: &usvg::Options, b
             image_error(budget, "embedded SVG images exceed the nesting limit");
             return None;
         }
-        match parse_image_bounded(&data, budget.clone(), depth + 1) {
+        match parse_image_bounded(&data, budget.clone(), depth + 1, xml_left) {
             Ok(tree) => {
                 let mut counter = budget.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
                 counter.svg_images = counter.svg_images.saturating_add(1);
@@ -552,8 +559,8 @@ fn bounded_data_image(mime: &str, data: Arc<Vec<u8>>, options: &usvg::Options, b
 }
 
 /// [`parse_image_bounded_with`] using the shared system font database.
-fn parse_image_bounded(bytes: &[u8], budget: Arc<Mutex<ImageBudget>>, depth: usize) -> Result<usvg::Tree, IoError> {
-    parse_image_bounded_with(bytes, budget, depth, fonts)
+fn parse_image_bounded(bytes: &[u8], budget: Arc<Mutex<ImageBudget>>, depth: usize, xml_left: usize) -> Result<usvg::Tree, IoError> {
+    parse_image_bounded_with(bytes, budget, depth, xml_left, fonts)
 }
 
 /// Parse one (possibly gzip-compressed) SVG at nesting `depth` against `budget`: the byte,
@@ -564,16 +571,20 @@ fn parse_image_bounded_with(
     bytes: &[u8],
     budget: Arc<Mutex<ImageBudget>>,
     depth: usize,
+    xml_left: usize,
     fonts: fn() -> Arc<usvg::fontdb::Database>,
 ) -> Result<usvg::Tree, IoError> {
     if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > MAX_BOUNDED_SVG_BYTES {
         return Err(IoError::Svg("embedded SVG source exceeds the 16 MiB byte limit".into()));
     }
     let xml = inflate_with_limit(bytes, MAX_BOUNDED_SVG_BYTES)?;
-    let xml_depth = nesting_depth(&xml, MAX_XML_DEPTH);
-    if xml_depth > MAX_XML_DEPTH {
+    // Nested SVG images are parsed on top of their parent's recursion, so all levels share one
+    // MAX_XML_DEPTH budget: `xml_left` is what the enclosing drawings left of it.
+    let xml_depth = nesting_depth(&xml, xml_left);
+    if xml_depth > xml_left {
         return Err(IoError::Svg(format!("elements are nested more than {MAX_XML_DEPTH} levels deep")));
     }
+    let xml_left = xml_left - xml_depth;
     {
         let mut counter = budget.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         counter.xml_bytes = counter
@@ -586,9 +597,9 @@ fn parse_image_bounded_with(
     if has_text && fontdb.faces().next().is_none() {
         budget.lock().unwrap_or_else(std::sync::PoisonError::into_inner).fontless_text = true;
     }
-    let mut opt = options(fontdb, MAX_XML_DEPTH - xml_depth);
+    let mut opt = options(fontdb, xml_left);
     let shared = budget.clone();
-    opt.image_href_resolver.resolve_data = Box::new(move |mime, data, options| bounded_data_image(mime, data, options, &shared, depth));
+    opt.image_href_resolver.resolve_data = Box::new(move |mime, data, options| bounded_data_image(mime, data, options, &shared, depth, xml_left));
     // The bounded inflate above is the only decompression step. from_data would detect a
     // nested gzip payload and inflate it again without the source-byte limit.
     let text = std::str::from_utf8(&xml).map_err(|_| IoError::Svg("the SVG is not valid UTF-8".into()))?;
@@ -691,7 +702,7 @@ fn parse_bounded_work_with(bytes: &[u8], max_pixels: u64, fonts: fn() -> Arc<usv
         fontless_text: false,
         error: None,
     }));
-    let tree = parse_image_bounded_with(bytes, budget.clone(), 0, fonts)?;
+    let tree = parse_image_bounded_with(bytes, budget.clone(), 0, MAX_XML_DEPTH, fonts)?;
     let counter = budget.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     // resvg renders each embedded SVG through a temporary pixmap as large as its destination.
     if counter.svg_images != 0 {
