@@ -58,19 +58,30 @@ pub(crate) fn float_selected(app: &mut PhotocraftApp, copy: bool, dx: f64, dy: f
 /// Show bounding box when dragging layer, and the release moves the layers once.
 const LIVE_LIMIT: u64 = 512 << 20;
 
-/// Whether the pixel memory a live drag frame writes for the layers `ids` of `doc` (their content
-/// and linked masks, worst case four tiles per stored tile) exceeds `limit`.
-fn exceeds(doc: &Document, ids: &[LayerId], limit: u64) -> bool {
-    // A shift by a pixel offset that isn't a whole tile writes up to four new tiles per stored one.
-    let bytes = |s: &photocraft_raster::Surface| {
-        (s.tile_count() as u64)
-            .saturating_mul((photocraft_geom::TILE_SIZE as u64).pow(2))
-            .saturating_mul(s.format().bytes_per_pixel() as u64)
-            .saturating_mul(4)
-    };
+/// Pixel memory a shift of `s` by a pixel offset that isn't a whole tile writes: one target tile per
+/// tile the content can reach (dense layers write about as many tiles as they store), and at most
+/// four target tiles per stored one (isolated tiles each straddle four).
+fn shift_bytes(s: &photocraft_raster::Surface) -> u64 {
+    let b = photocraft_compose::bounds::content_bounds(s);
+    if b.is_empty() {
+        return 0;
+    }
+    let t = photocraft_geom::TILE_SIZE as u64;
+    let reach = (u64::from(b.width()).div_ceil(t) + 1).saturating_mul(u64::from(b.height()).div_ceil(t) + 1);
+    let tiles = (s.tile_count() as u64).saturating_mul(4).min(reach);
+    tiles.saturating_mul(t * t).saturating_mul(s.format().bytes_per_pixel() as u64)
+}
+
+/// Whether the pixel memory a live drag frame writes for the layers `ids` of `doc` exceeds `limit`:
+/// what `moved_target` shifts, that is a layer's content and linked mask, or only its mask when
+/// `mask_target` drags an unlinked mask alone.
+fn exceeds(doc: &Document, ids: &[LayerId], limit: u64, mask_target: bool) -> bool {
     let mut total = 0u64;
     for l in ids.iter().filter_map(|id| doc.layer(*id)) {
-        total = total.saturating_add(l.surface().map_or(0, bytes)).saturating_add(l.mask.as_ref().map_or(0, |m| bytes(&m.surface)));
+        let mask_alone = mask_target && photocraft_engine::layer_multi_cmds::moves_mask_alone(l);
+        let content = if mask_alone { 0 } else { l.surface().map_or(0, shift_bytes) };
+        let mask = l.mask.as_ref().filter(|m| mask_alone || m.linked).map_or(0, |m| shift_bytes(&m.surface));
+        total = total.saturating_add(content).saturating_add(mask);
         if total > limit {
             return true;
         }
@@ -169,7 +180,7 @@ pub(crate) fn display_doc(app: &mut PhotocraftApp, idx: usize) -> Option<(Arc<Do
         let bounds = ids.iter().try_fold(Rect::EMPTY, |acc, id| Some(acc.union(&photocraft_compose::change_bounds(doc.layer(*id)?, all)?)));
         let canvas = doc.bounds();
         let moving = with_descendants(&doc, &ids);
-        let too_big = exceeds(&doc, &moving, LIVE_LIMIT);
+        let too_big = exceeds(&doc, &moving, LIVE_LIMIT, mask_target);
         let bounds = bounds.map(|b| moving.iter().filter_map(|id| shape_reach(doc.layer(*id)?, canvas)).fold(b, |acc, r| acc.union(&r)));
         app.move_preview = Some(MovePreview { doc: doc_id, revision, ids, moving, bounds, canvas, offsets: Vec::new(), shown: None, floating: false, too_big });
     }
