@@ -1132,6 +1132,29 @@ fn shared_transform_detects_a_changed_layer_selection() {
     assert!(multi_selection_changed(&app, app.multi_transform.as_ref().unwrap()));
 }
 
+/// A shared box keeps the held handle's pointer for the whole drag, as a one-layer box does
+/// (#5405): dragged off its corner, the resize pointer doesn't turn into the commit one.
+#[test]
+fn a_shared_box_keeps_the_held_handles_cursor_during_a_drag() {
+    let mut app = app_with_square(64, photocraft_geom::Rect::new(8, 8, 24, 24));
+    app.ui.extras.snap = false;
+    let first = app.session.active().unwrap().active_layer.unwrap();
+    app.session.execute("layer.new.layer", json!({})).unwrap();
+    let second = app.session.active().unwrap().active_layer.unwrap();
+    app.session.execute("layer.select", json!({"layer": first.0, "mode": "add"})).unwrap();
+    begin_layers(&mut app, vec![first, second], [8.0, 8.0, 48.0, 24.0]).unwrap();
+    let xf = ViewXform::active(&app).unwrap();
+    let none = egui::Modifiers::NONE;
+    let corner = cursor(&app, &xf, [48.0, 24.0], none);
+    let far = cursor(&app, &xf, [48.0, 60.0], none);
+    assert_ne!(corner, far, "away from the box the pointer differs");
+    crate::canvas::tool_event(&mut app, ToolEvent::Down { x: 48.0, y: 24.0, pressure: 1.0 }, none);
+    crate::canvas::tool_event(&mut app, ToolEvent::Move { x: 48.0, y: 60.0, pressure: 1.0 }, none);
+    assert!(app.multi_transform.as_ref().is_some_and(|m| m.gesture.is_some()), "the shared box holds the corner");
+    assert_eq!(cursor(&app, &xf, [48.0, 60.0], none), corner, "the dragged corner keeps its pointer");
+    crate::canvas::tool_event(&mut app, ToolEvent::Up { x: 48.0, y: 60.0 }, none);
+}
+
 /// Transform Selection cannot replace a shared transform that is already open.
 #[test]
 fn transform_selection_rejects_an_open_multi_transform_without_replacing_it() {

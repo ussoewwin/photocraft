@@ -316,7 +316,7 @@ pub(super) fn rotate_dir(t: &TransformSession, gesture: Option<Gesture>, p: [f64
 
 /// The handle a drag in progress holds, else the one under document point `p`.
 pub(super) fn handle_at(app: &PhotocraftApp, t: &TransformSession, p: [f64; 2], tol: f64) -> Hit {
-    app.transform_preview.as_ref().and_then(|pv| pv.gesture.map(|g| g.hit)).unwrap_or_else(|| hit(t, p, tol))
+    live_gesture(app).map(|g| g.hit).unwrap_or_else(|| hit(t, p, tol))
 }
 
 /// Cursor for hovering a document point while transforming. `xf` is the canvas's view;
