@@ -4241,3 +4241,8 @@ cameraData	Lens	Lens
 	Refine Hair needs hair detection, which isn't available yet	Saçı Hassaslaştır henüz kullanılamayan saç algılama gerektirir
 	Select and Mask was closed: its document is no longer the active one	Seç ve Maskele kapatıldı: belgesi artık etkin değil
 	Select and Mask was closed: another layer was selected	Seç ve Maskele kapatıldı: başka bir katman seçildi
+	Move effect up	Efekti yukarı taşı
+	Move effect down	Efekti aşağı taşı
+	Delete effect	Efekti sil
+	Current Layer:	Geçerli Katman:
+	Underlying Layer:	Alttaki Katman:

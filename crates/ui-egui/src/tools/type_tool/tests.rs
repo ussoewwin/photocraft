@@ -568,8 +568,7 @@ fn closed_path_aligned_selection_highlights_every_visible_cluster() {
         assert!(l.bounds().unwrap()[0] < 0.0, "{align} must exercise negative text coordinates");
         let text_layer = text_layer(&app.session.active().unwrap().doc, id).unwrap();
         let rendered = photocraft_text::render::layout_deform(&l, text_layer).unwrap();
-        let visible =
-            l.clusters.iter().filter(|c| rendered.place_glyph(f64::from(c.x + c.advance / 2.0)) != photocraft_text::warp::Placement::Hidden).count();
+        let visible = l.clusters.iter().filter(|c| rendered.place_glyph(f64::from(c.x + c.advance / 2.0)) != photocraft_text::warp::Placement::Hidden).count();
         assert_eq!(visible, l.clusters.len());
         let ed = app.ui.text_edit.as_mut().unwrap();
         ed.anchor = 0;

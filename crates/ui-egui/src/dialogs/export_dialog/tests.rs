@@ -321,12 +321,8 @@ fn the_estimate_is_the_exported_files_size() {
     let doc = Arc::new(doc);
     // Without the embedded profile, whose fixed size the proxy would scale with the pixels
     // (the untagged document is tagged sRGB on export, #9325).
-    let f = Map::from_iter([
-        ("format".into(), json!("jpg")),
-        ("scale".into(), json!(100)),
-        ("quality".into(), json!(32)),
-        ("embedProfile".into(), json!(false)),
-    ]);
+    let f =
+        Map::from_iter([("format".into(), json!("jpg")), ("scale".into(), json!(100)), ("quality".into(), json!(32)), ("embedProfile".into(), json!(false))]);
     let actual = photocraft_io::export(&default_export_document(&doc, &f, None).unwrap(), "x.jpg", &settings(&f).io_options()).unwrap().bytes.len() as u64;
     let proxy = default_preview_proxy(&doc, &f).unwrap();
     let old = estimate_native(&doc, &proxy, &f).unwrap();
@@ -338,9 +334,8 @@ fn the_estimate_is_the_exported_files_size() {
     let size = loop {
         let mut size = None;
         let mut output = ctx.run_ui(Default::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| {
-                size = poll_or_start_exact_estimate(ui, key, "jpg32", doc.clone(), &f, photocraft_engine::color_cmds::document_profile(&doc))
-            });
+            egui::CentralPanel::default()
+                .show(ctx, |ui| size = poll_or_start_exact_estimate(ui, key, "jpg32", doc.clone(), &f, photocraft_engine::color_cmds::document_profile(&doc)));
         });
         output.textures_delta.clear();
         if let Some(size) = size {

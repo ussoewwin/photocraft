@@ -236,7 +236,8 @@ mod tests {
         let mut s = Session::new();
         s.actions.list.push(Action::new("Child", vec![]));
         let file = ActionsFile {
-            version: 1, defaults_version: 0,
+            version: 1,
+            defaults_version: 0,
             actions: vec![
                 Action::new("Parent", vec![("actions.play".into(), json!({"action": 1}))]),
                 Action::new("Child", vec![("layer.new.layer".into(), json!({}))]),
@@ -263,7 +264,8 @@ mod tests {
             assert_eq!(s.actions, before);
         }
         for target in [json!(-1), json!(0.5), json!(1), Value::Null] {
-            let file = ActionsFile { version: 1, defaults_version: 0, actions: vec![Action::new("A", vec![("actions.play".into(), json!({"action": target}))])] };
+            let file =
+                ActionsFile { version: 1, defaults_version: 0, actions: vec![Action::new("A", vec![("actions.play".into(), json!({"action": target}))])] };
             assert!(s.execute("actions.import", json!({"data": serde_json::to_string(&file).unwrap()})).is_err());
             assert_eq!(s.actions, before);
         }

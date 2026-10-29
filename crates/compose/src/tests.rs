@@ -426,7 +426,14 @@ fn full_coverage_adjustment_keeps_its_result_over_huge_hdr_values() {
         let mut d = Document::new("hdr", Size::new(2, 2), ColorMode::Rgb, SampleType::F32);
         let mut base = Layer::raster("b", PixelFormat::RGBA32F);
         base.surface_mut().unwrap().fill_rect(Rect::new(0, 0, 2, 2), &[v, v, v, 1.0]);
-        let look = Adjustment::ColorLookup { name: "half".into(), lut: Some(std::sync::Arc::new(vec![0.5; 24])), size: 2, tetrahedral: false, dither: false, source: None };
+        let look = Adjustment::ColorLookup {
+            name: "half".into(),
+            lut: Some(std::sync::Arc::new(vec![0.5; 24])),
+            size: 2,
+            tetrahedral: false,
+            dither: false,
+            source: None,
+        };
         d.layers = vec![base, Layer::new("look", LayerContent::Adjustment(look))];
         let got = px(&d, 0, 0);
         for c in &got[..3] {
@@ -444,7 +451,14 @@ fn adjustment_fill_changes_the_special_blend_modes() {
         let mut d = Document::with_background("fill", Size::new(1, 1), ColorMode::Rgb, SampleType::U8, Color::WHITE);
         let mut base = Layer::raster("b", PixelFormat::RGBA8);
         base.surface_mut().unwrap().fill_rect(Rect::new(0, 0, 1, 1), &[64.0 / 255.0, 128.0 / 255.0, 192.0 / 255.0, 1.0]);
-        let look = Adjustment::ColorLookup { name: "half".into(), lut: Some(std::sync::Arc::new(vec![0.5; 24])), size: 2, tetrahedral: false, dither: false, source: None };
+        let look = Adjustment::ColorLookup {
+            name: "half".into(),
+            lut: Some(std::sync::Arc::new(vec![0.5; 24])),
+            size: 2,
+            tetrahedral: false,
+            dither: false,
+            source: None,
+        };
         let mut adj = Layer::new("look", LayerContent::Adjustment(look));
         adj.blend = mode;
         adj.fill_opacity = 0.4;
@@ -4484,4 +4498,3 @@ fn adjustment_blend_if_judges_the_result_before_opacity() {
         assert!(got.iter().zip(want).all(|(g, w)| (g - w).abs() <= 1), "black {black} white {white}: {got:?} vs Photoshop {want:?}");
     }
 }
-

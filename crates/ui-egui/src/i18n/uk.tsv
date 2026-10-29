@@ -2716,6 +2716,8 @@ cameraRaw	Roughness	Шорсткість
 	Reset Swatches	Скинути зразки кольорів
 	Add to Swatches	Додати до зразків кольорів
 	Blend If:	Накладати, якщо:
+	Current Layer:	Поточний шар:
+	Underlying Layer:	Нижній шар:
 	Channels:	Канали:
 	Knockout	Вибивання
 	Apply At Canvas Bounds	Застосувати на межах полотна
@@ -2801,6 +2803,9 @@ fontWeight	Italic	Курсивний
 	Drag around the centre to rotate the view  ·  Shift constrains to 15°	Перетягніть навколо центру, щоб повернути перегляд  ·  Shift обмежує крок до 15°
 	(coming soon)	(незабаром)
 	Add a layer style	Додати стиль шару
+	Move effect up	Перемістити ефект вгору
+	Move effect down	Перемістити ефект вниз
+	Delete effect	Видалити ефект
 	Add a mask  (from the selection; {key} inverts)	Додати маску  (із виділення; {key} інвертує)
 	Add an adjustment	Додати корекцію
 	Add space after paragraph	Додати інтервал після абзацу

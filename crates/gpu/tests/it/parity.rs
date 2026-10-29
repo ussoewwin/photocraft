@@ -3271,7 +3271,14 @@ fn integration_adjustment_fill_opacity_masks_and_hdr_match_cpu() {
                         let mut d = Document::new("combined adjustment", Size::new(1, 1), ColorMode::Rgb, SampleType::F32);
                         let mut base = Layer::raster("base", PixelFormat::RGBA32F);
                         base.surface_mut().unwrap().write_pixel(0, 0, &[0.25, 0.5, 0.75, 1.0]);
-                        let look = Adjustment::ColorLookup { name: "half".into(), lut: Some(std::sync::Arc::new(vec![0.5; 24])), size: 2, tetrahedral: false, dither: false, source: None };
+                        let look = Adjustment::ColorLookup {
+                            name: "half".into(),
+                            lut: Some(std::sync::Arc::new(vec![0.5; 24])),
+                            size: 2,
+                            tetrahedral: false,
+                            dither: false,
+                            source: None,
+                        };
                         let mut layer = Layer::new("adjust", LayerContent::Adjustment(look));
                         layer.blend = mode;
                         layer.clipped = clipped;
@@ -3292,7 +3299,14 @@ fn integration_adjustment_fill_opacity_masks_and_hdr_match_cpu() {
     let mut d = Document::new("HDR full coverage", Size::new(1, 1), ColorMode::Rgb, SampleType::F32);
     let mut base = Layer::raster("HDR", PixelFormat::RGBA32F);
     base.surface_mut().unwrap().write_pixel(0, 0, &[1.0e4, 1.0e4, 1.0e4, 1.0]);
-    let look = Adjustment::ColorLookup { name: "half".into(), lut: Some(std::sync::Arc::new(vec![0.5; 24])), size: 2, tetrahedral: false, dither: false, source: None };
+    let look = Adjustment::ColorLookup {
+        name: "half".into(),
+        lut: Some(std::sync::Arc::new(vec![0.5; 24])),
+        size: 2,
+        tetrahedral: false,
+        dither: false,
+        source: None,
+    };
     d.layers = vec![base, Layer::new("lookup", LayerContent::Adjustment(look))];
     check(&mut g, &d, "HDR full coverage with bounded result");
 }
