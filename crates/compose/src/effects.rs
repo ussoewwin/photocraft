@@ -41,7 +41,7 @@ mod paint;
 pub use bevel::{BEVEL_H_EPS, BevelGeom, BevelPaint, TextureCtx, bevel_chisel_h, bevel_geom, satin_distance};
 #[cfg(test)]
 use bevel::{bevel_maps, satin_map};
-pub use blur::tent_kernel;
+pub use blur::{tent_kernel, softer_glow_tail_width, softer_glow_tail_amplitude};
 #[cfg(test)]
 use blur::{blur, box_line, dilate, tent, tent_direct};
 pub(crate) use composite::{VectorStroke, build_maps_prepared, composite_with_effects_prepared, map_count};
@@ -89,7 +89,14 @@ pub fn margin(layer: &Layer) -> i32 {
     for e in layer.effects.items.iter().filter(|e| e.enabled()) {
         let r = match e {
             Effect::DropShadow(s) | Effect::InnerShadow(s) => s.distance + s.size,
-            Effect::OuterGlow(g) | Effect::InnerGlow(g) => g.size,
+            Effect::OuterGlow(g) => {
+                if g.technique == GlowTechnique::Softer {
+                    g.size + softer_glow_tail_width(g.size)
+                } else {
+                    g.size
+                }
+            }
+            Effect::InnerGlow(g) => g.size,
             Effect::Stroke(s) => s.size,
             Effect::Satin(s) => satin_distance(s) + s.size,
             Effect::BevelEmboss(b) => b.size + b.soften,
