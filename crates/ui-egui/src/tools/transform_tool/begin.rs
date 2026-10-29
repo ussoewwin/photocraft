@@ -1,3 +1,4 @@
+use super::MultiTransform;
 use super::commit::{commit, start_steps};
 use super::preview::{Above, preview_image};
 use super::{
@@ -8,6 +9,9 @@ use super::{
 /// Start Free Transform on the active layer (or its selected pixels), or on the targeted unlinked
 /// layer mask, alpha channel or Quick Mask.
 pub fn begin(app: &mut PhotocraftApp, ctx: &egui::Context) -> Result<(), String> {
+    if app.multi_transform.is_some() {
+        return Err("Commit or cancel the transform first".into());
+    }
     if let Some((params, path)) = crate::vector_ui::free_transform_path(app) {
         return begin_path(app, ctx, params, path);
     }
@@ -102,9 +106,82 @@ pub fn begin(app: &mut PhotocraftApp, ctx: &egui::Context) -> Result<(), String>
     Ok(())
 }
 
+/// The layers a shared transform box moves (none outside one): snapping must not target them.
+pub(crate) fn moving_layers(app: &PhotocraftApp) -> Option<Vec<LayerId>> {
+    app.multi_transform.as_ref().map(|m| m.layers.clone())
+}
+
+/// Start one shared transform box for several selected layers from Move › Show Transform
+/// Controls. Every layer is transformed by the same homography around `rect`; the engine commits
+/// them together as one history step. This path deliberately does not use the single-layer lifted
+/// texture preview: [`multi_display_doc`] previews a transformed document clone instead.
+pub(crate) fn begin_layers(app: &mut PhotocraftApp, layers: Vec<LayerId>, rect: [f64; 4]) -> Result<(), String> {
+    if layers.len() < 2 {
+        return Err("select two or more layers".into());
+    }
+    let st = app.session.active().ok_or("no document")?;
+    let doc = st.doc.clone();
+    let revision = st.revision;
+    let active_layer = st.active_layer;
+    let mut ids = Vec::with_capacity(layers.len());
+    for id in layers {
+        let Some(layer) = doc.layer(id) else { return Err("a selected layer no longer exists".into()) };
+        if crate::doc_props_ui::is_background(&doc, layer) {
+            continue;
+        }
+        if photocraft_engine::transform_cmds::locked_for_transform(&doc, id) {
+            app.ui.open_dialog(crate::state::DialogKind::Error, json!({"message": tl!(LOCKED)}).as_object().cloned().unwrap_or_default());
+            return Err(LOCKED.into());
+        }
+        if !ids.contains(&id) {
+            ids.push(id);
+        }
+    }
+    if ids.len() < 2 {
+        return Err("select two or more transformable layers".into());
+    }
+    crate::type_tool::commit(app);
+    let fallback = ids.first().copied().ok_or("select two or more transformable layers")?;
+    let active = active_layer.filter(|id| ids.contains(id)).unwrap_or(fallback);
+    let session = app.ui.alloc_id();
+    app.transform_preview = None;
+    app.multi_transform = Some(MultiTransform {
+        document: doc.id,
+        revision,
+        layers: ids,
+        gesture: None,
+        shown_quad: None,
+        shown_interpolation: None,
+        shown: None,
+        generation: 0,
+        tool: app.ui.tool,
+        committing: None,
+    });
+    app.ui.transform = Some(TransformSession {
+        session,
+        layer: active.0,
+        rect,
+        quad: corners(rect),
+        pivot: [(rect[0] + rect[2]) / 2.0, (rect[1] + rect[3]) / 2.0],
+        interpolation: "bicubic".into(),
+        warp: None,
+        selection: false,
+        target: None,
+        path: None,
+        made: None,
+        mode: Default::default(),
+        content_aware: None,
+        skew_v: 0.0,
+    });
+    Ok(())
+}
+
 /// Free Transform on a copy (⌥⌘T, no menu item): duplicates the active layer (with a selection,
 /// its selected pixels, as Layer via Copy) and transforms the copy (#352).
 pub fn begin_copy(app: &mut PhotocraftApp, ctx: &egui::Context) -> Result<(), String> {
+    if app.multi_transform.is_some() {
+        return Err("Commit or cancel the transform first".into());
+    }
     let selection = app.session.active().is_some_and(|d| d.doc.selection.is_some());
     let params = if selection { json!({}) } else { json!({"inPlace": true}) };
     app.run(if selection { "layer.new.layerViaCopy" } else { "layer.duplicate" }, params)?;
@@ -402,6 +479,9 @@ pub(super) fn rect_to_quad_affine(r: [f64; 4], q: [[f64; 2]; 4]) -> Option<photo
 /// Start Select › Transform Selection: the same box over the selection's bounds, previewing the
 /// selection mask (the marching ants are hidden meanwhile); commits `select.transformSelection`.
 pub fn begin_selection(app: &mut PhotocraftApp, ctx: &egui::Context) -> Result<(), String> {
+    if app.multi_transform.is_some() {
+        return Err("Commit or cancel the transform first".into());
+    }
     let st = app.session.active().ok_or("no document")?;
     let doc = st.doc.clone();
     let sel = doc.selection.clone().ok_or("no selection")?;
@@ -469,6 +549,9 @@ pub fn begin_selection(app: &mut PhotocraftApp, ctx: &egui::Context) -> Result<(
 
 /// Start (or switch an active Free Transform into) Warp mode.
 pub fn begin_warp(app: &mut PhotocraftApp, ctx: &egui::Context) -> Result<(), String> {
+    if app.multi_transform.is_some() {
+        return Err("Warp is not available for a multi-layer transform".into());
+    }
     if app.ui.transform.as_ref().is_some_and(|t| t.content_aware.is_some()) {
         return Err(CAS_ONLY_SCALES.into());
     }
@@ -488,6 +571,10 @@ pub fn begin_warp(app: &mut PhotocraftApp, ctx: &egui::Context) -> Result<(), St
 /// custom mesh following the current box (so a transform made first carries over). Editable type
 /// gets its own Warp Text style instead ([`enter_type_warp`]).
 pub fn enter_warp(app: &mut PhotocraftApp, ctx: &egui::Context) {
+    if app.multi_transform.is_some() {
+        app.ui.status = "Warp is not available for a multi-layer transform".into();
+        return;
+    }
     if app.ui.transform.as_ref().is_some_and(|t| t.warp.is_none()) && warps_type(app) {
         return enter_type_warp(app, ctx);
     }
@@ -519,6 +606,9 @@ pub fn enter_warp(app: &mut PhotocraftApp, ctx: &egui::Context) {
 /// The open transform moves an editable type layer as a whole (not a lone mask, channel, path or
 /// the selection). Its Warp is Warp Text: only the styles, and the type stays editable (#3004).
 pub fn warps_type(app: &PhotocraftApp) -> bool {
+    if app.multi_transform.is_some() {
+        return false;
+    }
     let Some(t) = &app.ui.transform else { return false };
     if t.selection || t.target.is_some() || t.path.is_some() {
         return false;

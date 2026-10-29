@@ -33,8 +33,12 @@ mod warp;
 
 pub(crate) use begin::begin_content_aware;
 pub use begin::{begin, begin_copy, begin_placed, begin_selection, begin_warp, enter_warp, leave_warp, warps_type};
-pub(crate) use commit::{SAVE_FOR_WEB, committing, nudge};
+pub(crate) use begin::{begin_layers, moving_layers};
+#[cfg(test)]
+use commit::multi_selection_changed;
+pub(crate) use commit::{SAVE_FOR_WEB, committing, multi_display_doc, nudge};
 pub use commit::{cancel, commit, end_if_left, follow_edits, intercept, is_enabled, on_job_event, track_steps};
+use drag_modes::multi_has_text;
 #[cfg(test)]
 use drag_modes::{HandleIndicator, handle_indicator, keep_convex, turns};
 pub(crate) use drag_modes::{apply_drag, corner_distorts, legacy_mods};
@@ -137,6 +141,23 @@ pub struct TransformPreview {
     committing: Option<JobId>,
     /// Content-Aware Scale's live preview (cas_transform.rs).
     pub(crate) content_aware: Option<crate::cas_transform::Live>,
+}
+
+/// A Free Transform geometry session started from the Move tool's shared controls for several
+/// selected layers. Unlike [`TransformPreview`], the preview is a transformed clone of the whole
+/// document, because there is no single moving texture to peel out and draw on a quad.
+pub(crate) struct MultiTransform {
+    document: DocId,
+    revision: u64,
+    layers: Vec<LayerId>,
+    gesture: Option<Gesture>,
+    shown_quad: Option<[[f64; 2]; 4]>,
+    shown_interpolation: Option<String>,
+    shown: Option<Arc<Document>>,
+    generation: u64,
+    tool: Tool,
+    /// A background `edit.transform` applying the shared transform.
+    committing: Option<JobId>,
 }
 
 /// What [`follow_edits`] needs to rebuild the preview document.

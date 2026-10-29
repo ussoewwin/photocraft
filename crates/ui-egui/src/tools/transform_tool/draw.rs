@@ -1,7 +1,8 @@
 use super::begin::warps_type;
+use super::committing;
 use super::drag_modes::{HandleIndicator, handle_indicator};
 use super::options_bar::{quad_scale, readout};
-use super::pointer::{Hit, handle_at, rotate_dir, rotation_degrees};
+use super::pointer::{Hit, handle_at, live_gesture, rotate_dir, rotation_degrees};
 use super::warp::{on_section_edge, quick_split_kind, single_patch};
 use super::{
     BezierMesh, Color32, DocId, HANDLE_PX, Homography, LayerId, PhotocraftApp, Pos2, SplitTool, Stroke, TransformPreview, TransformSession, ViewXform, Warp,
@@ -150,9 +151,14 @@ pub fn draw_content(app: &PhotocraftApp, painter: &egui::Painter, xf: &ViewXform
 /// The box, handles, reference point and path outline over the preview that [`draw_content`]
 /// drew; the warp grid and its split guides for a warp.
 pub fn draw_overlay(app: &PhotocraftApp, painter: &egui::Painter, xf: &ViewXform) {
-    let (Some(t), Some(pv)) = (&app.ui.transform, &app.transform_preview) else { return };
+    let Some(t) = &app.ui.transform else { return };
+    let pv = app.transform_preview.as_ref();
+    if pv.is_none() && app.multi_transform.is_none() {
+        return;
+    }
     let scr = |q: [f64; 2]| xf.to_screen(q[0] as f32, q[1] as f32);
     if let Some(w) = &t.warp {
+        let Some(pv) = pv else { return };
         let over_canvas = painter.ctx().input(|i| i.pointer.hover_pos()).filter(|p| xf.rect.contains(*p)).map(|p| xf.to_doc(p));
         let at = pv.split_pointer.or(over_canvas);
         // The same keys as `cursor`, sticky ones included, so the guide matches the pointer.
@@ -170,11 +176,13 @@ pub fn draw_overlay(app: &PhotocraftApp, painter: &egui::Painter, xf: &ViewXform
         draw_warp_overlay(painter, xf, w, pv, guide);
         return;
     }
-    if pv.committing.is_some() {
+    if committing(app).is_some() {
         return;
     }
     let accent = crate::theme::Tokens::get(painter.ctx()).accent;
-    if let (Some(path), Some(h)) = (&pv.path, Homography::rect_to_quad(t.rect, t.quad)) {
+    if let Some(pv) = pv
+        && let (Some(path), Some(h)) = (&pv.path, Homography::rect_to_quad(t.rect, t.quad))
+    {
         crate::vector_ui::draw_outline(
             painter,
             path,
@@ -202,7 +210,7 @@ pub fn draw_overlay(app: &PhotocraftApp, painter: &egui::Painter, xf: &ViewXform
     if let Some(at) = painter.ctx().pointer_hover_pos().filter(|p| xf.rect.contains(*p)) {
         let p = xf.to_doc(at);
         let tol = HANDLE_PX / f64::from(xf.zoom.max(0.01));
-        if let Some(k) = rotate_dir(t, Some(pv), p, tol) {
+        if let Some(k) = rotate_dir(t, live_gesture(app), p, tol) {
             // Through the view, so the arc bends round the corner as it shows under a turned or
             // flipped view.
             let toward = xf.to_screen((p[0] + k[0] * 16.0) as f32, (p[1] + k[1] * 16.0) as f32) - at;
@@ -324,7 +332,7 @@ pub(crate) enum Readout {
 /// reference point, a warp, or a distortion that has no single scale).
 pub(crate) fn live_readout(app: &PhotocraftApp) -> Option<Readout> {
     let t = app.ui.transform.as_ref().filter(|t| t.warp.is_none())?;
-    let g = app.transform_preview.as_ref()?.gesture?;
+    let g = app.transform_preview.as_ref().and_then(|pv| pv.gesture).or_else(|| app.multi_transform.as_ref().and_then(|m| m.gesture))?;
     match g.hit {
         Hit::Outside => Some(Readout::Angle(rotation_degrees(t.quad))),
         Hit::Inside => Some(Readout::Offset([t.quad[0][0] - g.quad0[0][0], t.quad[0][1] - g.quad0[0][1]])),

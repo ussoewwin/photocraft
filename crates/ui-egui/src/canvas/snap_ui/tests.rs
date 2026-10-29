@@ -617,6 +617,35 @@ fn distort_corner_does_not_snap_to_layer_edges() {
     assert!(app.prefs_rt.snap_lines.is_empty());
 }
 
+/// A shared Free Transform box for several layers doesn't snap to those layers' original
+/// edges: they move with it. Its left edge starts exactly on the mover's left edge, so a
+/// 2 px drag snapped straight back when only the active layer was left out.
+#[test]
+fn a_shared_transform_box_does_not_snap_to_its_own_layers() {
+    let mut app = app_with_box();
+    let mover = app.session.active().unwrap().active_layer.unwrap();
+    app.run("layer.new.layer", json!({"name": "second"})).unwrap();
+    app.run("select.rect", json!({"x": 120, "y": 40, "width": 40, "height": 40})).unwrap();
+    app.run("edit.fill", json!({"color": "#00ff00"})).unwrap();
+    app.run("select.deselect", json!({})).unwrap();
+    let second = app.session.active().unwrap().active_layer.unwrap();
+    app.run("layer.select", json!({"layer": mover.0, "mode": "add"})).unwrap();
+    app.ui.tool = Tool::Move;
+    crate::transform_tool::begin_layers(&mut app, vec![mover, second], [40.0, 40.0, 160.0, 80.0]).unwrap();
+    assert_eq!(crate::transform_tool::moving_layers(&app).map(|l| l.len()), Some(2));
+    let m = egui::Modifiers::NONE;
+    crate::canvas::tool_event(&mut app, ToolEvent::Down { x: 50.0, y: 50.0, pressure: 1.0 }, m);
+    crate::canvas::tool_event(&mut app, ToolEvent::Move { x: 51.0, y: 50.0, pressure: 1.0 }, m);
+    crate::canvas::tool_event(&mut app, ToolEvent::Up { x: 52.0, y: 50.0 }, m);
+    let q = app.ui.transform.as_ref().unwrap().quad;
+    assert!((q[0][0] - 42.0).abs() < 1e-6, "the box follows the pointer: {q:?}");
+    // The snap still works against a layer that stays put (the target's left edge, x = 300).
+    crate::canvas::tool_event(&mut app, ToolEvent::Down { x: 50.0, y: 50.0, pressure: 1.0 }, m);
+    crate::canvas::tool_event(&mut app, ToolEvent::Up { x: 306.0, y: 50.0 }, m);
+    let q = app.ui.transform.as_ref().unwrap().quad;
+    assert!((q[0][0] - 300.0).abs() < 1e-6, "{q:?}");
+}
+
 #[test]
 fn free_transform_drags_and_handles_snap() {
     let mut app = app_with_box();

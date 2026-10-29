@@ -23,6 +23,103 @@ fn active_bounds(s: &Session) -> Rect {
     st.doc.layer(st.active_layer.unwrap()).unwrap().surface().unwrap().content_bounds()
 }
 
+#[test]
+fn shared_transform_moves_several_layers_in_one_command() {
+    let mut s = session();
+    let first = s.active().unwrap().active_layer.unwrap();
+    s.execute("layer.new.layer", json!({})).unwrap();
+    let second = s.active().unwrap().active_layer.unwrap();
+    s.edit("paint second", |doc, _| {
+        doc.layer_mut(second).unwrap().surface_mut().unwrap().fill_rect(Rect::new(50, 40, 70, 60), &[0.0, 1.0, 0.0, 1.0]);
+        Ok(())
+    })
+    .unwrap();
+
+    s.execute(
+        "edit.transform",
+        json!({
+            "layers": [first.0, second.0],
+            "rect": [10.0, 10.0, 70.0, 60.0],
+            "quad": [[25.0, 30.0], [85.0, 30.0], [85.0, 80.0], [25.0, 80.0]],
+            "interpolation": "nearest"
+        }),
+    )
+    .unwrap();
+
+    let st = s.active().unwrap();
+    let a = st.doc.layer(first).unwrap().surface().unwrap().content_bounds();
+    let b = st.doc.layer(second).unwrap().surface().unwrap().content_bounds();
+    assert_eq!(a, Rect::new(25, 30, 45, 40));
+    assert_eq!(b, Rect::new(65, 60, 85, 80));
+}
+
+/// Photoshop, with two layers selected and a marquee active: Free Transform moves both whole
+/// layers and drops the selection. One undo restores the layers and the selection.
+#[test]
+fn shared_transform_moves_whole_layers_and_drops_the_selection() {
+    let mut s = session();
+    let first = s.active().unwrap().active_layer.unwrap();
+    s.execute("layer.new.layer", json!({})).unwrap();
+    let second = s.active().unwrap().active_layer.unwrap();
+    s.edit("paint second", |doc, _| {
+        doc.layer_mut(second).unwrap().surface_mut().unwrap().fill_rect(Rect::new(50, 40, 70, 60), &[0.0, 1.0, 0.0, 1.0]);
+        Ok(())
+    })
+    .unwrap();
+    s.execute("select.rect", json!({"x": 0, "y": 0, "width": 15, "height": 100})).unwrap();
+    let before_a = s.active().unwrap().doc.layer(first).unwrap().surface().unwrap().content_bounds();
+    let sel_before = s.active().unwrap().doc.selection.as_ref().unwrap().content_bounds();
+
+    s.execute("edit.transform", json!({"layers": [first.0, second.0], "dx": 20, "dy": 0, "interpolation": "nearest"})).unwrap();
+    let st = s.active().unwrap();
+    let a = st.doc.layer(first).unwrap().surface().unwrap().content_bounds();
+    let b = st.doc.layer(second).unwrap().surface().unwrap().content_bounds();
+    assert_eq!(a, Rect::new(before_a.x0 + 20, before_a.y0, before_a.x1 + 20, before_a.y1), "the whole layer moves");
+    assert_eq!(b, Rect::new(70, 40, 90, 60));
+    assert!(st.doc.selection.is_none(), "the selection is dropped");
+
+    s.execute("edit.undo", json!({})).unwrap();
+    let st = s.active().unwrap();
+    assert_eq!(st.doc.layer(first).unwrap().surface().unwrap().content_bounds(), before_a);
+    assert_eq!(st.doc.selection.as_ref().map(|m| m.content_bounds()), Some(sel_before), "one undo brings the selection back");
+}
+
+/// A `layers` list that is only one layer is no multi-layer transform: the selection stays.
+#[test]
+fn a_one_layer_list_keeps_the_selection() {
+    let mut s = session();
+    let id = s.active().unwrap().active_layer.unwrap();
+    s.execute("select.rect", json!({"x": 0, "y": 0, "width": 15, "height": 100})).unwrap();
+    s.execute("edit.transform", json!({"layers": [id.0], "dx": 20, "dy": 0})).unwrap();
+    assert!(s.active().unwrap().doc.selection.is_some());
+}
+
+/// A single layer keeps its behaviour: only the selected pixels move, and the selection with them.
+#[test]
+fn single_layer_transform_still_moves_the_selection() {
+    let mut s = session();
+    let id = s.active().unwrap().active_layer.unwrap();
+    s.execute("select.rect", json!({"x": 10, "y": 10, "width": 10, "height": 10})).unwrap();
+    s.execute("edit.transform", json!({"layer": id.0, "dx": 20, "dy": 0})).unwrap();
+    let sel = s.active().unwrap().doc.selection.as_ref().unwrap().content_bounds();
+    assert_eq!((sel.x0, sel.x1), (30, 40));
+}
+
+#[test]
+fn shared_transform_rejects_invalid_layer_lists() {
+    let mut s = session();
+    let active = s.active().unwrap().active_layer.unwrap();
+    for params in [
+        json!({"layers": "not-an-array", "matrix": [1, 0, 0, 1, 1, 1]}),
+        json!({"layers": [], "matrix": [1, 0, 0, 1, 1, 1]}),
+        json!({"layers": [u64::MAX], "matrix": [1, 0, 0, 1, 1, 1]}),
+        json!({"layer": active.0, "layers": [active.0], "matrix": [1, 0, 0, 1, 1, 1]}),
+        json!({"layers": [active.0], "target": "mask", "matrix": [1, 0, 0, 1, 1, 1]}),
+    ] {
+        assert!(s.execute("edit.transform", params).is_err());
+    }
+}
+
 // ---- Memory budget (#3773, #7807). Tests run with a 20 MB budget (2²⁰ px of 32-bit CMYK with
 // alpha), so nothing here comes near the real one. ----
 

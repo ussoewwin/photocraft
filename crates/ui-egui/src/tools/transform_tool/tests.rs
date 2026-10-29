@@ -1092,6 +1092,115 @@ fn free_transform_a_copy() {
     assert_eq!(app.session.active().unwrap().doc.layers.len(), layers);
 }
 
+/// Changing interpolation rerenders a shared preview even when its geometry is unchanged.
+#[test]
+fn shared_transform_preview_refreshes_when_interpolation_changes() {
+    let mut app = app_with_square(64, photocraft_geom::Rect::new(8, 8, 24, 24));
+    let first = app.session.active().unwrap().active_layer.unwrap();
+    app.session.execute("layer.new.layer", json!({})).unwrap();
+    let second = app.session.active().unwrap().active_layer.unwrap();
+    app.session
+        .edit("paint second", |doc, _| {
+            doc.layer_mut(second).unwrap().surface_mut().unwrap().fill_rect(photocraft_geom::Rect::new(32, 8, 48, 24), &[0.0, 1.0, 0.0, 1.0]);
+            Ok(())
+        })
+        .unwrap();
+    begin_layers(&mut app, vec![first, second], [8.0, 8.0, 48.0, 24.0]).unwrap();
+    for p in &mut app.ui.transform.as_mut().unwrap().quad {
+        p[0] += 4.0;
+    }
+
+    let (_, first_key) = multi_display_doc(&mut app, 0).expect("bicubic preview");
+    app.ui.transform.as_mut().unwrap().interpolation = "nearest".into();
+    let (_, second_key) = multi_display_doc(&mut app, 0).expect("nearest preview");
+    assert_ne!(first_key, second_key, "changing interpolation invalidates the cached shared preview");
+    assert_eq!(app.multi_transform.as_ref().unwrap().shown_interpolation.as_deref(), Some("nearest"));
+}
+
+/// A shared session is kept only while the same transformable layers stay selected.
+#[test]
+fn shared_transform_detects_a_changed_layer_selection() {
+    let mut app = app_with_square(64, photocraft_geom::Rect::new(8, 8, 24, 24));
+    let first = app.session.active().unwrap().active_layer.unwrap();
+    app.session.execute("layer.new.layer", json!({})).unwrap();
+    let second = app.session.active().unwrap().active_layer.unwrap();
+    app.session.execute("layer.select", json!({"layer": first.0, "mode": "add"})).unwrap();
+    begin_layers(&mut app, vec![first, second], [8.0, 8.0, 48.0, 24.0]).unwrap();
+    assert!(!multi_selection_changed(&app, app.multi_transform.as_ref().unwrap()));
+
+    app.session.execute("layer.select", json!({"layer": first.0})).unwrap();
+    assert!(multi_selection_changed(&app, app.multi_transform.as_ref().unwrap()));
+}
+
+/// A shared box keeps the held handle's pointer for the whole drag, as a one-layer box does
+/// (#5405): dragged off its corner, the resize pointer doesn't turn into the commit one.
+#[test]
+fn a_shared_box_keeps_the_held_handles_cursor_during_a_drag() {
+    let mut app = app_with_square(64, photocraft_geom::Rect::new(8, 8, 24, 24));
+    app.ui.extras.snap = false;
+    let first = app.session.active().unwrap().active_layer.unwrap();
+    app.session.execute("layer.new.layer", json!({})).unwrap();
+    let second = app.session.active().unwrap().active_layer.unwrap();
+    app.session.execute("layer.select", json!({"layer": first.0, "mode": "add"})).unwrap();
+    begin_layers(&mut app, vec![first, second], [8.0, 8.0, 48.0, 24.0]).unwrap();
+    let xf = ViewXform::active(&app).unwrap();
+    let none = egui::Modifiers::NONE;
+    let corner = cursor(&app, &xf, [48.0, 24.0], none);
+    let far = cursor(&app, &xf, [48.0, 60.0], none);
+    assert_ne!(corner, far, "away from the box the pointer differs");
+    crate::canvas::tool_event(&mut app, ToolEvent::Down { x: 48.0, y: 24.0, pressure: 1.0 }, none);
+    crate::canvas::tool_event(&mut app, ToolEvent::Move { x: 48.0, y: 60.0, pressure: 1.0 }, none);
+    assert!(app.multi_transform.as_ref().is_some_and(|m| m.gesture.is_some()), "the shared box holds the corner");
+    assert_eq!(cursor(&app, &xf, [48.0, 60.0], none), corner, "the dragged corner keeps its pointer");
+    crate::canvas::tool_event(&mut app, ToolEvent::Up { x: 48.0, y: 60.0 }, none);
+}
+
+/// Transform Selection cannot replace a shared transform that is already open.
+#[test]
+fn transform_selection_rejects_an_open_multi_transform_without_replacing_it() {
+    let mut app = app_with_square(64, photocraft_geom::Rect::new(8, 8, 24, 24));
+    let first = app.session.active().unwrap().active_layer.unwrap();
+    app.session.execute("layer.new.layer", json!({})).unwrap();
+    let second = app.session.active().unwrap().active_layer.unwrap();
+    app.session
+        .edit("paint second", |doc, _| {
+            doc.layer_mut(second).unwrap().surface_mut().unwrap().fill_rect(photocraft_geom::Rect::new(32, 8, 48, 24), &[0.0, 1.0, 0.0, 1.0]);
+            Ok(())
+        })
+        .unwrap();
+    app.session.execute("select.rect", json!({"x": 4, "y": 4, "width": 48, "height": 24})).unwrap();
+    begin_layers(&mut app, vec![first, second], [8.0, 8.0, 48.0, 24.0]).unwrap();
+    let session = app.ui.transform.as_ref().unwrap().session;
+
+    assert_eq!(begin_selection(&mut app, &egui::Context::default()), Err("Commit or cancel the transform first".into()));
+    assert_eq!(app.ui.transform.as_ref().map(|t| t.session), Some(session));
+    assert!(app.multi_transform.is_some(), "the existing shared transform stays open");
+}
+
+/// Transform Copy rejects an overlapping shared transform before it creates a layer.
+#[test]
+fn free_transform_copy_rejects_an_open_multi_transform_without_making_a_layer() {
+    let mut app = app_with_square(64, photocraft_geom::Rect::new(8, 8, 24, 24));
+    let first = app.session.active().unwrap().active_layer.unwrap();
+    app.session.execute("layer.new.layer", json!({})).unwrap();
+    let second = app.session.active().unwrap().active_layer.unwrap();
+    app.session
+        .edit("paint second", |doc, _| {
+            doc.layer_mut(second).unwrap().surface_mut().unwrap().fill_rect(photocraft_geom::Rect::new(32, 8, 48, 24), &[0.0, 1.0, 0.0, 1.0]);
+            Ok(())
+        })
+        .unwrap();
+    begin_layers(&mut app, vec![first, second], [8.0, 8.0, 48.0, 24.0]).unwrap();
+    let before = {
+        let st = app.session.active().unwrap();
+        (st.doc.layers.len(), st.revision, st.history.past_len())
+    };
+
+    assert_eq!(begin_copy(&mut app, &egui::Context::default()), Err("Commit or cancel the transform first".into()));
+    let st = app.session.active().unwrap();
+    assert_eq!((st.doc.layers.len(), st.revision, st.history.past_len()), before, "a rejected start is mutation-free");
+    assert!(app.multi_transform.is_some() && app.ui.transform.is_some(), "the existing transform stays open");
+}
 /// #4112: ⌥⌘T on a cylinder smart object, Warp mode, Enter with nothing touched: the copy
 /// keeps the cylinder and stays its own step (no warp step to fold into), so one undo takes
 /// back the copy and nothing before it.

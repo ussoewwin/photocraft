@@ -51,11 +51,17 @@ pub(super) fn handle_indicator(app: &PhotocraftApp, t: &TransformSession, h: Hit
 /// Editable type can be scaled, rotated and skewed but not distorted (#2630): the rule that greys
 /// Distort and Perspective in `enable_rules::disabled`, for the box's own layer. A box on a path,
 /// on the selection outline or on a lone mask or channel moves no type.
+pub(super) fn multi_has_text(app: &PhotocraftApp) -> bool {
+    let (Some(st), Some(m)) = (app.session.active(), app.multi_transform.as_ref()) else { return false };
+    m.layers.iter().any(|id| st.doc.layer(*id).is_some_and(|l| matches!(l.content, LayerContent::Text(_))))
+}
+
 fn distort_refused(app: &PhotocraftApp, t: &TransformSession) -> bool {
     t.path.is_none()
         && !t.selection
         && t.target.is_none()
-        && app.session.active().and_then(|st| st.doc.layer(LayerId(t.layer))).is_some_and(|l| matches!(l.content, LayerContent::Text(_)))
+        && (multi_has_text(app)
+            || app.session.active().and_then(|st| st.doc.layer(LayerId(t.layer))).is_some_and(|l| matches!(l.content, LayerContent::Text(_))))
 }
 
 /// Where Distort and Perspective are refused ([`distort_refused`]), ⌘-drag and ⌘⌥⇧-drag of a
