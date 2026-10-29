@@ -107,3 +107,25 @@ fn an_rgb_source_in_a_cmyk_or_lab_document_matches() {
         same(&format!("rgb into {mode:?}"), &doc, PixelFormat { mode, sample: SampleType::U8, alpha: true });
     }
 }
+
+/// Wide enough that a strip is 256 rows: the shadow, mask and blur cross the strip edges.
+#[test]
+fn effects_across_strip_edges_match() {
+    for depth in [SampleType::U8, SampleType::F32] {
+        let mut doc = Document::new("wide", Size::new(4096, 700), ColorMode::Rgb, depth);
+        let fmt = doc.pixel_format();
+        let mut base = Layer::new("base", LayerContent::Raster(block(&fmt, Rect::new(100, 200, 900, 560))));
+        let mut glow = photocraft_doc::Effect::default_drop_shadow();
+        if let photocraft_doc::Effect::DropShadow(d) = &mut glow {
+            d.size = 40.0;
+            d.distance = 30.0;
+        }
+        base.effects.items.push(glow);
+        base.effects.enabled = true;
+        let mut mask = LayerMask::reveal_all();
+        mask.surface.fill_rect(Rect::new(0, 240, 4096, 270), &[0.3]);
+        base.mask = Some(mask);
+        doc.layers = vec![base];
+        same(&format!("strips {depth:?}"), &doc, fmt);
+    }
+}
