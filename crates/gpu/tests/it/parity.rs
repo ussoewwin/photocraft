@@ -3196,6 +3196,33 @@ fn pass_through_clipping_base_with_an_adjustment() {
     check(&mut g, &d, "pass-through clipping base with an adjustment");
 }
 
+/// Dissolve's adjustment/effect decisions use document coordinates, even in offset regions
+/// and in the paged compositor. The clipped path comes from #4992.
+#[test]
+fn dissolve_adjustments_and_effects_match_cpu_in_offset_regions() {
+    let Some(mut g) = gpu() else { return };
+    for depth in [SampleType::U8, SampleType::U16, SampleType::F32] {
+        for effects in [false, true] {
+            let mut d = Document::new("Dissolve", Size::new(300, 280), ColorMode::Rgb, depth);
+            d.layers.push(noise_layer("base", d.pixel_format(), Rect::new(0, 0, 300, 280), 19, 0.4));
+            let mut layer = if effects {
+                let mut l = noise_layer("effect", d.pixel_format(), Rect::new(-8, 13, 290, 270), 27, 0.6);
+                l.effects.items = vec![Effect::ColorOverlay { common: FxCommon::new(BlendMode::Normal, 0.7), color: Color::rgb(0.2, 0.8, 0.4) }];
+                l
+            } else {
+                Layer::new("adjustment", LayerContent::Adjustment(Adjustment::Invert))
+            };
+            layer.blend = BlendMode::Dissolve;
+            layer.opacity = 0.37;
+            layer.mask = Some(mask(Rect::new(11, 7, 287, 265), 43, 0.0));
+            d.layers.push(layer);
+            let label = format!("Dissolve effects={effects} {depth:?}");
+            fx_check(&mut g, &d, &label);
+            diff_rect(&mut g, &d, Rect::new(17, 23, 281, 269), &label).unwrap();
+        }
+    }
+}
+
 /// Transparency Shapes Layer off changes the special eight's blend (the layer's alpha blends as
 /// Fill, #5692); the GPU has no pass for it and leaves such documents to the CPU. Other modes look
 /// the same either way and stay on the GPU.
