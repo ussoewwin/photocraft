@@ -687,14 +687,19 @@ fn windows_root_case_variants_keep_io_inside_the_grant() {
     let configured = PathBuf::from(inside.to_string_lossy().to_ascii_uppercase());
     let canonical = PathBuf::from(std::fs::canonicalize(&inside).unwrap().to_string_lossy().to_ascii_uppercase());
     for spelling in [&configured, &canonical] {
-        let path = spelling.join("new.bin");
+        let path = spelling.join("new.png");
         workspace.write(&path.to_string_lossy(), b"inside").unwrap();
         assert_eq!(workspace.read(&path.to_string_lossy()).unwrap(), b"inside");
         assert!(workspace.write(&spelling.join("..").join("outside").join("blocked.bin").to_string_lossy(), b"no").is_err());
     }
-    assert_eq!(std::fs::read(inside.join("new.bin")).unwrap(), b"inside");
+    assert_eq!(std::fs::read(inside.join("new.png")).unwrap(), b"inside");
     assert!(workspace.write(&configured.with_file_name("INSIDE-SIBLING").join("blocked.bin").to_string_lossy(), b"no").is_err());
     assert!(!outside.join("blocked.bin").exists());
+    // Case normalization must not bypass the refusal to replace unrelated existing files.
+    std::fs::write(inside.join("notes.bin"), b"keep").unwrap();
+    assert!(workspace.write(&configured.join("notes.bin").to_string_lossy(), b"no").is_err());
+    assert_eq!(std::fs::read(inside.join("notes.bin")).unwrap(), b"keep");
+
 }
 
 /// Unix roots with different case must not become aliases of the granted prefix.

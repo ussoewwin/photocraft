@@ -73,15 +73,15 @@ fn execute_command(app: &mut PhotocraftApp, ctx: &egui::Context, req: &ControlRe
     // A control-channel menu click must respect the same modal gate as the native menu.
     // The documented `ui` requests of Camera Raw and the full-window workspaces operate
     // the already-open one rather than click a menu. Only that continuation may pass its
-    // own modal gate. engine.execute is deliberately not subject to the UI's menu-click semantics.
+    // own modal gate. Both command entry points respect document ownership.
     let open_modal = if app.camera_raw.is_some() { Some("filter.cameraRaw") } else { crate::distort_ui::modal_workspace(app) };
     let continuation = open_modal == Some(id)
         && params.as_object().is_some_and(|fields| fields.len() == 1 && fields.get("ui").is_some_and(Value::is_object))
         && app.ui.dialogs.is_empty()
         && app.discard.is_none()
         && !crate::crop_ui::blocks(app, id);
-    if req.method == "ui.menu.invoke" && !continuation && !crate::menus::modal_allows(app, id) {
-        return err("menu command is unavailable while a modal dialog is open");
+    if !continuation && !crate::menus::modal_allows(app, id) {
+        return err("command is unavailable while a modal dialog is open");
     }
     if let Some(authorize) = app.services.automation_command.as_ref()
         && let Err(error) = authorize(id, &params)
