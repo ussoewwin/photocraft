@@ -516,6 +516,39 @@ fn blend_if_values_stay_ordered() {
 }
 
 #[test]
+fn blend_if_alt_split_and_drag_behavior() {
+    // Case 1: Alt-drag on unsplit black handle [0, 0, 255, 255] splits the right half
+    let mut mode = BlendDrag::Pair { pair: 0, origin_v: 0 };
+    let q = [0, 0, 255, 255];
+    let q1 = step_blend_drag(&mut mode, &q, 45, true);
+    assert_eq!(q1, [0, 45, 255, 255], "Alt-drag right must split black triangle into [0, 45]");
+
+    // Case 2: Moving the split right half further to 70
+    let q2 = step_blend_drag(&mut mode, &q1, 70, false);
+    assert_eq!(q2, [0, 70, 255, 255]);
+
+    // Case 3: Dragging the split half back to 0 merges the handle
+    let q3 = step_blend_drag(&mut mode, &q2, 0, false);
+    assert_eq!(q3, [0, 0, 255, 255], "Dragging back to origin reunites the triangle");
+
+    // Case 4: Alt-drag on unsplit white handle [0, 0, 255, 255] splits the left half
+    let mut mode_w = BlendDrag::Pair { pair: 2, origin_v: 255 };
+    let qw1 = step_blend_drag(&mut mode_w, &q, 200, true);
+    assert_eq!(qw1, [0, 0, 200, 255], "Alt-drag left must split white triangle into [200, 255]");
+
+    // Case 5: Dragging without Alt moves both halves together
+    let mut mode_solid = BlendDrag::Pair { pair: 0, origin_v: 0 };
+    let qs1 = step_blend_drag(&mut mode_solid, &q, 35, false);
+    assert_eq!(qs1, [35, 35, 255, 255], "Drag without Alt moves solid handle together");
+
+    // Case 6: Clamping prevents black handle from crossing white handle
+    let q_close = [0, 100, 150, 255];
+    let mut mode_single = BlendDrag::Single(1);
+    let q_clamped = step_blend_drag(&mut mode_single, &q_close, 180, false);
+    assert_eq!(q_clamped, [0, 150, 150, 255], "Black max cannot exceed white min");
+}
+
+#[test]
 fn contour_picker_and_editor_edit_the_effect_curve() {
     let mut s = session();
     s.execute("layer.layerStyle.dropShadow", json!({})).unwrap();
