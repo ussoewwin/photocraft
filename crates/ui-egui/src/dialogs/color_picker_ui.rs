@@ -221,6 +221,11 @@ pub fn title_for(name: &str) -> String {
     crate::i18n::fmt(tl!("Color Picker ({name})"), &[("name", name)])
 }
 
+/// Prefer a complete catalogued title; some locales only provide the named-colour template.
+pub(crate) fn fixed_title(label: &str, name: &str) -> String {
+    if crate::i18n::has(crate::i18n::current(), label) { tl!(label).to_string() } else { title_for(tl!(name)) }
+}
+
 /// The `"#rrggbb"` at `field` of `f` (a key or a JSON pointer).
 fn field_value<'a>(f: &'a Map<String, Value>, field: &str) -> Option<&'a str> {
     match field.strip_prefix('/') {
