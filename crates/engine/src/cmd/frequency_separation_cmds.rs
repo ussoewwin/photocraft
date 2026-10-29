@@ -123,7 +123,7 @@ fn run(s: &mut Session, p: &Value) -> Result<Value> {
         if src.content_bounds().is_empty() {
             return Err(EngineError::Other(format!("the layer \"{}\" has no pixels", source.name)));
         }
-        let low = crate::filters::apply_filter_to_surface(GAUSSIAN, &json!({ "radius": radius }), src, canvas, None, canvas)
+        let low = crate::filters::apply_filter_to_surface(GAUSSIAN, &json!({ "radius": radius }), src, canvas, None, canvas)?
             .ok_or_else(|| EngineError::Other("Gaussian Blur is unavailable".into()))?;
         // From the Low that is stored (quantised at 8 and 16 bits), so the two add up exactly.
         let high = high_pass(src, &low, canvas);

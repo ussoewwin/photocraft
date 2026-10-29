@@ -1,24 +1,36 @@
 {
   "selected_count": 108,
-  "integrated_count": 41,
-  "pending_count": 67,
+  "integrated_count": 61,
+  "pending_count": 47,
   "integrated_prs": [
+    9703,
     9651,
     9623,
+    9598,
+    9597,
     9596,
     9595,
     9594,
+    9590,
+    9589,
     9584,
+    9523,
+    9512,
     9509,
     9504,
     9493,
+    9481,
     9472,
     9457,
     9436,
     9418,
     9416,
+    9354,
+    9342,
+    9339,
     9172,
     9110,
+    9019,
     9015,
     9004,
     8931,
@@ -34,35 +46,31 @@
     6510,
     6387,
     6383,
+    6236,
     5939,
     5870,
     5165,
+    5090,
+    5010,
     4985,
+    4938,
     4883,
     4742,
     4547,
+    4305,
     3874,
     3554,
-    3520
+    3520,
+    3461,
+    3455,
+    1991
   ],
   "pending_prs": [
-    9703,
     9606,
-    9598,
-    9597,
-    9590,
-    9589,
-    9523,
     9517,
-    9512,
-    9481,
     9478,
     9401,
-    9354,
-    9342,
-    9339,
     9282,
-    9019,
     8986,
     8985,
     8905,
@@ -77,7 +85,6 @@
     6621,
     6492,
     6449,
-    6236,
     6139,
     6026,
     5744,
@@ -87,17 +94,13 @@
     5453,
     5270,
     5176,
-    5090,
     5082,
-    5010,
     4993,
     4992,
-    4938,
     4890,
     4783,
     4763,
     4711,
-    4305,
     4042,
     4035,
     4023,
@@ -105,16 +108,13 @@
     3748,
     3519,
     3464,
-    3461,
-    3455,
     3387,
     3345,
     3142,
     3139,
-    2300,
-    1991
+    2300
   ],
-  "state": "PARTIAL INTEGRATION — NOT READY FOR TESTING OR UPSTREAM PR",
+  "state": "PARTIAL INTEGRATION — RESOLVING CONFLICTS; NOT READY FOR PORTABLE ACCEPTANCE BUILD",
   "manual_tests": "NOT RUN",
   "integrated_validation": "NOT RUN",
   "branch": "integration/approved-bugfix-parity-2026-10-29",
@@ -123,7 +123,7 @@
       "number": 9703,
       "title": "Fix adjustment layer name clicks targeting masks",
       "head": "3605d30c38294c4d970e52f4a02f44f97e8bc1a9",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/9703#pullrequestreview-5655990760",
       "conflicts": [
         "crates/ui-egui/src/panels.rs"
@@ -161,7 +161,7 @@
       "number": 9598,
       "title": "fix(ui): Liquify's Twirl Counterclockwise gets a mirrored twirl icon",
       "head": "47aea89e9220b996f0d5a0d2bb8b5938100b4ad1",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/9598#pullrequestreview-5647858443",
       "conflicts": [
         "ATTRIBUTION.md"
@@ -171,7 +171,7 @@
       "number": 9597,
       "title": "fix(ui): the layer list doesn't move with no layer selected",
       "head": "9429df26b371c04c2afa65228a60ded739b5fbc2",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/9597#pullrequestreview-5648898287",
       "conflicts": [
         "crates/ui-egui/src/panels.rs"
@@ -205,7 +205,7 @@
       "number": 9590,
       "title": "fix(io): PSD layer-effect contours keep at most 16 points",
       "head": "a9744ed44dc782613b19a97b8c159a091f73e669",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/9590#pullrequestreview-5647923229",
       "conflicts": [
         "crates/io/src/effects_map.rs"
@@ -215,7 +215,7 @@
       "number": 9589,
       "title": "fix(compose, gpu): an adjustment layer's This Layer range judges its result before Opacity",
       "head": "da157945077190e550b53a5e14b0536f62761292",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/9589#pullrequestreview-5647036365",
       "conflicts": [
         "crates/compose/src/lib.rs",
@@ -234,7 +234,7 @@
       "number": 9523,
       "title": "Fix Type on a Path wrapping and caret positioning across closed-path seams",
       "head": "728782c595e768bdb6febc7f30e4d1456d13fd36",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/9523#pullrequestreview-5645920841",
       "conflicts": [
         "crates/ui-egui/src/type_tool.rs"
@@ -254,7 +254,7 @@
       "number": 9512,
       "title": "fix(compose, gpu): adjustment layers apply Fill inside the special eight blend modes",
       "head": "6c55561128caf5ac917eb3d174e8e7bb4bd48e23",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/9512#pullrequestreview-5644863033",
       "conflicts": [
         "crates/compose/src/lib.rs",
@@ -289,7 +289,7 @@
       "number": 9481,
       "title": "fix(ui): new layer effects start from the Make Default values",
       "head": "7937adff961027154d795b8905e821244ae4f929",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/9481#pullrequestreview-5644538284",
       "conflicts": [
         "crates/ui-egui/src/dialogs/layer_style.rs"
@@ -360,7 +360,7 @@
       "number": 9354,
       "title": "fix(ui): Full Screen Mode needs a document (#9349)",
       "head": "41eb1de5cff17f5f5b9c22913e48b71565b56a2a",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/9354#pullrequestreview-5641946837",
       "conflicts": [
         "crates/ui-egui/src/lib.rs",
@@ -372,7 +372,7 @@
       "number": 9342,
       "title": "fix(io, engine): Embed Color Profile writes sRGB for an untagged document (#9325)",
       "head": "c46a74621d36adae9707ab8f3eb39cf6b4c302b9",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/9342#pullrequestreview-5642054720",
       "conflicts": [
         "crates/engine/src/web_cmds.rs"
@@ -382,7 +382,7 @@
       "number": 9339,
       "title": "fix(export): embed requested sRGB profile for untagged sources (#9325)",
       "head": "393645ab91460af2e37cc3ba8f6921e7551f676e",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/9339#pullrequestreview-5642090549",
       "conflicts": [
         "crates/ui-egui/src/dialogs/export_dialog.rs"
@@ -421,7 +421,7 @@
       "number": 9019,
       "title": "fix(xtask): reject unknown performance benchmark selections",
       "head": "364c4be1c19728aefa601ee924bc7a0cd6a09789",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/9019#pullrequestreview-5638973719",
       "conflicts": [
         "xtask/src/perf.rs"
@@ -714,7 +714,7 @@
       "number": 6236,
       "title": "Shift+Alt+right-click opens Photoshop's HUD Color Picker (#6098)",
       "head": "ce546dd4b5451a17b843ef1e129bdb40fbfe3160",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/6236#pullrequestreview-5644088784",
       "conflicts": [
         "crates/ui-egui/src/brush_resize.rs",
@@ -892,7 +892,7 @@
       "number": 5090,
       "title": "Actions: add editable PhotoCraft Essentials starter presets",
       "head": "61d9e8cc1aed29ed6bea0d0fd2702fa87c4f0206",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/5090#pullrequestreview-5585928498",
       "conflicts": [
         "crates/engine/src/actions_cmds.rs",
@@ -918,7 +918,7 @@
       "number": 5010,
       "title": "Layer Style: Photoshop's layout (three columns, OK/Cancel/New Style/Preview on the right, one-line rows) [depends on #4938]",
       "head": "cc865221894e21f846d92b721cce7421ea338363",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/5010#pullrequestreview-5585991159",
       "conflicts": [
         "crates/ui-egui/src/dialogs.rs",
@@ -964,7 +964,7 @@
       "number": 4938,
       "title": "Layer Style: one dialog size on every page, and it fits short screens",
       "head": "63b7c921634835259139e4d3e7b9d3c396998b4d",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/4938#pullrequestreview-5586050980",
       "conflicts": [
         "crates/ui-egui/src/dialogs.rs",
@@ -1053,7 +1053,7 @@
       "number": 4305,
       "title": "Filter > Other > Frequency Separation (#1714)",
       "head": "1b74873991dbb2e9803d228a969291f09c6f1032",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/4305#pullrequestreview-5594762253",
       "conflicts": [
         "crates/engine/src/lib.rs",
@@ -1178,7 +1178,7 @@
       "number": 3461,
       "title": "Replay recorded layer visibility on the intended named layer",
       "head": "5d8cb2a39ad70e31260f1f3fc2010ca132daff65",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/3461#pullrequestreview-5597122170",
       "conflicts": [
         "crates/engine/src/actions_cmds.rs",
@@ -1192,7 +1192,7 @@
       "number": 3455,
       "title": "Undo and redo action definition edits from the Actions panel",
       "head": "d84fa7955d260505378a1a596ec80d602036319d",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/3455#pullrequestreview-5597131410",
       "conflicts": [
         "crates/engine/src/actions_cmds.rs",
@@ -1270,7 +1270,7 @@
       "number": 1991,
       "title": "feat(actions): import and export reusable Actions JSON files",
       "head": "202266b90613280e16ae285b53dd4e10d5f0c7ac",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/1991#pullrequestreview-5597895651",
       "conflicts": [
         "crates/automation/src/workspace.rs",
@@ -1278,5 +1278,20 @@
         "crates/ui-egui/src/actions.rs"
       ]
     }
-  ]
+  ],
+  "current_checkpoint_sha": "6c225b13c35652e50a797109ab9b6d2ae00cad98",
+  "updated_at": "2026-10-29T03:37:43.872223+00:00",
+  "active_subsystem": "Layer Style complete; continuing independent ports and build compatibility checks",
+  "parent_decision_required": {
+    "pr": 5176,
+    "conflict": "main uses patterns.pat; PR uses patterns.json and per-pattern files with lazy loading",
+    "proposal": "Use new index as authoritative after a successful migration. Dual-read valid legacy PAT only when no index/migration marker exists. Preserve legacy and corrupt data; never resurrect deletions from stale legacy data. Add migration/corruption/deletion/renamed-pattern regressions."
+  },
+  "validation": {
+    "compositor_at_31ce2208": "PASSED: 402 passed, 0 failed, 2 ignored",
+    "current_full_workspace": "NOT RUN",
+    "current_build_check": "IN PROGRESS: correcting API/module compatibility failures",
+    "manual": "NOT RUN",
+    "portable_final_build": "NOT RUN — waits for 100+ complete integration and validation"
+  }
 }

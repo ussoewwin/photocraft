@@ -1,9 +1,17 @@
 # Integration checkpoint and decisions
 
-**Partial integration: 41 of 108 selected heads are ancestors; 67 require resolution.**
+**Partial integration: 61 of 108 selected heads are ancestors; 47 require resolution.**
 No integrated build, corpus, full sweep or manual interaction qualification is claimed.
 See [test plan](approved-bugfix-parity-2026-10-29.md), [selection evidence](approved-selection.json)
 and [machine-readable status](integration-status.json).
+
+## Latest progress (updated 2026-10-29T03:37:43.872223+00:00)
+
+- Verified local integrated heads: **61 / 108**, checkpoint `6c225b13c35652e50a797109ab9b6d2ae00cad98`.
+- Layer Style sizing/layout/defaults and profile capture ports are committed; action JSON, definition history, named targets and starter actions are committed.
+- CPU compositor checkpoint at `31ce2208…`: 402 PASSED, 0 FAILED, 2 IGNORED. Later code is not yet fully validated.
+- Parent decision still needed for #5176: existing `patterns.pat` versus PR's `patterns.json` and per-pattern lazy files. Proposed compatibility migration is recorded in `integration-status.json`; the PR remains uncounted.
+- Final Windows portable artifact: NOT RUN until complete integration and applicable validation. Protocol correction is IN PROGRESS; generic historical per-PR cases are not accepted as complete.
 
 ## Scope holds
 
@@ -27,12 +35,12 @@ These proposals are pending parent semantic review. Mechanical moved-test/catalo
 
 ### Actions and automation (11)
 
-- [#1991](https://github.com/storytold/photocraft/pull/1991) feat(actions): import and export reusable Actions JSON files — PENDING CONFLICT
-- [#3455](https://github.com/storytold/photocraft/pull/3455) Undo and redo action definition edits from the Actions panel — PENDING CONFLICT
-- [#3461](https://github.com/storytold/photocraft/pull/3461) Replay recorded layer visibility on the intended named layer — PENDING CONFLICT
+- [#1991](https://github.com/storytold/photocraft/pull/1991) feat(actions): import and export reusable Actions JSON files — INTEGRATED
+- [#3455](https://github.com/storytold/photocraft/pull/3455) Undo and redo action definition edits from the Actions panel — INTEGRATED
+- [#3461](https://github.com/storytold/photocraft/pull/3461) Replay recorded layer visibility on the intended named layer — INTEGRATED
 - [#3748](https://github.com/storytold/photocraft/pull/3748) control: suggest near matches for unknown command ids and methods (#3674) — PENDING CONFLICT
 - [#4993](https://github.com/storytold/photocraft/pull/4993) Prevent control-channel engine commands from editing behind modal dialogs — PENDING CONFLICT
-- [#5090](https://github.com/storytold/photocraft/pull/5090) Actions: add editable PhotoCraft Essentials starter presets — PENDING CONFLICT
+- [#5090](https://github.com/storytold/photocraft/pull/5090) Actions: add editable PhotoCraft Essentials starter presets — INTEGRATED
 - [#5176](https://github.com/storytold/photocraft/pull/5176) Play CopyCat, AJ and Line and Color action sets; keep patterns across restarts; Shift Edge scale — PENDING CONFLICT
 - [#6492](https://github.com/storytold/photocraft/pull/6492) Fail control startup promptly when its port is occupied — PENDING CONFLICT
 - [#6510](https://github.com/storytold/photocraft/pull/6510) Automation: resolve configured root aliases for absolute paths (#6426) — INTEGRATED
@@ -43,7 +51,7 @@ These proposals are pending parent semantic review. Mechanical moved-test/catalo
 
 - [#3874](https://github.com/storytold/photocraft/pull/3874) fix(layer-style): support Blend If Alt-split handle feathering and throttle live preview — INTEGRATED
 - [#3967](https://github.com/storytold/photocraft/pull/3967) Add move and delete actions to Smart Filter rows — PENDING CONFLICT
-- [#4305](https://github.com/storytold/photocraft/pull/4305) Filter > Other > Frequency Separation (#1714) — PENDING CONFLICT
+- [#4305](https://github.com/storytold/photocraft/pull/4305) Filter > Other > Frequency Separation (#1714) — INTEGRATED
 - [#4711](https://github.com/storytold/photocraft/pull/4711) Treat Dissolve as a per-pixel choice — PENDING CONFLICT
 - [#4992](https://github.com/storytold/photocraft/pull/4992) Preserve Dissolve coverage when compositing clipped layers — PENDING CONFLICT
 - [#7153](https://github.com/storytold/photocraft/pull/7153) Smart Filters: double-clicking a Liquify filter reopens it in the Liquify workspace — INTEGRATED
@@ -56,9 +64,9 @@ These proposals are pending parent semantic review. Mechanical moved-test/catalo
 - [#8931](https://github.com/storytold/photocraft/pull/8931) feat(algo): describe the Gaussian blur as data for other devices — INTEGRATED
 - [#9472](https://github.com/storytold/photocraft/pull/9472) fix(io): import a Displace smart filter that names its map file without embedding it (#9162) — INTEGRATED
 - [#9509](https://github.com/storytold/photocraft/pull/9509) fix: an edit at full coverage keeps its result over huge 32-bit values — INTEGRATED
-- [#9512](https://github.com/storytold/photocraft/pull/9512) fix(compose, gpu): adjustment layers apply Fill inside the special eight blend modes — PENDING CONFLICT
+- [#9512](https://github.com/storytold/photocraft/pull/9512) fix(compose, gpu): adjustment layers apply Fill inside the special eight blend modes — INTEGRATED
 - [#9584](https://github.com/storytold/photocraft/pull/9584) fix(compose, gpu): Blend If hard points match Photoshop at 16 bits and for Gray — INTEGRATED
-- [#9589](https://github.com/storytold/photocraft/pull/9589) fix(compose, gpu): an adjustment layer's This Layer range judges its result before Opacity — PENDING CONFLICT
+- [#9589](https://github.com/storytold/photocraft/pull/9589) fix(compose, gpu): an adjustment layer's This Layer range judges its result before Opacity — INTEGRATED
 - [#9595](https://github.com/storytold/photocraft/pull/9595) fix(compose, gpu): a Pass Through group with Blend If renders isolated — INTEGRATED
 - [#9651](https://github.com/storytold/photocraft/pull/9651) perf(algo): row-parallel local_sharpen with fast-path protect_detail (#5426) — INTEGRATED
 
@@ -71,13 +79,13 @@ These proposals are pending parent semantic review. Mechanical moved-test/catalo
 - [#5870](https://github.com/storytold/photocraft/pull/5870) fix(format): reject duplicate native layer identities — INTEGRATED
 - [#6387](https://github.com/storytold/photocraft/pull/6387) Video Frames to Layers: every page of a multi-page TIFF (part of #6379) — INTEGRATED
 - [#8897](https://github.com/storytold/photocraft/pull/8897) fix(io): read linked smart objects for PSD export as regular files only — PENDING CONFLICT
-- [#9339](https://github.com/storytold/photocraft/pull/9339) fix(export): embed requested sRGB profile for untagged sources (#9325) — PENDING CONFLICT
-- [#9342](https://github.com/storytold/photocraft/pull/9342) fix(io, engine): Embed Color Profile writes sRGB for an untagged document (#9325) — PENDING CONFLICT
+- [#9339](https://github.com/storytold/photocraft/pull/9339) fix(export): embed requested sRGB profile for untagged sources (#9325) — INTEGRATED
+- [#9342](https://github.com/storytold/photocraft/pull/9342) fix(io, engine): Embed Color Profile writes sRGB for an untagged document (#9325) — INTEGRATED
 - [#9401](https://github.com/storytold/photocraft/pull/9401) fix(format): a save on macOS keeps the file's creation time (#9388) — PENDING CONFLICT
 - [#9416](https://github.com/storytold/photocraft/pull/9416) Affinity reader: contiguous curve records and a cheaper object tag index — INTEGRATED
 - [#9418](https://github.com/storytold/photocraft/pull/9418) Color Lookup: honour the .3dl Mesh header's cube edge and output depth (#9078, #9073) — INTEGRATED
 - [#9457](https://github.com/storytold/photocraft/pull/9457) raw: faster tone stage (Shadows, Highlights, Clarity, Texture, Dehaze), same bytes — INTEGRATED
-- [#9590](https://github.com/storytold/photocraft/pull/9590) fix(io): PSD layer-effect contours keep at most 16 points — PENDING CONFLICT
+- [#9590](https://github.com/storytold/photocraft/pull/9590) fix(io): PSD layer-effect contours keep at most 16 points — INTEGRATED
 - [#9596](https://github.com/storytold/photocraft/pull/9596) fix(io): drop a kept Txt2 once no type layers are left — INTEGRATED
 
 ### Painting (9)
@@ -88,7 +96,7 @@ These proposals are pending parent semantic review. Mechanical moved-test/catalo
 - [#5165](https://github.com/storytold/photocraft/pull/5165) Fix: brush section selection — INTEGRATED
 - [#5939](https://github.com/storytold/photocraft/pull/5939) fix(paint): scale blur sigma with brush size (#5892) — INTEGRATED
 - [#6139](https://github.com/storytold/photocraft/pull/6139) Fix painting workflows, File Info and layer selection — PENDING CONFLICT
-- [#6236](https://github.com/storytold/photocraft/pull/6236) Shift+Alt+right-click opens Photoshop's HUD Color Picker (#6098) — PENDING CONFLICT
+- [#6236](https://github.com/storytold/photocraft/pull/6236) Shift+Alt+right-click opens Photoshop's HUD Color Picker (#6098) — INTEGRATED
 - [#7848](https://github.com/storytold/photocraft/pull/7848) fix(retouch): preserve Smudge pickup with live-pixel stroke commits — PENDING CONFLICT
 - [#9623](https://github.com/storytold/photocraft/pull/9623) Pencil: keep a 1 px freehand line connected where it turns — INTEGRATED
 
@@ -99,7 +107,7 @@ These proposals are pending parent semantic review. Mechanical moved-test/catalo
 - [#6383](https://github.com/storytold/photocraft/pull/6383) Windows releases ship a symbols zip: the release build's PDBs for profilers (#688) — INTEGRATED
 - [#7743](https://github.com/storytold/photocraft/pull/7743) packaging: the portable zip holds the files, not a folder with the files in it — INTEGRATED
 - [#9015](https://github.com/storytold/photocraft/pull/9015) fix(xtask): reject leading zeroes in numeric prerelease identifiers — INTEGRATED
-- [#9019](https://github.com/storytold/photocraft/pull/9019) fix(xtask): reject unknown performance benchmark selections — PENDING CONFLICT
+- [#9019](https://github.com/storytold/photocraft/pull/9019) fix(xtask): reject unknown performance benchmark selections — INTEGRATED
 - [#9110](https://github.com/storytold/photocraft/pull/9110) test: GPU tests honour WGPU_BACKEND, so they run on Windows with an Intel GPU (#4) — INTEGRATED
 - [#9436](https://github.com/storytold/photocraft/pull/9436) Startup: a failed launch says why in a dialog instead of closing silently (#7643) — INTEGRATED
 
@@ -125,7 +133,7 @@ These proposals are pending parent semantic review. Mechanical moved-test/catalo
 - [#4783](https://github.com/storytold/photocraft/pull/4783) Fix/4758 type extreme finite geometry 20261013s1215 — PENDING CONFLICT
 - [#8347](https://github.com/storytold/photocraft/pull/8347) Type: Roman Hanging Punctuation (trailing marks hang, don't steer the alignment) — PENDING CONFLICT
 - [#9478](https://github.com/storytold/photocraft/pull/9478) fix(text): vertical type sets roman letters upright, one per em, as Photoshop does (#9470) — PENDING CONFLICT
-- [#9523](https://github.com/storytold/photocraft/pull/9523) Fix Type on a Path wrapping and caret positioning across closed-path seams — PENDING CONFLICT
+- [#9523](https://github.com/storytold/photocraft/pull/9523) Fix Type on a Path wrapping and caret positioning across closed-path seams — INTEGRATED
 - [#9594](https://github.com/storytold/photocraft/pull/9594) fix(engine): copied type keeps its size across resolutions after an edit — INTEGRATED
 
 ### UI and workflow (26)
@@ -137,8 +145,8 @@ These proposals are pending parent semantic review. Mechanical moved-test/catalo
 - [#4547](https://github.com/storytold/photocraft/pull/4547) fix(icons): PhotoCraft icon corner radius matches other Craft apps (#4478) — INTEGRATED
 - [#4883](https://github.com/storytold/photocraft/pull/4883) feat(ui): show selection and active-layer bounds in the status bar — INTEGRATED
 - [#4890](https://github.com/storytold/photocraft/pull/4890) Add scrollbar visibility preferences (#3262) — PENDING CONFLICT
-- [#4938](https://github.com/storytold/photocraft/pull/4938) Layer Style: one dialog size on every page, and it fits short screens — PENDING CONFLICT
-- [#5010](https://github.com/storytold/photocraft/pull/5010) Layer Style: Photoshop's layout (three columns, OK/Cancel/New Style/Preview on the right, one-line rows) [depends on #4938] — PENDING CONFLICT
+- [#4938](https://github.com/storytold/photocraft/pull/4938) Layer Style: one dialog size on every page, and it fits short screens — INTEGRATED
+- [#5010](https://github.com/storytold/photocraft/pull/5010) Layer Style: Photoshop's layout (three columns, OK/Cancel/New Style/Preview on the right, one-line rows) [depends on #4938] — INTEGRATED
 - [#5270](https://github.com/storytold/photocraft/pull/5270) Layer Style: Gradient Overlay takes any number of colour stops (#5177) — PENDING CONFLICT
 - [#5744](https://github.com/storytold/photocraft/pull/5744) fix(ui): keep detached documents in one interactive window — PENDING CONFLICT
 - [#6449](https://github.com/storytold/photocraft/pull/6449) Hand tool: Cmd held zooms in and Alt zooms out, as in Photoshop — PENDING CONFLICT
@@ -148,14 +156,14 @@ These proposals are pending parent semantic review. Mechanical moved-test/catalo
 - [#9004](https://github.com/storytold/photocraft/pull/9004) fix(ui): enlarge Move tool alignment icons for legibility — INTEGRATED
 - [#9172](https://github.com/storytold/photocraft/pull/9172) Gradient Fill layer: default to Foreground to Transparent (#8708) — INTEGRATED
 - [#9282](https://github.com/storytold/photocraft/pull/9282) feat(ui): Preset menus for Levels, Exposure, Black & White and Channel Mixer — PENDING CONFLICT
-- [#9354](https://github.com/storytold/photocraft/pull/9354) fix(ui): Full Screen Mode needs a document (#9349) — PENDING CONFLICT
-- [#9481](https://github.com/storytold/photocraft/pull/9481) fix(ui): new layer effects start from the Make Default values — PENDING CONFLICT
+- [#9354](https://github.com/storytold/photocraft/pull/9354) fix(ui): Full Screen Mode needs a document (#9349) — INTEGRATED
+- [#9481](https://github.com/storytold/photocraft/pull/9481) fix(ui): new layer effects start from the Make Default values — INTEGRATED
 - [#9504](https://github.com/storytold/photocraft/pull/9504) fix(ui): Keyboard Shortcuts records ⌘Z instead of undoing the capture — INTEGRATED
 - [#9517](https://github.com/storytold/photocraft/pull/9517) fix(ui): Layer Style scrolls on a short window so OK stays on screen — PENDING CONFLICT
-- [#9597](https://github.com/storytold/photocraft/pull/9597) fix(ui): the layer list doesn't move with no layer selected — PENDING CONFLICT
-- [#9598](https://github.com/storytold/photocraft/pull/9598) fix(ui): Liquify's Twirl Counterclockwise gets a mirrored twirl icon — PENDING CONFLICT
+- [#9597](https://github.com/storytold/photocraft/pull/9597) fix(ui): the layer list doesn't move with no layer selected — INTEGRATED
+- [#9598](https://github.com/storytold/photocraft/pull/9598) fix(ui): Liquify's Twirl Counterclockwise gets a mirrored twirl icon — INTEGRATED
 - [#9606](https://github.com/storytold/photocraft/pull/9606) fix(ui): the Color panel remembers its options across restarts — PENDING CONFLICT
-- [#9703](https://github.com/storytold/photocraft/pull/9703) Fix adjustment layer name clicks targeting masks — PENDING CONFLICT
+- [#9703](https://github.com/storytold/photocraft/pull/9703) Fix adjustment layer name clicks targeting masks — INTEGRATED
 
 ## Pending conflict files and exact source deltas
 
