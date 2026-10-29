@@ -101,6 +101,7 @@ use strokes::{HOLD_REPEAT_MS, draw_clone_preview, feed_live_stroke, pointer_butt
 #[cfg(test)]
 pub(crate) use strokes::{SPOT_HEALING_TRAIL, live_retouch_points};
 pub(crate) use tabs::arranged_cells;
+pub(crate) use tabs::tab_title_at;
 #[cfg(test)]
 use tabs::{TEAR_OFF, pro_tab_title, tab_context_items, tab_drop_index, tab_move_target, tabs, torn_off};
 pub use tabs::{TabStrip, document_area, extra_windows};
@@ -114,8 +115,6 @@ use textures::{clamp_texture_side, preview_bounds, texture_factor};
 use textures::{ensure_gpu, redraw_focus, visible_doc_rect};
 pub use tool_input::{ToolEvent, selection_drag_kind, tool_event};
 pub(crate) use tool_input::{command_guide_at, command_moves_layer, event_tool};
-#[cfg(test)]
-use transform_controls::transform_controls_several;
 pub(crate) use transform_controls::{LAYER_EDGES, layer_edges_rect};
 use transform_controls::{begin_transform_controls_at, draw_transform_controls, transform_controls_cursor, transform_controls_rect, transform_controls_turn};
 #[cfg(test)]

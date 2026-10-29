@@ -140,12 +140,6 @@ pub(crate) fn display_doc(app: &mut PhotocraftApp, idx: usize) -> (std::sync::Ar
     if let Some(shown) = crate::gradient_ui::display_doc(app, idx) {
         return shown;
     }
-    // Move › Show Transform Controls on several selected layers: one shared live transform.
-    // It comes before the Move preview so a floating selection can remain part of that shared
-    // transform instead of short-circuiting to its untransformed floating preview.
-    if let Some(shown) = crate::transform_tool::multi_display_doc(app, idx) {
-        return shown;
-    }
     // Move tool drag: the moving layers at the pointer.
     if let Some(shown) = crate::move_ui::display_doc(app, idx) {
         return shown;

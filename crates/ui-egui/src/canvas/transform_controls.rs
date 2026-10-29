@@ -37,42 +37,7 @@ pub(super) fn transform_controls_layers(app: &PhotocraftApp) -> Vec<&photocraft_
         return Vec::new();
     }
     let Some(st) = app.session.active() else { return Vec::new() };
-    let layers: Vec<_> =
-        st.selected_layers().into_iter().filter_map(|id| st.doc.layer(id)).filter(|l| !crate::doc_props_ui::is_background(&st.doc, l)).collect();
-    if layers.len() > 1 && layers.iter().any(|l| photocraft_engine::transform_cmds::locked_for_transform(&st.doc, l.id)) {
-        return Vec::new();
-    }
-    layers
-}
-
-/// Several layers are selected: Show Transform Controls frames and transforms them together.
-pub(super) fn transform_controls_several(app: &PhotocraftApp) -> bool {
-    transform_controls_layers(app).len() > 1
-}
-
-/// The document-space frame behind Move › Show Transform Controls. Several selected layers are
-/// transformed as whole layers, so a pixel selection does not crop every one to the selection.
-fn transform_controls_bounds(app: &PhotocraftApp) -> Option<photocraft_geom::Rect> {
-    let st = app.session.active()?;
-    let layers = transform_controls_layers(app);
-    let several = layers.len() > 1;
-    let floating = photocraft_engine::float_cmds::floating(st).map(|f| f.layer);
-    let floating_piece = app.session.active_index().and_then(|idx| floating_outline(app, idx)).map(|o| o.content_bounds());
-    let (dx, dy) = crate::move_ui::floating_offset(app).unwrap_or((0, 0));
-    layers
-        .into_iter()
-        .map(|l| {
-            if several && floating == Some(l.id) {
-                let remaining = photocraft_engine::transform_cmds::whole_layer_bounds(&st.doc, l);
-                floating_piece.map_or(remaining, |piece| remaining.union(&piece.translate(dx, dy)))
-            } else if several {
-                photocraft_engine::transform_cmds::whole_layer_bounds(&st.doc, l)
-            } else {
-                photocraft_engine::transform_cmds::transform_frame(&st.doc, l)
-            }
-        })
-        .filter(|b| !b.is_empty())
-        .reduce(|a, b| a.union(&b))
+    st.selected_layers().into_iter().filter_map(|id| st.doc.layer(id)).filter(|l| !crate::doc_props_ui::is_background(&st.doc, l)).collect()
 }
 
 /// Move tool › Show Transform Controls: the boxes Free Transform would open on the selected
@@ -80,17 +45,13 @@ fn transform_controls_bounds(app: &PhotocraftApp) -> Option<photocraft_geom::Rec
 pub(super) fn transform_controls_rect(app: &PhotocraftApp, xf: &ViewXform) -> Option<Rect> {
     let st = app.session.active()?;
     let layers = transform_controls_layers(app);
-    let b = transform_controls_bounds(app)?;
+    let b = layers.iter().map(|l| photocraft_engine::transform_cmds::transform_frame(&st.doc, l)).filter(|b| !b.is_empty()).reduce(|a, b| a.union(&b))?;
     // Floating selected pixels are framed by their outline, as their ants are (#7538), not by the
     // selection they were cut with; a frame round other selected layers too keeps them all.
     let alone = matches!(layers.as_slice(), [l] if photocraft_engine::float_cmds::floating(st).is_some_and(|f| f.layer == l.id));
-    let b = if alone {
-        let b = app.session.active_index().and_then(|idx| floating_outline(app, idx)).map_or(b, |o| o.content_bounds());
-        let (dx, dy) = crate::move_ui::floating_offset(app).unwrap_or((0, 0));
-        b.translate(dx, dy)
-    } else {
-        b
-    };
+    let b = app.session.active_index().filter(|_| alone).and_then(|idx| floating_outline(app, idx)).map_or(b, |o| o.content_bounds());
+    let (dx, dy) = crate::move_ui::floating_offset(app).unwrap_or((0, 0));
+    let b = b.translate(dx, dy);
     if b.is_empty() {
         return None;
     }
@@ -143,20 +104,14 @@ pub(super) fn transform_controls_hit(r: Rect, p: Pos2) -> bool {
     transform_controls_cursor(r, p).is_some()
 }
 
-/// Enter the existing Free Transform session when a Move-tool transform control is pressed.
+/// Enter the existing Free Transform session when a Move-tool transform control is pressed: on
+/// every selected layer, as the frame shows them (#6501).
 pub(super) fn begin_transform_controls_at(app: &mut PhotocraftApp, ctx: &egui::Context, xf: &ViewXform, p: Pos2) -> bool {
     let Some(r) = transform_controls_rect(app, xf) else { return false };
     if !transform_controls_hit(r, p) {
         return false;
     }
-    let result = if transform_controls_several(app) {
-        let Some(b) = transform_controls_bounds(app) else { return false };
-        let ids = transform_controls_layers(app).into_iter().map(|l| l.id).collect();
-        crate::transform_tool::begin_layers(app, ids, [b.x0 as f64, b.y0 as f64, b.x1 as f64, b.y1 as f64])
-    } else {
-        crate::transform_tool::begin(app, ctx)
-    };
-    match result {
+    match crate::transform_tool::begin(app, ctx) {
         Ok(()) => true,
         Err(e) => {
             app.ui.status = e;
@@ -165,7 +120,7 @@ pub(super) fn begin_transform_controls_at(app: &mut PhotocraftApp, ctx: &egui::C
     }
 }
 
-/// Move tool › Show Transform Controls: the selected layers' bounding box with its eight handles,
+/// Move tool › Show Transform Controls: the selected layers' bounding box, with its eight handles,
 /// and the outline of every selected shape layer, as in Photoshop.
 pub(super) fn draw_transform_controls(app: &mut PhotocraftApp, painter: &egui::Painter, xf: &ViewXform) {
     let Some(r) = transform_controls_rect(app, xf) else { return };

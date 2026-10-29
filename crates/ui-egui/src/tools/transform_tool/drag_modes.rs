@@ -1,5 +1,6 @@
+use super::begin::moves_kind;
 use super::pointer::{Gesture, Hit, carry_pivot};
-use super::{Homography, LayerContent, LayerId, PhotocraftApp, TransformMode, TransformSession};
+use super::{Homography, LayerContent, PhotocraftApp, TransformMode, TransformSession};
 
 /// The same effective modifiers drive the geometry and decide whether Ctrl is a distortion
 /// gesture rather than the ordinary snap override. Keep type and Content-Aware Scale refusals.
@@ -51,17 +52,8 @@ pub(super) fn handle_indicator(app: &PhotocraftApp, t: &TransformSession, h: Hit
 /// Editable type can be scaled, rotated and skewed but not distorted (#2630): the rule that greys
 /// Distort and Perspective in `enable_rules::disabled`, for the box's own layer. A box on a path,
 /// on the selection outline or on a lone mask or channel moves no type.
-pub(super) fn multi_has_text(app: &PhotocraftApp) -> bool {
-    let (Some(st), Some(m)) = (app.session.active(), app.multi_transform.as_ref()) else { return false };
-    m.layers.iter().any(|id| st.doc.layer(*id).is_some_and(|l| matches!(l.content, LayerContent::Text(_))))
-}
-
 fn distort_refused(app: &PhotocraftApp, t: &TransformSession) -> bool {
-    t.path.is_none()
-        && !t.selection
-        && t.target.is_none()
-        && (multi_has_text(app)
-            || app.session.active().and_then(|st| st.doc.layer(LayerId(t.layer))).is_some_and(|l| matches!(l.content, LayerContent::Text(_))))
+    t.path.is_none() && !t.selection && t.target.is_none() && moves_kind(app, t, |c| matches!(c, LayerContent::Text(_)))
 }
 
 /// Where Distort and Perspective are refused ([`distort_refused`]), ⌘-drag and ⌘⌥⇧-drag of a

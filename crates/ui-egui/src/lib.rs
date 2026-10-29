@@ -149,6 +149,7 @@ pub use dialogs::rasterize_prompt;
 pub use dialogs::replace_prompt;
 use dialogs::rgb_histogram;
 pub use dialogs::screen_picker;
+pub use dialogs::select_mask_ui;
 pub use dialogs::shape_dialog;
 pub(crate) use dialogs::shape_fill_ui;
 use dialogs::sizing;
@@ -524,8 +525,6 @@ pub struct PhotocraftApp {
     pub(crate) hist_uncached: Option<(DocId, u64)>,
     /// Free Transform preview (document without the moving pixels + their texture).
     pub(crate) transform_preview: Option<transform_tool::TransformPreview>,
-    /// Move-tool Show Transform Controls session spanning several selected layers.
-    pub(crate) multi_transform: Option<transform_tool::MultiTransform>,
     /// Move-tool ⇧/⌥ drag state (move_mods).
     pub(crate) move_mods: move_mods::MoveDrag,
     /// Cached document for a modal text Style Options color preview.
@@ -749,6 +748,9 @@ mod transform_undo_tests;
 
 #[cfg(test)]
 mod transform_type_tests;
+
+#[cfg(test)]
+mod transform_several_tests;
 
 #[cfg(test)]
 mod psd_open_tests;

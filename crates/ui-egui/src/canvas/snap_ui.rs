@@ -215,18 +215,18 @@ fn begin(app: &mut PhotocraftApp, p: [f64; 2], mods: egui::Modifiers) {
     let moves_layer = crate::canvas::command_moves_layer(app, tool, p, mods);
     let crop_tol = crate::crop_ui::tolerance(app);
     let gesture = if let Some(t) = &app.ui.transform {
-        // A shared box moves every layer of its session: none of them is a target.
-        let moving = crate::transform_tool::moving_layers(app).unwrap_or_else(|| vec![LayerId(t.layer)]);
         let corner = match crate::transform_tool::hit(t, p, crate::transform_tool::handle_tolerance(app)) {
-            crate::transform_tool::Hit::Corner(index) => t.quad.get(index).map(|&point| (Gesture::TransformCorner { index, point }, moving.clone())),
+            crate::transform_tool::Hit::Corner(index) => {
+                t.quad.get(index).map(|&point| (Gesture::TransformCorner { index, point }, crate::transform_tool::moving_layers(t)))
+            }
             _ => None,
         };
         if t.mode == crate::state::TransformMode::Distort {
             corner
         } else if near_handle(&t.quad, p, crate::transform_tool::handle_tolerance(app)) {
-            corner.or(Some((Gesture::Point, moving)))
+            corner.or_else(|| Some((Gesture::Point, crate::transform_tool::moving_layers(t))))
         } else if in_quad(&t.quad, p) {
-            Some((Gesture::TransformMove { rect: quad_rect(&t.quad) }, moving))
+            Some((Gesture::TransformMove { rect: quad_rect(&t.quad) }, crate::transform_tool::moving_layers(t)))
         } else {
             None
         }

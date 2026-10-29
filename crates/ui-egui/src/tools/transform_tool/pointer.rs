@@ -1,10 +1,10 @@
-use super::begin::warps_type;
+use super::begin::{moving_layers, warps_type};
 use super::commit::{commit, committing, moves_type};
 use super::drag_modes::{apply_drag, apply_mode_drag, drag_mods, handle_indicator, mode_allows, mode_mods};
-use super::multi_has_text;
 use super::warp::{quick_split_kind, split_cursor, surface_at, warp_hit, warp_pointer};
 use super::{
-    CursorIcon, HANDLE_PX, Homography, LayerContent, LayerId, PhotocraftApp, ToolEvent, TransformMode, TransformSession, ViewXform, WarpStyle, handle_tolerance,
+    CursorIcon, HANDLE_PX, Homography, LayerContent, PhotocraftApp, ToolEvent, TransformMode, TransformPreview, TransformSession, ViewXform, WarpStyle,
+    handle_tolerance,
 };
 
 /// Which part of the box a document point hits.
@@ -72,49 +72,6 @@ pub fn pointer(app: &mut PhotocraftApp, ev: ToolEvent, mods: egui::Modifiers) ->
         warp_pointer(app, ev, tol, mods);
         return true;
     }
-
-    if app.multi_transform.is_some() {
-        match ev {
-            ToolEvent::Down { x, y, .. } => {
-                let mut h = hit(&t, [x, y], tol);
-                // ⌥-click away from the handles moves the reference point there (and drags it).
-                if mods.alt
-                    && matches!(h, Hit::Inside | Hit::Outside)
-                    && let Some(s) = app.ui.transform.as_mut()
-                {
-                    s.pivot = [x, y];
-                    h = Hit::Pivot;
-                }
-                let g = (mode_allows(t.mode, h) || h == Hit::Outside).then_some(Gesture { hit: h, start: [x, y], quad0: t.quad, pivot0: t.pivot });
-                if let Some(m) = app.multi_transform.as_mut() {
-                    m.gesture = g;
-                }
-            }
-            ToolEvent::Move { x, y, .. } | ToolEvent::Up { x, y } => {
-                let g = app.multi_transform.as_ref().and_then(|m| m.gesture);
-                if matches!(ev, ToolEvent::Up { .. })
-                    && let Some(m) = app.multi_transform.as_mut()
-                {
-                    m.gesture = None;
-                }
-                if matches!(ev, ToolEvent::Up { .. }) && g.is_some_and(|g| accepts_outside_click(g, [x, y], tol)) {
-                    commit(app);
-                    return true;
-                }
-                let type_layer = multi_has_text(app);
-                let adjusted = g.map(|g| drag_mods(app, &t, g.hit, mods));
-                if let (Some(g), Some((mode, mods)), Some(s)) = (g, adjusted, app.ui.transform.as_mut())
-                    && mode_allows(t.mode, g.hit)
-                {
-                    apply_mode_drag(s, g, [x, y], mode, type_layer, mods);
-                    round_to_pixel_grid(app);
-                }
-            }
-        }
-        crate::snap_ui::retain_transform_lines(app, mods);
-        return true;
-    }
-
     let Some(pv) = app.transform_preview.as_mut() else { return false };
     match ev {
         ToolEvent::Down { x, y, .. } => {
@@ -173,9 +130,6 @@ pub fn pointer(app: &mut PhotocraftApp, ev: ToolEvent, mods: egui::Modifiers) ->
 /// offset, and a proportional scale off by its ratio: a shape dragged to 540 px came out 539.6.
 /// Rotated, skewed and distorted boxes are left as dragged.
 fn round_to_pixel_grid(app: &mut PhotocraftApp) {
-    if app.multi_transform.is_some() {
-        return;
-    }
     if !app.session.prefs().tools.snap_vector_tools_and_transforms_to_pixel_grid {
         return;
     }
@@ -183,8 +137,9 @@ fn round_to_pixel_grid(app: &mut PhotocraftApp) {
     if t.selection || t.warp.is_some() || t.content_aware.is_some() || t.target.is_some() {
         return;
     }
-    let vector =
-        t.path.is_some() || app.session.active().and_then(|st| st.doc.layer(LayerId(t.layer))).is_some_and(|l| matches!(l.content, LayerContent::Shape(_)));
+    let shapes =
+        |st: &photocraft_engine::DocState| moving_layers(t).iter().all(|id| st.doc.layer(*id).is_some_and(|l| matches!(l.content, LayerContent::Shape(_))));
+    let vector = t.path.is_some() || app.session.active().is_some_and(shapes);
     if !vector || !upright(&t.quad) {
         return;
     }
@@ -276,15 +231,10 @@ pub(super) fn rotation_degrees(quad: [[f64; 2]; 4]) -> f64 {
 /// just outside a corner, or anywhere while a rotate drag is on. It points into the box along the
 /// bisector of the nearest corner, so each corner gets its own arrow and they turn with the box.
 pub(crate) fn rotate_cursor_dir(app: &PhotocraftApp, p: [f64; 2]) -> Option<[f64; 2]> {
-    rotate_dir(app.ui.transform.as_ref()?, live_gesture(app), p, handle_tolerance(app))
+    rotate_dir(app.ui.transform.as_ref()?, app.transform_preview.as_ref(), p, handle_tolerance(app))
 }
 
-/// The drag on the box, of a one-layer session or of a shared box over several layers.
-pub(super) fn live_gesture(app: &PhotocraftApp) -> Option<Gesture> {
-    app.transform_preview.as_ref().and_then(|pv| pv.gesture).or_else(|| app.multi_transform.as_ref().and_then(|m| m.gesture))
-}
-
-pub(super) fn rotate_dir(t: &TransformSession, gesture: Option<Gesture>, p: [f64; 2], tol: f64) -> Option<[f64; 2]> {
+pub(super) fn rotate_dir(t: &TransformSession, pv: Option<&TransformPreview>, p: [f64; 2], tol: f64) -> Option<[f64; 2]> {
     // Content-Aware Scale's box only scales, and Skew doesn't rotate: no rotate arrow.
     if !(p[0].is_finite() && p[1].is_finite())
         || t.warp.is_some()
@@ -295,7 +245,7 @@ pub(super) fn rotate_dir(t: &TransformSession, gesture: Option<Gesture>, p: [f64
     }
     // During a drag the arrow shows only while it rotates: not when a handle that scales, skews
     // or distorts strays past a corner (#5405).
-    match gesture {
+    match pv.and_then(|pv| pv.gesture) {
         Some(g) if g.hit == Hit::Outside || (t.mode == TransformMode::Rotate && matches!(g.hit, Hit::Corner(_) | Hit::Edge(_))) => {}
         Some(_) => return None,
         None if !near_rotate_corner(t, p, tol) => return None,
@@ -316,7 +266,7 @@ pub(super) fn rotate_dir(t: &TransformSession, gesture: Option<Gesture>, p: [f64
 
 /// The handle a drag in progress holds, else the one under document point `p`.
 pub(super) fn handle_at(app: &PhotocraftApp, t: &TransformSession, p: [f64; 2], tol: f64) -> Hit {
-    live_gesture(app).map(|g| g.hit).unwrap_or_else(|| hit(t, p, tol))
+    app.transform_preview.as_ref().and_then(|pv| pv.gesture.map(|g| g.hit)).unwrap_or_else(|| hit(t, p, tol))
 }
 
 /// Cursor for hovering a document point while transforming. `xf` is the canvas's view;
