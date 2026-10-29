@@ -104,6 +104,8 @@ fn candidates_walk_from_specific_to_general() {
     assert_eq!(candidates("zh_TW"), ["zh-tw", "zh-hant", "zh"]);
     assert_eq!(candidates("zh-CN"), ["zh-cn", "zh-hans", "zh"]);
     assert_eq!(candidates("zh-Hant-HK"), ["zh-hant-hk", "zh-hant", "zh"]);
+    assert_eq!(candidates("nn_NO.UTF-8"), ["nn-no", "nb", "nn"]);
+    assert_eq!(candidates("no"), ["nb", "no"]);
 }
 
 #[test]
@@ -133,6 +135,65 @@ fn spanish_resolves_and_pluralises() {
     }
     let forms: Vec<usize> = [0, 1, 3].into_iter().map(es.0.plural).collect();
     assert_eq!(forms, [1, 0, 1]);
+}
+
+#[test]
+fn swedish_resolves_and_pluralises() {
+    let sv = Lang::from_code("sv").expect("sv registered");
+    assert_eq!(sv.name(), "Svenska");
+    for tag in ["sv", "SV", "sv-SE", "sv_SE.UTF-8", "sv-FI", "sv_FI.UTF-8", "sv-AX"] {
+        assert_eq!(lang_from_tag(tag), Some(sv), "{tag}");
+        assert_eq!(Lang::from_pref(tag), sv, "{tag}");
+    }
+    let forms: Vec<usize> = [0, 1, 2, 21].into_iter().map(sv.0.plural).collect();
+    assert_eq!(forms, [1, 0, 1, 1]);
+    assert_eq!(tr(sv, "File"), "Arkiv");
+    assert_eq!(trn(sv, 1, "{n} layer", "{n} layers"), "1 lager");
+    assert_eq!(trn(sv, 3, "{n} layer", "{n} layers"), "3 lager");
+}
+
+#[test]
+fn finnish_resolves_and_pluralises() {
+    let fi = Lang::from_code("fi").expect("fi registered");
+    assert_eq!(fi.name(), "Suomi");
+    for tag in ["fi", "FI", "fi-FI", "fi_FI.UTF-8"] {
+        assert_eq!(lang_from_tag(tag), Some(fi), "{tag}");
+        assert_eq!(Lang::from_pref(tag), fi, "{tag}");
+    }
+    // Filipino and Swedish in Finland don't pick Finnish.
+    assert_ne!(lang_from_tag("fil"), Some(fi));
+    assert_ne!(lang_from_tag("sv-FI"), Some(fi));
+    assert_eq!(tr(fi, "File"), "Tiedosto");
+    // The partitive singular follows any number but 1.
+    for (n, layer) in [(0, "tasoa"), (1, "taso"), (2, "tasoa"), (21, "tasoa")] {
+        assert_eq!(trn(fi, n, "{n} layer", "{n} layers"), format!("{n} {layer}"));
+    }
+}
+
+#[test]
+fn danish_resolves_and_pluralises() {
+    let da = Lang::from_code("da").expect("da registered");
+    assert_eq!(da.name(), "Dansk");
+    for tag in ["da", "DA", "da-DK", "da_DK.UTF-8", "da-GL"] {
+        assert_eq!(lang_from_tag(tag), Some(da), "{tag}");
+        assert_eq!(Lang::from_pref(tag), da, "{tag}");
+    }
+    assert_eq!(tr(da, "File"), "Filer");
+    assert_eq!(trn(da, 1, "{n} document", "{n} documents"), "1 dokument");
+    assert_eq!(trn(da, 3, "{n} document", "{n} documents"), "3 dokumenter");
+}
+
+#[test]
+fn norwegian_resolves_and_pluralises() {
+    let nb = Lang::from_code("nb").expect("nb registered");
+    assert_eq!(nb.name(), "Norsk bokmål");
+    for tag in ["nb", "NB", "nb-NO", "nb_NO.UTF-8", "no", "no-NO", "no_NO.UTF-8", "nn", "nn-NO", "nn_NO.UTF-8"] {
+        assert_eq!(lang_from_tag(tag), Some(nb), "{tag}");
+        assert_eq!(Lang::from_pref(tag), nb, "{tag}");
+    }
+    assert_eq!(tr(nb, "File"), "Fil");
+    assert_eq!(trn(nb, 1, "{n} item", "{n} items"), "1 element");
+    assert_eq!(trn(nb, 3, "{n} item", "{n} items"), "3 elementer");
 }
 
 #[test]
