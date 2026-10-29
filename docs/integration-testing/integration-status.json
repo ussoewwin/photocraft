@@ -113,9 +113,9 @@
     1991
   ],
   "pending_prs": [],
-  "state": "ALL 108 SELECTED HEADS INTEGRATED - COMBINED VALIDATION IN PROGRESS; NOT READY FOR ACCEPTANCE",
+  "state": "108 SELECTED HEADS INTEGRATED; VALIDATED PORTABLE TEST BUILD PREPARED; MANUAL ACCEPTANCE NOT RUN",
   "manual_tests": "NOT RUN",
-  "integrated_validation": "NOT RUN",
+  "integrated_validation": "PASSED at frozen source",
   "branch": "integration/approved-bugfix-parity-2026-10-29",
   "prs": [
     {
@@ -270,7 +270,7 @@
     },
     {
       "number": 9504,
-      "title": "fix(ui): Keyboard Shortcuts records âŒ˜Z instead of undoing the capture",
+      "title": "fix(ui): Keyboard Shortcuts records \u00e2\u0152\u02dcZ instead of undoing the capture",
       "head": "993c9ed167c6acd9bc8f87c6cff6e2c7abba17a8",
       "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/9504#pullrequestreview-5644657832",
@@ -537,7 +537,7 @@
     },
     {
       "number": 8193,
-      "title": "Filter Gallery â€º Cutout 3/4: edges and curves stage",
+      "title": "Filter Gallery \u00e2\u20ac\u00ba Cutout 3/4: edges and curves stage",
       "head": "864024609b872de3d869879f1632b951c896c6cd",
       "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/8193#pullrequestreview-5643244034",
@@ -545,7 +545,7 @@
     },
     {
       "number": 8192,
-      "title": "Filter Gallery â€º Cutout 2/4: regions stage",
+      "title": "Filter Gallery \u00e2\u20ac\u00ba Cutout 2/4: regions stage",
       "head": "412e3b7cf1f4836a5772d93391d21728dbe1f74f",
       "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/8192#pullrequestreview-5642599218",
@@ -553,7 +553,7 @@
     },
     {
       "number": 8191,
-      "title": "Filter Gallery â€º Cutout 1/4: colour and palette stage",
+      "title": "Filter Gallery \u00e2\u20ac\u00ba Cutout 1/4: colour and palette stage",
       "head": "91e4cec43525ca739c05cff614701fbd3576e389",
       "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/8191#pullrequestreview-5642584382",
@@ -584,7 +584,7 @@
     },
     {
       "number": 7903,
-      "title": "Filter Gallery â€º Cutout 4/4: trace the image into flat paper shapes",
+      "title": "Filter Gallery \u00e2\u20ac\u00ba Cutout 4/4: trace the image into flat paper shapes",
       "head": "5c30699087b02edcaa23397a0f7076bf503be048",
       "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/7903#pullrequestreview-5643279271",
@@ -793,7 +793,7 @@
     },
     {
       "number": 5650,
-      "title": "Guides: âŒ¥ turns a dragged guide; dropping one on either ruler deletes it (#5034)",
+      "title": "Guides: \u00e2\u0152\u00a5 turns a dragged guide; dropping one on either ruler deletes it (#5034)",
       "head": "4b1bd6fb6d264f885cb9caa3b8a6578ee527bd7b",
       "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/5650#pullrequestreview-5593380251",
@@ -807,7 +807,7 @@
     },
     {
       "number": 5515,
-      "title": "Selecting subject now automatically applies to selected layer, and usâ€¦",
+      "title": "Selecting subject now automatically applies to selected layer, and us\u00e2\u20ac\u00a6",
       "head": "375d4894a119b6cd5933d53e8fe7f506d2783392",
       "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/5515#pullrequestreview-5593377843",
@@ -1278,11 +1278,42 @@
       ]
     }
   ],
-  "current_checkpoint_sha": "2334a460f22ed2c09d7e5f73cbb2ebe9125d4fc1",
-  "updated_at": "2026-10-29T09:17:39.597875+00:00",
-  "active_subsystem": "Focused corrections passed; successor full validation is hosted in GitHub",
+  "current_checkpoint_sha": "f5b3f1238bb414b43851ebe86f3a58ce83bb9b48",
+  "updated_at": "2026-10-29T12:06:29.604333+00:00",
+  "active_subsystem": "Portable test delivery",
   "parent_decision_required": null,
   "validation": {
+    "source_sha": "f5b3f1238bb414b43851ebe86f3a58ce83bb9b48",
+    "ci": "https://github.com/FredApps/photocraft/actions/runs/40858867520",
+    "conclusion": "success",
+    "linux_tests": {
+      "passed": 12904,
+      "skipped": 97
+    },
+    "windows_unit": {
+      "passed": 10326,
+      "skipped": 79,
+      "leaky_warnings": 1
+    },
+    "windows_integration": {
+      "passed": 2501,
+      "skipped": 19,
+      "leaky_warnings": 2
+    },
+    "manual": "NOT RUN",
+    "portable_archive": "VERIFIED",
+    "gui_acceptance": "NOT RUN"
+  },
+  "currently_matching_approved_heads": 107,
+  "selection_drift": [
+    {
+      "pr": 5493,
+      "integrated_approved_head": "f97eb2849a68e1ed1c08c5b378770cf35cbcb72d",
+      "new_unapproved_head": "67f57c3cf1e7de045aee03a305663d9560daa3e3",
+      "decision": "New head excluded; historical approved head retained and not counted among 107 current matching approvals."
+    }
+  ],
+  "historical_validation": {
     "compositor_at_31ce2208": "PASSED: 402 passed, 0 failed, 2 ignored",
     "current_full_workspace": "Pending hosted successor validation",
     "current_build_check": "PENDING successor check at 964a47b51; 30a2b002b workspace/all-target passed in 1m20s; UI helper extraction compile passed",
@@ -1298,13 +1329,68 @@
     "corrected_text": "283 runner passes, zero failures, five ignored; two Cairo-only early-return cases BLOCKED; hanging-row regressions executed",
     "corrected_focused_ui": "PASSED on reconciliation working tree:244 passed, zero failed, one intentionally ignored capture; full corrected UI sweep running"
   },
-  "currently_matching_approved_heads": 107,
-  "selection_drift": [
-    {
-      "pr": 5493,
-      "integrated_approved_head": "f97eb2849a68e1ed1c08c5b378770cf35cbcb72d",
-      "new_unapproved_head": "67f57c3cf1e7de045aee03a305663d9560daa3e3",
-      "decision": "New head excluded; historical approved head retained and not counted among 107 current matching approvals."
+  "portable_build": {
+    "source_sha": "f5b3f1238bb414b43851ebe86f3a58ce83bb9b48",
+    "base_sha": "5f9b4391874aabc9deb2fcb905267613e4d93ec8",
+    "version": "0.17.0-integration.20261029.f5b3f123",
+    "architecture": "Windows x64",
+    "ci_run": 40858867520,
+    "ci_url": "https://github.com/FredApps/photocraft/actions/runs/40858867520",
+    "packaging_lint_run": 40858747395,
+    "build_run": 40867283787,
+    "build_url": "https://github.com/FredApps/photocraft/actions/runs/40867283787",
+    "workflow_id": 390299892,
+    "workflow_restored_state": "disabled_manually",
+    "fonts_pin": "b076417b5880bd4154bd22f00695b1d28c6bea83",
+    "artifact_verified": true,
+    "artifact": {
+      "id": 12895845995,
+      "name": "release-windows-x64",
+      "job_id": 123425396034,
+      "url": "https://github.com/FredApps/photocraft/actions/runs/40867283787/artifacts/12895845995",
+      "source_sha": "f5b3f1238bb414b43851ebe86f3a58ce83bb9b48",
+      "filename": "photocraft-0.17.0-integration.20261029.f5b3f123-windows-x64-portable.zip",
+      "sha256": "4125eccd5b009f30dc2d72f64bfafcf32220dc5574f765d0b3664ac4d9f992ba",
+      "size_bytes": 127391123,
+      "github_artifact_digest": "sha256:d642eb3969b9b3afbf3898c71d08a979b3bef01b51d26bae32e384ed8a28bf4f",
+      "expires_at": "2027-01-27T11:41:10Z",
+      "zip_crc": "PASSED",
+      "portable_marker": "PRESENT",
+      "pe_headers": {
+        "photocraft.exe": {
+          "signature": "PE",
+          "machine": "0x8664 (x64)",
+          "size": 149296640
+        },
+        "photocraft-cli.exe": {
+          "signature": "PE",
+          "machine": "0x8664 (x64)",
+          "size": 107922432
+        }
+      },
+      "manual_gui": "NOT RUN"
+    },
+    "manual_tests": "NOT RUN",
+    "packaging_platform_blocker": "macOS universal job could not start: GitHub reports recent account payments failed or spending limit needs increase. No billing/settings changes attempted. Windows jobs continue independently.",
+    "other_platform_failures": [
+      {
+        "platform": "macOS universal",
+        "job_id": 123425395799,
+        "reason": "GitHub runner did not start: account payment/spending restriction; no settings changed."
+      },
+      {
+        "platform": "FreeBSD aarch64",
+        "job_id": 123425395796,
+        "reason": "VM provisioning failed because pkg could not find cmake in configured repositories; no PhotoCraft build executed."
+      }
+    ],
+    "build_run_status": "in_progress",
+    "build_run_conclusion": null,
+    "windows_job_conclusion": "success",
+    "signing": "UNSIGNED: fork has no Windows signing secrets; no credentials/settings changed",
+    "packaging_cli_version_check": {
+      "status": "PASSED in GitHub packaging job",
+      "output": "photocraft-cli 0.17.0-integration.20261029.f5b3f123 (f5b3f1238, 2026-10-29)"
     }
-  ]
+  }
 }

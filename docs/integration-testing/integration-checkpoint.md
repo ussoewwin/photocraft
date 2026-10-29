@@ -1,3 +1,42 @@
+# Final testing checkpoint
+
+Validated and packaged source: `f5b3f1238bb414b43851ebe86f3a58ce83bb9b48`. Base: `5f9b4391874aabc9deb2fcb905267613e4d93ec8`.
+Version: `0.17.0-integration.20261029.f5b3f123`; Windows x64; pinned fonts `b076417b5880bd4154bd22f00695b1d28c6bea83`.
+[Full-sweep CI](https://github.com/FredApps/photocraft/actions/runs/40858867520); [portable build](https://github.com/FredApps/photocraft/actions/runs/40867283787);
+[download artifact](https://github.com/FredApps/photocraft/actions/runs/40867283787/artifacts/12895845995). Portable ZIP: `photocraft-0.17.0-integration.20261029.f5b3f123-windows-x64-portable.zip`.
+SHA256: `4125eccd5b009f30dc2d72f64bfafcf32220dc5574f765d0b3664ac4d9f992ba`. Artifact ID `12895845995`, job ID `123425396034`.
+The source SHA was checked against the run and artifact metadata. The ZIP was inspected for portable
+content and x64 PE executables; this is not a claim that GUI/manual cases passed.
+Release workflow 390299892 was temporarily enabled for the authorized dispatch and its original
+`disabled_manually` state was restored while the accepted run continued. No stable publication or installation.
+This test build is **unsigned** because the fork has no Windows signing secrets. The packaging job
+executed the CLI version check and printed the expected version and `f5b3f1238` source prefix.
+
+| Gate | State | Evidence / limitation |
+|---|---|---|
+| Frozen selected-head ancestry | PASSED | 108/108 selected heads are ancestors of `f5b3f1238bb414b43851ebe86f3a58ce83bb9b48`. |
+| Full Linux gate | PASSED | 12,904 passed, 97 skipped; fmt, strict Clippy, layers, scorecard, tests, panic hunt, doctests, wasm and i18n passed. |
+| Command panic hunt | PASSED | One requested ignored test executed and passed; one other test skipped. |
+| Windows unit | PASSED | 10,326 passed, 79 skipped; one nextest leaky-process warning. |
+| Windows integration | PASSED | 2,501 passed, 19 skipped; two nextest leaky-process warnings. |
+| Without HEIF | PASSED | 1,887 passed, 14 skipped. |
+| Pinned corpus / actual engine rerender | PASSED | Separate corpus job passed, including 2,428 engine tests and smart-filter rerender cases; cached IO round-trip is separate coverage. |
+| Morphology / quick performance / web-wasm | PASSED | All three requested jobs passed at the frozen source. No general large-image performance claim follows. |
+| Packaging lint / conflict scan | PASSED | All four packaging-lint jobs passed; zero conflict-marker hits across 2,630 tracked files. Both independent packaging jobs preserved. |
+| Portable archive | VERIFIED | Exact-source artifact and ZIP/PE inspection; see build record. GUI acceptance remains NOT RUN. |
+| Optional fuzz | SKIPPED | Not requested for this CI dispatch. |
+| Manual / Photoshop / platform acceptance | NOT RUN | Use the Windows entry sheet and per-PR appendix; unavailable required capabilities are BLOCKED, not PASSED. |
+
+### Selection refresh
+
+107 of the 108 frozen selected heads still matched open, non-draft, current-head FredApps approvals
+at the post-integration refresh. #5493 advanced without a matching approval: approved
+`f97eb2849a68e1ed1c08c5b378770cf35cbcb72d` remains integrated; newer
+`67f57c3cf1e7de045aee03a305663d9560daa3e3` is excluded. #5493 does not count toward the 107 current
+matching approvals. The minimum of 100 remains satisfied. Immutable approval receipts are preserved.
+
+## Historical reconciliation log — superseded execution states below
+
 # Integration checkpoint and decisions
 
 **Partial integration: 108 of 108 selected heads are ancestors; 0 require resolution.**
