@@ -37,7 +37,7 @@ pub fn inspect(app: &PhotocraftApp, ctx: &egui::Context) -> Value {
         "strokeEditor": app.ui.stroke_editor,
         "magnetic": app.ui.magnetic,
         "textEdit": app.ui.text_edit,
-        // The paragraph box's overflow port's flag (set by the overlay each frame): agents
+        // The paragraph box's overflow flag (set by the overlay each frame): agents
         // learn the overflow without a screen; never persisted (serde skip). Gated on the
         // session: the flag is a per-frame snapshot, and an `ui.inspect` running between the
         // frame that ended the edit and the one that resets the flag would otherwise report

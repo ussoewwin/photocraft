@@ -2851,7 +2851,7 @@ fn overflows_says_whether_a_box_holds_its_text() {
     let l = e.layout(&TextLayer { shape: tall_box.clone(), ..exact }, 72.0);
     assert!(!l.overflows("ab\n"), "{:?}", l.lines.last().map(|ln| ln.range.clone()));
     // Empty text never overflows: even a box too short for its paragraph (no lines laid out)
-    // has nothing to lose, so no port.
+    // has nothing to lose, so no overflow mark.
     let l = e.layout(&TextLayer { shape: short_box.clone(), ..point("", 24.0) }, 72.0);
     assert!(!l.overflows(""), "{} lines", l.lines.len());
     let _ = &mut e;

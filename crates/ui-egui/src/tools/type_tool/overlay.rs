@@ -1,5 +1,3 @@
-use egui::vec2;
-
 use super::editing::edit_home;
 use super::ime_edit::{ime_offsets, ime_preedit_is_current};
 use super::layout::layout;
@@ -8,23 +6,16 @@ use super::{Color32, LayerId, PhotocraftApp, Point, Pos2, Stroke, ViewXform, byt
 /// Selection highlight, caret and text frame over the canvas.
 pub fn draw_overlay(app: &mut PhotocraftApp, painter: &egui::Painter, xf: &ViewXform) {
     app.ui.type_box_overflow = false;
-    let Some(ed) = app.ui.text_edit.clone() else {
-        app.ui.type_port_hover = None;
-        return;
-    };
+    let Some(ed) = app.ui.text_edit.clone() else { return };
     // Until it commits, an edit in a document no longer active draws nothing over this one.
     if edit_home(app, &ed) != app.session.active_index() {
-        app.ui.type_port_hover = None;
         return;
     }
     if ed.dragging {
         app.ui.caret_blink_time = painter.ctx().input(|i| i.time);
     }
     let id = LayerId(ed.layer);
-    let Some((l, aff, text)) = layout(app, id) else {
-        app.ui.type_port_hover = None;
-        return;
-    };
+    let Some((l, aff, text)) = layout(app, id) else { return };
     if ed.mask {
         draw_mask_overlay(app, painter, xf, id);
     }
@@ -63,27 +54,25 @@ pub fn draw_overlay(app: &mut PhotocraftApp, painter: &egui::Painter, xf: &ViewX
     let frame = Stroke::new(1.0, t.accent);
     match shape {
         Some(photocraft_doc::text::TextShape::Box { x, y, width, height }) => {
+            // Text the box can't hold: as in the reference application, the lower-right handle
+            // grows and shows a black "+". Automation reads `ui.type_box_overflow` instead.
+            let over = l.overflows(&text);
+            app.ui.type_box_overflow = over;
             if !has_transform {
                 let c = [scr_t(x, y), scr_t(x + width, y), scr_t(x + width, y + height), scr_t(x, y + height)];
                 painter.add(egui::Shape::closed_line(c.to_vec(), frame));
                 let mids = [c[0].lerp(c[1], 0.5), c[1].lerp(c[2], 0.5), c[2].lerp(c[3], 0.5), c[3].lerp(c[0], 0.5)];
-                for p in c.iter().chain(mids.iter()) {
-                    let r = egui::Rect::from_center_size(*p, egui::vec2(7.0, 7.0));
+                for (i, p) in c.iter().chain(mids.iter()).enumerate() {
+                    let side = if over && i == 2 { OVERFLOW_HANDLE } else { 7.0 };
+                    let r = egui::Rect::from_center_size(*p, egui::vec2(side, side));
                     painter.rect_filled(r, 0.0, Color32::WHITE);
                     painter.rect_stroke(r, 0.0, frame, egui::StrokeKind::Inside);
                 }
-            }
-            // Text the box can't hold: a red “+” port shows at the box's bottom edge near the
-            // right corner, hanging half below it. Hovering explains what to do (the toggle is
-            // off), and automation reads `ui.type_box_overflow` without the screen.
-            let over = l.overflows(&text);
-            app.ui.type_box_overflow = over;
-            if over {
-                overflow_port(app, painter, scr_t(x + width, y + height));
-            } else {
-                // The port is gone under a resting pointer: a stale hover clock would show the
-                // hint instantly when it comes back, instead of after a fresh hover.
-                app.ui.type_port_hover = None;
+                if over {
+                    let (p, arm) = (c[2], OVERFLOW_HANDLE / 2.0 - 2.5);
+                    painter.line_segment([p - egui::vec2(arm, 0.0), p + egui::vec2(arm, 0.0)], OVERFLOW_PLUS);
+                    painter.line_segment([p - egui::vec2(0.0, arm), p + egui::vec2(0.0, arm)], OVERFLOW_PLUS);
+                }
             }
         }
         // Area type: the outline of the shape it wraps inside.
@@ -98,8 +87,6 @@ pub fn draw_overlay(app: &mut PhotocraftApp, painter: &egui::Painter, xf: &ViewX
             }
         }
         _ => {
-            // No box, no port: the hover clock is meaningless there too.
-            app.ui.type_port_hover = None;
             for ln in &l.lines {
                 // Horizontal: just under the baseline; vertical: the column's centre line.
                 let y = if l.vertical { ln.baseline } else { ln.baseline + ln.descent * 0.25 };
@@ -162,68 +149,10 @@ pub fn draw_overlay(app: &mut PhotocraftApp, painter: &egui::Painter, xf: &ViewX
     }
 }
 
-/// The overflow port: a red disc with a white “+”, half below the box's bottom edge, a little
-/// in from the right corner (Photoshop marks a paragraph box with more text than fits this
-/// way). Hovering it for the app's tooltip delay shows an explanation, unless the tooltip
-/// preferences turn those off. A white rim keeps the port readable on any background, like the
-/// other canvas tool marks.
-fn overflow_port(app: &mut PhotocraftApp, painter: &egui::Painter, corner: Pos2) {
-    let t = crate::theme::Tokens::get(painter.ctx());
-    let (r, c) = (4.5_f32, egui::pos2(corner.x - 7.0, corner.y + 4.5));
-    let (s, w) = (2.6_f32, Stroke::new(1.6, Color32::WHITE));
-    painter.circle_filled(c, r + 1.0, Color32::WHITE);
-    painter.circle_filled(c, r, t.danger);
-    painter.line_segment([c - vec2(s, 0.0), c + vec2(s, 0.0)], w);
-    painter.line_segment([c - vec2(0.0, s), c + vec2(0.0, s)], w);
-    let prefs = app.session.prefs();
-    if !(prefs.interface.show_tooltips && prefs.tools.show_tooltips) {
-        return;
-    }
-    let ctx = painter.ctx();
-    let hit = egui::Rect::from_center_size(c, egui::vec2(16.0, 16.0));
-    let over = ctx.rect_contains_pointer(painter.layer_id(), hit);
-    let time = ctx.input(|i| i.time);
-    // Enter sets the hover clock; leaving clears it. While the delay isn't over, the repaint
-    // wakes the frame that clears it, so the hint can't show late.
-    let began = if over {
-        *app.ui.type_port_hover.get_or_insert(time)
-    } else {
-        app.ui.type_port_hover = None;
-        time
-    };
-    if !over {
-        return;
-    }
-    let passed = time - began;
-    let delay = crate::theme::TOOLTIP_DELAY as f64;
-    if passed < delay {
-        ctx.request_repaint_after(std::time::Duration::from_secs_f32((delay - passed) as f32));
-        return;
-    }
-    let galley = painter.layout_no_wrap(
-        tl!("More text than the box holds — enlarge the box, reduce the type, or delete text").to_string(),
-        egui::FontId::proportional(12.0),
-        t.text,
-    );
-    let (pad, lead) = (vec2(7.0, 5.0), vec2(10.0, 6.0));
-    let size = galley.size() + pad;
-    // Down-right of the port by default; a port near the screen's right/bottom edge flips the
-    // card left/up instead, so the guidance never runs off the visible area.
-    let screen = ctx.content_rect();
-    let mut a = c + lead;
-    if a.x + size.x > screen.right() {
-        a.x = c.x - lead.x - size.x;
-    }
-    if a.y + size.y > screen.bottom() {
-        a.y = c.y - lead.y - size.y;
-    }
-    let rect = egui::Rect::from_min_size(a, size);
-    painter.rect_filled(rect.expand(1.0), 2.0, t.shadow);
-    painter.rect_filled(rect, 2.0, t.card);
-    painter.galley(rect.min + pad * 0.5, galley, t.text);
-    // No repaint here: the tooltip anchors at the port, a resting pointer draws it until it
-    // moves, and egui schedules the frame a movement hides it in.
-}
+/// The side of a paragraph box's lower-right handle while the box can't hold its text (the
+/// other handles are 7 px), and the black "+" drawn inside it.
+pub(super) const OVERFLOW_HANDLE: f32 = 11.0;
+pub(super) const OVERFLOW_PLUS: Stroke = Stroke { width: 1.0, color: Color32::BLACK };
 
 /// The text caret, drawn in order: a white halo, then a solid black line inside it, so it reads on
 /// any background (#6085). The black line used to be a 0.75 pt hairline inside a white one, which
