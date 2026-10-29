@@ -85,7 +85,7 @@ pub(crate) fn batch(a: &BatchArgs, out: &mut dyn Write, err: &mut dyn Write) -> 
             for (id, p) in &actions {
                 if photocraft_engine::actions_cmds::shell_view_command(id)
                     || photocraft_engine::actions_cmds::shell_save_command(id)
-                    || photocraft_engine::actions_cmds::noop_step(&h.session, id)
+                    || photocraft_engine::actions_cmds::noop_step(&h.session, id, p)
                 {
                     continue;
                 }

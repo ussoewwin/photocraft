@@ -93,8 +93,8 @@ pub(crate) fn run_cmds(a: &RunArgs, out: &mut dyn Write, err: &mut dyn Write) ->
     }
     let cmds = command_list(a)?;
     for (id, params) in cmds {
-        // Deselect with nothing selected is a silent no-op in a script, as in action playback (#8802).
-        if photocraft_engine::actions_cmds::noop_step(&h.session, &id) {
+        // A step that is a silent no-op in action playback (Deselect with nothing selected, an Arrange that cannot move the layer) is one in a script too (#8802).
+        if photocraft_engine::actions_cmds::noop_step(&h.session, &id, &params) {
             print_json(out, &json!({"command": id, "result": null}), JsonStyle::Compact)?;
             continue;
         }
