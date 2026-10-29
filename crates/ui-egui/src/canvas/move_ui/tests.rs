@@ -287,6 +287,106 @@ fn the_estimate_follows_a_group_into_its_contents() {
     assert!(!super::exceeds(&st.doc, &[group], super::LIVE_LIMIT, true), "an unlinked group mask dragged alone leaves the contents");
 }
 
+/// A `width` × `height` `depth`-bit document whose new layer covers the canvas, one fill per tile
+/// with its own colour (a photo: no two tiles share pixels), and the Move tool on.
+fn photo(width: u32, height: u32, depth: u32) -> PhotocraftApp {
+    let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+    app.session.execute("file.new", json!({"width": width, "height": height, "depth": depth})).unwrap();
+    app.sync_views();
+    app.session.execute("layer.new.layer", json!({})).unwrap();
+    app.session
+        .edit("paint", |doc, a| {
+            let canvas = Rect::new(0, 0, width as i32, height as i32);
+            let surface = doc.layer_mut(a.unwrap()).unwrap().surface_mut().unwrap();
+            for (i, c) in canvas.tiles().enumerate() {
+                let v = (i % 251) as f32 / 251.0;
+                surface.fill_rect(c.rect().intersect(&canvas), &[v, 1.0 - v, 0.5, 1.0]);
+            }
+            Ok(())
+        })
+        .unwrap();
+    app.ui.tool = Tool::Move;
+    app.ui.extras.snap = false;
+    app.ui.view.show.smart_guides = false;
+    app
+}
+
+/// Mid-drag by (37, 11): is the layer shown at the pointer?
+fn follows_a_drag(app: &mut PhotocraftApp) -> bool {
+    let m = egui::Modifiers::NONE;
+    crate::canvas::tool_event(app, ToolEvent::Down { x: 100.0, y: 100.0, pressure: 1.0 }, m);
+    crate::canvas::tool_event(app, ToolEvent::Move { x: 137.0, y: 111.0, pressure: 1.0 }, m);
+    let shown = super::display_doc(app, 0).is_some();
+    crate::canvas::tool_event(app, ToolEvent::Up { x: 137.0, y: 111.0 }, m);
+    shown
+}
+
+/// Ordinary photos keep the live drag: a 36 MP 8-bit layer (580 stored tiles) and a 24 MP 16-bit
+/// one write their tiles plus one edge row and column, not four tiles for each stored one.
+#[test]
+fn ordinary_photos_follow_the_pointer() {
+    for (w, h, depth) in [(7360, 4912, 8), (6000, 4000, 16)] {
+        let mut app = photo(w, h, depth);
+        assert!(follows_a_drag(&mut app), "{w} × {h} {depth}-bit");
+    }
+}
+
+/// A solid fill stores one tile shared by every covered position, and a shift shares it too (only
+/// the edge is written), so a large filled layer drags live as it does without the limit.
+#[test]
+fn a_large_solid_layer_follows_the_pointer() {
+    let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+    app.session.execute("file.new", json!({"width": 12000, "height": 12000, "depth": 16})).unwrap();
+    app.sync_views();
+    app.session.execute("layer.new.layer", json!({})).unwrap();
+    app.session.execute("select.all", json!({})).unwrap();
+    app.session.execute("edit.fill", json!({"color": "#ff0000"})).unwrap();
+    app.session.execute("select.deselect", json!({})).unwrap();
+    app.ui.tool = Tool::Move;
+    app.ui.extras.snap = false;
+    app.ui.view.show.smart_guides = false;
+    assert!(follows_a_drag(&mut app), "a filled 12000 × 12000 16-bit layer");
+}
+
+/// Content off the tile grid: the 2 × 2 blocks round its stored tiles reach a column and a row
+/// past what a shift writes, which is at most the tiles the content can reach.
+#[test]
+fn the_estimate_is_capped_by_what_the_content_reaches() {
+    let format = photocraft_color::PixelFormat::RGBA8;
+    let mut s = photocraft_raster::Surface::new(format);
+    s.fill_rect(Rect::new(128, 128, 384, 384), &[1.0, 0.0, 0.0, 1.0]);
+    let tile = u64::from(photocraft_geom::TILE_SIZE.unsigned_abs()).pow(2) * format.bytes_per_pixel() as u64;
+    assert_eq!(s.tile_count(), 4, "a tile-sized square straddles four tiles");
+    assert_eq!(super::shift_bytes(&s), 4 * tile, "it reaches (1 + 1) × (1 + 1) target tiles, not the nine blocks round its tiles");
+}
+
+/// `shift_smart` shifts a smart object's filter mask with it: the estimate counts it.
+#[test]
+fn the_estimate_counts_a_smart_filter_mask() {
+    let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+    app.session.execute("file.new", json!({"width": 64, "height": 64, "background": "transparent"})).unwrap();
+    app.session.execute("layer.new.layer", json!({})).unwrap();
+    app.session.execute("select.rect", json!({"x": 8, "y": 8, "width": 16, "height": 16})).unwrap();
+    app.session.execute("edit.fill", json!({"color": "#ff0000"})).unwrap();
+    app.session.execute("select.deselect", json!({})).unwrap();
+    app.session.execute("layer.smartObjects.convertToSmartObject", json!({})).unwrap();
+    let id = app.session.active().unwrap().active_layer.unwrap();
+    assert!(!super::exceeds(&app.session.active().unwrap().doc, &[id], super::LIVE_LIMIT, false), "a small smart object");
+    app.session
+        .edit("paint", |doc, a| {
+            let photocraft_doc::LayerContent::Smart(sm) = &mut doc.layer_mut(a.unwrap()).unwrap().content else { panic!("not a smart object") };
+            let mut mask = photocraft_doc::LayerMask::hide_all();
+            // Isolated tiles, each written as four by a shift: past the limit at one byte a pixel.
+            let tile = mask.surface.solid_tile(&[1.0]);
+            let count = (super::LIVE_LIMIT / (1 << 16) / 4 + 1) as i32;
+            mask.surface.put_tiles((0..count).map(|i| (photocraft_geom::TileCoord::new(i * 10, 0), tile.clone())));
+            sm.filter_mask = Some(mask);
+            Ok(())
+        })
+        .unwrap();
+    assert!(super::exceeds(&app.session.active().unwrap().doc, &[id], super::LIVE_LIMIT, false), "the filter mask moves with it");
+}
+
 #[test]
 fn bounding_box_preference_turns_the_live_drag_off() {
     assert!(live(false), "by default the layer follows the pointer");
