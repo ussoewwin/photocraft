@@ -1,7 +1,7 @@
 {
   "selected_count": 108,
-  "integrated_count": 91,
-  "pending_count": 17,
+  "integrated_count": 108,
+  "pending_count": 0,
   "integrated_prs": [
     9703,
     9651,
@@ -82,39 +82,38 @@
     5082,
     5010,
     4993,
+    4992,
     4985,
     4938,
-    4883,
-    4742,
-    4547,
-    4305,
-    3874,
-    3554,
-    3520,
-    3461,
-    3455,
-    1991
-  ],
-  "pending_prs": [
-    4992,
     4890,
+    4883,
     4783,
     4763,
+    4742,
     4711,
+    4547,
+    4305,
     4042,
     4035,
     4023,
     3967,
+    3874,
     3748,
+    3554,
+    3520,
     3519,
     3464,
+    3461,
+    3455,
     3387,
     3345,
     3142,
     3139,
-    2300
+    2300,
+    1991
   ],
-  "state": "PARTIAL INTEGRATION — RESOLVING CONFLICTS; NOT READY FOR PORTABLE ACCEPTANCE BUILD",
+  "pending_prs": [],
+  "state": "ALL 108 SELECTED HEADS INTEGRATED - COMBINED VALIDATION IN PROGRESS; NOT READY FOR ACCEPTANCE",
   "manual_tests": "NOT RUN",
   "integrated_validation": "NOT RUN",
   "branch": "integration/approved-bugfix-parity-2026-10-29",
@@ -271,7 +270,7 @@
     },
     {
       "number": 9504,
-      "title": "fix(ui): Keyboard Shortcuts records âŒ˜Z instead of undoing the capture",
+      "title": "fix(ui): Keyboard Shortcuts records \u00e2\u0152\u02dcZ instead of undoing the capture",
       "head": "993c9ed167c6acd9bc8f87c6cff6e2c7abba17a8",
       "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/9504#pullrequestreview-5644657832",
@@ -538,7 +537,7 @@
     },
     {
       "number": 8193,
-      "title": "Filter Gallery â€º Cutout 3/4: edges and curves stage",
+      "title": "Filter Gallery \u00e2\u20ac\u00ba Cutout 3/4: edges and curves stage",
       "head": "864024609b872de3d869879f1632b951c896c6cd",
       "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/8193#pullrequestreview-5643244034",
@@ -546,7 +545,7 @@
     },
     {
       "number": 8192,
-      "title": "Filter Gallery â€º Cutout 2/4: regions stage",
+      "title": "Filter Gallery \u00e2\u20ac\u00ba Cutout 2/4: regions stage",
       "head": "412e3b7cf1f4836a5772d93391d21728dbe1f74f",
       "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/8192#pullrequestreview-5642599218",
@@ -554,7 +553,7 @@
     },
     {
       "number": 8191,
-      "title": "Filter Gallery â€º Cutout 1/4: colour and palette stage",
+      "title": "Filter Gallery \u00e2\u20ac\u00ba Cutout 1/4: colour and palette stage",
       "head": "91e4cec43525ca739c05cff614701fbd3576e389",
       "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/8191#pullrequestreview-5642584382",
@@ -585,7 +584,7 @@
     },
     {
       "number": 7903,
-      "title": "Filter Gallery â€º Cutout 4/4: trace the image into flat paper shapes",
+      "title": "Filter Gallery \u00e2\u20ac\u00ba Cutout 4/4: trace the image into flat paper shapes",
       "head": "5c30699087b02edcaa23397a0f7076bf503be048",
       "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/7903#pullrequestreview-5643279271",
@@ -794,7 +793,7 @@
     },
     {
       "number": 5650,
-      "title": "Guides: âŒ¥ turns a dragged guide; dropping one on either ruler deletes it (#5034)",
+      "title": "Guides: \u00e2\u0152\u00a5 turns a dragged guide; dropping one on either ruler deletes it (#5034)",
       "head": "4b1bd6fb6d264f885cb9caa3b8a6578ee527bd7b",
       "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/5650#pullrequestreview-5593380251",
@@ -808,7 +807,7 @@
     },
     {
       "number": 5515,
-      "title": "Selecting subject now automatically applies to selected layer, and usâ€¦",
+      "title": "Selecting subject now automatically applies to selected layer, and us\u00e2\u20ac\u00a6",
       "head": "375d4894a119b6cd5933d53e8fe7f506d2783392",
       "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/5515#pullrequestreview-5593377843",
@@ -941,7 +940,7 @@
       "number": 4992,
       "title": "Preserve Dissolve coverage when compositing clipped layers",
       "head": "194a8976cd6c14441222b287b9b4f4841a0eb2f9",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/4992#pullrequestreview-5549725271",
       "conflicts": [
         "crates/compose/src/lib.rs",
@@ -975,7 +974,7 @@
       "number": 4890,
       "title": "Add scrollbar visibility preferences (#3262)",
       "head": "ab84cab7355ac999fb1be226950978bafec39605",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/4890#pullrequestreview-5593534344",
       "conflicts": [
         "crates/engine/src/prefs.rs",
@@ -1000,7 +999,7 @@
       "number": 4783,
       "title": "Fix/4758 type extreme finite geometry 20261013s1215",
       "head": "a9d62726bed607bc540db9d09c8dc1be4f9895aa",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/4783#pullrequestreview-5583807081",
       "conflicts": [
         "crates/io/src/blocks.rs",
@@ -1012,7 +1011,7 @@
       "number": 4763,
       "title": "refactor(liquify): reuse native brush resizing and anchored HUD feedback",
       "head": "f2804a7cf013519d9ba8bac1da3d96458c4f656b",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/4763#pullrequestreview-5583718187",
       "conflicts": [
         "crates/ui-egui/src/brush_resize.rs",
@@ -1031,7 +1030,7 @@
       "number": 4711,
       "title": "Treat Dissolve as a per-pixel choice",
       "head": "db546ff4822a011a7915b66af3834f94c05767db",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/4711#pullrequestreview-5594717250",
       "conflicts": [
         "crates/compose/src/effects.rs",
@@ -1065,7 +1064,7 @@
       "number": 4042,
       "title": "feat(canvas): rotate view with Shift + middle-mouse drag",
       "head": "f05098562220a663d052ee3918fd36c8c3e17a51",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/4042#pullrequestreview-5583745473",
       "conflicts": [
         "crates/ui-egui/src/canvas.rs",
@@ -1076,7 +1075,7 @@
       "number": 4035,
       "title": "fix(cmyk): Flatten Image and merges keep the inks of a tagged CMYK document (#3778)",
       "head": "15ebf8fc940031abdf772e5fdd687c8b55938639",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/4035#pullrequestreview-5595033656",
       "conflicts": [
         "crates/compose/src/lib.rs",
@@ -1089,7 +1088,7 @@
       "number": 4023,
       "title": "i18n(es): add 548 missing rows, fix five filter and video terms",
       "head": "303a5346fcb5961cf3a776024db58507b401e4ea",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/4023#pullrequestreview-5595056228",
       "conflicts": [
         "crates/ui-egui/src/i18n/es.tsv"
@@ -1099,7 +1098,7 @@
       "number": 3967,
       "title": "Add move and delete actions to Smart Filter rows",
       "head": "3a77519ce2cef0fb60cebd4ea796d599f68868cb",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/3967#pullrequestreview-5595072511",
       "conflicts": [
         "crates/ui-egui/src/panels.rs",
@@ -1119,7 +1118,7 @@
       "number": 3748,
       "title": "control: suggest near matches for unknown command ids and methods (#3674)",
       "head": "c45d01eafe84e600bb28033a6853cc19c827b7bf",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/3748#pullrequestreview-5583803054",
       "conflicts": [
         "crates/automation/src/rpc.rs",
@@ -1147,7 +1146,7 @@
       "number": 3519,
       "title": "feat(export): optionally trim transparent margins from layer files",
       "head": "807de6c043a512cb947d86b944c758b3db1277c7",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/3519#pullrequestreview-5583738841",
       "conflicts": [
         "crates/engine/src/file_cmds.rs",
@@ -1159,7 +1158,7 @@
       "number": 3464,
       "title": "fix(vector): target selected saved paths and own Pen gestures",
       "head": "1eecd00b2dff4ae4c642269cec211cd06ce1c3aa",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/3464#pullrequestreview-5597090618",
       "conflicts": [
         "crates/engine/src/vector_cmds.rs",
@@ -1205,7 +1204,7 @@
       "number": 3387,
       "title": "feat(codecs): add lossless JPEG XL export for 8/16-bit images",
       "head": "58b83f42a4b39cf56751be53ec8d227efee70f68",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/3387#pullrequestreview-5597200428",
       "conflicts": [
         "apps/photocraft/src/services.rs",
@@ -1218,7 +1217,7 @@
       "number": 3345,
       "title": "Add grouped gradient presets and selectable style icons",
       "head": "bfb691f84896fe68543980426632153dc4b4ea69",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/3345#pullrequestreview-5597265645",
       "conflicts": [
         "crates/ui-egui/src/panels.rs",
@@ -1235,7 +1234,7 @@
       "number": 3142,
       "title": "Read applied Sony RAW metadata and crop ILCE-6000 images",
       "head": "e2ed234e654e574109ffcdb9756f8e8d1b8a00b2",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/3142#pullrequestreview-5597503674",
       "conflicts": [
         "crates/raw/src/cameras.rs",
@@ -1247,7 +1246,7 @@
       "number": 3139,
       "title": "Draw right-to-left layer names in visual word order",
       "head": "4da79e8d16ded8b51f06c1ac64e50ccba288274e",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/3139#pullrequestreview-5597496876",
       "conflicts": [
         "Cargo.lock",
@@ -1260,7 +1259,7 @@
       "number": 2300,
       "title": "Scroll the viewport while outlining with Polygonal Lasso",
       "head": "ebf3777aec961d1815aa141d9987eaa645c2273f",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/2300#pullrequestreview-5564229610",
       "conflicts": [
         "crates/ui-egui/src/canvas.rs"
@@ -1279,16 +1278,16 @@
       ]
     }
   ],
-  "current_checkpoint_sha": "3c79ed44304b27a0d811e379284acc29855798f6",
-  "updated_at": "2026-10-29T05:08:07.390596+00:00",
-  "active_subsystem": "90 heads: gradient arbitrary-stop/interpolation and Mixer Brush ports complete; frozen all-target check running",
+  "current_checkpoint_sha": "7acb18325654d0b8a56f95cada9ca4186d45dc43",
+  "updated_at": "2026-10-29T05:45:40.679773+00:00",
+  "active_subsystem": "All selected merges complete; running combined validation and preparing frozen protocol",
   "parent_decision_required": null,
   "validation": {
     "compositor_at_31ce2208": "PASSED: 402 passed, 0 failed, 2 ignored",
     "current_full_workspace": "NOT RUN",
-    "current_build_check": "IN PROGRESS at 32f583f1d6f3d6a65d6846ac02b83c99ce8040e6; 70-head all-target check PASSED",
+    "current_build_check": "PENDING final 108-head check; 103-head working-tree check passed before final cleanup",
     "pattern_store_at_d98e4195": "PASSED: 35 tests, 0 failed, 1 benchmark ignored; final tree not yet tested",
     "manual": "NOT RUN",
-    "portable_final_build": "NOT RUN — waits for 100+ complete integration and validation"
+    "portable_final_build": "NOT RUN \u2014 waits for 100+ complete integration and validation"
   }
 }
