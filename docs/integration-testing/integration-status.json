@@ -1,7 +1,7 @@
 {
   "selected_count": 108,
-  "integrated_count": 90,
-  "pending_count": 18,
+  "integrated_count": 91,
+  "pending_count": 17,
   "integrated_prs": [
     9703,
     9651,
@@ -81,6 +81,7 @@
     5090,
     5082,
     5010,
+    4993,
     4985,
     4938,
     4883,
@@ -95,7 +96,6 @@
     1991
   ],
   "pending_prs": [
-    4993,
     4992,
     4890,
     4783,
@@ -931,7 +931,7 @@
       "number": 4993,
       "title": "Prevent control-channel engine commands from editing behind modal dialogs",
       "head": "81964dc5ef77a71a2ae2a938958cf3ed77d90719",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/4993#pullrequestreview-5549725641",
       "conflicts": [
         "crates/ui-egui/src/control.rs"
@@ -1279,8 +1279,8 @@
       ]
     }
   ],
-  "current_checkpoint_sha": "c89736bbdc0eba78995f28c2fc1615478347312d",
-  "updated_at": "2026-10-29T05:06:30.082362+00:00",
+  "current_checkpoint_sha": "3c79ed44304b27a0d811e379284acc29855798f6",
+  "updated_at": "2026-10-29T05:08:07.390596+00:00",
   "active_subsystem": "90 heads: gradient arbitrary-stop/interpolation and Mixer Brush ports complete; frozen all-target check running",
   "parent_decision_required": null,
   "validation": {

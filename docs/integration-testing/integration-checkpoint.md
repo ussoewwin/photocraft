@@ -1,15 +1,16 @@
 # Integration checkpoint and decisions
 
-**Partial integration: 90 of 108 selected heads are ancestors; 18 require resolution.**
+**Partial integration: 91 of 108 selected heads are ancestors; 17 require resolution.**
 No integrated build, corpus, full sweep or manual interaction qualification is claimed.
 See [test plan](approved-bugfix-parity-2026-10-29.md), [selection evidence](approved-selection.json)
 and [machine-readable status](integration-status.json).
 
 
 
-## Latest progress (updated 2026-10-29T05:06:30.082362+00:00)
 
-- Verified local integrated heads: **90 / 108**, checkpoint `c89736bbdc0eba78995f28c2fc1615478347312d`.
+## Latest progress (updated 2026-10-29T05:08:07.390596+00:00)
+
+- Verified local integrated heads: **91 / 108**, checkpoint `3c79ed44304b27a0d811e379284acc29855798f6`.
 - Layer Style sizing/layout/defaults and profile capture ports are committed; action JSON, definition history, named targets and starter actions are committed.
 - CPU compositor checkpoint at `31ce2208…`: 402 PASSED, 0 FAILED, 2 IGNORED. Later code is not yet fully validated.
 - Parent approved #5176 compatibility migration: atomically commit the new authoritative index last; preserve legacy/corrupt files and never resurrect stale entries. Implementation committed; 35 preset-store tests PASSED at d98e4195, including all four migration regressions; one benchmark ignored. Final-tree rerun remains pending.
@@ -41,7 +42,7 @@ These proposals are pending parent semantic review. Mechanical moved-test/catalo
 - [#3455](https://github.com/storytold/photocraft/pull/3455) Undo and redo action definition edits from the Actions panel — INTEGRATED
 - [#3461](https://github.com/storytold/photocraft/pull/3461) Replay recorded layer visibility on the intended named layer — INTEGRATED
 - [#3748](https://github.com/storytold/photocraft/pull/3748) control: suggest near matches for unknown command ids and methods (#3674) — PENDING CONFLICT
-- [#4993](https://github.com/storytold/photocraft/pull/4993) Prevent control-channel engine commands from editing behind modal dialogs — PENDING CONFLICT
+- [#4993](https://github.com/storytold/photocraft/pull/4993) Prevent control-channel engine commands from editing behind modal dialogs — INTEGRATED
 - [#5090](https://github.com/storytold/photocraft/pull/5090) Actions: add editable PhotoCraft Essentials starter presets — INTEGRATED
 - [#5176](https://github.com/storytold/photocraft/pull/5176) Play CopyCat, AJ and Line and Color action sets; keep patterns across restarts; Shift Edge scale — INTEGRATED
 - [#6492](https://github.com/storytold/photocraft/pull/6492) Fail control startup promptly when its port is occupied — INTEGRATED
