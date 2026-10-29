@@ -21,8 +21,8 @@ No original file on disk is edited. Test on a PSD copy.
 Format preservation is not a claim of lossless Illustrator editing: the editor regenerates
 its supported AI/PDF/EPS content, and unsupported features or missing fonts can change appearance.
 Native Adobe Photoshop/Illustrator Edit Contents acceptance remains unverified. The chooser
-keeps that warning explicit. Existing explicit `updateSvg` API calls retain their conversion
-behavior; the native editing UI never uses that conversion path.
+keeps that warning explicit. `updateSvg` only replaces SVG contents: it refuses an AI, PDF or
+EPS source, which only `updateVectorSource` saves back, in its own format.
 
 Native editing requires VectorCraft and its adjacent vectorcraft-cli for bounded previews,
 even when another interactive editor is selected. The CLI runs headless in the background,
@@ -30,9 +30,10 @@ restricted to a fresh private temporary read/write root per snapshot, separate f
 interactive working directory. Open and export must both succeed, with cancellation and a
 60-second timeout. Each stable native save is validated before PhotoCraft accepts it.
 
-Foreign AI files ordinarily require Save As in VectorCraft to protect the source. PhotoCraft
-regenerates only the private AI working copy with VectorCraft editing data before launching it,
-so ordinary Save can be used without changing that general protection. Merely opening the
+Foreign AI files ordinarily require Save As in VectorCraft to protect the source. When VectorCraft
+is the editor, PhotoCraft regenerates only the private AI working copy with VectorCraft editing
+data before launching it, so ordinary Save can be used without changing that general protection.
+Illustrator and other editors get the original AI bytes. Merely opening the
 editor never updates the embedded original. Ordinary EPS Save needs the companion VectorCraft
 EPS-save support; older editors may require exporting EPS to the opened private file.
 

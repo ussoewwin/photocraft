@@ -55,7 +55,7 @@ fn preview_work_plain_paths_and_artboard_clip_do_not_repeat_photo_decode() {
     let svg = format!(
         r#"<svg xmlns="http://www.w3.org/2000/svg" width="6000" height="4000"><defs><clipPath id="page"><path d="M0 0H6000V4000H0Z"/></clipPath></defs><g clip-path="url(#page)"><image width="6000" height="4000" href="data:image/png,{data}"/><path d="M0 0H4V4Z"/><path d="M5 5H9V9Z"/><path d="M10 10H14V14Z"/><path d="M15 15H19V19Z"/></g></svg>"#
     );
-    let parsed = parse_bounded_work_with(svg.as_bytes(), MAX_RASTER_PIXELS, fonts).unwrap();
+    let parsed = parse_bounded_work_with(svg.as_bytes(), MAX_RASTER_PIXELS, true, fonts).unwrap();
     assert!(!parsed.repeatable_raster && !parsed.repeatable_svg);
     let (imported, work) = import_svg_bounded_with_work("photo and paths", svg.as_bytes(), 48_000_000).unwrap();
     assert!(work <= 48_000_000, "ordinary photo composition stays within two full-size surfaces: {work}");
@@ -70,7 +70,7 @@ fn preview_work_repeatable_raster_patterns_pay_for_repainting() {
     let svg = format!(
         r#"<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><defs><pattern id="paint" width="1" height="1" patternUnits="userSpaceOnUse"><image width="1" height="1" href="data:image/png,{data}"/></pattern></defs><path fill="url(#paint)" d="M0 0H4V4H0Z"/><path fill="url(#paint)" d="M4 4H8V8H4Z"/></svg>"#
     );
-    let parsed = parse_bounded_work_with(svg.as_bytes(), MAX_RASTER_PIXELS, fonts).unwrap();
+    let parsed = parse_bounded_work_with(svg.as_bytes(), MAX_RASTER_PIXELS, true, fonts).unwrap();
     assert!(parsed.repeatable_raster);
     assert!(
         import_svg_bounded_with_work("pattern", svg.as_bytes(), 8192).is_err(),
@@ -86,14 +86,14 @@ fn preview_work_use_images_charge_each_resolved_occurrence() {
     let svg = format!(
         r##"<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"><defs><image id="photo" width="1" height="1" href="data:image/png,{data}"/></defs><use href="#photo"/><use href="#photo" x="1"/><use href="#photo" x="2"/></svg>"##
     );
-    let parsed = parse_bounded_work_with(svg.as_bytes(), MAX_RASTER_PIXELS, fonts).unwrap();
+    let parsed = parse_bounded_work_with(svg.as_bytes(), MAX_RASTER_PIXELS, true, fonts).unwrap();
     assert!(parsed.decoded >= 3 * 4096, "each resolved use must reserve its own raster decode: {}", parsed.decoded);
     assert!(!parsed.repeatable_raster);
     assert!(import_svg_bounded_with_work("uses", svg.as_bytes(), 3 * 4096).is_err());
     let blurred = svg
         .replace("<defs>", "<defs><filter id=\"blur\"><feGaussianBlur stdDeviation=\"0.1\"/></filter>")
         .replace("<use href=", "<use filter=\"url(#blur)\" href=");
-    let parsed = parse_bounded_work_with(blurred.as_bytes(), MAX_RASTER_PIXELS, fonts).unwrap();
+    let parsed = parse_bounded_work_with(blurred.as_bytes(), MAX_RASTER_PIXELS, true, fonts).unwrap();
     assert!(!parsed.repeatable_raster && !parsed.repeatable_svg, "blur without image resources must not multiply source decoding");
 }
 
@@ -123,8 +123,10 @@ fn embedded_images_share_budget_and_nested_svg_cannot_hide_raster_bombs() {
     let oversized = image_svg(&embedded_image("image/png", &png_dimensions(u32::MAX, u32::MAX)));
     let nested = image_svg(&embedded_image("image/svg+xml", oversized.as_bytes()));
     assert!(parse_bounded(nested.as_bytes(), MAX_RASTER_PIXELS).unwrap_err().to_string().contains("decoded pixel budget"));
+    // A PNG without a header can't be charged, so it is left out like usvg's own resolver
+    // leaves out an image it can't read; the drawing still opens.
     let malformed = image_svg(&embedded_image("image/png", b"\x89PNG\r\n\x1a\n"));
-    assert!(parse_bounded(malformed.as_bytes(), MAX_RASTER_PIXELS).unwrap_err().to_string().contains("dimensions"));
+    assert!(!parse_bounded(malformed.as_bytes(), MAX_RASTER_PIXELS).unwrap().tree.root().has_children());
     assert_eq!(gif_frame_size(b"GIF89a\x01\0\x01\0\0\0\0\x21\xfe\xff"), None, "truncated extension has no frame");
 }
 
@@ -760,8 +762,148 @@ fn bounded_svg_rejects_nested_gzip_at_top_level_and_inside_data_urls() {
     for mime in ["image/svg+xml", "text/plain"] {
         let single = image_svg(&embedded_image(mime, &once));
         assert!(parse_bounded(single.as_bytes(), 64).is_ok());
+        // Inflated once, the doubly compressed image is not SVG text: it is left out, never
+        // inflated a second time.
         let nested = image_svg(&embedded_image(mime, &twice));
-        assert!(parse_bounded(nested.as_bytes(), 64).unwrap_err().to_string().contains("UTF-8"));
+        assert!(!parse_bounded(nested.as_bytes(), 64).unwrap().tree.root().has_children());
     }
     assert!(parse_bounded(b"\xff\xfe", 64).is_err(), "invalid XML encoding is refused");
+}
+
+/// An embedded image the bounded resolver can't charge (an unknown MIME type, a format resvg
+/// doesn't draw, a PNG under another MIME type, a corrupt PNG) is left out as usvg's own
+/// resolver leaves it out, and the rest of the drawing still renders.
+#[test]
+fn unreadable_embedded_images_are_left_out_and_the_drawing_still_renders() {
+    let image = photocraft_codecs::Image::from_u8(2, 2, photocraft_codecs::ChannelLayout::Rgb, vec![255; 12]).unwrap();
+    let png = photocraft_codecs::encode(&image, photocraft_codecs::Format::Png, &Default::default()).unwrap();
+    for (mime, bytes) in [
+        ("image/x-foo", png.clone()),
+        ("application/octet-stream", png.clone()),
+        ("application/octet-stream", png_dimensions(6000, 5000)),
+        ("image/png", png_dimensions(0, 4)),
+        ("image/bmp", b"BM\0\0\0\0".to_vec()),
+        ("image/png", png[..20].to_vec()),
+    ] {
+        let svg = format!(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"4\" height=\"4\">{}<rect x=\"2\" width=\"2\" height=\"4\" fill=\"#ff0000\"/></svg>",
+            embedded_image(mime, &bytes)
+        );
+        let buf = rasterize_bounded(svg.as_bytes(), 1.0, MAX_RASTER_PIXELS).unwrap_or_else(|e| panic!("{mime}: {e}"));
+        let at = |x: usize, y: usize| buf.px[y * 4 + x];
+        assert!(at(3, 1)[0] > 0.99 && at(3, 1)[3] > 0.99, "{mime}: the rect still draws");
+        assert!(import_svg_bounded("clipboard", svg.as_bytes(), MAX_RASTER_PIXELS).is_ok(), "{mime}");
+    }
+}
+
+/// resvg reuses one scratch surface per level of nested SVG images, so side-by-side SVG
+/// images (icons in a layout) cost one drawing-sized surface, not one each, and a drawing
+/// rendered at up to the 24 MP output limit with one level of them still renders.
+#[test]
+fn side_by_side_svg_images_need_one_scratch_surface() {
+    let icon = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"10\" height=\"10\"><rect width=\"10\" height=\"10\" fill=\"#0000ff\"/></svg>";
+    let images: String = (0..12)
+        .map(|i| {
+            let data = icon.bytes().map(|byte| format!("%{byte:02X}")).collect::<String>();
+            format!("<image x=\"{}\" width=\"100\" height=\"100\" href=\"data:image/svg+xml,{data}\"/>", i * 150)
+        })
+        .collect();
+    let layout = format!("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1920\" height=\"1080\">{images}</svg>");
+    assert!(parse_bounded(layout.as_bytes(), 24_000_000).is_ok(), "12 icons on a 2 MP canvas");
+    let buf = rasterize_bounded(layout.as_bytes(), 2.0, 24_000_000).unwrap();
+    assert_eq!((buf.rect.width(), buf.rect.height()), (3840, 2160));
+    assert!(buf.px[100 * 3840 + 100][2] > 0.99, "the first icon draws");
+    let one = format!("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"400\" height=\"300.1\">{}</svg>", &images[..images.find("/>").unwrap() + 2]);
+    let big = rasterize_bounded(one.as_bytes(), 10.0, 24_000_000).unwrap();
+    assert_eq!((big.rect.width(), big.rect.height()), (4000, 3001), "a 12 MP render with one SVG image");
+}
+
+/// usvg parses an embedded SVG on top of the drawing's own recursion: 511 + 511 levels, each fine
+/// alone, overflowed a 1 MB stack. The bounded path shares [`MAX_XML_DEPTH`] between them too.
+#[test]
+fn bounded_embedded_svg_gets_only_the_nesting_depth_the_drawing_left() {
+    let nested = |depth: usize| {
+        format!(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"8\" height=\"8\">{}<rect width=\"8\" height=\"8\"/>{}</svg>",
+            "<g>".repeat(depth),
+            "</g>".repeat(depth)
+        )
+    };
+    let embed = move |outer: usize, inner: usize| {
+        let data = nested(inner).bytes().map(|byte| format!("%{byte:02X}")).collect::<String>();
+        format!(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"8\" height=\"8\">{}<image width=\"8\" height=\"8\" href=\"data:image/svg+xml,{data}\"/>{}</svg>",
+            "<g>".repeat(outer),
+            "</g>".repeat(outer)
+        )
+    };
+    std::thread::Builder::new()
+        .stack_size(1 << 20)
+        .spawn(move || {
+            let deep = embed(MAX_XML_DEPTH - 2, MAX_XML_DEPTH - 2);
+            let buf = rasterize_bounded(deep.as_bytes(), 1.0, MAX_RASTER_PIXELS).unwrap();
+            assert!(buf.px[4 * 8 + 4][3] < 0.01, "the too-deep image is left out");
+            let fine = embed(200, 200);
+            let buf = rasterize_bounded(fine.as_bytes(), 1.0, MAX_RASTER_PIXELS).unwrap();
+            assert!(buf.px[4 * 8 + 4][3] > 0.99, "within the shared budget the image draws");
+        })
+        .unwrap()
+        .join()
+        .unwrap();
+}
+
+/// Each level of embedded SVG image adds the parser's and renderer's frames on top of the one it
+/// sits in. Every chain the bounded path takes (base64 grows each level, so the XML byte budget
+/// ends it before [`MAX_EMBEDDED_SVG_DEPTH`]) parses and renders on a 1 MB thread stack (Windows'
+/// main-thread size); deeper ones are refused.
+#[test]
+fn the_deepest_chain_of_embedded_svg_images_fits_a_small_stack() {
+    fn base64(bytes: &[u8]) -> String {
+        const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        let mut out = String::new();
+        for chunk in bytes.chunks(3) {
+            let n = chunk.iter().enumerate().fold(0u32, |n, (i, b)| n | u32::from(*b) << (16 - 8 * i));
+            for i in 0..4 {
+                out.push(if i <= chunk.len() { T[(n >> (18 - 6 * i) & 63) as usize] as char } else { '=' });
+            }
+        }
+        out
+    }
+    let chain = |levels: usize| {
+        let mut svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"8\" height=\"8\"><rect width=\"8\" height=\"8\"/></svg>".to_string();
+        for _ in 0..levels {
+            svg = format!(
+                "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"8\" height=\"8\"><image width=\"8\" height=\"8\" href=\"data:image/svg+xml;base64,{}\"/></svg>",
+                base64(svg.as_bytes())
+            );
+        }
+        svg
+    };
+    std::thread::Builder::new()
+        .stack_size(1 << 20)
+        .spawn(move || {
+            let mut accepted = 0;
+            for levels in 1..=MAX_EMBEDDED_SVG_DEPTH + 1 {
+                match rasterize_bounded(chain(levels).as_bytes(), 1.0, MAX_RASTER_PIXELS) {
+                    Ok(buf) => {
+                        assert!(buf.px[4 * 8 + 4][3] > 0.99, "{levels} levels: the innermost rect draws through every level");
+                        accepted = levels;
+                    }
+                    Err(_) => assert!(accepted > 0, "a one-level chain renders"),
+                }
+            }
+            assert!((20..=MAX_EMBEDDED_SVG_DEPTH).contains(&accepted), "deepest accepted chain: {accepted}");
+        })
+        .unwrap()
+        .join()
+        .unwrap();
+}
+
+/// Only a stored display preview is strict about an embedded image it can't read; an edited SVG
+/// saved back from an external editor leaves it out, as placement does.
+#[test]
+fn only_stored_previews_refuse_unreadable_embedded_images() {
+    let svg = image_svg(&embedded_image("image/bmp", b"BM\0\0\0\0"));
+    assert!(import_svg_bounded_with_work("edit", svg.as_bytes(), MAX_RASTER_PIXELS).is_ok());
+    assert!(import_svg_preview_with_work("preview", svg.as_bytes(), MAX_RASTER_PIXELS).is_err());
 }

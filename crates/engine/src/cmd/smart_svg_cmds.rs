@@ -294,6 +294,10 @@ fn update_contents_with_frame_budget(s: &mut Session, p: &Value, native: bool, f
         }
         bytes
     } else {
+        // updateSvg replaces SVG contents; an AI, PDF or EPS source keeps its own format.
+        if photocraft_io::vector_preview::is_native_source(original) {
+            return Err(bad(UPDATE, "the original source is AI, PDF or EPS: use layer.smartObjects.updateVectorSource"));
+        }
         svg.as_bytes().to_vec()
     };
     if original == replacement_bytes {

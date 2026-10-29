@@ -647,10 +647,11 @@ impl Ctx<'_> {
             }
             _ => stored,
         };
+        // The global blocks' data lives in `self.global` (an owned open moves it out of the file).
         let vector_preview = rec.block(&crate::vector_preview::PSD_KEY).and_then(|block| {
-            let file = self.file;
+            let global = &self.global;
             self.vector_previews.decode(&id, &block.data, || {
-                crate::linked::embedded_payload_in_blocks(file.global_blocks.iter().map(|b| (&b.key, b.data.as_slice())), &id).map(|(_, source)| source)
+                crate::linked::embedded_payload_in_blocks(global.iter().map(|(_, key, data)| (key, data.as_slice())), &id).map(|(_, source)| source)
             })
         });
         LayerContent::Smart(SmartObject {

@@ -93,7 +93,7 @@ fn place(s: &Session, doc: &Document, sm: &SmartObject, layers: &mut [Layer]) ->
         && photocraft_io::svg::is_svg(bytes)
         && let Some(transform) = affine
     {
-        check_destination_shapes(layers, transform, doc.size).map_err(other)?;
+        check_destination_shapes(layers, transform, doc.size, doc.pixel_format().bytes_per_pixel()).map_err(other)?;
     }
     for l in layers {
         released(l, |l| crate::transform_cmds::transform_layer(None, photocraft_doc::Locks::default(), l, &h, affine, Interp::Bicubic))?;
@@ -193,8 +193,17 @@ pub(super) fn convert_to_layers(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"layer": new_id.0, "group": group, "discardedSmartFilters": discarded}))
 }
 
-/// Preflight transformed SVG shape caches before an operation refreshes their raster caches.
-fn check_destination_shapes(layers: &[Layer], transform: photocraft_geom::Affine, size: photocraft_geom::Size) -> std::result::Result<(), String> {
+/// Preflight transformed SVG shape caches before an operation refreshes their raster caches:
+/// together they may take 1 GiB in the document's pixel format, the budget the SVG import
+/// itself keeps its layer caches under (several full-canvas shapes in a 24 MP document fit).
+fn check_destination_shapes(
+    layers: &[Layer],
+    transform: photocraft_geom::Affine,
+    size: photocraft_geom::Size,
+    bytes_per_pixel: usize,
+) -> std::result::Result<(), String> {
+    const MAX_CACHE_BYTES: u64 = 1 << 30;
+    let max_pixels = MAX_CACHE_BYTES / u64::try_from(bytes_per_pixel.max(1)).unwrap_or(u64::MAX);
     let canvas = photocraft_geom::Rect::from_size(size);
     let mut pixels = 0u64;
     let mut pending: Vec<&Layer> = layers.iter().collect();
@@ -206,7 +215,7 @@ fn check_destination_shapes(layers: &[Layer], transform: photocraft_geom::Affine
         let compiled = photocraft_vector::CompiledShape::new(&shape, photocraft_vector::DEFAULT_TOLERANCE, canvas);
         let area = compiled.bounds().map_or(0, |bounds| bounds.intersect(&canvas).size().area());
         pixels = pixels.checked_add(area).ok_or("The unpacked shape caches exceed the smart-object cache budget")?;
-        if pixels > 24_000_000 {
+        if pixels > max_pixels {
             return Err("The unpacked shape caches exceed the smart-object cache budget".into());
         }
     }

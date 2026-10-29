@@ -14,6 +14,7 @@ use std::time::{Duration, Instant};
 /// Exercise the real CLI's same-format Save, the native watcher and PhotoCraft's transaction.
 #[test]
 #[ignore = "set VECTORCRAFT_TEST_EDITOR and optionally PHOTO_NATIVE_LOGO_PSD/PHOTO_NATIVE_CONTAINER"]
+#[allow(clippy::cognitive_complexity, reason = "one opt-in walk through a real editor, step by step")]
 fn original_format_real_editor_save_watcher_and_psd_roundtrip() {
     let editor = std::env::var_os("VECTORCRAFT_TEST_EDITOR").expect("VECTORCRAFT_TEST_EDITOR");
     let editor = Path::new(&editor);
@@ -68,7 +69,7 @@ fn original_format_real_editor_save_watcher_and_psd_roundtrip() {
     };
     let before = photo.active().unwrap().doc.clone();
     let (_send, stop) = mpsc::channel();
-    let (owned, initial) = vector_conversion::prepare(editor, &source, &stop).unwrap();
+    let (owned, initial) = vector_conversion::prepare(editor, &source, &stop, true).unwrap();
     assert_eq!(owned.file.extension().unwrap().to_str().unwrap(), source.extension);
     assert!(photo.active().unwrap().doc == before, "preparation must not change the embedded original");
     let file = owned.file.clone();

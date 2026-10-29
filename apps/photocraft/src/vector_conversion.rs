@@ -10,13 +10,16 @@ use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant};
 
 /// Validate the source using a private preview, then expose only an original-format copy.
-pub(super) fn prepare(editor: &Path, source: &ExternalVectorSource, stop: &Receiver<()>) -> Result<(OwnedSvg, Vec<u8>), String> {
+/// `regenerate_ai` is true only when the interactive editor is VectorCraft: other editors
+/// (Illustrator, a chosen program) get the original AI bytes.
+pub(super) fn prepare(editor: &Path, source: &ExternalVectorSource, stop: &Receiver<()>, regenerate_ai: bool) -> Result<(OwnedSvg, Vec<u8>), String> {
     render_preview(editor, source, stop)?;
     // Foreign AI opens read-only for ordinary Save in VectorCraft. Regenerate only this
     // private AI working copy with editable AI data; never weaken that source-file protection.
     // Comparing the watcher with this initial copy prevents an open-only/no-op replacement.
-    let initial = if source.extension == "ai" { run_export(editor, source, stop, "ai")? } else { source.bytes.as_ref().clone() };
-    if source.extension == "ai" {
+    let regenerate = regenerate_ai && source.extension == "ai";
+    let initial = if regenerate { run_export(editor, source, stop, "ai")? } else { source.bytes.as_ref().clone() };
+    if regenerate {
         let prepared = ExternalVectorSource { bytes: std::sync::Arc::new(initial.clone()), extension: source.extension.clone(), size: source.size };
         render_preview(editor, &prepared, stop)?;
     }
@@ -247,6 +250,50 @@ mod tests {
         assert!(source_svg(br#"<svg xmlns="http://www.w3.org/2000/svg" width="12mm" height="9mm"/>"#, Some((16.0, 12.0))).is_err());
     }
 
+    /// A stand-in `vectorcraft-cli` that logs every request beside itself and answers the open
+    /// and export requests, writing a small SVG (or, for `ai`, a regenerated PDF) to the export path.
+    #[cfg(unix)]
+    const FAKE_CLI: &str = r#"#!/bin/sh
+log="$(dirname "$0")/requests.log"
+while IFS= read -r line; do
+  printf '%s\n' "$line" >> "$log"
+  case "$line" in
+    *document.export*)
+      out=$(printf '%s' "$line" | sed -n 's/.*"path":"\([^"]*\)".*/\1/p')
+      case "$line" in
+        *'"format":"ai"'*) printf '%%PDF-1.7 regenerated' > "$out" ;;
+        *) printf '<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"/>' > "$out" ;;
+      esac ;;
+  esac
+done
+printf '{"id":1,"result":{"isError":false}}\n{"id":2,"result":{"isError":false}}\n'
+"#;
+
+    /// Illustrator or another chosen editor gets the original AI; only VectorCraft's own working
+    /// copy is regenerated (VectorCraft opens a foreign AI read-only).
+    #[cfg(unix)]
+    #[test]
+    fn ai_working_copy_is_regenerated_only_for_vectorcraft() {
+        use std::os::unix::fs::PermissionsExt;
+        let directory = tempfile::tempdir().unwrap();
+        let editor = directory.path().join("Editor");
+        std::fs::write(&editor, b"#!/bin/sh\n").unwrap();
+        let cli = directory.path().join("vectorcraft-cli");
+        std::fs::write(&cli, FAKE_CLI).unwrap();
+        std::fs::set_permissions(&cli, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let original = b"%PDF-1.7\noriginal AI".to_vec();
+        let source = ExternalVectorSource { bytes: std::sync::Arc::new(original.clone()), extension: "ai".into(), size: None };
+        let (_send, stop) = std::sync::mpsc::channel();
+        let (owned, initial) = prepare(&editor, &source, &stop, false).unwrap();
+        assert_eq!(initial, original);
+        assert_eq!(std::fs::read(&owned.file).unwrap(), original, "the other editor opens the original AI");
+        let log = std::fs::read_to_string(directory.path().join("requests.log")).unwrap();
+        assert!(log.contains(r#""format":"svg""#), "the preview is still converted: {log}");
+        assert!(!log.contains(r#""format":"ai""#), "no AI re-export for another editor: {log}");
+        let (_owned, regenerated) = prepare(&editor, &source, &stop, true).unwrap();
+        assert_eq!(regenerated, b"%PDF-1.7 regenerated");
+    }
+
     #[test]
     fn conversion_requires_successful_open_and_export_replies() {
         let good = r#"{"id":1,"result":{"isError":false}}
@@ -278,7 +325,7 @@ mod live_vectorcraft_tests {
         let (_send, stop) = mpsc::channel();
         let eps = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 8 6\n0 0 1 setrgbcolor 0 0 8 6 rectfill\nshowpage\n%%EOF\n";
         let source = ExternalVectorSource { bytes: Arc::new(eps.to_vec()), extension: "eps".into(), size: Some((16.0, 12.0)) };
-        let (owned, initial) = prepare(editor, &source, &stop).unwrap();
+        let (owned, initial) = prepare(editor, &source, &stop, true).unwrap();
         assert_eq!(initial, *source.bytes);
         assert_eq!(owned.file.extension().unwrap(), "eps");
         assert_eq!(std::fs::read(&owned.file).unwrap(), *source.bytes);
@@ -287,7 +334,7 @@ mod live_vectorcraft_tests {
         let raster = photocraft_io::svg::rasterize_bounded(&svg, 1.0, 24_000_000).unwrap();
         assert_eq!((raster.rect.width(), raster.rect.height()), (16, 12));
         let invalid = ExternalVectorSource { bytes: Arc::new(b"%PDF-1.6\nnot a PDF".to_vec()), extension: "pdf".into(), size: None };
-        assert!(prepare(editor, &invalid, &stop).is_err());
+        assert!(prepare(editor, &invalid, &stop, true).is_err());
         let root = owned.root.clone();
         drop(owned);
         assert!(!root.exists());

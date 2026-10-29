@@ -23,6 +23,15 @@ pub fn stack_image(file_name: &str, bytes: &[u8], fmt: PixelFormat, mode: photoc
         all => all,
     };
     let bounds = doc.bounds();
+    // An SVG opens with one layer per shape, and every visible one gets its own float frame:
+    // they may take 1 GiB together, the SVG import's own budget, before any is rendered.
+    if photocraft_io::svg::is_svg(bytes) {
+        let visible = u64::try_from(layers.iter().filter(|l| l.visible).count()).unwrap_or(u64::MAX);
+        let frame_bytes = doc.size.area().saturating_mul(16);
+        if visible.saturating_mul(frame_bytes) > 1 << 30 {
+            return Err(EngineError::Other("the SVG has too many shapes for Stack Mode at this size".into()));
+        }
+    }
     let frames: Vec<Vec<[f32; 4]>> = layers
         .iter()
         .filter(|l| l.visible)

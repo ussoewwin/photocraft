@@ -113,7 +113,7 @@ fn display_document_with_work(svg: &[u8], max_pixels: u64) -> Option<(photocraft
     }
     #[cfg(test)]
     RENDERED_PREVIEWS.with(|count| count.set(count.get().saturating_add(1)));
-    crate::svg::import_svg_bounded_with_work("Preview.svg", svg, max_pixels).ok().map(|(imported, work)| (imported.document, work))
+    crate::svg::import_svg_preview_with_work("Preview.svg", svg, max_pixels).ok().map(|(imported, work)| (imported.document, work))
 }
 
 /// Serialize only a validated preview of the same native source; the blob is four-byte padded.

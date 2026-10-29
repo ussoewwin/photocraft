@@ -11,7 +11,7 @@ pub(crate) fn open(editor: ExternalSvgEditor, source: photocraft_ui_egui::Extern
 }
 
 mod native {
-    use super::*;
+    use super::{ExternalSvgEditor, ExternalSvgSession, ExternalVectorSave};
     use std::fs::{Metadata, OpenOptions};
     use std::io::{Read, Write};
     use std::path::Path;
@@ -36,7 +36,12 @@ mod native {
         let portal = matches!(&editor, ExternalSvgEditor::VectorCraft);
         #[cfg(not(target_os = "linux"))]
         let portal = false;
+        let chosen_vectorcraft = matches!(&editor, ExternalSvgEditor::VectorCraft);
+        let chosen_bundle = matches!(&editor, ExternalSvgEditor::Program(path) if cfg!(target_os = "macos") && Path::new(path).extension().is_some_and(|ext| ext.eq_ignore_ascii_case("app")) && Path::new(path).is_dir());
         let executable = if portal && source.extension == "svg" { None } else { Some(resolve(editor)?) };
+        // Only VectorCraft's own working copy of an AI is regenerated (it opens foreign AI
+        // read-only); Illustrator and other editors get the original bytes.
+        let regenerate_ai = chosen_vectorcraft || executable.as_ref().is_some_and(|resolved| is_vectorcraft(resolved, chosen_bundle));
         // Display conversion is always performed by VectorCraft's CLI, even when the user
         // chooses a different interactive editor. A VectorCraft build with an adjacent CLI keeps
         // its matching CLI; for a macOS bundle that is the bundle's own `Contents/MacOS`.
@@ -52,7 +57,7 @@ mod native {
             .name("photocraft-vector-editor".into())
             .spawn(move || {
                 let prepared = match converter.as_deref() {
-                    Some(executable) => super::vector_conversion::prepare(executable, &source, &stopped),
+                    Some(executable) => super::vector_conversion::prepare(executable, &source, &stopped, regenerate_ai),
                     None => OwnedSvg::create(&source.bytes).map(|owned| (owned, source.bytes.as_ref().clone())),
                 };
                 match prepared {
@@ -134,6 +139,22 @@ mod native {
         fn launch(&self, file: &Path) -> std::io::Result<Child> {
             self.command(file).spawn()
         }
+    }
+
+    /// Whether a chosen program is VectorCraft: a macOS bundle `resolve_program` identified by
+    /// its bundle id (it then runs the executable directly), a known VectorCraft installation,
+    /// or an executable named as VectorCraft is (`vectorcraft`/`vectorcraft.exe`, an AppImage
+    /// `vectorcraft-<version>-….AppImage`, the Flatpak launcher `ai.storyteller.vectorcraft`).
+    /// A neighbouring CLI alone doesn't make an editor VectorCraft.
+    fn is_vectorcraft(resolved: &Resolved, chosen_bundle: bool) -> bool {
+        resolved.bundle.is_none()
+            && (chosen_bundle
+                || resolved.program.file_name().is_some_and(|name| {
+                    let name = name.to_string_lossy().to_ascii_lowercase();
+                    let stem = name.strip_suffix(".exe").unwrap_or(&name);
+                    stem == "vectorcraft" || stem == "ai.storyteller.vectorcraft" || (stem.starts_with("vectorcraft-") && !stem.starts_with("vectorcraft-cli"))
+                })
+                || vectorcraft_programs().contains(&resolved.program))
     }
 
     /// True when `program`'s directory holds a regular (not linked) `vectorcraft-cli`.
@@ -563,7 +584,7 @@ mod native {
         }
 
         /// Write normalized SVG through a checked, no-follow handle before editor launch.
-        #[cfg(test)]
+        #[cfg(all(test, unix))]
         pub(super) fn overwrite(&self, bytes: &[u8]) -> Result<(), String> {
             if bytes.is_empty() || bytes.len() > MAX_BYTES {
                 return Err("Prepared SVG exceeds the supported byte limit".into());
@@ -879,6 +900,23 @@ mod native {
     #[cfg(test)]
     mod tests {
         use super::*;
+
+        /// Only VectorCraft gets a regenerated AI working copy: Illustrator, another program or a
+        /// bundle opened through LaunchServices gets the original.
+        #[test]
+        fn only_vectorcraft_editors_get_a_regenerated_ai() {
+            let root = std::env::temp_dir();
+            let program = |name: &str| Resolved::direct(root.join(name));
+            assert!(is_vectorcraft(&program(if cfg!(windows) { "vectorcraft.exe" } else { "vectorcraft" }), false));
+            assert!(!is_vectorcraft(&program(if cfg!(windows) { "Illustrator.exe" } else { "Illustrator" }), false));
+            assert!(is_vectorcraft(&program("vectorcraft-1.2.0-linux-x86_64.AppImage"), false));
+            assert!(is_vectorcraft(&program("ai.storyteller.vectorcraft"), false));
+            assert!(!is_vectorcraft(&program(if cfg!(windows) { "vectorcraft-cli.exe" } else { "vectorcraft-cli" }), false));
+            assert!(!is_vectorcraft(&program("uninstall-vectorcraft.exe"), false));
+            assert!(is_vectorcraft(&program("Renamed"), true), "a bundle identified as VectorCraft runs directly");
+            let cocoa = Resolved { program: root.join("Editor"), bundle: Some(root.join("Editor.app")) };
+            assert!(!is_vectorcraft(&cocoa, true));
+        }
 
         #[test]
         fn conversion_errors_wait_for_queue_capacity_without_disappearing() {

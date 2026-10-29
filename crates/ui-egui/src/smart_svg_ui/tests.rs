@@ -170,6 +170,25 @@ fn manual_internal_choice_uses_existing_child_document_flow() {
     assert!(!app.smart_svg.internal_once);
 }
 
+/// Edit Contents again on contents already open in the internal editor switches to that
+/// document, as it does for any smart object, instead of an error.
+#[test]
+fn edit_contents_again_switches_to_the_open_internal_copy() {
+    let (mut app, _, calls) = fixture();
+    let parent = app.session.active_index().unwrap();
+    open(&mut app);
+    app.smart_svg.pending.as_mut().unwrap().editor = Editor::Internal;
+    confirm(&mut app).unwrap();
+    let child = app.session.active().unwrap().doc.id;
+    app.session.set_active(parent);
+    app.run("layer.smartObjects.editContents", json!({})).unwrap();
+    assert_eq!(app.session.active().unwrap().doc.id, child);
+    assert_eq!(app.session.smart_links.len(), 1);
+    assert!(app.smart_svg.pending.is_none());
+    assert!(!app.ui.status_error, "{}", app.ui.status);
+    assert!(calls.borrow().is_empty());
+}
+
 #[test]
 fn missing_external_service_keeps_internal_edit_and_save_back() {
     let (mut app, saves, calls) = fixture();

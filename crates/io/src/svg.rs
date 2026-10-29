@@ -376,11 +376,26 @@ struct ImageBudget {
     pixels: u64,
     xml_bytes: u64,
     svg_images: u64,
+    /// The deepest chain of embedded SVG images (an SVG image inside an SVG image is 2). resvg
+    /// draws each one through a scratch pixmap as large as the one it is drawn into and frees it
+    /// afterwards, so this many such surfaces exist at once, however many siblings there are.
+    svg_chain: u64,
     draw_nodes: u64,
     repeatable_raster: bool,
     repeatable_svg: bool,
     fontless_text: bool,
+    /// An embedded image that can't be read fails the drawing instead of being left out. A
+    /// stored display preview must draw completely, or it isn't used.
+    strict: bool,
     error: Option<String>,
+}
+
+/// Leave out an embedded image that can't be read, or with a strict budget record `error`.
+fn unreadable_image(budget: &Mutex<ImageBudget>, error: &str) -> Option<usvg::ImageKind> {
+    if budget.lock().unwrap_or_else(std::sync::PoisonError::into_inner).strict {
+        image_error(budget, error);
+    }
+    None
 }
 
 /// Record the first budget or decoding failure seen while usvg resolves images. Resolver
@@ -487,10 +502,20 @@ fn webp_frame_sizes(chunks: &[u8], dimensions: &mut (usize, usize), nested: bool
 }
 
 /// usvg's data-URL image resolver with budgets: nested SVG images are parsed with the same
-/// budget up to [`MAX_EMBEDDED_SVG_DEPTH`], and PNG/JPEG/GIF/WebP images are charged their
-/// largest declared frame before decoding. Anything else, or any overrun, records an error and
-/// resolves to no image so the enclosing parse fails.
-fn bounded_data_image(mime: &str, data: Arc<Vec<u8>>, options: &usvg::Options, budget: &Arc<Mutex<ImageBudget>>, depth: usize) -> Option<usvg::ImageKind> {
+/// budget up to [`MAX_EMBEDDED_SVG_DEPTH`] and within the `xml_left` levels of XML nesting the
+/// drawing left them, and PNG/JPEG/GIF/WebP images are charged their largest declared frame
+/// before decoding. An overrun records an error and resolves to no image so the enclosing parse
+/// fails. An image that isn't one of those formats, is invalid, or has a MIME type usvg doesn't
+/// know is left out and the rest still draws, as usvg's own resolver does (with a strict budget
+/// it is an error too).
+fn bounded_data_image(
+    mime: &str,
+    data: Arc<Vec<u8>>,
+    options: &usvg::Options,
+    budget: &Arc<Mutex<ImageBudget>>,
+    depth: usize,
+    xml_left: usize,
+) -> Option<usvg::ImageKind> {
     if budget.lock().unwrap_or_else(std::sync::PoisonError::into_inner).error.is_some() {
         return None;
     }
@@ -500,94 +525,100 @@ fn bounded_data_image(mime: &str, data: Arc<Vec<u8>>, options: &usvg::Options, b
             image_error(budget, "embedded SVG images exceed the nesting limit");
             return None;
         }
-        match parse_image_bounded(&data, budget.clone(), depth + 1) {
-            Ok(tree) => {
-                let mut counter = budget.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-                counter.svg_images = counter.svg_images.saturating_add(1);
-                Some(usvg::ImageKind::SVG(tree))
-            }
-            Err(e) => {
-                image_error(budget, format!("can't parse embedded SVG image: {e}"));
-                None
-            }
-        }
+        // A budget overrun inside the image is already recorded; any other failure (not an
+        // SVG, nested deeper than the drawing left room for) only leaves the image out.
+        let Ok(tree) = parse_image_bounded(&data, budget.clone(), depth + 1, xml_left) else {
+            return unreadable_image(budget, "can't parse an embedded SVG image");
+        };
+        let mut counter = budget.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        counter.svg_images = counter.svg_images.saturating_add(1);
+        counter.svg_chain = counter.svg_chain.max(u64::try_from(depth + 1).unwrap_or(u64::MAX));
+        Some(usvg::ImageKind::SVG(tree))
     } else {
         let supported = matches!(
             format,
             Some(photocraft_codecs::Format::Png | photocraft_codecs::Format::Jpeg | photocraft_codecs::Format::Gif | photocraft_codecs::Format::WebP)
         );
-        if !supported {
-            image_error(budget, "embedded SVG image has unsupported or invalid raster data");
-            return None;
+        let size = supported.then(|| imagesize::blob_size(&data).ok()).flatten();
+        let Some(size) = size else { return unreadable_image(budget, "embedded SVG image has unsupported or invalid raster data") };
+        let mut dimensions = (size.width, size.height);
+        if format == Some(photocraft_codecs::Format::Gif) {
+            let Some(frame) = gif_frame_size(&data) else { return unreadable_image(budget, "can't read embedded GIF frame dimensions") };
+            dimensions = (dimensions.0.max(frame.0), dimensions.1.max(frame.1));
         }
-        let dimensions = match imagesize::blob_size(&data) {
-            Ok(size) => (size.width, size.height),
-            Err(e) => {
-                image_error(budget, format!("can't read embedded SVG image dimensions: {e}"));
-                return None;
-            }
-        };
-        let mut dimensions = if format == Some(photocraft_codecs::Format::Gif) {
-            let Some(frame) = gif_frame_size(&data) else {
-                image_error(budget, "can't read embedded GIF frame dimensions");
-                return None;
-            };
-            (dimensions.0.max(frame.0), dimensions.1.max(frame.1))
-        } else {
-            dimensions
-        };
         if format == Some(photocraft_codecs::Format::WebP) && data.get(12..).and_then(|chunks| webp_frame_sizes(chunks, &mut dimensions, false)).is_none() {
-            image_error(budget, "can't read embedded WebP frame dimensions");
-            return None;
+            return unreadable_image(budget, "can't read embedded WebP frame dimensions");
+        }
+        // usvg's resolver only wraps the bytes (resvg decodes them when drawing): an image under
+        // a MIME type it doesn't know, or with no pixels, is left out uncharged, as usvg would.
+        let Some(image) = (usvg::ImageHrefResolver::default_data_resolver())(mime, data, options) else {
+            return unreadable_image(budget, "embedded SVG raster image has an unsupported MIME type");
+        };
+        if dimensions.0 == 0 || dimensions.1 == 0 {
+            return unreadable_image(budget, "embedded SVG image has no pixels");
         }
         if !charge_image(budget, dimensions.0, dimensions.1) {
             return None;
         }
-        let image = (usvg::ImageHrefResolver::default_data_resolver())(mime, data, options);
-        if image.is_none() {
-            image_error(budget, "embedded SVG raster image has an unsupported MIME type");
-        }
-        image
+        Some(image)
     }
 }
 
 /// [`parse_image_bounded_with`] using the shared system font database.
-fn parse_image_bounded(bytes: &[u8], budget: Arc<Mutex<ImageBudget>>, depth: usize) -> Result<usvg::Tree, IoError> {
-    parse_image_bounded_with(bytes, budget, depth, fonts)
+fn parse_image_bounded(bytes: &[u8], budget: Arc<Mutex<ImageBudget>>, depth: usize, xml_left: usize) -> Result<usvg::Tree, IoError> {
+    parse_image_bounded_with(bytes, budget, depth, xml_left, fonts)
 }
 
 /// Parse one (possibly gzip-compressed) SVG at nesting `depth` against `budget`: the byte,
 /// inflated-size and XML-depth limits apply first, embedded images go through
 /// [`bounded_data_image`], and the tree's drawing-node count and repeatable image resources are
 /// added to the budget for the caller's work estimate. Fonts load only when text is present.
+/// usvg parses an embedded SVG on top of the drawing's own recursion, so the drawing and the
+/// images inside it share `xml_left` levels of XML nesting ([`MAX_XML_DEPTH`] for the drawing).
+/// Byte and decode overruns are also recorded in `budget`, so they fail the whole drawing; a
+/// nesting or syntax error only fails this SVG.
 fn parse_image_bounded_with(
     bytes: &[u8],
     budget: Arc<Mutex<ImageBudget>>,
     depth: usize,
+    xml_left: usize,
     fonts: fn() -> Arc<usvg::fontdb::Database>,
 ) -> Result<usvg::Tree, IoError> {
+    let overrun = |error: IoError| {
+        image_error(&budget, error.to_string());
+        error
+    };
     if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > MAX_BOUNDED_SVG_BYTES {
-        return Err(IoError::Svg("embedded SVG source exceeds the 16 MiB byte limit".into()));
+        return Err(overrun(IoError::Svg("embedded SVG source exceeds the 16 MiB byte limit".into())));
     }
-    let xml = inflate_with_limit(bytes, MAX_BOUNDED_SVG_BYTES)?;
-    if nesting_depth(&xml, MAX_XML_DEPTH) > MAX_XML_DEPTH {
-        return Err(IoError::Svg(format!("elements are nested more than {MAX_XML_DEPTH} levels deep")));
-    }
-    {
+    let xml = inflate_with_limit(bytes, MAX_BOUNDED_SVG_BYTES).map_err(overrun)?;
+    // Charged before anything can leave the image out, so skipped images still use up the budget.
+    let xml_len = u64::try_from(xml.len()).unwrap_or(u64::MAX);
+    let left = {
         let mut counter = budget.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        counter.xml_bytes = counter
-            .xml_bytes
-            .checked_sub(u64::try_from(xml.len()).unwrap_or(u64::MAX))
-            .ok_or_else(|| IoError::Svg("embedded SVG XML exceeds the decoded byte budget".into()))?;
+        let left = counter.xml_bytes.checked_sub(xml_len);
+        if let Some(left) = left {
+            counter.xml_bytes = left;
+        }
+        left
+    };
+    if left.is_none() {
+        return Err(overrun(IoError::Svg("embedded SVG XML exceeds the decoded byte budget".into())));
+    }
+    let nesting = nesting_depth(&xml, xml_left);
+    if nesting > xml_left {
+        return Err(IoError::Svg(format!("elements are nested more than {xml_left} levels deep")));
     }
     let has_text = xml.windows(4).any(|w| w == b"text");
     let fontdb = if has_text { fonts() } else { Arc::new(usvg::fontdb::Database::new()) };
     if has_text && fontdb.faces().next().is_none() {
         budget.lock().unwrap_or_else(std::sync::PoisonError::into_inner).fontless_text = true;
     }
+    // The resolver below replaces `options`' own, so its embedded-SVG depth argument is unused.
     let mut opt = options(fontdb, 0);
     let shared = budget.clone();
-    opt.image_href_resolver.resolve_data = Box::new(move |mime, data, options| bounded_data_image(mime, data, options, &shared, depth));
+    let image_xml_left = xml_left.saturating_sub(nesting);
+    opt.image_href_resolver.resolve_data = Box::new(move |mime, data, options| bounded_data_image(mime, data, options, &shared, depth, image_xml_left));
     // The bounded inflate above is the only decompression step. from_data would detect a
     // nested gzip payload and inflate it again without the source-byte limit.
     let text = std::str::from_utf8(&xml).map_err(|_| IoError::Svg("the SVG is not valid UTF-8".into()))?;
@@ -656,53 +687,66 @@ fn repeatable_image_resources(tree: &usvg::Tree) -> (bool, bool) {
 struct ParsedWork {
     parsed: Parsed,
     svg_images: u64,
+    svg_chain: u64,
     decoded: u64,
     draw_nodes: u64,
     repeatable_raster: bool,
     repeatable_svg: bool,
 }
 
-/// Parse untrusted SVG with at most `max_pixels` (capped at 24 MP) of decoded image pixels.
+/// Parse untrusted SVG with at most `max_pixels` (capped at 24 MP) of decoded image pixels. The
+/// scratch surfaces its embedded SVG images need at the drawing's own size count against the
+/// same limit.
 fn parse_bounded(bytes: &[u8], max_pixels: u64) -> Result<Parsed, IoError> {
-    parse_bounded_inner(bytes, max_pixels).map(|(tree, _)| tree)
+    let (parsed, chain) = parse_bounded_inner(bytes, max_pixels)?;
+    let area = canvas(&parsed.tree, &mut Vec::new()).size.area();
+    check_scratch_surfaces(area, chain, max_pixels)?;
+    Ok(parsed)
 }
 
-/// [`parse_bounded`], also returning how many embedded SVG images were parsed (each one is
-/// rendered through its own intermediate surface).
+/// [`parse_bounded`] without the scratch-surface check, also returning the deepest chain of
+/// embedded SVG images (see [`ImageBudget::svg_chain`]) so a render can check it at its own size.
 fn parse_bounded_inner(bytes: &[u8], max_pixels: u64) -> Result<(Parsed, u64), IoError> {
     parse_bounded_inner_with(bytes, max_pixels, fonts)
 }
 
 /// [`parse_bounded_inner`] with an explicit font source, so tests can pin the available fonts.
 fn parse_bounded_inner_with(bytes: &[u8], max_pixels: u64, fonts: fn() -> Arc<usvg::fontdb::Database>) -> Result<(Parsed, u64), IoError> {
-    parse_bounded_work_with(bytes, max_pixels, fonts).map(|work| (work.parsed, work.svg_images))
+    parse_bounded_work_with(bytes, max_pixels, false, fonts).map(|work| (work.parsed, work.svg_chain))
+}
+
+/// resvg draws an embedded SVG image through a scratch pixmap as large as the `area` it is drawn
+/// into, one per level of a `chain` of nested images, all alive at once; past `max_pixels` (at
+/// most 24 MP) of them is an error. Siblings reuse the space one after another, so a drawing
+/// with any number of side-by-side SVG images needs one, like the drawing itself.
+fn check_scratch_surfaces(area: u64, chain: u64, max_pixels: u64) -> Result<(), IoError> {
+    if chain != 0 && area.checked_mul(chain).is_none_or(|pixels| pixels > max_pixels.min(MAX_RASTER_PIXELS)) {
+        return Err(IoError::Svg("embedded SVG intermediate images exceed the SVG cache budget".into()));
+    }
+    Ok(())
 }
 
 /// The decoder's charged pixels, including raster images inside nested SVG images.
-fn parse_bounded_work_with(bytes: &[u8], max_pixels: u64, fonts: fn() -> Arc<usvg::fontdb::Database>) -> Result<ParsedWork, IoError> {
+fn parse_bounded_work_with(bytes: &[u8], max_pixels: u64, strict: bool, fonts: fn() -> Arc<usvg::fontdb::Database>) -> Result<ParsedWork, IoError> {
     let budget = Arc::new(Mutex::new(ImageBudget {
         pixels: max_pixels.min(MAX_RASTER_PIXELS),
         xml_bytes: MAX_BOUNDED_SVG_BYTES,
         svg_images: 0,
+        svg_chain: 0,
         draw_nodes: 0,
         repeatable_raster: false,
         repeatable_svg: false,
         fontless_text: false,
+        strict,
         error: None,
     }));
-    let tree = parse_image_bounded_with(bytes, budget.clone(), 0, fonts)?;
+    let tree = parse_image_bounded_with(bytes, budget.clone(), 0, MAX_XML_DEPTH, fonts)?;
     let counter = budget.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-    // resvg renders each embedded SVG through a temporary pixmap as large as its destination.
-    if counter.svg_images != 0 {
-        let area = canvas(&tree, &mut Vec::new()).size.area();
-        if area.checked_mul(counter.svg_images.saturating_add(1)).is_none_or(|pixels| pixels > max_pixels.min(MAX_RASTER_PIXELS)) {
-            return Err(IoError::Svg("embedded SVG intermediate images exceed the SVG cache budget".into()));
-        }
-    }
     let decoded = max_pixels.min(MAX_RASTER_PIXELS).saturating_sub(counter.pixels);
     Ok(ParsedWork {
         parsed: Parsed { tree, fontless_text: counter.fontless_text },
         svg_images: counter.svg_images,
+        svg_chain: counter.svg_chain,
         decoded,
         draw_nodes: counter.draw_nodes,
         repeatable_raster: counter.repeatable_raster,
@@ -836,14 +880,29 @@ pub fn import_svg_bounded(name: &str, bytes: &[u8], max_cached_pixels: u64) -> R
 /// their independent 24 MP caps; the aggregate allowance can pay for several components.
 /// Raster-bearing patterns, masks and image-filter resources conservatively reserve repaint
 /// work across drawing nodes; ordinary vector paths, artboard clips and blur alone do not.
-/// [`import_svg_bounded`] retains its existing independent image/cache limits.
+/// [`import_svg_bounded`] retains its existing independent image/cache limits. An embedded image
+/// it can't read is left out, as on placement.
 pub fn import_svg_bounded_with_work(name: &str, bytes: &[u8], max_work: u64) -> Result<(ImportResult, u64), IoError> {
+    import_svg_bounded_with_work_mode(name, bytes, max_work, false)
+}
+
+/// [`import_svg_bounded_with_work`] for a stored display preview: an embedded image it can't
+/// read fails it, so only a preview that draws completely stands in for its native source.
+pub fn import_svg_preview_with_work(name: &str, bytes: &[u8], max_work: u64) -> Result<(ImportResult, u64), IoError> {
+    import_svg_bounded_with_work_mode(name, bytes, max_work, true)
+}
+
+fn import_svg_bounded_with_work_mode(name: &str, bytes: &[u8], max_work: u64, strict: bool) -> Result<(ImportResult, u64), IoError> {
     if max_work == 0 {
         return Err(IoError::Svg("SVG preview validation work budget is exhausted".into()));
     }
-    let ParsedWork { parsed, svg_images, decoded, draw_nodes, repeatable_raster, repeatable_svg } =
-        parse_bounded_work_with(bytes, max_work.min(MAX_RASTER_PIXELS), fonts)?;
+    let ParsedWork { parsed, svg_images, decoded, draw_nodes, repeatable_raster, repeatable_svg, .. } =
+        parse_bounded_work_with(bytes, max_work.min(MAX_RASTER_PIXELS), strict, fonts)?;
     let area = canvas(&parsed.tree, &mut Vec::new()).size.area();
+    // This preview check charges every embedded SVG image a canvas-sized surface of work.
+    if svg_images != 0 && area.checked_mul(svg_images.saturating_add(1)).is_none_or(|pixels| pixels > max_work.min(MAX_RASTER_PIXELS)) {
+        return Err(IoError::Svg("embedded SVG intermediate images exceed the SVG cache budget".into()));
+    }
     let uses = draw_nodes.max(1);
     let intermediate_surfaces = svg_images.saturating_mul(if repeatable_svg { uses } else { 1 }).saturating_add(1);
     // Only raster-bearing repeatable resources can repaint an already-parsed image. Plain
@@ -874,6 +933,14 @@ pub fn import_svg_bounded_with_work(name: &str, bytes: &[u8], max_work: u64) -> 
 /// are rendered, rather than silently changing the source's layer structure.
 pub fn import_svg_bounded_layers(name: &str, bytes: &[u8], max_cached_pixels: u64) -> Result<ImportResult, IoError> {
     import_svg_inner(name, bytes, MAX_GROUP_DEPTH, Some(max_cached_pixels), true)
+}
+
+/// Opens untrusted SVG (smart-object contents) as [`import_svg`] does, as editable layers under
+/// its retained-pixel budget, but with the bounded parse: embedded images may decode to at most
+/// `max_decoded_pixels` (capped at 24 MP) in all, nested SVG images get the same budget, and
+/// compressed data inflates to at most 16 MiB.
+pub fn import_svg_bounded_images(name: &str, bytes: &[u8], max_decoded_pixels: u64) -> Result<ImportResult, IoError> {
+    import_parsed(name, parse_bounded(bytes, max_decoded_pixels)?, MAX_GROUP_DEPTH, None, false)
 }
 
 /// The pixel bounds [`import_svg_bounded`] gives the drawing, found without rendering any layer
@@ -994,17 +1061,15 @@ pub fn rasterize(bytes: &[u8], scale: f32) -> Result<photocraft_compose::Buffer,
 
 /// Render untrusted embedded SVG with intrinsic raster-image and aggregate decode budgets.
 pub fn rasterize_bounded(bytes: &[u8], scale: f32, max_decoded_pixels: u64) -> Result<photocraft_compose::Buffer, IoError> {
-    let (parsed, images) = parse_bounded_inner(bytes, max_decoded_pixels)?;
+    let (parsed, chain) = parse_bounded_inner(bytes, max_decoded_pixels)?;
     let tree = parsed.tree;
-    if images != 0 {
+    if chain != 0 {
         let cv = canvas(&tree, &mut Vec::new());
         let k = cv.scale * scale.clamp(1.0 / 64.0, 64.0);
         let width = ((tree.size().width() * k).ceil() as u32).max(1);
         let height = ((tree.size().height() * k).ceil() as u32).max(1);
-        if (u64::from(width) * u64::from(height)).checked_mul(images.saturating_add(1)).is_none_or(|pixels| pixels > max_decoded_pixels.min(MAX_RASTER_PIXELS))
-        {
-            return Err(IoError::Svg("embedded SVG intermediate images exceed the rendered pixel budget".into()));
-        }
+        check_scratch_surfaces(u64::from(width) * u64::from(height), chain, max_decoded_pixels)
+            .map_err(|_| IoError::Svg("embedded SVG intermediate images exceed the rendered pixel budget".into()))?;
     }
     rasterize_tree(&tree, scale)
 }

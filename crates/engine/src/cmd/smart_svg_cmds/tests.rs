@@ -321,18 +321,25 @@ fn embedded_pdf_ai_and_eps_update_shared_instances_without_reading_linked_paths(
             assert_eq!(base64::engine::general_purpose::STANDARD.decode(exported["sourceBase64"].as_str().unwrap()).unwrap(), bytes);
             assert_eq!(exported["extension"], if name.ends_with("ai") { "ai" } else { "eps" });
             assert_eq!(s.active().unwrap().doc, before);
-            let params =
+            // updateSvg refuses native sources; they save back in their own format.
+            let svg_params =
                 json!({"document":exported["document"],"layer":id.0,"svg":BLUE,"fingerprint":exported["fingerprint"],"contentsId":exported["contentsId"]});
-            assert_eq!(s.execute(UPDATE, params.clone()).unwrap()["updated"], true);
+            fails_without_edit(&mut s, svg_params);
+            let changed = [bytes, b" edited"].concat();
+            let params = json!({"document":exported["document"],"layer":id.0,"fingerprint":exported["fingerprint"],"contentsId":exported["contentsId"],
+                "sourceBase64":base64::engine::general_purpose::STANDARD.encode(&changed),"extension":exported["extension"],"previewSvg":BLUE});
+            assert_eq!(s.execute(UPDATE_VECTOR, params.clone()).unwrap()["updated"], true);
             for id in [id, duplicate] {
-                assert_eq!(source(&s, id), BLUE.as_bytes());
+                assert_eq!(source(&s, id), changed);
             }
             let after = s.active().unwrap().doc.clone();
             assert!(s.undo());
             assert_eq!(s.active().unwrap().doc, before);
             assert!(s.redo());
             assert_eq!(s.active().unwrap().doc, after);
-            fails_without_edit(&mut s, params); // stale first-save fingerprint
+            let before_stale = s.active().unwrap().doc.clone();
+            assert!(s.execute(UPDATE_VECTOR, params).is_err(), "stale first-save fingerprint");
+            assert_eq!(s.active().unwrap().doc, before_stale);
             let serialized = photocraft_format::save_to_bytes(&after, &Default::default()).unwrap();
             assert_eq!(photocraft_format::load_from_bytes(&serialized).unwrap(), *after);
         }
@@ -405,6 +412,28 @@ fn original_vector_formats_save_atomically_and_survive_undo_and_persistence() {
             s.execute(UPDATE_VECTOR, repeated).unwrap();
             assert!(s.execute(UPDATE_VECTOR, params).is_err(), "stale session must not overwrite later changes");
         }
+    }
+}
+
+/// A save from an external editor whose SVG embeds an image PhotoCraft can't read (here a BMP)
+/// is accepted with that image left out, as placing the same SVG is.
+#[test]
+fn saved_svg_with_an_unreadable_embedded_image_still_updates() {
+    let (mut s, id) = session(8);
+    let edited = r#"<svg xmlns="http://www.w3.org/2000/svg" width="8" height="6"><image width="4" height="6" href="data:image/bmp,BM"/><rect x="4" width="4" height="6" fill="blue"/></svg>"#;
+    let params = request(&mut s, id, edited);
+    assert_eq!(s.execute(UPDATE, params).unwrap()["updated"], true);
+    assert_eq!(source(&s, id), edited.as_bytes());
+}
+
+/// updateSvg replaces SVG contents only: it never turns an AI, PDF or EPS source into SVG.
+#[test]
+fn update_svg_refuses_native_sources() {
+    for ext in ["ai", "pdf", "eps"] {
+        let (mut s, id, original) = native_session(ext, 8);
+        let params = request(&mut s, id, BLUE);
+        fails_without_edit(&mut s, params);
+        assert_eq!(source(&s, id), original, "{ext}");
     }
 }
 
