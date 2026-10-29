@@ -219,6 +219,25 @@ fn layer_style_title_gutters_can_start_drags() {
     }
 }
 
+/// #9515: Bevel & Emboss is taller than a small window (1435 × 858, the reporter's): its page
+/// scrolls, so OK and Cancel stay on screen.
+#[test]
+fn layer_style_buttons_stay_on_a_short_window() {
+    use egui_kittest::{Harness, kittest::Queryable};
+
+    let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", serde_json::json!({"width": 64, "height": 64})).unwrap();
+    app.run("layer.new.layer", serde_json::json!({})).unwrap();
+    let mut h = Harness::builder().with_size(egui::vec2(1435.0, 858.0)).build_ui_state(|ui, app| show(app, ui.ctx()), app);
+    PhotocraftApp::setup_context(&h.ctx, crate::theme::ThemeKind::ALL[0]);
+    crate::layer_style::open(h.state_mut(), Some("bevelEmboss")).unwrap();
+    h.run_steps(4);
+    for label in ["OK", "Cancel"] {
+        let r = h.get_by_label(label).rect();
+        assert!(r.bottom() <= 858.0, "{label} is off the window: {r:?}");
+    }
+}
+
 #[test]
 fn dragging_the_title_bar_moves_the_dialog() {
     use egui_kittest::{Harness, kittest::Queryable};
