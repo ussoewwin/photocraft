@@ -1278,16 +1278,26 @@
       ]
     }
   ],
-  "current_checkpoint_sha": "7acb18325654d0b8a56f95cada9ca4186d45dc43",
-  "updated_at": "2026-10-29T05:45:40.679773+00:00",
+  "current_checkpoint_sha": "30a2b002be3754aff4297d887ec01c28dcf18037",
+  "updated_at": "2026-10-29T06:15:48.040076+00:00",
   "active_subsystem": "All selected merges complete; running combined validation and preparing frozen protocol",
   "parent_decision_required": null,
   "validation": {
     "compositor_at_31ce2208": "PASSED: 402 passed, 0 failed, 2 ignored",
-    "current_full_workspace": "NOT RUN",
-    "current_build_check": "PENDING final 108-head check; 103-head working-tree check passed before final cleanup",
+    "current_full_workspace": "PENDING: exact-head full-sweep CI 40827875047",
+    "current_build_check": "PASSED: cargo check --workspace --all-targets --locked --offline at 30a2b002be3754aff4297d887ec01c28dcf18037 (1m20s)",
     "pattern_store_at_d98e4195": "PASSED: 35 tests, 0 failed, 1 benchmark ignored; final tree not yet tested",
     "manual": "NOT RUN",
-    "portable_final_build": "NOT RUN \u2014 waits for 100+ complete integration and validation"
-  }
+    "portable_final_build": "NOT RUN: waits for validation",
+    "current_ci": "PENDING https://github.com/FredApps/photocraft/actions/runs/40827875047"
+  },
+  "currently_matching_approved_heads": 107,
+  "selection_drift": [
+    {
+      "pr": 5493,
+      "integrated_approved_head": "f97eb2849a68e1ed1c08c5b378770cf35cbcb72d",
+      "new_unapproved_head": "67f57c3cf1e7de045aee03a305663d9560daa3e3",
+      "decision": "New head excluded; historical approved head retained and not counted among 107 current matching approvals."
+    }
+  ]
 }

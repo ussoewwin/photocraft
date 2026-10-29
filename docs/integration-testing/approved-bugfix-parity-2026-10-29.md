@@ -249,20 +249,20 @@ For Photoshop acceptance, record Photoshop version/platform, reference fixture i
 
 ## Current execution record
 
-Candidate code: `11fdb1807`. This is an execution ledger, not an acceptance pass.
+Candidate code: `30a2b002be3754aff4297d887ec01c28dcf18037`. This is an execution ledger, not an acceptance pass.
 
 | Gate | State | Evidence / limitation |
 |---|---|---|
 | Selected-head ancestry | PASSED | 108/108 immutable selected heads are ancestors of the candidate; no open merge. |
 | Formatting | PASSED | `cargo fmt --all` completed before the candidate commit; exact final check remains part of CI. |
-| Workspace/all-target compile | IN PROGRESS | Candidate check in progress; the earlier 103-head working-tree check passed, which does not establish final-candidate validity. |
-| Linux/Windows/web CI | IN PROGRESS | [Current run 40827696354](https://github.com/FredApps/photocraft/actions/runs/40827696354) targets `11fdb1807`. |
+| Workspace/all-target compile | PASSED | Exact candidate `cargo check --workspace --all-targets --locked --offline`: 1m20s. |
+| Linux/Windows/web CI | IN PROGRESS | [Current run 40827875047](https://github.com/FredApps/photocraft/actions/runs/40827875047) targets `30a2b002be3754aff4297d887ec01c28dcf18037`. |
 | Previous 108-head CI | FAILED | [Run 40825263899](https://github.com/FredApps/photocraft/actions/runs/40825263899): corpus and web compilation found a missing JXL module import; corrected in the candidate. No pass inferred. |
-| Frozen ownership regressions | IN PROGRESS | 103-head `4f23f459ba6f1a056238b1019aee0821f8347ca1`; final-candidate rerun is still required. |
+| Frozen ownership regressions | IN PROGRESS | 103-head run: 14 passed, 3 failed. Fixes applied; immutable `11fdb1807` rerun is compiling. |
 | Pattern persistence checkpoint | PASSED | 71-head `d98e419542d48ebfd52fef70f06d2c000bd8b8c0`: 35 passed, 0 failed, 1 benchmark ignored. Final-candidate coverage remains pending. |
-| Explicit full workspace sweep | NOT RUN | Requires `PHOTOCRAFT_FULL_SWEEP=1 cargo test --workspace --locked`; ordinary daily/CI quarter sweeps do not substitute. |
+| Explicit full workspace sweep | IN PROGRESS | Current dispatch sets `PHOTOCRAFT_FULL_SWEEP=1`; retain executed counts and failures. |
 | Pinned corpus IO / engine rerender | IN PROGRESS | Current CI corpus job must establish these separately. |
-| Performance and large-image checks | NOT RUN | Record quick suite and selected hot-path outputs; no claims from contended debug builds. |
+| Performance and large-image checks | IN PROGRESS | Quick suite and 36 MP selection morphology dispatched; other selected large-image hot paths remain NOT RUN. |
 | Photoshop/platform/manual cases | NOT RUN | Photoshop reopening, reference diffs, macOS interactions, and Windows Intel/DX12 claims require their specified environments. |
 | Windows portable build | NOT RUN | Dispatch only after applicable validation; no production release or installation is authorized. |
 
@@ -287,3 +287,7 @@ Record final source SHA, resolved version, workflow run/job, artifact ID/name, a
 ### Validation correction record
 
 The prior bd52 run failed strict Clippy (Layer Style nested guards and Action mapping complexity) and JPEG XL extension discovery. Four JPEG XL encoder/independent-decoder cases passed before the capability-registration case failed. Its Windows integration job stopped on the same strict lint failures. The web build passed. Successor `11fdb1807` restores format discovery, extracts validated Action mappings into helpers, and corrects pen ownership regressions. Run [40827696354](https://github.com/FredApps/photocraft/actions/runs/40827696354) explicitly requests full sweep and morphology/performance checks; outcomes are PENDING. A local workspace/all-target check completed, but its mutable working-tree run is not immutable final-build evidence. Local Clippy is BLOCKED because the component is absent; hosted strict Clippy remains required. No portable artifact exists yet.
+
+### Selection refresh
+
+A fresh GitHub read after integration found 107 of the 108 selected PRs still open/non-draft at their exact FredApps-approved heads. #5493 advanced from approved `f97eb2849a68e1ed1c08c5b378770cf35cbcb72d` to `67f57c3cf1e7de045aee03a305663d9560daa3e3` without a matching new approval. Only the historical approved head is integrated; its new head is excluded, and #5493 does not count toward the 107 current matching approvals. The minimum of 100 remains satisfied. The immutable selection receipt is preserved rather than rewritten.
