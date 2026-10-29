@@ -566,6 +566,9 @@ impl FilterParams {
     pub fn halo(&self) -> Halo {
         let g = |sigma: f32| Halo::Radius(((sigma.max(0.0) * 3.0).ceil() as i32).saturating_add(1));
         match self {
+            // Small Gaussian radii use the calibrated seven-tap kernel as well: its reach is
+            // three pixels even when ceil(3 * radius) + 1 would be smaller.
+            FilterParams::GaussianBlur { radius } | FilterParams::HighPass { radius } if (0.05..1.0).contains(radius) => Halo::Radius(3),
             FilterParams::GaussianBlur { radius } | FilterParams::HighPass { radius } => g(*radius),
             FilterParams::UnsharpMask { radius, .. } => Halo::Radius(sharpen::exact::halo(*radius)),
             FilterParams::SmartSharpen { radius, .. } => g(*radius),

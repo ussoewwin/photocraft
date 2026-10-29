@@ -1156,7 +1156,7 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
                 let center = d.brush_resize.map_or(hp, |(anchor, _, _)| anchor);
                 let r = d.opts.size * 0.5 * d.zoom;
                 if d.brush_resize.is_some() {
-                    crate::brush_resize::tip_preview(
+                    crate::brush_resize::liquify_tip_preview(
                         &clip,
                         center,
                         r,
