@@ -708,6 +708,8 @@ fn ui_set_rejects_unknown_fields_before_changing_anything() {
     let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
     let ctx = egui::Context::default();
     app.set_theme(&ctx, ThemeKind::StudioLight);
+    // Not the default tool, so a rejected `"tool": "move"` that still applied would show.
+    app.ui.tool = Tool::Brush;
     // `dark` was advertised to MCP clients but never read; a typo looked like success too.
     for params in [json!({"dark": true}), json!({"thme": "classic"}), json!({"tool": "move", "dark": true})] {
         let r = call(&mut app, &ctx, "ui.set", params.clone());
@@ -715,7 +717,7 @@ fn ui_set_rejects_unknown_fields_before_changing_anything() {
         assert!(r["error"].as_str().unwrap().contains("unknown field"), "{r}");
     }
     assert_eq!(app.ui.theme, ThemeKind::StudioLight);
-    assert_eq!(app.ui.tool, Tool::Move, "a rejected call applies none of its fields");
+    assert_eq!(app.ui.tool, Tool::Brush, "a rejected call applies none of its fields");
     // Every field the method reads gets past the check (a bad value is its own error).
     for field in UI_SET_FIELDS {
         let r = call(&mut app, &ctx, "ui.set", json!({ field: null }));
