@@ -1140,7 +1140,7 @@ fn arrange_that_cannot_move_is_a_noop_in_playback() {
     assert!(played.get("failed").is_none(), "{played}");
     assert_eq!(s.active().unwrap().history.past_len(), before + 2, "the no-op adds no history step");
 
-    // The predicate agrees with the command for every layer: top level, above the Background,
+    // The predicate identifies no movement for every layer: top level, above the Background,
     // and inside a group.
     let a = s.execute("layer.new.layer", json!({"name": "A"})).unwrap()["layer"].clone();
     s.execute("layer.select", json!({"layer": a})).unwrap();
@@ -1152,9 +1152,18 @@ fn arrange_that_cannot_move_is_a_noop_in_playback() {
     for id in ids.into_iter().filter(|id| Some(*id) != bg) {
         for (cmd, dir) in cmds {
             let at_end = super::super::ops::arrange_at_end(&s.active().unwrap().doc, id, dir);
+            let history = s.active().unwrap().history.past_len();
             let ran = s.execute(cmd, json!({"layer": id.0}));
-            assert_eq!(at_end, ran.is_err(), "{cmd} on {id:?}: {ran:?}");
-            if ran.is_ok() {
+            if at_end {
+                if matches!(cmd, "layer.arrange.bringToFront" | "layer.arrange.sendToBack") {
+                    assert_eq!(ran.unwrap(), json!({"moved": false}), "{cmd} on {id:?}");
+                } else {
+                    assert!(ran.is_err(), "{cmd} on {id:?}: {ran:?}");
+                }
+                assert_eq!(s.active().unwrap().history.past_len(), history, "a no-op must not add history");
+            } else {
+                ran.unwrap();
+                assert_eq!(s.active().unwrap().history.past_len(), history + 1);
                 s.execute("edit.undo", json!({})).unwrap();
             }
         }
