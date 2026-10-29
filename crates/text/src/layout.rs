@@ -336,6 +336,7 @@ impl Layouter {
                 flow.stop = true;
                 break;
             }
+            if para.merge_hanging_row(out,&line,li,nlines) { continue; }
             let Some(frame) = para.frame_line(&line, li, nlines, slot, flow) else {
                 flow.stop = true;
                 break;
