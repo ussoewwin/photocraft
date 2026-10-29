@@ -234,6 +234,9 @@ fn decode_band(
                 return Err(CodecError::LimitExceeded(format!("a {} byte strip or tile", pref.len)));
             }
             if scratch.len() < pref.len {
+                scratch
+                    .try_reserve_exact(pref.len - scratch.len())
+                    .map_err(|_| CodecError::LimitExceeded(format!("cannot allocate {} bytes for a strip or tile", pref.len)))?;
                 scratch.resize(pref.len, 0);
             }
             let buf = scratch.get_mut(..pref.len).ok_or_else(|| err("scratch buffer"))?;
