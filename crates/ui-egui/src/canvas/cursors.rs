@@ -210,3 +210,6 @@ pub(crate) fn eyedropper_color(app: &mut PhotocraftApp, x: f64, y: f64) -> Optio
 pub(crate) fn composite_color(app: &mut PhotocraftApp, x: f64, y: f64) -> Option<[f32; 3]> {
     sample_color(app, x, y, "all")
 }
+
+pub(crate) fn alt_loads_mixer(tool:Tool,mods:egui::Modifiers)->bool {mods.alt && !mods.ctrl && tool==Tool::MixerBrush}
+pub(crate) fn alt_picks(tool:Tool,mods:egui::Modifiers)->bool {alt_samples(tool,mods)||alt_loads_mixer(tool,mods)}

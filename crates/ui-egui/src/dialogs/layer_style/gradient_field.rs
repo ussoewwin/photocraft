@@ -170,7 +170,7 @@ pub(super) fn row(app: &mut PhotocraftApp, ui: &mut egui::Ui, f: &mut Map<String
         let mut cur = String::new();
         let mut opts: Vec<(String, &str)> = vec![(String::new(), "Custom")];
         opts.extend(names.iter().map(|(id, n)| (id.clone(), n.as_str())));
-        if widgets::dropdown(ui, &format!("fx-gradient-preset-{effect}"), &mut cur, &opts, 180.0) && !cur.is_empty() {
+        if widgets::dropdown(ui, &format!("fx-gradient-preset-{effect}"), "Gradient preset", &mut cur, &opts, 180.0) && !cur.is_empty() {
             apply_preset(app, f, effect, disp, &cur);
             ui.data_mut(|d| d.insert_temp(sel_key, 0usize));
         }
