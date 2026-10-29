@@ -54,6 +54,7 @@ mod tool_input;
 mod transform_controls;
 mod view_xform;
 pub mod wheel_nav;
+pub mod zoom_field;
 pub mod zoom_hold;
 pub mod zoom_levels;
 pub mod zoom_window_fit;

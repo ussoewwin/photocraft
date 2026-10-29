@@ -101,6 +101,7 @@ use canvas::tile_overlay;
 use canvas::tool_cursor;
 pub use canvas::tool_feedback;
 pub use canvas::wheel_nav;
+pub use canvas::zoom_field;
 pub use canvas::zoom_hold;
 pub use canvas::zoom_levels;
 pub use canvas::zoom_window_fit;
