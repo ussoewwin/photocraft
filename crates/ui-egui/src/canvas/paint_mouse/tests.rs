@@ -487,6 +487,44 @@ fn right_stroke_erases_with_pen_pressure_through_the_control_channel_path() {
 }
 
 #[test]
+fn shift_alt_right_through_the_control_channel_respects_the_erase_preference() {
+    // As on the canvas, with the right-erase preference the erase stroke wins over the HUD
+    // for Brush/Eraser; without it, Shift+Alt+right opens the HUD (#6098).
+    let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({"width": 120, "height": 80})).unwrap();
+    app.ui.tool = Tool::Brush;
+    let shift_alt = egui::Modifiers { shift: true, alt: true, ..Default::default() };
+    app.run("prefs.set", json!({"path": "tools.rightClickWithPaintingTools", "value": "erase"})).unwrap();
+    assert!(pointer_secondary(&mut app, &egui::Context::default(), true, shift_alt, [10.0, 10.0]), "the events reach the tool");
+    assert!(app.ui.color_hud.is_none(), "no HUD with the erase preference");
+    assert!(app.secondary_erase, "the down arms the erasing stroke");
+    pointer_secondary(&mut app, &egui::Context::default(), false, shift_alt, [10.0, 10.0]);
+    // With the default preference the same gesture opens the HUD instead.
+    app.run("prefs.set", json!({"path": "tools.rightClickWithPaintingTools", "value": "brushPicker"})).unwrap();
+    assert!(!pointer_secondary(&mut app, &egui::Context::default(), true, shift_alt, [10.0, 10.0]));
+    assert!(app.ui.color_hud.is_some_and(|h| !h.hold), "the control-channel HUD opened");
+}
+
+#[test]
+fn a_control_channel_up_closes_the_hud_without_repeating_its_modifiers() {
+    // Each control-channel request carries its own modifiers, so an Up sent after the keys
+    // are released arrives without Shift+Alt: it must still close the HUD it opened, or the
+    // HUD stays up and keeps picking from the hover (#6098 review).
+    let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({"width": 120, "height": 80})).unwrap();
+    app.ui.tool = Tool::Brush;
+    let shift_alt = egui::Modifiers { shift: true, alt: true, ..Default::default() };
+    assert!(!pointer_secondary(&mut app, &egui::Context::default(), true, shift_alt, [10.0, 10.0]));
+    assert!(app.ui.color_hud.is_some_and(|h| !h.hold), "the control-channel HUD opened");
+    assert!(!pointer_secondary(&mut app, &egui::Context::default(), false, egui::Modifiers::NONE, [10.0, 10.0]));
+    assert!(app.ui.color_hud.is_none(), "the Up closes it whatever the modifiers say");
+    // A real-mouse HUD belongs to the canvas gesture and waits for its own button release.
+    crate::color_hud::open(&mut app, [10.0, 10.0], true);
+    pointer_secondary(&mut app, &egui::Context::default(), false, egui::Modifiers::NONE, [10.0, 10.0]);
+    assert!(app.ui.color_hud.is_some_and(|h| h.hold), "a held HUD is left to the canvas");
+}
+
+#[test]
 fn the_brush_is_a_per_tool_option_that_presets_keep() {
     let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
     app.run("file.new", json!({"width": 64, "height": 64})).unwrap();
