@@ -52,7 +52,12 @@ pub fn pen_down(app: &mut PhotocraftApp, x: f64, y: f64, shift: bool) {
     {
         app.ui.pen = Some(resumed);
     }
+    let owner = capture_pen_owner(app);
     let pen = app.ui.pen.get_or_insert_with(PenPath::default);
+    if pen.owner.is_none() {
+        pen.owner = owner;
+    }
+    pen.commit_failed = false;
     pen.adjusting_in = false;
     pen.last_pointer = Some([x, y]);
     pen.reposition = false;
@@ -92,6 +97,7 @@ pub fn pen_down(app: &mut PhotocraftApp, x: f64, y: f64, shift: bool) {
 /// Pen drag: pull out the handles of the anchor just placed. ⇧ (read live, as it is held)
 /// turns the handle to the nearest 45° direction from its anchor.
 pub fn pen_move(app: &mut PhotocraftApp, x: f64, y: f64, shift: bool) {
+    cancel_stale_pen(app);
     if let Some(pen) = app.ui.pen.as_mut()
         && pen.dragging
     {
@@ -132,6 +138,9 @@ pub(super) fn shift_45(origin: [f64; 2], p: [f64; 2], shift: bool) -> [f64; 2] {
 /// clicking the first anchor commits the path. Therefore Cmd/Ctrl+Z must consume one
 /// knot rather than undoing an unrelated, already committed document operation.
 pub fn pen_undo_last_point(app: &mut PhotocraftApp) -> bool {
+    if cancel_stale_pen(app) {
+        return true;
+    }
     if !cancel_stale(app) {
         return false;
     }
@@ -169,6 +178,7 @@ pub fn pen_undo_last_point(app: &mut PhotocraftApp) -> bool {
 }
 
 pub fn pen_up(app: &mut PhotocraftApp) {
+    cancel_stale_pen(app);
     let jitter = 2.0 / f64::from(app.point_zoom().max(0.01));
     let Some(pen) = app.ui.pen.as_mut() else { return };
     pen.dragging = false;
@@ -191,6 +201,7 @@ pub fn pen_up(app: &mut PhotocraftApp) {
 /// ⌥/Alt during a Pen drag breaks the pair of handles being pulled out: from then on only the
 /// outgoing handle follows the pointer and the incoming curve stays as it is (#3306).
 pub fn pen_break_handle(app: &mut PhotocraftApp) {
+    cancel_stale_pen(app);
     let Some(pen) = app.ui.pen.as_mut().filter(|p| p.dragging && !p.adjusting_last) else { return };
     let Some(i) = pen.knots.len().checked_sub(1) else { return };
     if !pen.unlinked.contains(&i) {
@@ -202,6 +213,7 @@ pub fn pen_break_handle(app: &mut PhotocraftApp) {
 /// ⌥/Alt-press on one of the last anchor's handles while drawing grabs that handle alone: the
 /// drag turns it and the other handle stays put (#3306, #6077). False when the press misses both.
 pub fn pen_grab_handle(app: &mut PhotocraftApp, x: f64, y: f64) -> bool {
+    cancel_stale_pen(app);
     let tol = 6.0 / f64::from(app.point_zoom().max(0.01));
     let Some(pen) = app.ui.pen.as_mut() else { return false };
     let Some((i, k)) = pen.knots.len().checked_sub(1).zip(pen.knots.last()) else { return false };
@@ -299,66 +311,49 @@ pub(crate) fn pen_replace(app: &mut PhotocraftApp, path: &Path) {
     }
 }
 
-/// Preserve a foreign document's draft as its Work Path before another document can edit it.
-/// A failed commit retains the draft and blocks the caller until it can be retried.
 pub fn cancel_stale(app: &mut PhotocraftApp) -> bool {
-    let active = app.session.active().map(|st| st.doc.id);
-    if app.ui.pen.is_none() {
-        app.ui.pen_doc = None;
-        return true;
-    }
-    let Some(owner) = app.ui.pen_doc.filter(|d| Some(*d) != active) else { return true };
-    if let Some(index) = app.session.documents().iter().position(|d| d.doc.id == owner) {
-        let Some(mut pen) = app.ui.pen.clone() else { return true };
-        if pen.curvature {
-            curvature_refresh(&mut pen, false);
-        }
-        let active = app.session.active_index();
-        app.session.set_active(index);
-        // Bypass shell targets and sync_views: both belong to the newly active document.
-        let result = app.session.execute("path.set", json!({"name": "work", "op": "combine", "path": pen_to_json(&pen, false)}));
-        if let Some(index) = active {
-            app.session.set_active(index);
-        }
-        if let Err(e) = result {
-            app.ui.status = e.to_string();
-            app.ui.status_error = true;
-            return false;
-        }
-    }
-    app.ui.pen = None;
-    app.ui.pen_doc = None;
-    if app.ui.direct_selection.target == Some(crate::direct_select::PathRef::Pen) {
-        app.ui.direct_selection = Default::default();
-    }
-    true
+    cancel_stale_pen(app);
+    !app.ui.pen.as_ref().is_some_and(|p| p.commit_failed && p.owner.as_ref().is_some_and(|o| !o.valid(app)))
 }
 
-/// Finish the pen path: a work path (Path mode) or a new shape layer (Shape mode). A commit the
-/// document refuses (a locked shape layer to add to…) keeps the draft, so nothing drawn is lost
-/// and it can be committed again; `false` then.
 pub fn pen_commit(app: &mut PhotocraftApp, closed: bool) -> bool {
-    // The control channel is drained after `sync_views`, so a document switch in this frame has
-    // not been seen yet: never commit the path into the document it was not drawn on.
-    if !cancel_stale(app) {
-        return false;
-    }
-    let Some(draft) = app.ui.pen.take() else { return true };
-    let doc = app.ui.pen_doc.take();
-    let mut pen = draft.clone();
-    if pen.curvature {
-        curvature_refresh(&mut pen, closed);
-    }
-    if !commit_path(app, &pen, closed) {
-        app.ui.pen = Some(draft);
-        app.ui.pen_doc = doc;
-        return false;
-    }
+    try_pen_commit(app, closed).is_ok()
+}
+
+/// Finish the draft as [`pen_commit`] does. On failure the draft stays as it was, marked
+/// `commit_failed`, and the error is shown and returned.
+pub(super) fn try_pen_commit(app: &mut PhotocraftApp, closed: bool) -> Result<(), String> {
+    cancel_stale_pen(app);
+    let Some(mut pen) = app.ui.pen.take() else { return Ok(()) };
     if app.ui.direct_selection.target == Some(crate::direct_select::PathRef::Pen) {
         // Its anchors are no longer the Pen's: the committed path is another path.
         app.ui.direct_selection = Default::default();
     }
-    true
+    let original = fold_close(&pen)
+        .map(|mut folded| {
+            folded.dragging = false;
+            folded.adjusting_last = false;
+            folded
+        })
+        .unwrap_or_else(|| pen.clone());
+    if pen.curvature {
+        curvature_refresh(&mut pen, closed);
+    }
+    if let Err(e) = commit_path(app, &pen, closed) {
+        app.ui.pen = Some(PenPath { commit_failed: true, ..original });
+        app.ui.status = e.clone();
+        app.ui.status_error = true;
+        return Err(e);
+    }
+    Ok(())
+}
+
+/// Another tool finishes the Pen's draft, once: a draft whose commit failed waits for the user.
+pub(crate) fn finish_pen_if_left(app: &mut PhotocraftApp) {
+    cancel_stale_pen(app);
+    if app.ui.pen.as_ref().is_some_and(|p| !p.commit_failed && !p.drawn_with(app.ui.tool)) {
+        pen_commit(app, false);
+    }
 }
 
 /// End the Pen path for good (Esc, or switching to another tool): commit it, and when the
@@ -397,7 +392,7 @@ pub fn pen_end(app: &mut PhotocraftApp) {
 /// layer; in Path mode a subpath of the targeted vector mask, else of the selected path or a new
 /// work path. An added subpath takes the options bar's Path Operation (#1397). `false` when the
 /// document refused it, with the reason in the status bar.
-fn commit_path(app: &mut PhotocraftApp, pen: &PenPath, closed: bool) -> bool {
+fn commit_path_current(app: &mut PhotocraftApp, pen: &PenPath, closed: bool) -> bool {
     if pen.knots.len() < 2 {
         return true;
     }
@@ -684,6 +679,16 @@ pub(crate) fn freeform_locked_shape(app: &PhotocraftApp) -> bool {
 /// as the Pen does. Releasing on the start point closes the path; a click draws nothing. The
 /// points at indices `straight` were ⌥-clicked: the segment into each one stays straight.
 pub fn freeform_finish(app: &mut PhotocraftApp, points: &[[f64; 3]], straight: &[usize]) {
+    let Some(owner) = capture_pen_owner(app) else { return };
+    freeform_finish_owned(app, points, straight, owner);
+}
+
+/// [`freeform_finish`] to the destination captured when the trace began. A trace of another
+/// document commits nothing; a failed commit keeps the fitted path as a draft.
+pub(crate) fn freeform_finish_owned(app: &mut PhotocraftApp, points: &[[f64; 3]], straight: &[usize], owner: PenOwner) {
+    if !owner.valid(app) {
+        return;
+    }
     let trace: Vec<[f64; 2]> = points.iter().map(|p| [p[0], p[1]]).collect();
     let (Some(first), Some(last)) = (trace.first(), trace.last()) else { return };
     let tol = 6.0 / app.point_zoom().max(0.01) as f64;
@@ -698,7 +703,13 @@ pub fn freeform_finish(app: &mut PhotocraftApp, points: &[[f64; 3]], straight: &
     } else {
         fit_with_straight_segments(&trace, straight, fit, closed.then_some(tol))
     };
-    commit_path(app, &pen.0, pen.1);
+    let (mut pen, closed) = pen;
+    pen.owner = Some(owner);
+    if let Err(e) = commit_path(app, &pen, closed) {
+        app.ui.pen = Some(PenPath { commit_failed: true, ..pen });
+        app.ui.status = e;
+        app.ui.status_error = true;
+    }
 }
 
 fn knot_points(k: &photocraft_doc::Knot) -> [[f64; 2]; 3] {
@@ -755,4 +766,38 @@ fn fit_with_straight_segments(trace: &[[f64; 2]], straight: &[usize], fit: f64, 
     corners.sort_unstable();
     corners.dedup();
     (PenPath { knots, unlinked: corners, ..Default::default() }, closed)
+}
+
+use super::{PenOwner, cancel_stale_pen, capture_pen_owner};
+
+fn commit_path(app: &mut PhotocraftApp, pen: &PenPath, closed: bool) -> Result<(), String> {
+    let Some(owner) = pen.owner.as_ref().filter(|o| o.valid(app)) else { return Err("Pen draft target is stale; no path was changed".into()) };
+    let options = std::mem::replace(&mut app.ui.tool_options, owner.options.clone());
+    let vector_mask = std::mem::replace(&mut app.ui.vector_mask_target, owner.vector_mask);
+    app.ui.selected_path = match &owner.target {
+        super::PenTarget::Path { name, append } => append.then(|| name.clone()),
+        _ => None,
+    };
+    if let Some(st) = app.session.active_mut() {
+        st.active_layer = owner.layer;
+    }
+    let foreground = std::mem::replace(&mut app.session.tools.foreground, owner.foreground);
+    let background = std::mem::replace(&mut app.session.tools.background, owner.background);
+    let channel = app.session.active().map(|st| st.channel_view.target);
+    if let Some(st) = app.session.active_mut() {
+        st.channel_view.target = if matches!(owner.target, super::PenTarget::VectorMask(_)) {
+            photocraft_engine::channel_cmds::ChannelTarget::VectorMask
+        } else {
+            photocraft_engine::channel_cmds::ChannelTarget::Composite
+        };
+    }
+    let result = commit_path_current(app, pen, closed);
+    if let (Some(st), Some(channel)) = (app.session.active_mut(), channel) {
+        st.channel_view.target = channel;
+    }
+    app.session.tools.foreground = foreground;
+    app.session.tools.background = background;
+    app.ui.tool_options = options;
+    app.ui.vector_mask_target = vector_mask;
+    if result { Ok(()) } else { Err(app.ui.status.clone()) }
 }

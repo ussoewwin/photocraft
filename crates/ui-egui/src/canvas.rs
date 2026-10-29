@@ -1656,13 +1656,14 @@ fn finish_canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, view: &mut Vie
     // Scrollbars (scrollbars.rs): drawn over the canvas edges, they take the pointer there.
     let t0 = crate::gpu_canvas::now_ms();
     let before = view.center;
-    let mode=app.session.prefs().interface.scrollbar_visibility;
-    let visible=match mode {
-      photocraft_engine::prefs::ScrollbarVisibility::Hidden=>false,
-      photocraft_engine::prefs::ScrollbarVisibility::AutoHide=>ui.rect_contains_pointer(rect)||ui.input(|i|i.pointer.any_down()),
-      _=>true,
+    let mode = app.session.prefs().interface.scrollbar_visibility;
+    let visible = match mode {
+        photocraft_engine::prefs::ScrollbarVisibility::Hidden => false,
+        photocraft_engine::prefs::ScrollbarVisibility::AutoHide => ui.rect_contains_pointer(rect) || ui.input(|i| i.pointer.any_down()),
+        _ => true,
     };
-    let over_bars = visible && app.ui.view.shows_scrollbars()
+    let over_bars = visible
+        && app.ui.view.shows_scrollbars()
         && crate::scrollbars::show(ui, rect, view, flip, aspect, app.session.prefs().tools.overscroll, egui::Id::unique(("pc-canvas", idx)));
     ctx.data_mut(|d| d.insert_temp(bars_id, over_bars));
     if view.center != before {
@@ -1964,7 +1965,7 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
     }
     if middle_rotate && response.dragged() && !stroke_dismissal {
         if let Some(pointer) = response.interact_pointer_pos()
-            && crate::rotate_view::middle_drag(view, &xf, pointer, response.drag_delta().x)
+            && crate::rotate_view::middle_drag(&mut view, &xf, pointer, response.drag_delta().x)
         {
             ctx.request_repaint();
         }
@@ -2632,3 +2633,12 @@ mod lasso_preview_tests {
         assert_eq!((dashes, solid), (0, 1), "Magnetic Lasso: the traced border is solid");
     }
 }
+
+pub(crate) use drag::cancel_stale_vector_drag;
+
+#[cfg(test)]
+#[path = "pen_gesture_owner_tests.rs"]
+mod pen_gesture_owner_tests;
+#[cfg(test)]
+#[path = "pen_path_visual_tests.rs"]
+mod pen_path_visual_tests;

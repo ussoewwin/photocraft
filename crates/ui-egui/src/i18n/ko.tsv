@@ -113,6 +113,8 @@
 # Art History Brush (#213).
 
 # Egui 0.37 migration controls (Aspect Ratio, Category, Color Table, Gamma, Interpolation, Profile, Target, Units, Demosaic)
+# Smart Filter row actions (#1265)
+
 	Mask Options…	마스크 옵션…
 	Layer Mask Display Options…	레이어 마스크 표시 옵션…
 	Channel Color	채널 색상
@@ -1200,7 +1202,6 @@
 	Dots	점
 	Drag a rectangle around the object	오브젝트를 둘러싸는 사각형을 드래그하세요
 	Drag on the image to add a constraint; Shift for horizontal/vertical; right-click a constraint to change or delete it.	이미지 위에서 드래그하여 제약 조건 추가; Shift 키로 수평/수직 유지; 제약 조건을 오른쪽 클릭하여 변경 또는 삭제.
-	Drag to move the active shape's path or the Work Path	드래그하여 활성 모양의 패스 또는 작업 패스 이동
 	Click: select anchor · Drag: move anchor, handle or segment · {shift}-click: add · {alt}-click: whole subpath	클릭: 기준점 선택 · 드래그: 기준점, 핸들 또는 세그먼트 이동 · {shift}-클릭: 추가 · {alt}-클릭: 하위 패스 전체
 	Draw with the Pen tool (P) or make a work path from a selection.	펜 도구(P)로 그리거나 선택 영역에서 작업 패스를 만드세요.
 	Drop an image or PSD anywhere to open it.	이미지나 PSD를 아무 곳에나 놓아 여세요.
@@ -1919,11 +1920,9 @@
 	Slice Select Tool	분할 영역 선택 도구
 	Slice Tool	분할 영역 도구
 	Smart Filters	스마트 필터
-# Smart Filter row actions (#1265)
 	Move Up	위로 이동
 	Move Down	아래로 이동
 	Delete Smart Filter	스마트 필터 삭제
-
 	Smudge Tool	손가락 도구
 	Soft	부드럽게
 	Soften	부드럽게 하기
@@ -3645,8 +3644,6 @@ curves	Smooth	매끄럽게
 	The fastest and the softest, with colour fringing on fine detail.	가장 빠르고 가장 부드러우며, 미세한 디테일에 색 번짐이 있음.
 	“{name}” already exists. Replace it?	“{name}”이(가) 이미 있습니다. 대치하시겠습니까?
 	The name in the save dialog was “{name}”.	저장 대화상자에 입력한 이름: “{name}”
-	Move Up	위로 이동
-	Move Down	아래로 이동
 	Previous Brush	이전 브러시
 	Next Brush	다음 브러시
 	First Brush	첫 번째 브러시
@@ -3751,3 +3748,4 @@ curves	Smooth	매끄럽게
 @plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	{group}에서 가져온 모양 수: {n}
 	Scrollbar Visibility	스크롤 막대 표시
 	Hidden	숨김
+	Drag to move the selected path	드래그하여 선택한 패스 이동

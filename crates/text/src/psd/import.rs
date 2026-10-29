@@ -298,7 +298,9 @@ pub fn text_layer_from_tysh(data: &[u8], dpi: f32) -> Option<TextLayer> {
             layer.transform.m = corrected;
         }
     }
-    if !super::usable_tysh_transform(&layer.transform.m) {return None;}
+    if !super::usable_tysh_transform(&layer.transform.m) {
+        return None;
+    }
     layer.sync_summary();
     Some(layer)
 }
@@ -359,7 +361,9 @@ fn legacy_point_origin(t: &TySh) -> Option<[f64; 2]> {
         return None;
     }
     let shifted = [a * bounds[0] + c * bounds[1] + e, b * bounds[0] + d * bounds[1] + f];
-    if !shifted.iter().all(|v|v.is_finite()) {return None;}
+    if !shifted.iter().all(|v| v.is_finite()) {
+        return None;
+    }
     let origin_distance = e.abs().max(f.abs());
     let shifted_distance = shifted[0].abs().max(shifted[1].abs());
     // A local bounding-box origin in the thousands and a transform origin beyond a normal canvas
@@ -795,8 +799,8 @@ pub const OPENTYPE_KEYS: [(&str, &str); 8] = [
 #[cfg(test)]
 mod tysh_geometry_tests {
     use super::*;
-use crate::psd::{usable_tysh_transform, write_tysh};
-use photocraft_psd::descriptor::UnicodeString;
+    use crate::psd::{usable_tysh_transform, write_tysh};
+    use photocraft_psd::descriptor::UnicodeString;
 
     #[test]
     fn overflowing_legacy_origin_does_not_escape_as_a_nonfinite_transform() {

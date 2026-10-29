@@ -89,6 +89,13 @@ pub struct PenPath {
     /// Curvature Pen: the anchor being dragged.
     #[serde(skip)]
     pub moving: Option<usize>,
+    /// The document and target the first anchor was placed on; a draft without one (restored
+    /// from settings) is never committed.
+    #[serde(skip)]
+    pub(crate) owner: Option<PenOwner>,
+    /// The last commit failed: the draft stays as it was and isn't retried on its own.
+    #[serde(skip)]
+    pub(crate) commit_failed: bool,
     /// Drawing carries on from an endpoint of this open subpath of a document path (#6593): the
     /// commit replaces that subpath instead of adding one.
     #[serde(default)]
@@ -133,3 +140,131 @@ mod pen_path_ops_tests;
 mod paint_tests;
 
 pub(crate) use pen::freeform_locked_shape;
+
+/// Where a Pen draft goes, captured at its first anchor.
+#[derive(Clone, Debug)]
+pub(crate) struct PenOwner {
+    document: DocId,
+    revision: u64,
+    source: Weak<Document>,
+    target: PenTarget,
+    options: ToolOptions,
+    layer: Option<photocraft_doc::LayerId>,
+    vector_mask: bool,
+    foreground: [f32; 4],
+    background: [f32; 4],
+}
+
+impl PartialEq for PenOwner {
+    fn eq(&self, other: &Self) -> bool {
+        self.document == other.document && self.revision == other.revision && self.source.ptr_eq(&other.source) && self.target == other.target
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+enum PenTarget {
+    /// A new shape layer, with the paint chosen when drawing began.
+    Shape {
+        fill: Value,
+        stroke: Value,
+        open_stroke: Value,
+    },
+    VectorMask(u64),
+    /// The work path or a saved path; `append` adds the draft as a subpath (#4721).
+    Path {
+        name: String,
+        append: bool,
+    },
+}
+
+/// Where the Pen draws now: a new shape layer (Shape mode), else the work or saved path selected
+/// in the Paths panel (the new path joins it, #4721), else the targeted vector mask, else a new
+/// Work Path that replaces the old one.
+pub(crate) fn capture_pen_owner(app: &PhotocraftApp) -> Option<PenOwner> {
+    let st = app.session.active()?;
+    let target = if app.ui.tool_options.vector_mode == "shape" {
+        let mut open_stroke = app.ui.tool_options.shape_stroke.params();
+        open_stroke["width"] = json!(app.ui.tool_options.stroke_width.max(1.0));
+        open_stroke["color"] = json!(app.session.tools.foreground);
+        PenTarget::Shape { fill: fill_param(app), stroke: stroke_param(app), open_stroke }
+    } else if let Some((name, _)) = selected_document_geometry(app) {
+        PenTarget::Path { name, append: true }
+    } else if let Some(id) = targeted_vector_mask_id(app) {
+        PenTarget::VectorMask(id)
+    } else {
+        PenTarget::Path { name: "work".into(), append: false }
+    };
+    Some(PenOwner {
+        document: st.doc.id,
+        revision: st.revision,
+        source: Arc::downgrade(&st.doc),
+        target,
+        options: app.ui.tool_options.clone(),
+        layer: st.active_layer,
+        vector_mask: app.ui.vector_mask_target,
+        foreground: app.session.tools.foreground,
+        background: app.session.tools.background,
+    })
+}
+
+impl PenOwner {
+    fn valid(&self, app: &PhotocraftApp) -> bool {
+        app.session.active().is_some_and(|st| st.doc.id == self.document && st.revision == self.revision && self.source.ptr_eq(&Arc::downgrade(&st.doc)))
+    }
+}
+
+use photocraft_doc::DocId;
+use std::sync::{Arc, Weak};
+
+use path_ops::{selected_document_geometry, targeted_vector_mask_id};
+pub(crate) use pen::{finish_pen_if_left, freeform_finish_owned};
+use shapes::{fill_param, stroke_param};
+
+/// Commit a valid source-owned draft on a tab switch; otherwise cancel with an actionable diagnostic.
+pub(crate) fn cancel_stale_pen(app: &mut PhotocraftApp) -> bool {
+    let Some(pen) = app.ui.pen.as_ref() else { return false };
+    if pen.owner.as_ref().is_some_and(|o| o.valid(app)) {
+        return false;
+    }
+    if pen.commit_failed {
+        return false;
+    }
+    let owner = pen.owner.clone();
+    if let Some(owner) = owner.as_ref() {
+        let index = app
+            .session
+            .documents()
+            .iter()
+            .position(|st| st.doc.id == owner.document && st.revision == owner.revision && owner.source.ptr_eq(&Arc::downgrade(&st.doc)));
+        if let Some(index) = index {
+            let active = app.session.active_index();
+            let saved_ui = app.ui.clone();
+            let draft = app.ui.pen.take();
+            app.session.set_active(index);
+            app.ui.pen = draft;
+            // This source matches the immutable owner; normal commit validation still applies.
+            let result = pen::try_pen_commit(app, false);
+            if let Some(active) = active {
+                app.session.set_active(active);
+            }
+            let failed = app.ui.pen.take();
+            let message = app.ui.status.clone();
+            app.ui = saved_ui;
+            app.ui.pen = if result.is_ok() { None } else { failed };
+            if result.is_err() {
+                app.ui.status = message;
+                app.ui.status_error = true;
+            }
+            app.ui.pen_doc = app.ui.pen.as_ref().and_then(|p| p.owner.as_ref().map(|o| o.document));
+            return true;
+        }
+    }
+    app.ui.pen = None;
+    app.ui.pen_doc = None;
+    if app.ui.direct_selection.target == Some(crate::direct_select::PathRef::Pen) {
+        app.ui.direct_selection = Default::default();
+    }
+    app.ui.status = "Pen draft cancelled because its source document or path changed; newer work was preserved".into();
+    app.ui.status_error = true;
+    true
+}

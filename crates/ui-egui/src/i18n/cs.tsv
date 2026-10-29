@@ -148,6 +148,8 @@
 # Art History Brush (#213).
 
 # Egui 0.37 migration controls (Aspect Ratio, Category, Color Table, Gamma, Interpolation, Profile, Target, Units, Demosaic)
+# Smart Filter row actions (#1265)
+
 	Mask Options…	Možnosti masky…
 	Layer Mask Display Options…	Možnosti zobrazení masky vrstvy…
 	Channel Color	Barva kanálu
@@ -1234,7 +1236,6 @@
 	Dots	Tečky
 	Drag a rectangle around the object	Táhněte obdélník kolem objektu
 	Drag on the image to add a constraint; Shift for horizontal/vertical; right-click a constraint to change or delete it.	Tažením v obraze přidáte omezení; Shift pro vodorovné/svislé; pravým kliknutím na omezení ho změníte nebo odstraníte.
-	Drag to move the active shape's path or the Work Path	Tažením přesunete cestu aktivního tvaru nebo pracovní cestu
 	Click: select anchor · Drag: move anchor, handle or segment · {shift}-click: add · {alt}-click: whole subpath	Klik: vybrat bod · Tažení: přesunout bod, úchyt nebo segment · {shift}+klik: přidat · {alt}+klik: celá podcesta
 	Draw with the Pen tool (P) or make a work path from a selection.	Kreslete nástrojem pero (P) nebo vytvořte pracovní cestu z výběru.
 	Drop an image or PSD anywhere to open it.	Přetáhněte sem obrázek nebo PSD a otevře se.
@@ -1959,11 +1960,9 @@
 	Slice Select Tool	Nástroj výběr řezu
 	Slice Tool	Nástroj řez
 	Smart Filters	Chytré filtry
-# Smart Filter row actions (#1265)
 	Move Up	Přesunout nahoru
 	Move Down	Přesunout dolů
 	Delete Smart Filter	Odstranit chytrý filtr
-
 	Smudge Tool	Nástroj rozmazání
 	Soft	Měkké
 	Soften	Změkčení
@@ -4179,8 +4178,6 @@ navigator	Zoom	Zvětšení
 layers	Fill	Krytí výplně
 layers	Fill:	Krytí výplně:
 cameraRaw	Dehaze	Odstranění oparu
-	Move Up	Přesunout nahoru
-	Move Down	Přesunout dolů
 	Previous Brush	Předchozí štětec
 	Next Brush	Další štětec
 	First Brush	První štětec
@@ -4277,3 +4274,4 @@ cameraRaw	Dehaze	Odstranění oparu
 @plural	Imported {n} shape from {file}|Imported {n} shapes from {file}	Počet tvarů importovaných z {file}: {n}|Počet tvarů importovaných z {file}: {n}|Počet tvarů importovaných z {file}: {n}
 @plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	Počet tvarů importovaných z {group}: {n}|Počet tvarů importovaných z {group}: {n}|Počet tvarů importovaných z {group}: {n}
 	Scrollbar Visibility	Viditelnost posuvníků
+	Drag to move the selected path	Tažením přesunete vybranou cestu

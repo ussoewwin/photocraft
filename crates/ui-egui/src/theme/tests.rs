@@ -34,7 +34,7 @@ fn hidden_scrollbars_keep_wheel_scrolling_available() {
                     ui.label(format!("Row {i}"));
                 }
             });
-            *offset = area.state.offset.y;
+            *offset = area.state.clamped_offset().y;
         },
         0.0,
     );
@@ -42,6 +42,7 @@ fn hidden_scrollbars_keep_wheel_scrolling_available() {
     h.run();
     h.hover_at(egui::pos2(30.0, 40.0));
     h.event(egui::Event::MouseWheel {
+        source: egui::MouseWheelSource::Unknown,
         unit: egui::MouseWheelUnit::Line,
         delta: egui::vec2(0.0, -3.0),
         phase: egui::TouchPhase::Move,

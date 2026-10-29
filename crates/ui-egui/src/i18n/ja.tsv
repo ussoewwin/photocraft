@@ -142,6 +142,8 @@
 
 # Pen draft after a refused commit (#7648)
 # Art History Brush (#213).
+# Smart Filter row actions (#1265)
+
 	Mask Options…	マスクオプション…
 	Layer Mask Display Options…	レイヤーマスクの表示オプション…
 	Channel Color	チャンネルカラー
@@ -1223,7 +1225,6 @@
 	Dots	ドット
 	Drag a rectangle around the object	オブジェクトを囲む矩形をドラッグ
 	Drag on the image to add a constraint; Shift for horizontal/vertical; right-click a constraint to change or delete it.	画像上をドラッグして制約を追加。Shift で水平/垂直、制約を右クリックで変更・削除。
-	Drag to move the active shape's path or the Work Path	ドラッグして、アクティブなシェイプのパスまたは作業用パスを移動
 	Click: select anchor · Drag: move anchor, handle or segment · {shift}-click: add · {alt}-click: whole subpath	クリック: アンカーポイントを選択 · ドラッグ: ポイント、ハンドル、セグメントを移動 · {shift}+クリック: 追加 · {alt}+クリック: サブパス全体
 	Draw with the Pen tool (P) or make a work path from a selection.	ペンツール(P)で描くか、選択範囲から作業用パスを作成します。
 	Drop an image or PSD anywhere to open it.	画像や PSD をここにドロップすると開きます。
@@ -1943,11 +1944,9 @@
 	Slice Select Tool	スライス選択ツール
 	Slice Tool	スライスツール
 	Smart Filters	スマートフィルター
-# Smart Filter row actions (#1265)
 	Move Up	上へ移動
 	Move Down	下へ移動
 	Delete Smart Filter	スマートフィルターを削除
-
 	Smudge Tool	指先ツール
 	Soft	ソフト
 	Soften	ぼかし
@@ -4111,8 +4110,6 @@ curves	Smooth	スムーズ
 	The fastest and the softest, with colour fringing on fine detail.	最も高速で最も柔らかく、細部に色にじみが出る。
 	“{name}” already exists. Replace it?	「{name}」は既に存在します。置き換えますか？
 	The name in the save dialog was “{name}”.	保存ダイアログで指定した名前は「{name}」でした。
-	Move Up	上へ移動
-	Move Down	下へ移動
 	Previous Brush	前のブラシ
 	Next Brush	次のブラシ
 	First Brush	最初のブラシ
@@ -4207,3 +4204,4 @@ curves	Smooth	スムーズ
 	Choose a custom shape file (.csh).	カスタムシェイプファイル (.csh) を選択してください。
 @plural	Imported {n} shape from {file}|Imported {n} shapes from {file}	{file} から読み込んだシェイプ数: {n}
 @plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	{group} から読み込んだシェイプ数: {n}
+	Drag to move the selected path	ドラッグして選択したパスを移動

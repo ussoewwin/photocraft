@@ -78,12 +78,50 @@ fn all_shape_tools_and_open_pen_use_the_complete_stroke_defaults() {
         a.run("edit.redo", json!({})).unwrap();
         assert_eq!(a.run("shape.info", json!({})).unwrap(), info);
         a.ui.tool_options.vector_mode = "shape".into();
-        a.ui.pen = Some(PenPath { knots: vec![[[30.0, 40.0]; 3], [[80.0, 40.0]; 3]], ..Default::default() });
+        a.ui.pen = Some(PenPath { knots: vec![[[30.0, 40.0]; 3], [[80.0, 40.0]; 3]], owner: capture_pen_owner(&a), ..Default::default() });
         pen_commit(&mut a, false);
         let open = a.run("shape.info", json!({})).unwrap();
         assert_eq!(open["stroke"]["dashes"], info["stroke"]["dashes"]);
         assert_eq!(open["path"]["subpaths"][0]["closed"], false);
     }
+}
+
+#[test]
+fn freeform_straight_segments_keep_the_captured_saved_path_and_reject_a_foreign_document() {
+    let mut app = app();
+    app.ui.tool = Tool::FreeformPen;
+    let seed = json!({"subpaths":[{"knots":[[20,20],[120,20]]}]});
+    for name in ["work", "Saved drawing"] {
+        app.run("path.set", json!({"name": name, "path": seed})).unwrap();
+    }
+    app.ui.selected_path = Some("Saved drawing".into());
+    let owner = capture_pen_owner(&app).unwrap();
+    let original = app.session.active().unwrap().doc.clone();
+    let n = app.session.active().unwrap().history.past_len();
+    let points = [[20.0, 60.0, 1.0], [60.0, 60.0, 1.0], [100.0, 80.0, 1.0], [140.0, 80.0, 1.0]];
+    app.ui.selected_path = Some("work".into());
+    app.ui.tool_options.vector_mode = "shape".into();
+    freeform_finish_owned(&mut app, &points, &[1, 3], owner);
+    let st = app.session.active().unwrap();
+    assert_eq!(st.doc.work_path, original.work_path);
+    let saved = &st.doc.paths.iter().find(|p| p.name == "Saved drawing").unwrap().path;
+    assert_eq!(saved.subpaths[0], original.paths[0].path.subpaths[0]);
+    assert_eq!(saved.subpaths.len(), 2);
+    let knots = &saved.subpaths[1].knots;
+    assert_eq!(knots.len(), 4);
+    for (a, b) in [(0, 1), (2, 3)] {
+        assert_eq!(knots[a].out_ctrl, knots[a].anchor, "straight segment starts at its anchor");
+        assert_eq!(knots[b].in_ctrl, knots[b].anchor, "straight segment ends at its anchor");
+    }
+    assert_eq!(st.history.past_len(), n + 1);
+    assert!(app.ui.pen.is_none());
+    app.ui.tool_options.vector_mode = "path".into();
+    let owner = capture_pen_owner(&app).unwrap();
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let (source, n) = (app.session.active().unwrap().doc.clone(), app.session.active().unwrap().history.past_len());
+    freeform_finish_owned(&mut app, &points, &[1, 3], owner);
+    assert!(Arc::ptr_eq(&source, &app.session.active().unwrap().doc));
+    assert_eq!(app.session.active().unwrap().history.past_len(), n);
 }
 
 fn app() -> PhotocraftApp {
@@ -119,6 +157,24 @@ fn paths_context_menu_uses_the_clicked_row_and_dispatches_commands() {
     let first = path_rows(doc, None).into_iter().find(|r| r.name == "First").unwrap();
     let (_, _, duplicate) = path_context_actions(&first, doc, None).into_iter().find(|(_, id, _)| *id == "path.set").unwrap();
     assert_eq!(duplicate["name"], "First copy 2", "duplicate must not overwrite an existing path");
+}
+
+#[test]
+fn failed_freeform_straight_segment_commit_keeps_its_owned_fitted_draft() {
+    let mut app = app();
+    app.ui.tool = Tool::FreeformPen;
+    let owner = capture_pen_owner(&app).unwrap();
+    let (source, n) = (app.session.active().unwrap().doc.clone(), app.session.active().unwrap().history.past_len());
+    let points = [[20.0, 60.0, 1.0], [1e40, 60.0, 1.0], [140.0, 80.0, 1.0]];
+    freeform_finish_owned(&mut app, &points, &[1, 2], owner.clone());
+    let pen = app.ui.pen.as_ref().expect("invalid fitted geometry must remain available after its failed commit");
+    assert!(pen.commit_failed);
+    assert_eq!(pen.owner.as_ref(), Some(&owner));
+    assert!(owner.valid(&app));
+    assert_eq!(pen.knots.len(), 3);
+    assert_eq!(pen.knots[1], [[1e40, 60.0]; 3]);
+    assert!(Arc::ptr_eq(&source, &app.session.active().unwrap().doc));
+    assert_eq!(app.session.active().unwrap().history.past_len(), n);
 }
 
 #[test]
@@ -329,7 +385,7 @@ fn show_target_path_and_extras_hide_the_path_outlines() {
     }
     // The Pen's path in progress is a gesture, not the target path: it stays visible.
     app.ui.tool = Tool::Pen;
-    app.ui.pen = Some(PenPath { knots: vec![[[20.0, 20.0]; 3], [[60.0, 40.0]; 3]], ..Default::default() });
+    app.ui.pen = Some(PenPath { knots: vec![[[20.0, 20.0]; 3], [[60.0, 40.0]; 3]], owner: capture_pen_owner(&app), ..Default::default() });
     toggle(&mut app, "view.show.targetPath");
     assert!(overlay_shapes(&app, &ctx) > 0, "the pen path in progress is still drawn");
 }
@@ -1118,7 +1174,8 @@ fn pen_last_anchor_hit_tolerance_tracks_zoom_and_draft_round_trips() {
         assert_eq!(pen.knots[1][2], pen.knots[1][0]);
         let saved = serde_json::to_value(pen).unwrap();
         let restored: PenPath = serde_json::from_value(saved).unwrap();
-        assert_eq!(restored, *pen);
+        // The runtime owner isn't saved: a restored draft belongs to no document.
+        assert_eq!(restored, PenPath { owner: None, ..pen.clone() });
         assert_eq!(pen_to_json(&restored, false)["subpaths"][0]["knots"][1]["smooth"], false);
         pen_down(&mut app, 100.0 + 7.0 / f64::from(zoom), 100.0, false);
         assert_eq!(app.ui.pen.as_ref().unwrap().knots.len(), 3);

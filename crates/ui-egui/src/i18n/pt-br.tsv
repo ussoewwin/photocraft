@@ -115,6 +115,8 @@
 
 # Pen draft after a refused commit (#7648)
 # Art History Brush (#213).
+# Smart Filter row actions (#1265)
+
 	Mask Options…	Opções de máscara…
 	Layer Mask Display Options…	Opções de exibição de máscara de camada…
 	Channel Color	Cor do canal
@@ -1180,7 +1182,6 @@
 	Dots	Pontos
 	Drag a rectangle around the object	Arraste um retângulo ao redor do objeto
 	Drag on the image to add a constraint; Shift for horizontal/vertical; right-click a constraint to change or delete it.	Arraste sobre a imagem para adicionar uma restrição; Shift para horizontal/vertical; clique direito em uma restrição para alterá-la ou excluí-la.
-	Drag to move the active shape's path or the Work Path	Arraste para mover o demarcador da forma ativa ou o demarcador de trabalho
 	Click: select anchor · Drag: move anchor, handle or segment · {shift}-click: add · {alt}-click: whole subpath	Clique: selecionar ponto · Arrastar: mover ponto, alça ou segmento · {shift}-clique: adicionar · {alt}-clique: subdemarcador inteiro
 	Draw with the Pen tool (P) or make a work path from a selection.	Desenhe com a ferramenta Caneta (P) ou crie um demarcador de trabalho a partir de uma seleção.
 	Drop an image or PSD anywhere to open it.	Solte uma imagem ou um PSD em qualquer lugar para abri-lo.
@@ -1892,11 +1893,9 @@
 	Slice Select Tool	Ferramenta Seleção de fatia
 	Slice Tool	Ferramenta Fatia
 	Smart Filters	Filtros inteligentes
-# Smart Filter row actions (#1265)
 	Move Up	Mover para cima
 	Move Down	Mover para baixo
 	Delete Smart Filter	Excluir filtro inteligente
-
 	Smudge Tool	Ferramenta Borrar
 	Soft	Suave
 	Soften	Suavizar
@@ -4232,8 +4231,6 @@ layerLabel	No Color	Sem cor
 	The fastest and the softest, with colour fringing on fine detail.	O mais rápido e o mais suave, com franjamento de cor em detalhes finos.
 	“{name}” already exists. Replace it?	“{name}” já existe. Substituir?
 	The name in the save dialog was “{name}”.	O nome na caixa de diálogo Salvar era “{name}”.
-	Move Up	Mover para cima
-	Move Down	Mover para baixo
 	Previous Brush	Pincel anterior
 	Next Brush	Próximo pincel
 	First Brush	Primeiro pincel
@@ -4457,3 +4454,4 @@ layerLabel	No Color	Sem cor
 @plural	Imported {n} shape from {file}|Imported {n} shapes from {file}	Quantidade de formas importadas de {file}: {n}|Quantidade de formas importadas de {file}: {n}
 @plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	Quantidade de formas importadas de {group}: {n}|Quantidade de formas importadas de {group}: {n}
 	Scrollbar Visibility	Visibilidade das barras de rolagem
+	Drag to move the selected path	Arraste para mover o demarcador selecionado

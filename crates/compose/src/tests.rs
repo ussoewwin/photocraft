@@ -658,8 +658,6 @@ fn hidden_base_hides_clipping_group() {
     assert!(close4(px(&d, 1, 1), [1.0; 4]));
 }
 
-
-
 #[test]
 fn isolated_group_differs_from_pass_through() {
     // A Multiply layer inside a group: pass-through multiplies with the background,

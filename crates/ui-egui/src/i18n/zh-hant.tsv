@@ -118,6 +118,8 @@
 # Art History Brush (#213).
 
 # Egui 0.37 migration controls (Aspect Ratio, Category, Color Table, Gamma, Interpolation, Profile, Target, Units, Demosaic)
+# Smart Filter row actions (#1265)
+
 	Mask Options…	遮色片選項…
 	Layer Mask Display Options…	圖層遮色片顯示選項…
 	Channel Color	色版顏色
@@ -1210,7 +1212,6 @@
 	Dots	點
 	Drag a rectangle around the object	在物件周圍拖曳出矩形
 	Drag on the image to add a constraint; Shift for horizontal/vertical; right-click a constraint to change or delete it.	在影像上拖曳以新增限制線；按住 Shift 可限制水平/垂直；在限制線上按右鍵可變更或刪除。
-	Drag to move the active shape's path or the Work Path	拖曳以移動作用中形狀的路徑或工作路徑
 	Click: select anchor · Drag: move anchor, handle or segment · {shift}-click: add · {alt}-click: whole subpath	按一下：選取錨點 · 拖曳：移動錨點、把手或線段 · {shift}-按一下：增加 · {alt}-按一下：整個子路徑
 	Draw with the Pen tool (P) or make a work path from a selection.	使用筆型工具 (P) 繪製，或從選取範圍建立工作路徑。
 	Drop an image or PSD anywhere to open it.	將影像或 PSD 拖放到任何位置即可開啟。
@@ -1938,11 +1939,9 @@
 	Slice Select Tool	切片選取工具
 	Slice Tool	切片工具
 	Smart Filters	智慧型濾鏡
-# Smart Filter row actions (#1265)
 	Move Up	上移
 	Move Down	下移
 	Delete Smart Filter	刪除智慧型濾鏡
-
 	Smudge Tool	指尖工具
 	Soft	柔邊
 	Soften	柔化
@@ -3060,8 +3059,6 @@ curves	Smooth	平滑
 	The fastest and the softest, with colour fringing on fine detail.	最快也最柔和，細節處有色邊。
 	“{name}” already exists. Replace it?	「{name}」已存在。要取代它嗎？
 	The name in the save dialog was “{name}”.	儲存對話框中的名稱是「{name}」。
-	Move Up	上移
-	Move Down	下移
 	Previous Brush	上一個筆刷
 	Next Brush	下一個筆刷
 	First Brush	第一個筆刷
@@ -3170,3 +3167,4 @@ curves	Smooth	平滑
 @plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	從 {group} 匯入的形狀數量：{n}
 	Scrollbar Visibility	捲軸可見性
 	Hidden	隱藏
+	Drag to move the selected path	拖曳以移動選取的路徑

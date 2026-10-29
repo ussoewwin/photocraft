@@ -699,7 +699,6 @@ fn windows_root_case_variants_keep_io_inside_the_grant() {
     std::fs::write(inside.join("notes.bin"), b"keep").unwrap();
     assert!(workspace.write(&configured.join("notes.bin").to_string_lossy(), b"no").is_err());
     assert_eq!(std::fs::read(inside.join("notes.bin")).unwrap(), b"keep");
-
 }
 
 /// Unix roots with different case must not become aliases of the granted prefix.

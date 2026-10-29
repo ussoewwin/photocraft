@@ -44,7 +44,12 @@ pub fn curvature_down(app: &mut PhotocraftApp, x: f64, y: f64) {
     if app.ui.pen.is_none() {
         app.ui.pen_doc = app.session.active().map(|st| st.doc.id);
     }
+    let owner = capture_pen_owner(app);
     let pen = app.ui.pen.get_or_insert_with(|| PenPath { curvature: true, ..Default::default() });
+    if pen.owner.is_none() {
+        pen.owner = owner;
+    }
+    pen.commit_failed = false;
     if hit.is_none() {
         pen.knots.push([[x, y]; 3]);
     }
@@ -53,6 +58,7 @@ pub fn curvature_down(app: &mut PhotocraftApp, x: f64, y: f64) {
 }
 
 pub fn curvature_move(app: &mut PhotocraftApp, x: f64, y: f64) {
+    cancel_stale_pen(app);
     if let Some(pen) = app.ui.pen.as_mut().filter(|p| p.curvature)
         && let Some(k) = pen.moving.and_then(|i| pen.knots.get_mut(i))
     {
@@ -62,6 +68,7 @@ pub fn curvature_move(app: &mut PhotocraftApp, x: f64, y: f64) {
 }
 
 pub fn curvature_up(app: &mut PhotocraftApp) {
+    cancel_stale_pen(app);
     if let Some(pen) = app.ui.pen.as_mut() {
         pen.moving = None;
     }
@@ -76,6 +83,7 @@ pub fn curvature_toggle(app: &mut PhotocraftApp, x: f64, y: f64) {
         crate::direct_select::curvature_toggle_active(app, [x, y]);
         return;
     }
+    cancel_stale_pen(app);
     let Some(i) = curvature_hit(app, x, y) else { return };
     let Some(pen) = app.ui.pen.as_mut() else { return };
     if let Some(at) = pen.unlinked.iter().position(|&c| c == i) {
@@ -85,3 +93,5 @@ pub fn curvature_toggle(app: &mut PhotocraftApp, x: f64, y: f64) {
     }
     curvature_refresh(pen, false);
 }
+
+use super::{cancel_stale_pen, capture_pen_owner};

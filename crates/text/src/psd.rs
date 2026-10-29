@@ -294,4 +294,6 @@ mod nonfinite_tests {
 }
 
 /// Bounded finite affine terms accepted before type layout.
-pub fn usable_tysh_transform(matrix:&[f64;6])->bool {transform_is_safe(&Affine{m:*matrix})}
+pub fn usable_tysh_transform(matrix: &[f64; 6]) -> bool {
+    transform_is_safe(&Affine { m: *matrix })
+}

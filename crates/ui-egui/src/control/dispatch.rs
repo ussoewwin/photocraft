@@ -1,3 +1,4 @@
+use super::METHODS;
 use super::inspect::inspect;
 use super::params::{
     BUTTONS, KEY_MODIFIERS, MAX_CLICKS, POINTER_MODIFIERS, UI_SET_FIELDS, bool_field, err, f32_field, f32_range, input_choice, input_modifiers, input_number,
@@ -69,7 +70,7 @@ fn execute_command(app: &mut PhotocraftApp, ctx: &egui::Context, req: &ControlRe
     let p = &req.params;
     let Some(id) = str_param(p, "command").or(str_param(p, "id")) else { return err("missing `command`") };
     if req.method == "engine.execute" && METHODS.contains(&id) && photocraft_engine::commands::find(id).is_none() {
-      return err(photocraft_engine::command_hints::protocol_method_as_command(id));
+        return err(photocraft_engine::command_hints::protocol_method_as_command(id));
     }
     let params = p.get("params").cloned().unwrap_or(json!({}));
     let wait = wait_param(p);

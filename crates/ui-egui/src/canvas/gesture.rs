@@ -13,6 +13,9 @@ pub(crate) fn finish_gesture(app: &mut PhotocraftApp, d: Drag) {
         app.live_stroke = None;
         return;
     }
+    if d.vector_owner.as_ref().is_some_and(|owner| !owner.valid(app)) {
+        return;
+    }
     let mut end = d.points.last().copied().unwrap_or([d.start[0], d.start[1], 1.0]);
     let (sx, sy) = snap_aliased_tip(app, d.tool, end[0], end[1]);
     end[0] = sx;
@@ -78,7 +81,11 @@ pub(crate) fn finish_gesture(app: &mut PhotocraftApp, d: Drag) {
     }
     match d.tool {
         Tool::ObjectSelection => crate::retouch_ui::finish_object_selection(app, d.start, [end[0], end[1]], d.modifiers),
-        Tool::FreeformPen => crate::vector_ui::freeform_finish(app, &d.points, d.lasso.as_ref().map_or(&[], |l| l.straight())),
+        Tool::FreeformPen => {
+            if let Some(owner) = d.pen_owner {
+                crate::vector_ui::freeform_finish_owned(app, &d.points, d.lasso.as_ref().map_or(&[], |l| l.straight()), owner);
+            }
+        }
         // Photoshop: a click without dragging opens Create Rectangle / Ellipse / … instead.
         t if crate::vector_ui::is_shape_tool(t)
             && crate::shape_dialog::is_click(d.start, &d.points, app.point_zoom())

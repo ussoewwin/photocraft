@@ -116,6 +116,8 @@
 # Art History Brush (#213).
 
 # Egui 0.37 migration controls (Aspect Ratio, Category, Color Table, Gamma, Interpolation, Profile, Target, Units, Demosaic)
+# Smart Filter row actions (#1265)
+
 	Mask Options…	蒙版选项…
 	Layer Mask Display Options…	图层蒙版显示选项…
 	Channel Color	通道颜色
@@ -1227,7 +1229,6 @@
 	Dots	点
 	Drag a rectangle around the object	围绕对象拖出矩形
 	Drag on the image to add a constraint; Shift for horizontal/vertical; right-click a constraint to change or delete it.	在图像上拖动以添加约束；按 Shift 保持水平或垂直；右键单击约束可更改或删除。
-	Drag to move the active shape's path or the Work Path	拖动以移动当前形状的路径或工作路径
 	Click: select anchor · Drag: move anchor, handle or segment · {shift}-click: add · {alt}-click: whole subpath	单击：选择锚点 · 拖动：移动锚点、手柄或线段 · {shift}-单击：添加 · {alt}-单击：整个子路径
 	Draw with the Pen tool (P) or make a work path from a selection.	使用钢笔工具（P）绘制，或从选区创建工作路径。
 	Drop an image or PSD anywhere to open it.	将图像或 PSD 拖放到任意位置即可打开。
@@ -1968,11 +1969,9 @@
 	Slice Select Tool	切片选择工具
 	Slice Tool	切片工具
 	Smart Filters	智能滤镜
-# Smart Filter row actions (#1265)
 	Move Up	上移
 	Move Down	下移
 	Delete Smart Filter	删除智能滤镜
-
 	Smudge Tool	涂抹工具
 	Soft	软
 	Soften	柔化
@@ -3099,8 +3098,6 @@ curves	Smooth	平滑
 	The fastest and the softest, with colour fringing on fine detail.	最快也最柔和，细节处有色边。
 	“{name}” already exists. Replace it?	“{name}”已存在。要替换它吗？
 	The name in the save dialog was “{name}”.	存储对话框中的名称是“{name}”。
-	Move Up	上移
-	Move Down	下移
 	Previous Brush	上一个画笔
 	Next Brush	下一个画笔
 	First Brush	第一个画笔
@@ -3214,3 +3211,4 @@ curves	Smooth	平滑
 @plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	从 {group} 导入的形状数量：{n}
 	Scrollbar Visibility	滚动条可见性
 	Hidden	隐藏
+	Drag to move the selected path	拖动以移动选中的路径

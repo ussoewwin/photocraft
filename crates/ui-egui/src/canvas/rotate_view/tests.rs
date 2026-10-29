@@ -21,14 +21,8 @@ fn middle_drag_rotates_about_the_pointer_without_panning() {
 #[test]
 fn middle_drag_ignores_invalid_or_stationary_input() {
     let mut view = View::default();
-    let xf = ViewXform {
-        rect: Rect::from_min_size(pos2(0.0, 0.0), vec2(600.0, 400.0)),
-        zoom: 1.0,
-        center: view.center,
-        flip: false,
-        rotation: 0.0,
-        aspect: 1.0,
-    };
+    let xf =
+        ViewXform { rect: Rect::from_min_size(pos2(0.0, 0.0), vec2(600.0, 400.0)), zoom: 1.0, center: view.center, flip: false, rotation: 0.0, aspect: 1.0 };
     assert!(!middle_drag(&mut view, &xf, pos2(200.0, 120.0), 0.0));
     assert!(!middle_drag(&mut view, &xf, pos2(200.0, 120.0), f32::NAN));
     assert!(!middle_drag(&mut view, &xf, pos2(f32::INFINITY, 120.0), 20.0));

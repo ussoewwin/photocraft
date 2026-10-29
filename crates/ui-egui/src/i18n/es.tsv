@@ -82,6 +82,8 @@
 # Color panel menu: modes, copy commands and colour ramps (#6000)
 # Pen draft after a refused commit (#7648)
 # Art History Brush (#213).
+# Smart Filter row actions (#1265)
+
 	Mask Options…	Opciones de máscara…
 	Layer Mask Display Options…	Opciones de visualización de máscara de capa…
 	Channel Color	Color del canal
@@ -1168,7 +1170,6 @@
 	Dots	Puntos
 	Drag a rectangle around the object	Arrastre un rectángulo alrededor del objeto
 	Drag on the image to add a constraint; Shift for horizontal/vertical; right-click a constraint to change or delete it.	Arrastre sobre la imagen para añadir una restricción; Mayús para horizontal/vertical; clic derecho en una restricción para cambiarla o eliminarla.
-	Drag to move the active shape's path or the Work Path	Arrastre para mover el trazado de la forma activa o el trazado de trabajo
 	Click: select anchor · Drag: move anchor, handle or segment · {shift}-click: add · {alt}-click: whole subpath	Clic: seleccionar punto · Arrastrar: mover punto, manejador o segmento · {shift}-clic: añadir · {alt}-clic: subtrazado completo
 	Draw with the Pen tool (P) or make a work path from a selection.	Dibuje con la herramienta Pluma (P) o cree un trazado de trabajo a partir de una selección.
 	Drop an image or PSD anywhere to open it.	Suelte una imagen o un PSD en cualquier lugar para abrirlo.
@@ -1890,11 +1891,9 @@
 	Slice Select Tool	Herramienta Selección de sector
 	Slice Tool	Herramienta Sector
 	Smart Filters	Filtros inteligentes
-# Smart Filter row actions (#1265)
 	Move Up	Mover arriba
 	Move Down	Mover abajo
 	Delete Smart Filter	Eliminar filtro inteligente
-
 	Smudge Tool	Herramienta Dedo
 	Soft	Suave
 	Soften	Suavizar
@@ -4346,8 +4345,6 @@ navigator	Zoom	Zoom
 	The fastest and the softest, with colour fringing on fine detail.	El más rápido y el más suave, con halo de color en el detalle fino.
 	“{name}” already exists. Replace it?	«{name}» ya existe. ¿Reemplazarlo?
 	The name in the save dialog was “{name}”.	El nombre en el cuadro de diálogo Guardar era «{name}».
-	Move Up	Mover arriba
-	Move Down	Mover abajo
 	Previous Brush	Pincel anterior
 	Next Brush	Pincel siguiente
 	First Brush	Primer pincel
@@ -4442,3 +4439,4 @@ navigator	Zoom	Zoom
 @plural	Imported {n} shape from {file}|Imported {n} shapes from {file}	Cantidad de formas importadas de {file}: {n}|Cantidad de formas importadas de {file}: {n}
 @plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	Cantidad de formas importadas de {group}: {n}|Cantidad de formas importadas de {group}: {n}
 	Scrollbar Visibility	Visibilidad de las barras de desplazamiento
+	Drag to move the selected path	Arrastre para mover el trazado seleccionado

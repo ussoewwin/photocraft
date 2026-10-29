@@ -1,3 +1,4 @@
+use super::cancel_stale_vector_drag;
 use super::cursors::{alt_eyedropper, sample_eyedropper};
 use super::drag::Drag;
 use super::gesture::{finish_gesture, polygon_click, selection_mode};
@@ -296,6 +297,17 @@ fn handle_move_pointer(app: &mut PhotocraftApp, ev: ToolEvent, tool: Tool, mods:
 
 /// Tool state machine. Shared by mouse input and automation.
 pub fn tool_event(app: &mut PhotocraftApp, ev: ToolEvent, mods: egui::Modifiers) {
+    cancel_stale_vector_drag(app);
+    if app.cancelled_vector_drag {
+        match ev {
+            ToolEvent::Down { .. } => app.cancelled_vector_drag = false,
+            ToolEvent::Move { .. } => return,
+            ToolEvent::Up { .. } => {
+                app.cancelled_vector_drag = false;
+                return;
+            }
+        }
+    }
     let Some((armed, mods)) = preflight_tool_event(app, ev, mods) else { return };
     let Some((raw, ev, mods)) = filter_event_before_tool(app, ev, mods, armed) else { return };
     let tool = event_tool(app, mods);
@@ -479,7 +491,9 @@ pub fn tool_event(app: &mut PhotocraftApp, ev: ToolEvent, mods: egui::Modifiers)
             }
             // ⌥ flips Dodge/Burn and Blur/Sharpen for this stroke.
             let tool = crate::retouch_ui::alt_flipped(tool, mods.alt);
-            app.drag = Some(Drag { clear, ..Drag::new(tool, from.map_or([x, y], |p| [p[0], p[1]]), points, mods, erase) });
+            let mut drag = Drag { clear, ..Drag::new(tool, from.map_or([x, y], |p| [p[0], p[1]]), points, mods, erase) };
+            drag.capture_vector_owners(app);
+            app.drag = Some(drag);
             app.trail = None;
             app.stylus.begin_stroke();
             if from.is_some() {

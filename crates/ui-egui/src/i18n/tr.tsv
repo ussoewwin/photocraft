@@ -4256,3 +4256,4 @@ cameraData	Lens	Lens
 @plural	Imported {n} shape from {file}|Imported {n} shapes from {file}	{file} kaynağından içe aktarılan şekil sayısı: {n}
 @plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	{group} kaynağından içe aktarılan şekil sayısı: {n}
 	Scrollbar Visibility	Kaydırma çubuklarının görünürlüğü
+	Drag to move the selected path	Seçili yolu taşımak için sürükleyin

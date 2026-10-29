@@ -81,6 +81,8 @@
 
 # Pen draft after a refused commit (#7648)
 # Art History Brush (#213).
+# Smart Filter row actions.
+
 	Paper Width	Papír szélessége
 	Paper Height	Papír magassága
 @id	edit.purge.undo	Visszavonási adatok
@@ -1731,11 +1733,9 @@ fontWeight	Thin	Hajszálvékony
 	Show the layer's effects  ({key}-click: all layers)	Réteg effektusainak megjelenítése  ({key}+kattintás: minden réteg)
 	Skip	Kihagy
 	Smart Filters	Intelligens szűrők
-# Smart Filter row actions.
 	Move Up	Mozgatás felfelé
 	Move Down	Mozgatás lefelé
 	Delete Smart Filter	Intelligens szűrő törlése
-
 	Soft Light	Lágy fény
 	Soften	Lágyítás
 	Source	Forrás
@@ -4347,8 +4347,6 @@ cameraRaw	Yellow	Sárga
 	The fastest and the softest, with colour fringing on fine detail.	A leggyorsabb és a leglágyabb, apró részleteken színes szegéllyel.
 	“{name}” already exists. Replace it?	„{name}” már létezik. Lecseréli?
 	The name in the save dialog was “{name}”.	A mentési párbeszédpanelen megadott név: „{name}”.
-	Move Up	Mozgatás felfelé
-	Move Down	Mozgatás lefelé
 	Previous Brush	Előző ecset
 	Next Brush	Következő ecset
 	First Brush	Első ecset
@@ -4440,3 +4438,4 @@ cameraRaw	Yellow	Sárga
 @plural	Imported {n} shape from {file}|Imported {n} shapes from {file}	A(z) {file} forrásból importált alakzatok száma: {n}
 @plural	Imported {n} shape from {group}|Imported {n} shapes from {group}	A(z) {group} forrásból importált alakzatok száma: {n}
 	Scrollbar Visibility	Görgetősávok láthatósága
+	Drag to move the selected path	Húzza a kijelölt útvonal mozgatásához
