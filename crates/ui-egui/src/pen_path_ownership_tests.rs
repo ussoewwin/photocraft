@@ -442,9 +442,13 @@ fn tab_switch_commits_only_the_valid_original_captured_saved_path() {
     draft(&mut app);
     let source = app.session.active().unwrap().doc.id;
     app.session.execute("file.new", json!({"width":200,"height":200})).unwrap();
+    seed(&mut app, "Destination", 100.0);
+    app.ui.selected_path = Some("Destination".into());
     let current = app.session.active().unwrap().doc.clone();
     assert!(vector_ui::cancel_stale_pen(&mut app));
     assert!(app.ui.pen.is_none());
+    app.sync_views();
+    assert_eq!(app.ui.selected_path.as_deref(), Some("Destination"));
     assert!(std::sync::Arc::ptr_eq(&current, &app.session.active().unwrap().doc));
     let old = app.session.documents().iter().find(|s| s.doc.id == source).unwrap();
     assert_eq!(old.doc.paths.iter().find(|p| p.name == "Saved drawing").unwrap().path.subpaths.len(), 2);

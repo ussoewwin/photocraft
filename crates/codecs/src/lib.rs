@@ -48,7 +48,7 @@ pub use crate::resolution::{exif_resolution, export_exif, export_xmp, photoshop_
 pub use crate::source_settings::{WebpEncoding, jpeg_quality, webp_encoding};
 pub use half::f16;
 
-use crate::codecs::{dds, dicom, dpx, exr, fits, heif, iff, jpeg, pcx, png, pnm, tiff, via_image, webp, xpm};
+use crate::codecs::{dds, dicom, dpx, exr, fits, heif, iff, jpeg, jxl, pcx, png, pnm, tiff, via_image, webp, xpm};
 
 /// Detect the format and decode with default [`Limits`].
 pub fn decode(bytes: &[u8]) -> Result<Image, CodecError> {

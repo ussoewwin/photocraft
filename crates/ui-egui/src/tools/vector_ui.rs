@@ -249,6 +249,10 @@ pub(crate) fn cancel_stale_pen(app: &mut PhotocraftApp) -> bool {
             }
             let failed = app.ui.pen.take();
             let message = app.ui.status.clone();
+            // The temporary source commit ran sync_views on that document. Rebind its runtime
+            // tracker before restoring the destination UI, so the next frame cannot clear
+            // an unrelated saved-path selection in the destination tab.
+            app.path_document = app.session.active().map(|st| (st.doc.id, st.revision, Arc::downgrade(&st.doc)));
             app.ui = saved_ui;
             app.ui.pen = if result.is_ok() { None } else { failed };
             if result.is_err() {
