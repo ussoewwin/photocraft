@@ -484,6 +484,71 @@ pub(super) fn locking_to(_: &str, p: &Value) -> Option<Descriptor> {
     Some(desc("null").with("null", target_ref("Lyr ")).with("layerLocking", D::Descriptor(locks)))
 }
 
+fn layer_set_from(d: &Descriptor, r: &[ReferenceItem]) -> Mapped {
+    let unsupported = Mapped::Unsupported { harmless: false };
+    let Some(mut p) = layer_target(r) else { return unsupported };
+    let Some(t) = get_obj(d, "T   ") else { return unsupported };
+    let mut v = Vec::new();
+    if let Some(c) = get_enum(t, "Clr ").and_then(|c| lookup(LABEL_COLORS, &c)) {
+        let mut lp = p.clone();
+        lp.insert("color".into(), c.into());
+        v.push(("layer.setLabelColor", Value::Object(lp)));
+    }
+    if let Some(n) = get_text(t, "Nm  ") {
+        p.insert("name".into(), n.into());
+    }
+    if let Some(o) = get_num(t, "Opct") {
+        p.insert("opacity".into(), (o / 100.0).into());
+    }
+    if let Some(f) = get_num(t, "fillOpacity") {
+        p.insert("fill".into(), (f / 100.0).into());
+    }
+    if let Some(m) = get_enum(t, "Md  ") {
+        let Some(label) = blend_label(&m) else { return unsupported };
+        p.insert("blend".into(), label.into());
+    }
+    if let Some(vis) = get_bool(t, "Vsbl") {
+        p.insert("visible".into(), vis.into());
+    }
+    // Lock buttons and Blending Options' Advanced checkboxes act on the target layer.
+    let targeted = !p.contains_key("layer");
+    if let Some(locks) = get_obj(t, "layerLocking") {
+        match lock_params(locks) {
+            Some(l) if targeted => v.push(("layer.lockLayers", Value::Object(l))),
+            _ => return unsupported,
+        }
+    }
+    let mut advanced = Map::new();
+    for (key, param) in ADVANCED_BLENDING {
+        if let Some(b) = get_bool(t, key) {
+            advanced.insert((*param).into(), b.into());
+        }
+    }
+    if !advanced.is_empty() {
+        if !targeted {
+            return unsupported;
+        }
+        v.push(("layer.layerStyle.blendingOptions", Value::Object(advanced)));
+    }
+    if p.keys().any(|k| k != "layer") {
+        v.push(("layer.setProps", Value::Object(p)));
+    }
+    // The Layer Style dialog's OK on a layer without effects records only the effects'
+    // scale (`Lefx` = {Scl}); an empty `T` is an OK that changed nothing. Neither changes
+    // the document.
+    let no_effect = t.items.iter().all(|(k, val)| match val {
+        D::Descriptor(fx) if k.is("Lefx") => fx.items.iter().all(|(fk, _)| fk.is("Scl ")),
+        _ => false,
+    });
+    if !v.is_empty() {
+        steps(v)
+    } else if no_effect {
+        Mapped::Unsupported { harmless: true }
+    } else {
+        unsupported
+    }
+}
+
 pub(super) fn set_from(d: &Descriptor) -> Mapped {
     let Some(r) = get_ref(d, "null") else { return Mapped::Unsupported { harmless: false } };
     let unsupported = Mapped::Unsupported { harmless: false };
@@ -499,69 +564,7 @@ pub(super) fn set_from(d: &Descriptor) -> Mapped {
             Some(hex) => step("tools.setColors", json!({(if p == "FrgC" { "foreground" } else { "background" }): hex})),
             None => unsupported,
         },
-        (Some("Lyr"), _) => {
-            let Some(mut p) = layer_target(r) else { return unsupported };
-            let Some(t) = get_obj(d, "T   ") else { return unsupported };
-            let mut v = Vec::new();
-            if let Some(c) = get_enum(t, "Clr ").and_then(|c| lookup(LABEL_COLORS, &c)) {
-                let mut lp = p.clone();
-                lp.insert("color".into(), c.into());
-                v.push(("layer.setLabelColor", Value::Object(lp)));
-            }
-            if let Some(n) = get_text(t, "Nm  ") {
-                p.insert("name".into(), n.into());
-            }
-            if let Some(o) = get_num(t, "Opct") {
-                p.insert("opacity".into(), (o / 100.0).into());
-            }
-            if let Some(f) = get_num(t, "fillOpacity") {
-                p.insert("fill".into(), (f / 100.0).into());
-            }
-            if let Some(m) = get_enum(t, "Md  ") {
-                let Some(label) = blend_label(&m) else { return unsupported };
-                p.insert("blend".into(), label.into());
-            }
-            if let Some(vis) = get_bool(t, "Vsbl") {
-                p.insert("visible".into(), vis.into());
-            }
-            // Lock buttons and Blending Options' Advanced checkboxes act on the target layer.
-            let targeted = !p.contains_key("layer");
-            if let Some(locks) = get_obj(t, "layerLocking") {
-                match lock_params(locks) {
-                    Some(l) if targeted => v.push(("layer.lockLayers", Value::Object(l))),
-                    _ => return unsupported,
-                }
-            }
-            let mut advanced = Map::new();
-            for (key, param) in ADVANCED_BLENDING {
-                if let Some(b) = get_bool(t, key) {
-                    advanced.insert((*param).into(), b.into());
-                }
-            }
-            if !advanced.is_empty() {
-                if !targeted {
-                    return unsupported;
-                }
-                v.push(("layer.layerStyle.blendingOptions", Value::Object(advanced)));
-            }
-            if p.keys().any(|k| k != "layer") {
-                v.push(("layer.setProps", Value::Object(p)));
-            }
-            // The Layer Style dialog's OK on a layer without effects records only the effects'
-            // scale (`Lefx` = {Scl}); an empty `T` is an OK that changed nothing. Neither changes
-            // the document.
-            let no_effect = t.items.iter().all(|(k, val)| match val {
-                D::Descriptor(fx) if k.is("Lefx") => fx.items.iter().all(|(fk, _)| fk.is("Scl ")),
-                _ => false,
-            });
-            if !v.is_empty() {
-                steps(v)
-            } else if no_effect {
-                Mapped::Unsupported { harmless: true }
-            } else {
-                unsupported
-            }
-        }
+        (Some("Lyr"), _) => layer_set_from(d, r),
         // Layer › Smart Filter › Blending Options (`indx` counts the filters from 1, bottom first).
         (Some("filterFX"), _) => {
             let index = match r.first() {
@@ -611,6 +614,38 @@ pub(super) fn set_from(d: &Descriptor) -> Mapped {
         }
         _ => unsupported,
     }
+}
+
+fn layer_set_to(p: &Value) -> Option<Descriptor> {
+    // Only these keys map onto the `Lyr ` descriptor; locks, clipping, Advanced Blending
+    // channels or an explicit `layers` list would be dropped (#7196, #7246).
+    const MAPPED: [&str; 7] = ["layer", "name", "opacity", "fill", "blend", "visible", "color"];
+    if p.as_object().is_some_and(|m| m.iter().any(|(k, v)| !v.is_null() && !MAPPED.contains(&k.as_str()))) {
+        return None;
+    }
+    let mut t = desc("Lyr ");
+    if let Some(n) = jstr(p, "name") {
+        t = t.with("Nm  ", text(n));
+    }
+    if let Some(o) = jnum(p, "opacity") {
+        t = t.with("Opct", pct(o * 100.0));
+    }
+    if let Some(f) = jnum(p, "fill") {
+        t = t.with("fillOpacity", pct(f * 100.0));
+    }
+    if let Some(m) = jstr(p, "blend") {
+        t = t.with("Md  ", enm("BlnM", blend_ps(m)?));
+    }
+    if let Some(v) = jbool(p, "visible") {
+        t = t.with("Vsbl", D::Boolean(v));
+    }
+    if let Some(c) = jstr(p, "color") {
+        t = t.with("Clr ", enm("Clr ", lookup_back(LABEL_COLORS, c)?));
+    }
+    if t.items.is_empty() {
+        return None;
+    }
+    Some(desc("null").with("null", layer_ref(p)?).with("T   ", D::Descriptor(t)))
 }
 
 pub(super) fn set_to(id: &str, p: &Value) -> Option<Descriptor> {
@@ -676,35 +711,7 @@ pub(super) fn set_to(id: &str, p: &Value) -> Option<Descriptor> {
             sel(D::Descriptor(desc(cls).with("Top ", px(y)).with("Left", px(x)).with("Btom", px(y + h)).with("Rght", px(x + w))))
         }
         "layer.setProps" | "layer.renameLayer" | "layer.setLabelColor" => {
-            // Only these keys map onto the `Lyr ` descriptor; locks, clipping, Advanced Blending
-            // channels or an explicit `layers` list would be dropped (#7196, #7246).
-            const MAPPED: [&str; 7] = ["layer", "name", "opacity", "fill", "blend", "visible", "color"];
-            if p.as_object().is_some_and(|m| m.iter().any(|(k, v)| !v.is_null() && !MAPPED.contains(&k.as_str()))) {
-                return None;
-            }
-            let mut t = desc("Lyr ");
-            if let Some(n) = jstr(p, "name") {
-                t = t.with("Nm  ", text(n));
-            }
-            if let Some(o) = jnum(p, "opacity") {
-                t = t.with("Opct", pct(o * 100.0));
-            }
-            if let Some(f) = jnum(p, "fill") {
-                t = t.with("fillOpacity", pct(f * 100.0));
-            }
-            if let Some(m) = jstr(p, "blend") {
-                t = t.with("Md  ", enm("BlnM", blend_ps(m)?));
-            }
-            if let Some(v) = jbool(p, "visible") {
-                t = t.with("Vsbl", D::Boolean(v));
-            }
-            if let Some(c) = jstr(p, "color") {
-                t = t.with("Clr ", enm("Clr ", lookup_back(LABEL_COLORS, c)?));
-            }
-            if t.items.is_empty() {
-                return None;
-            }
-            desc("null").with("null", layer_ref(p)?).with("T   ", D::Descriptor(t))
+            return layer_set_to(p);
         }
         "layer.new.layerFromBackground" => {
             let bckg = D::Reference(vec![ReferenceItem::Property { class: class("Lyr "), key: Id::new("Bckg") }]);

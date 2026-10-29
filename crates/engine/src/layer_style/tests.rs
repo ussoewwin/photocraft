@@ -628,8 +628,7 @@ fn double_stroke_bands_render_and_survive_an_edit() {
 #[test]
 fn unchanged_dense_imported_stops_roundtrip_without_edit_limit_regression() {
     let mut s = session();
-    let mut gradient = Gradient::default();
-    gradient.stops = (0..300).map(|i| (i as f32 / 299.0, Color::rgb(i as f32 / 777.0, 0.123456, 0.9))).collect();
+    let gradient = Gradient { stops: (0..300).map(|i| (i as f32 / 299.0, Color::rgb(i as f32 / 777.0, 0.123456, 0.9))).collect(), ..Gradient::default() };
     let fx = Effect::GradientOverlay { common: FxCommon::new(BlendMode::Normal, 1.0), gradient: gradient.clone(), dither: false, interpolation: None };
     let stops: Vec<_> = gradient.stops.iter().map(|(t, c)| json!([t, c])).collect();
     s.execute("layer.layerStyle.replace", json!({"effects":[{"kind":"gradientOverlay","fx":fx,"params":{"stops":stops}}]})).unwrap();

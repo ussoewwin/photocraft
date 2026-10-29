@@ -244,7 +244,12 @@ fn same_named_saved_paths_do_not_share_selection_or_drafts_across_tabs() {
     assert!(app.session.set_active(0));
     app.sync_views();
     assert!(app.ui.selected_path.is_none());
-    assert_eq!(path(&app, "Saved drawing"), first);
+    // The captured-target reconciliation preserves main's valid-source commit on a tab
+    // switch. Only the original path receives that draft; the same-named B path stayed exact.
+    let committed = path(&app, "Saved drawing");
+    assert_eq!(committed.subpaths.len(), first.subpaths.len() + 1);
+    assert_eq!(committed.subpaths[0], first.subpaths[0]);
+    assert_eq!(committed.subpaths.last().unwrap().knots[0].anchor.y, 60.0);
 }
 
 #[test]

@@ -44,10 +44,10 @@ pub fn curvature_down(app: &mut PhotocraftApp, x: f64, y: f64) {
     if app.ui.pen.is_none() {
         app.ui.pen_doc = app.session.active().map(|st| st.doc.id);
     }
-    let owner = capture_pen_owner(app);
+    let Some(owner) = capture_pen_owner(app) else { return };
     let pen = app.ui.pen.get_or_insert_with(|| PenPath { curvature: true, ..Default::default() });
     if pen.owner.is_none() {
-        pen.owner = owner;
+        pen.owner = Some(owner);
     }
     pen.commit_failed = false;
     if hit.is_none() {

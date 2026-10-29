@@ -107,9 +107,10 @@ const TIFF_LAYOUTS: &[ChannelLayout] = &[L::Gray, L::GrayA, L::Rgb, L::Rgba, L::
 
 impl Format {
     /// Every format known to the crate (enabled or not).
-    pub const ALL: [Format; 22] = [
+    pub const ALL: [Format; 23] = [
         Format::Png,
         Format::Jpeg,
+        Format::Jxl,
         Format::Tiff,
         Format::WebP,
         Format::Gif,

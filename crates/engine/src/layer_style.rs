@@ -1001,15 +1001,15 @@ fn replace_effects(s: &mut Session, p: &Value) -> Result<Value> {
                 }
                 if let Effect::GradientOverlay { gradient, interpolation, .. } = &fx {
                     let stops = interpolation.as_ref().map_or(&gradient.stops, |s| &s.stops);
-                    if exact_stops(&params).as_ref() == Some(stops) {
-                        if let Some(o) = params.as_object_mut() {
-                            o.remove("stops");
-                        }
+                    if exact_stops(&params).as_ref() == Some(stops)
+                        && let Some(o) = params.as_object_mut()
+                    {
+                        o.remove("stops");
                     }
-                    if opacity_stops_param(&params, CMD).ok().flatten().as_ref() == Some(&gradient.opacity_stops) {
-                        if let Some(o) = params.as_object_mut() {
-                            o.remove("opacityStops");
-                        }
+                    if opacity_stops_param(&params, CMD).ok().flatten().as_ref() == Some(&gradient.opacity_stops)
+                        && let Some(o) = params.as_object_mut()
+                    {
+                        o.remove("opacityStops");
                     }
                 }
                 check_gradient_params(&params, CMD)?;

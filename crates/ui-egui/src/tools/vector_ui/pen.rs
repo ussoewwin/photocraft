@@ -52,10 +52,10 @@ pub fn pen_down(app: &mut PhotocraftApp, x: f64, y: f64, shift: bool) {
     {
         app.ui.pen = Some(resumed);
     }
-    let owner = capture_pen_owner(app);
+    let Some(owner) = capture_pen_owner(app) else { return };
     let pen = app.ui.pen.get_or_insert_with(PenPath::default);
     if pen.owner.is_none() {
-        pen.owner = owner;
+        pen.owner = Some(owner);
     }
     pen.commit_failed = false;
     pen.adjusting_in = false;
@@ -792,6 +792,9 @@ fn commit_path(app: &mut PhotocraftApp, pen: &PenPath, closed: bool) -> Result<(
         };
     }
     let result = commit_path_current(app, pen, closed);
+    if result && matches!(owner.target, super::PenTarget::Shape { .. } | super::PenTarget::VectorMask(_)) {
+        app.ui.selected_path = Some("layer".into());
+    }
     if let (Some(st), Some(channel)) = (app.session.active_mut(), channel) {
         st.channel_view.target = channel;
     }
