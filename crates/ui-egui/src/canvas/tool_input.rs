@@ -310,6 +310,17 @@ fn consumes_cancelled_vector_event(app: &mut PhotocraftApp, ev: ToolEvent) -> bo
     false
 }
 
+fn handle_eyedropper_event(app: &mut PhotocraftApp, tool: Tool, ev: ToolEvent, mods: egui::Modifiers) -> bool {
+    if tool != Tool::Eyedropper {
+        return false;
+    }
+    match ev {
+        ToolEvent::Down { x, y, .. } | ToolEvent::Move { x, y, .. } => sample_eyedropper(app, x, y, mods),
+        ToolEvent::Up { .. } => {}
+    }
+    true
+}
+
 /// Tool state machine. Shared by mouse input and automation.
 pub fn tool_event(app: &mut PhotocraftApp, ev: ToolEvent, mods: egui::Modifiers) {
     if consumes_cancelled_vector_event(app, ev) {
@@ -318,14 +329,8 @@ pub fn tool_event(app: &mut PhotocraftApp, ev: ToolEvent, mods: egui::Modifiers)
     let Some((armed, mods)) = preflight_tool_event(app, ev, mods) else { return };
     let Some((raw, ev, mods)) = filter_event_before_tool(app, ev, mods, armed) else { return };
     let tool = event_tool(app, mods);
-    if tool == Tool::Eyedropper {
-        match ev {
-            ToolEvent::Down { x, y, .. } | ToolEvent::Move { x, y, .. } => {
-                sample_eyedropper(app, x, y, mods);
-                return;
-            }
-            ToolEvent::Up { .. } => return,
-        }
+    if handle_eyedropper_event(app, tool, ev, mods) {
+        return;
     }
     // A locked layer (the Background without a selection, say): no drag, and Photoshop's message
     // once the pointer moves (a click says nothing). ⌘ with a selection tool here (#896); the Move
