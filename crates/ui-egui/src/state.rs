@@ -215,6 +215,11 @@ pub struct UiState {
     /// Inline type editing session, if any.
     #[serde(default)]
     pub text_edit: Option<TextEdit>,
+    /// Whether the text being edited overflows its paragraph box (the box's lower-right handle
+    /// shows the overflow "+").
+    /// Read by automation while a session edits that box; never written to settings.
+    #[serde(skip)]
+    pub type_box_overflow: bool,
     /// Clock time in seconds when type cursor blink was last reset (e.g. on keypress/caret move).
     #[serde(skip)]
     pub caret_blink_time: f64,
@@ -494,6 +499,7 @@ impl Default for UiState {
             recent_files: Vec::new(),
             recent_fonts: Vec::new(),
             text_edit: None,
+            type_box_overflow: false,
             caret_blink_time: 0.0,
             text_edit_return_tool: None,
             type_transform: None,
