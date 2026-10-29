@@ -805,7 +805,8 @@ fn tool_icon(t: LiquifyTool) -> &'static str {
         LiquifyTool::Reconstruct => "brush-cleaning",
         LiquifyTool::Smooth => "droplet",
         LiquifyTool::TwirlCw => "rotate-cw",
-        LiquifyTool::TwirlCcw => "undo-2",
+        // Twirl Clockwise's arrow mirrored: `undo-2` read as Undo (#9547).
+        LiquifyTool::TwirlCcw => "rotate-ccw",
         LiquifyTool::Pucker => "scan",
         LiquifyTool::Bloat => "maximize-2",
         LiquifyTool::PushLeft => "chevrons-left",
