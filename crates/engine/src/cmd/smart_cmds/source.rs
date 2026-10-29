@@ -223,7 +223,7 @@ const STRIP_PIXELS: u64 = 1 << 20;
 /// so the float composite and its conversion never cover more than [`STRIP_PIXELS`].
 fn composite_in_strips(src: &Document, fmt: PixelFormat) -> Surface {
     let b = src.bounds();
-    let rows = photocraft_compose::band_rows_for(b.width(), i32::try_from(STRIP_PIXELS / u64::from(b.width().max(1))).unwrap_or(i32::MAX));
+    let rows = strip_rows(b.width());
     let mut out = Surface::new(fmt);
     let mut y = b.y0;
     while y < b.y1 {
@@ -233,6 +233,13 @@ fn composite_in_strips(src: &Document, fmt: PixelFormat) -> Surface {
     }
     out.prune();
     out
+}
+
+/// Rows per strip of a `width`-pixel source: as many as fit in [`STRIP_PIXELS`], at least one.
+/// Not rounded up to the compositor's tile height, which for a very wide source would be many
+/// times the budget (a 300000 px row is already 0.3 Mpx).
+fn strip_rows(width: u32) -> i32 {
+    i32::try_from((STRIP_PIXELS / u64::from(width.max(1))).max(1)).unwrap_or(i32::MAX)
 }
 
 /// Runs the gray and 32-bit conversions a source needs to reach `fmt`; `raster` yields the
@@ -319,6 +326,16 @@ mod tests {
         assert!(cache_get(&key).is_none(), "{bytes} bytes against a limit of {}", bytes - 1);
         cache_put_within(key, img, bytes);
         assert!(cache_get(&key).is_some());
+    }
+
+    #[test]
+    fn strips_stay_within_their_pixel_budget_however_wide_the_source() {
+        for width in [1u32, 255, 4096, 5000, 300_000, u32::MAX] {
+            let rows = strip_rows(width);
+            assert!(rows >= 1, "{width}: {rows}");
+            assert!(rows == 1 || u64::from(width) * rows as u64 <= STRIP_PIXELS, "{width} px × {rows} rows");
+        }
+        assert_eq!(strip_rows(4096), 256);
     }
 
     #[test]
