@@ -155,15 +155,60 @@ pub(super) fn buffer_to_surface(buf: &photocraft_compose::Buffer, fmt: PixelForm
     s
 }
 
-pub(super) fn source_surface(src: &Document, buf: &photocraft_compose::Buffer, fmt: PixelFormat) -> Result<Surface> {
+/// A source's pixels in `fmt` from a flattened `buf` (the stack-mode combine, which has no
+/// document to composite).
+pub(super) fn source_surface_from_buffer(src: &Document, buf: &photocraft_compose::Buffer, fmt: PixelFormat) -> Result<Surface> {
+    let raster = |f| buffer_to_surface(buf, f);
+    convert_source(src, fmt, raster)
+}
+
+/// `src` composited straight into `fmt` in strips, without the full-size RGBA buffer
+/// [`photocraft_compose::flatten`] allocates (16 bytes a pixel on top of the surface).
+pub(super) fn flattened_source(src: &Document, fmt: PixelFormat) -> Result<Surface> {
+    let b = src.bounds();
+    if u64::from(b.width()) * u64::from(b.height()) > photocraft_compose::MAX_RENDER_PIXELS {
+        return Err(other(format!("the smart object's {}×{} contents are too large to render", b.width(), b.height())));
+    }
+    // The banded compositor composites CMYK in inks and Lab in L, a and b: not the same pixels as
+    // the RGBA buffer, so those modes keep the buffer path.
+    let native = |m| matches!(m, ColorMode::Cmyk | ColorMode::Lab);
+    if native(src.mode) || native(fmt.mode) {
+        return source_surface_from_buffer(src, &photocraft_compose::flatten(src), fmt);
+    }
+    convert_source(src, fmt, |f| composite_in_strips(src, f))
+}
+
+/// Pixels per strip of [`composite_in_strips`]: the compositor's own bands are 8 Mpx, which for
+/// most sources is the whole image again (a band and its f32 conversion are 32 bytes a pixel).
+const STRIP_PIXELS: u64 = 1 << 20;
+
+/// [`photocraft_compose::flatten_to_surface`] of `src`, composited a strip of rows at a time
+/// so the float composite and its conversion never cover more than [`STRIP_PIXELS`].
+fn composite_in_strips(src: &Document, fmt: PixelFormat) -> Surface {
+    let b = src.bounds();
+    let rows = photocraft_compose::band_rows_for(b.width(), i32::try_from(STRIP_PIXELS / u64::from(b.width().max(1))).unwrap_or(i32::MAX));
+    let mut out = Surface::new(fmt);
+    let mut y = b.y0;
+    while y < b.y1 {
+        let strip = Rect::new(b.x0, y, b.x1, y.saturating_add(rows).min(b.y1));
+        out.write_region(strip, &photocraft_compose::composite_to_surface(src, strip, fmt, None).read_region(strip));
+        y = strip.y1;
+    }
+    out.prune();
+    out
+}
+
+/// Runs the gray and 32-bit conversions a source needs to reach `fmt`; `raster` yields the
+/// source's composite at a pixel format.
+fn convert_source(src: &Document, fmt: PixelFormat, raster: impl FnOnce(PixelFormat) -> Surface) -> Result<Surface> {
     let gray = fmt.mode == ColorMode::Grayscale && src.pixel_format().mode != ColorMode::Grayscale;
     let linear = fmt.sample == SampleType::F32 && src.depth != SampleType::F32;
     if !gray && !linear {
-        return Ok(buffer_to_surface(buf, fmt));
+        return Ok(raster(fmt));
     }
     let mut doc = Document::new(src.name.clone(), src.size, src.mode, src.depth);
     doc.icc_profile = src.icc_profile.clone();
-    doc.layers = vec![Layer::new("source", LayerContent::Raster(buffer_to_surface(buf, src.pixel_format())))];
+    doc.layers = vec![Layer::new("source", LayerContent::Raster(raster(src.pixel_format())))];
     if gray {
         let gray_profile = crate::color_cmds::working_profile(ColorMode::Grayscale);
         crate::color_cmds::convert_document(&mut doc, &gray_profile, photocraft_cms::Intent::RelativeColorimetric, true)?;
@@ -213,8 +258,7 @@ pub fn source_image(file_name: &str, bytes: &[u8], fmt: PixelFormat) -> Result<S
         return Ok(img);
     }
     let doc = decode_source(file_name, bytes)?;
-    let buf = photocraft_compose::flatten(&doc);
-    let img = SourceImage { surface: Arc::new(source_surface(&doc, &buf, fmt)?), bounds: doc.bounds() };
+    let img = SourceImage { surface: Arc::new(flattened_source(&doc, fmt)?), bounds: doc.bounds() };
     cache_put(key, img.clone());
     Ok(img)
 }
