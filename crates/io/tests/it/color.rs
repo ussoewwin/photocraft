@@ -210,7 +210,7 @@ fn cmyk_merged_composite_reads_through_the_embedded_profile() {
                 if depth == 8 { data.push(v as u8) } else { data.extend((v as u16).to_be_bytes()) }
             }
         }
-        f.image_data = photocraft_psd::ImageData { compression: Compression::Raw, data };
+        f.image_data = photocraft_psd::ImageData { compression: Compression::Raw, data, ..Default::default() };
         f.resources.push(ImageResource::new(1039, profile.to_bytes().to_vec()));
         let merged = merged_composite(&f).unwrap();
         let mut seen_far = false;

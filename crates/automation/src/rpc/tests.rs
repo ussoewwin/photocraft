@@ -818,6 +818,23 @@ fn methods_lists_the_job_methods_and_every_listed_name_is_served() {
     assert!(h.handle("jobs.nope", Value::Null).unwrap_err().to_string().contains("unknown method"));
 }
 
+/// #3674: a guessed name gets a pointer to the right one, in both directions.
+#[test]
+fn unknown_names_suggest_the_right_method_or_command() {
+    let mut h = Headless::new();
+    let err = |h: &mut Headless, m: &str, p: Value| h.handle(m, p).unwrap_err().to_string();
+    let e = err(&mut h, "engine.execute", json!({"command": "engine.commands"}));
+    assert!(e.contains("did you mean `command.list`") && e.contains("protocol method"), "{e}");
+    let e = err(&mut h, "engine.execute", json!({"command": "doc.inspect"}));
+    assert!(e.contains("`doc.inspect` is a protocol method"), "{e}");
+    let e = err(&mut h, "engine.execute", json!({"command": "edit.undoo"}));
+    assert!(e.contains("did you mean `edit.undo`"), "{e}");
+    let e = err(&mut h, "doc.inspct", Value::Null);
+    assert!(e.contains("did you mean `doc.inspect`") && e.contains("(try `methods`)"), "{e}");
+    let e = err(&mut h, "edit.undo", Value::Null);
+    assert!(e.contains("engine.execute {\"command\": \"edit.undo\"}"), "{e}");
+}
+
 #[test]
 fn batch_response_budget_stops_later_steps_even_when_stop_on_error_is_false() {
     let mut h = Headless::new();

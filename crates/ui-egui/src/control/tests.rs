@@ -8,6 +8,35 @@ fn call(app: &mut PhotocraftApp, ctx: &egui::Context, method: &str, params: Valu
     }
 }
 
+/// #3674: a guessed name gets a pointer to the right one, in both directions; and every
+/// method listed for those hints is served.
+#[test]
+fn unknown_names_suggest_the_right_method_or_command() {
+    let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+    let ctx = egui::Context::default();
+    let mut error = |method: &str, params: Value| {
+        let reply = call(&mut app, &ctx, method, params);
+        assert_eq!(reply["ok"], false, "{reply}");
+        reply["error"].as_str().unwrap_or_default().to_owned()
+    };
+    let e = error("engine.execute", json!({"command": "engine.commands"}));
+    assert!(e.contains("did you mean `command.list`") && e.contains("protocol method"), "{e}");
+    let e = error("engine.execute", json!({"command": "ui.inspect"}));
+    assert!(e.contains("`ui.inspect` is a protocol method"), "{e}");
+    let e = error("engine.execute", json!({"command": "edit.undoo"}));
+    assert!(e.contains("did you mean `edit.undo`"), "{e}");
+    let e = error("ui.inspct", json!({}));
+    assert!(e.contains("did you mean `ui.inspect`"), "{e}");
+    let e = error("edit.undo", json!({}));
+    assert!(e.contains("engine.execute {\"command\": \"edit.undo\"}"), "{e}");
+    for m in METHODS {
+        let (req, _rx) = ControlRequest::new(*m, json!({}));
+        if let Outcome::Done(v) = handle(&mut app, &ctx, &req) {
+            assert!(!v.to_string().contains("unknown method"), "{m} is listed but not served: {v}");
+        }
+    }
+}
+
 #[test]
 fn shift_right_brush_does_not_open_presets_or_paint() {
     let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());

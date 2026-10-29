@@ -1,8 +1,10 @@
+use crate::command_hints;
 use super::LayerId;
 
 #[derive(Debug, thiserror::Error)]
 pub enum EngineError {
-    #[error("unknown command `{0}`")]
+    /// Displays with the nearest registered ids, if any ([`command_hints`], #3674).
+    #[error("unknown command `{id}`{hint}", id = .0, hint = command_hints::unknown_command_hint(.0))]
     UnknownCommand(String),
     #[error("command `{0}` is not available right now: {1}")]
     Disabled(String, String),
