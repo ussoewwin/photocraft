@@ -28,8 +28,12 @@ Removed all 21 requested PR contributions from the existing 108-PR integration, 
 
 ## Validation and testing
 
-New GitHub CI is required, including full-sweep Linux and Windows tests, corpus, WebAssembly and lint. Until that run completes, this trimmed source is not validated. The previous Windows portable ZIP still contains the removed changes and must not be used for acceptance of this branch. Manual UI checks are NOT RUN.
+The trimmed head `8c8c4b95` passed [full-sweep fork CI](https://github.com/FredApps/photocraft/actions/runs/40935778575). The subsequent merge of upstream `8a6771a7` requires a fresh run, including Linux and Windows tests, corpus, WebAssembly and lint. Until that run completes, the reconciled source is not validated. The previous Windows portable ZIP still contains the removed changes and must not be used for acceptance of this branch. Manual UI checks are NOT RUN.
 
 Use the retained 87 cases in [the regression appendix](per-pr-regressions.md). Verify basic editing/save/reopen/Undo/Redo, retained layer-name visibility playback, guide rotation/deletion, pattern persistence, gradient editing and type layout after the removals. Verify the removed menus, preferences and shortcuts are absent or return to base behavior. Custom shape import and native layer-identity rejection are excluded; do not mark their old tests as passing.
 
 The previous build records and approval snapshot are retained only as historical provenance. The frozen retained head list is [here](trimmed-selection-2026-10-29.json).
+
+## Upstream reconciliation
+
+Combined the retained Arrange end-of-stack behavior with upstream action playback no-op detection. Combined multi-layer Free Transform with the retained interpolation preference and added a regression for the combined behavior. Both Path Operations and multi-layer transform documentation are retained. The same 21 exclusions remain; no excluded feature was deliberately reintroduced.

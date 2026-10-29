@@ -16,6 +16,7 @@ fn session() -> TransformSession {
         mode: Default::default(),
         content_aware: None,
         skew_v: 0.0,
+        layers: Vec::new(),
     }
 }
 
@@ -2185,6 +2186,28 @@ fn nested_group_preview_detaches_every_clipped_ancestor() {
 }
 
 #[test]
+fn several_preview_detaches_clipped_ancestors() {
+    use photocraft_color::PixelFormat;
+    use photocraft_doc::Layer;
+    let mut app = app_with_square(64, photocraft_geom::Rect::new(8, 8, 24, 24));
+    let st = app.session.active_mut().unwrap();
+    let doc = Arc::make_mut(&mut st.doc);
+    let first = doc.layers.pop().unwrap();
+    let first_id = first.id;
+    let mut second = Layer::raster("second", PixelFormat::RGBA8);
+    second.surface_mut().unwrap().fill_rect(photocraft_geom::Rect::new(32, 8, 48, 24), &[0., 1., 0., 1.]);
+    let second_id = second.id;
+    let mut group = Layer::group("clipped", vec![first, second]);
+    group.clipped = true;
+    doc.layers.push(Layer::raster("hidden base", PixelFormat::RGBA8));
+    doc.layers.push(group);
+    let shown = Several::shown(doc, &[first_id, second_id], &[]);
+    let (image, _) = composite_image(&shown, photocraft_geom::Rect::new(0, 0, 64, 64), 4096);
+    assert_eq!(image.pixels[16 * image.size[0] + 16], Color32::from_rgb(255, 0, 0));
+    assert_eq!(image.pixels[16 * image.size[0] + 40], Color32::from_rgb(0, 255, 0));
+}
+
+#[test]
 fn unknown_preview_target_keeps_the_previous_document_fallback() {
     let app = app_with_square(64, photocraft_geom::Rect::new(8, 8, 24, 24));
     let st = app.session.active().unwrap();
@@ -3239,4 +3262,21 @@ fn applying_the_box_hides_no_pointer() {
     // The overlay draws no handles while the box is applied, so no drawn pointer either.
     assert_eq!(cursor(&app, &xf, [32.0, 32.0], cmd()), Some(CursorIcon::ResizeNwSe));
     assert_eq!(cursor(&app, &xf, [96.0, 32.0], cmd()), Some(CursorIcon::ResizeVertical));
+}
+
+#[test]
+fn several_layers_reuse_the_transform_interpolation_preference() {
+    let mut app = app_with_square(64, photocraft_geom::Rect::new(8, 8, 24, 24));
+    let st = app.session.active_mut().unwrap();
+    let first = st.active_layer.unwrap();
+    let mut second = photocraft_doc::Layer::raster("second", photocraft_color::PixelFormat::RGBA8);
+    second.surface_mut().unwrap().fill_rect(photocraft_geom::Rect::new(32, 8, 48, 24), &[0., 1., 0., 1.]);
+    let second_id = second.id;
+    Arc::make_mut(&mut st.doc).layers.push(second);
+    st.selected_layers = vec![first, second_id];
+    app.ui.tool_options.transform_interpolation = Some(photocraft_engine::prefs::Interpolation::Nearest);
+    begin(&mut app, &egui::Context::default()).unwrap();
+    let transform = app.ui.transform.as_ref().unwrap();
+    assert_eq!(transform.layers.len(), 2);
+    assert_eq!(transform.interpolation, "nearest");
 }

@@ -6,6 +6,28 @@ use super::{Document, EngineError, Layer, LayerContent, LayerId, LayerMask, Resu
 /// (a Photoshop action plays it without complaint).
 const ALREADY_THERE: &str = "the layer is already at the front or back";
 
+/// Is layer `id` already as far as Arrange can take it in direction `dir` (up when positive)? True
+/// at the top or bottom of its stack, or just above the Background, which stays at the bottom. The
+/// Background itself is not: arranging it is refused outright.
+pub(crate) fn arrange_at_end(doc: &Document, id: LayerId, dir: i32) -> bool {
+    let Some(path) = doc.path_of(id) else { return false };
+    let Some((&idx, parent)) = path.split_last() else { return false };
+    let len = if parent.is_empty() {
+        doc.layers.len()
+    } else {
+        match doc.layer_at(parent).and_then(Layer::children) {
+            Some(children) => children.len(),
+            None => return false,
+        }
+    };
+    let bg = if parent.is_empty() { crate::background_cmds::background_id(doc) } else { None };
+    if bg == Some(id) {
+        return false;
+    }
+    let floor = usize::from(bg.is_some());
+    if dir > 0 { idx.saturating_add(1) >= len } else { idx <= floor }
+}
+
 pub(super) fn arrange(s: &mut Session, p: &Value, delta: i32) -> Result<Value> {
     let id = layer_param(s, p)?;
     let edited = s.edit("Arrange", |doc, _| {
