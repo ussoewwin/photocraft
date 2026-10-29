@@ -2197,6 +2197,25 @@ fn blend_if() {
     check(&mut g, &d, "gray blend if");
 }
 
+/// A Pass Through group with Blend If renders isolated on the GPU as on the CPU (#9554): an
+/// adjustment inside it leaves the layers beneath alone.
+#[test]
+fn pass_through_group_with_blend_if_is_isolated() {
+    use photocraft_doc::BlendRange;
+    let Some(mut g) = gpu() else { return };
+    for gated in [true, false] {
+        let mut d = base_doc(64, 48);
+        d.layers[0] = noise_layer("bg", PixelFormat::RGBA8, Rect::from_xywh(0, 0, 64, 48), 5, 1.0);
+        let mut grp = Layer::group("group", vec![Layer::new("inv", LayerContent::Adjustment(Adjustment::Invert))]);
+        grp.blend = BlendMode::PassThrough;
+        if gated {
+            grp.blend_if.set(1, [BlendRange::FULL, BlendRange { black: [0, 0], white: [110, 110] }]);
+        }
+        d.layers.push(grp);
+        check(&mut g, &d, &format!("pass-through group, Blend If {gated}"));
+    }
+}
+
 #[test]
 fn channel_restrictions() {
     let Some(mut g) = gpu() else { return };

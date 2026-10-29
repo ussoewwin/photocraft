@@ -398,7 +398,8 @@ impl<'a> Planner<'a> {
         let visible_clipped: Vec<&'a Layer> = clipped.iter().filter(|c| c.visible).collect();
 
         // Below 100% fill a pass-through group renders isolated (as the CPU compositor does), and
-        // so does one that is the base of a clipping group and holds an adjustment layer.
+        // so does one that is the base of a clipping group and holds an adjustment layer, or one
+        // with Blend If (#9554).
         let clip_base_adjusts = !visible_clipped.is_empty()
             && matches!(&layer.content, LayerContent::Group(g) if g.children.iter().any(|c| c.visible && matches!(c.content, LayerContent::Adjustment(_))));
         if let LayerContent::Group(g) = &layer.content
@@ -406,6 +407,7 @@ impl<'a> Planner<'a> {
             && layer.fill_opacity >= 1.0
             && !has_effects(layer)
             && !clip_base_adjusts
+            && !photocraft_compose::blend_if_active(layer, self.cx.mode)
         {
             let before = self.retain(backdrop);
             let mut after = self.stack(&g.children, backdrop)?;
