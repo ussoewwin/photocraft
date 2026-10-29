@@ -27,10 +27,20 @@ pub(super) fn tool_mode_dropdown(ui: &mut egui::Ui, id: &str, modes: &[Option<Bl
 /// `~` is held (`held`). The wheel over it steps the mode, as over the Layers panel's (#2061).
 pub(super) fn paint_mode_dropdown(ui: &mut egui::Ui, id: &str, b: &mut photocraft_engine::BrushSettings, clear: &mut bool, held: bool) {
     let opts = crate::brush_mode_menu::choices();
-    let mut mode = if *clear || held { None } else { Some(b.mode) };
+    let mut mode = if *clear || held {
+        (None, false)
+    } else if b.behind {
+        (None, true)
+    } else {
+        (Some(b.mode), false)
+    };
     if !widgets::dropdown_wheel_hovered(ui, id, tl!("Mode"), &mut mode, &opts, 96.0).0.is_empty() {
-        *clear = mode.is_none();
-        if let Some(m) = mode {
+        *clear = mode == (None, false);
+        b.behind = mode.1;
+        if mode.1 {
+            b.mode = BlendMode::Normal;
+        }
+        if let Some(m) = mode.0 {
             b.mode = m;
         }
     }

@@ -330,7 +330,14 @@ fn command_body_more(app: &mut PhotocraftApp, ui: &mut egui::Ui, d: &Dialog, fie
         _ if crate::blur_pins::owns(fields) => crate::blur_pins::body(ui, fields),
         _ if fields.contains_key("__filter") => filter_body(app, ui, d, fields, id),
         _ if crate::new_guide_ui::owns(fields) => crate::new_guide_ui::body(ui, fields),
-        _ if fields.contains_key("__form") => crate::view_cmds::form_body(ui, fields),
+        _ if fields.contains_key("__form") => {
+            if fields.get("__command").and_then(Value::as_str) == Some("file.fileInfo") {
+                let room = (ui.ctx().content_rect().height() - DIALOG_CHROME).max(120.0);
+                egui::ScrollArea::vertical().id_salt(("file-info-body", d.id)).max_height(room).show(ui, |ui| crate::view_cmds::form_body(ui, fields));
+            } else {
+                crate::view_cmds::form_body(ui, fields);
+            }
+        }
         _ => {}
     }
     outcome
@@ -633,7 +640,7 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
                 ui.set_max_width(360.0);
             }
             if color_picker {
-                ui.set_width(crate::color_picker_ui::CONTENT_WIDTH);
+                ui.set_width(crate::color_picker_ui::content_width(ui));
             }
             let label = egui::Label::new(egui::RichText::new(&title).font(crate::theme::semibold(15.0))).selectable(false);
             let t = if crate::color_picker_ui::owns(&fields) { ui.add_sized(egui::vec2(ui.available_width(), 22.0), label).rect } else { ui.add(label).rect };
@@ -779,6 +786,11 @@ fn about_tab_body(app: &mut PhotocraftApp, ui: &mut egui::Ui, tab: &str) {
 
 /// The dialog title as shown: [`title`] in the UI language.
 fn display_title(d: &Dialog) -> String {
+    match d.fields.get("__colorPicker").and_then(Value::as_str) {
+        Some("foreground") => return crate::color_picker_ui::title_for(tl!("Foreground Color")),
+        Some("background") => return crate::color_picker_ui::title_for(tl!("Background Color")),
+        _ => {}
+    }
     if crate::smart_filter_dialog::owns(&d.fields) {
         return crate::smart_filter_dialog::title(&d.fields);
     }

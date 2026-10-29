@@ -7,10 +7,11 @@ use serde_json::json;
 use crate::{PhotocraftApp, state::Tool, theme::Tokens};
 
 /// The options bar and canvas picker use the same order, including painting-only Clear.
-pub(crate) fn choices() -> Vec<(Option<BlendMode>, &'static str)> {
-    let mut choices: Vec<_> = BlendMode::LAYER_MODES.iter().map(|m| (Some(*m), m.label())).collect();
-    let at = choices.iter().position(|o| o.0 == Some(BlendMode::Dissolve)).map_or(choices.len(), |i| i + 1);
-    choices.insert(at, (None, "Clear"));
+pub(crate) fn choices() -> Vec<((Option<BlendMode>, bool), &'static str)> {
+    let mut choices: Vec<_> = BlendMode::LAYER_MODES.iter().map(|m| ((Some(*m), false), m.label())).collect();
+    let at = choices.iter().position(|o| o.0 == (Some(BlendMode::Dissolve), false)).map_or(choices.len(), |i| i + 1);
+    choices.insert(at, ((None, true), "Behind"));
+    choices.insert(at + 1, ((None, false), "Clear"));
     choices
 }
 
@@ -102,12 +103,12 @@ pub(crate) fn blocks_control(app: &mut PhotocraftApp, ctx: &Context, ev: crate::
     false
 }
 
-fn choose(app: &mut PhotocraftApp, mode: Option<BlendMode>) {
+fn choose(app: &mut PhotocraftApp, mode: (Option<BlendMode>, bool)) {
     // Clear is the existing painting-only UI flag; keep the underlying blend mode just as the
     // options bar does. Journal the choice through the same brush command.
-    let selected = mode.unwrap_or(app.session.tools.brush.mode);
-    match app.run("tools.setBrush", json!({"brush": {"mode": selected}})) {
-        Ok(_) => app.ui.tool_options.brush_clear = mode.is_none(),
+    let selected = if mode.1 { BlendMode::Normal } else { mode.0.unwrap_or(app.session.tools.brush.mode) };
+    match app.run("tools.setBrush", json!({"brush": {"mode": selected,"behind":mode.1}})) {
+        Ok(_) => app.ui.tool_options.brush_clear = mode == (None, false),
         Err(e) => app.ui.status = e,
     }
     app.ui.brush_mode_menu = None;
@@ -124,7 +125,13 @@ pub(crate) fn show(app: &mut PhotocraftApp, ctx: &Context) {
         return;
     }
     let choices = choices();
-    let current = if app.ui.tool_options.brush_clear { None } else { Some(app.session.tools.brush.mode) };
+    let current = if app.ui.tool_options.brush_clear {
+        (None, false)
+    } else if app.session.tools.brush.behind {
+        (None, true)
+    } else {
+        (Some(app.session.tools.brush.mode), false)
+    };
     let screen = crate::work_area::visible_rect(ctx);
     let id = menu_id();
     let margin = ctx.global_style().spacing.menu_margin.sum() + egui::Vec2::splat(2.0);

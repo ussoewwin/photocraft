@@ -54,6 +54,8 @@ pub fn pen_down(app: &mut PhotocraftApp, x: f64, y: f64, shift: bool) {
     }
     let pen = app.ui.pen.get_or_insert_with(PenPath::default);
     pen.adjusting_in = false;
+    pen.last_pointer = Some([x, y]);
+    pen.reposition = false;
     if let Some(first) = pen.knots.first().map(|k| k[0])
         && on_closing_anchor(pen, x, y, tol)
     {
@@ -95,6 +97,16 @@ pub fn pen_move(app: &mut PhotocraftApp, x: f64, y: f64, shift: bool) {
     {
         let (adjusting_last, adjusting_in) = (pen.adjusting_last, pen.adjusting_in);
         if let Some(k) = pen.knots.last_mut() {
+            if pen.reposition {
+                if let Some([px, py]) = pen.last_pointer {
+                    for point in k {
+                        point[0] += x - px;
+                        point[1] += y - py;
+                    }
+                }
+                pen.last_pointer = Some([x, y]);
+                return;
+            }
             let a = k[0];
             let [x, y] = shift_45(a, [x, y], shift);
             if adjusting_in {
@@ -106,6 +118,7 @@ pub fn pen_move(app: &mut PhotocraftApp, x: f64, y: f64, shift: bool) {
                 k[1] = [2.0 * a[0] - x, 2.0 * a[1] - y];
             }
         }
+        pen.last_pointer = Some([x, y]);
     }
 }
 
@@ -160,6 +173,8 @@ pub fn pen_up(app: &mut PhotocraftApp) {
     let Some(pen) = app.ui.pen.as_mut() else { return };
     pen.dragging = false;
     pen.adjusting_last = false;
+    pen.reposition = false;
+    pen.last_pointer = None;
     pen.adjusting_in = false;
     if closing(pen) {
         // A click on the first anchor closes the path and leaves that anchor's handles alone.
@@ -208,6 +223,8 @@ pub fn pen_grab_handle(app: &mut PhotocraftApp, x: f64, y: f64) -> bool {
     }
     pen.dragging = true;
     pen.adjusting_last = true;
+    pen.reposition = false;
+    pen.last_pointer = Some([x, y]);
     pen.adjusting_in = incoming;
     true
 }

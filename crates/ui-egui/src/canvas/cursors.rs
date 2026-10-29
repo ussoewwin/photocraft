@@ -173,9 +173,12 @@ pub(super) fn alt_eyedropper(app: &mut PhotocraftApp, ev: ToolEvent, mods: egui:
 }
 
 pub(super) fn sample_eyedropper(app: &mut PhotocraftApp, x: f64, y: f64, mods: egui::Modifiers) {
-    if let Some([r, g, b]) = eyedropper_color(app, x, y) {
+    if let Some(mut rgb) = eyedropper_color(app, x, y) {
+        if super::paint_target(app) != json!("pixels") {
+            rgb = [photocraft_color::convert::rgb_to_gray(rgb); 3];
+        }
         let key = if mods.alt { "background" } else { "foreground" };
-        let _ = app.run("tools.setColors", json!({ key: [r, g, b, 1.0] }));
+        let _ = app.run("tools.setColors", json!({ key: [rgb[0],rgb[1],rgb[2],1.0] }));
     }
 }
 

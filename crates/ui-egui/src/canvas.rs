@@ -1552,6 +1552,7 @@ fn draw_default_tool_cursor(app: &mut PhotocraftApp, ui: &mut egui::Ui, input: &
             if precise_other_cursor(app) { egui::CursorIcon::Crosshair } else { pen_cursor(ui.ctx(), tool, p) }
         }
         // Preferences › Cursors › Other Cursors: Precise shows a crosshair for every tool.
+        Tool::Move if crate::move_mods::copying(app, alt) => egui::CursorIcon::Copy,
         Tool::Move | Tool::Type | Tool::VerticalType | Tool::HorizontalTypeMask | Tool::VerticalTypeMask
             if app.session.prefs().cursors.other == photocraft_engine::prefs::OtherCursor::Precise =>
         {
@@ -1880,6 +1881,10 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
     crate::crop_ui::cancel_stale(app);
     crate::crop_ui::ensure_frame(app);
     let mut drawing = crate::crop_ui::active(app);
+    if let Some(pen) = app.ui.pen.as_mut().filter(|pen| pen.dragging && !pen.curvature) {
+        pen.reposition = reposition;
+        drawing = true;
+    }
     if let Some(d) = app.drag.as_mut().filter(|d| crate::hold_keys::repositions(d.tool)) {
         d.reposition = reposition;
         drawing = true;

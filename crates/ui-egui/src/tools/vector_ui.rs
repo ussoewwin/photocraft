@@ -74,6 +74,11 @@ pub struct PenPath {
     /// Re-dragging the final anchor changes its outgoing control only; the incoming curve stays put.
     #[serde(skip)]
     pub adjusting_last: bool,
+    /// Space moves the anchor and both handles together during a Pen drag.
+    #[serde(skip)]
+    pub reposition: bool,
+    #[serde(skip)]
+    pub last_pointer: Option<[f64; 2]>,
     /// ⌥/Alt-dragging the final anchor's incoming handle: it turns alone (#6077).
     #[serde(skip)]
     pub adjusting_in: bool,

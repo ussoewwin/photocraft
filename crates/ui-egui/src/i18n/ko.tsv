@@ -3739,3 +3739,4 @@ curves	Smooth	매끄럽게
 	Refine Hair needs hair detection, which isn't available yet	머리카락 다듬기에는 머리카락 감지가 필요하지만 아직 사용할 수 없습니다
 	Select and Mask was closed: its document is no longer the active one	선택 및 마스크가 닫혔습니다: 해당 문서가 더 이상 활성 문서가 아닙니다
 	Select and Mask was closed: another layer was selected	선택 및 마스크가 닫혔습니다: 다른 레이어가 선택되었습니다
+	Select Layer Under Cursor	커서 아래 레이어 선택
