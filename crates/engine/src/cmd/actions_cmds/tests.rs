@@ -98,8 +98,9 @@ fn definition_edits_undo_redo_without_touching_document_or_journal() {
         name: "A".into(),
         steps: vec![("layer.new.layer".into(), json!({})), ("select.all".into(), json!({}))],
         disabled: Default::default(),
+        ..Default::default()
     });
-    s.actions.list.push(Action { name: "Caller".into(), steps: vec![("actions.play".into(), json!({"action": "A"}))], disabled: Default::default() });
+    s.actions.list.push(Action { name: "Caller".into(), steps: vec![("actions.play".into(), json!({"action": "A"}))], ..Default::default() });
     s.edit_prefs(|p| {
         p.shortcuts.insert("actions.play:A".into(), "F6".into());
     });
