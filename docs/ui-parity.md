@@ -165,6 +165,7 @@ Triangle and Curvature Pen (minus legacy Rounded Rectangle and Targeted Adjustme
 | Ruler units px/in/cm/mm/pt/pica/% | done | |
 | ⇧-drag a guide out of a ruler: it lands on the nearest ruler tick | done | `rulers.rs` `snap_to_tick` (#3770) |
 | A dragged guide shows its position beside the pointer (X for vertical, Y for horizontal, in the ruler unit) | done | `rulers.rs` `guide_drag_readout` (#7680) |
+| ⌥ while dragging a guide (out of a ruler, or with the Move tool) turns it; a guide dropped on either ruler is deleted | done | `rulers.rs` `GuideDrag::track`, `view.moveGuide` `toOrientation` (#5034) |
 | Status bar follows the ruler unit | partial | #2602 |
 | Ruler corner and gaps drawn as Photoshop | partial | #2600, #2601, #2551 |
 | Guides stored as f64 | missing | `Vec<f32>` (UI-217-20) |
@@ -282,6 +283,7 @@ Paragraph; the rest open as in-app floating windows.
 | 2026-10-13 | minor | Menu bar from the keyboard: Alt / F10 focus, Alt+letter, underlined mnemonics (#4988) |
 | 2026-10-13 | minor | Layers panel filter row: Kind is a real dropdown with Kind, Name and Mode filters, drivable by `ui.set {layerFilter}` (#5048); row added as partial |
 | 2026-10-14 | minor | Character and Paragraph panels edit persistent defaults without a type target (#5556); no percentage or estimate changed |
+| 2026-10-14 | minor | ⌥ while dragging a guide turns it horizontal ↔ vertical, as in Photoshop; a guide dropped on either ruler is deleted (#5034) |
 | 2026-10-13 | minor | Stale "missing tool" rows corrected against main: Color Replacement (`paint.colorReplacement`), Red Eye (`paint.redEye`) and Add/Delete Anchor Point (the P flyout cycle) are live toolbar tools, so only Art History Brush is missing; no percentage or estimate changed |
 | 2026-10-13 | minor | Smart object perspective (non-affine) corrected to done: #426 landed four-corner placements with PSD round trip; scorecard FILE-215-6 flipped |
 | 2026-10-10 | major | First version, from a source audit against Photoshop 2026 27.11.0's shortcuts file and the open issues |

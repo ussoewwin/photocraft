@@ -191,7 +191,9 @@ fn filter_event_before_tool(app: &mut PhotocraftApp, ev: ToolEvent, mods: egui::
     if let ToolEvent::Down { x, y, .. } = raw
         && let Some((vertical, i)) = command_guide_at(app, app.active_tool(), [x, y], mods)
     {
-        app.guide_drag = Some(crate::rulers::GuideDrag::existing(vertical, i, [x, y]));
+        let mut guide=crate::rulers::GuideDrag::existing(vertical,i,[x,y]);
+        guide.track([x,y],mods.alt);
+        app.guide_drag=Some(guide);
         crate::snap_ui::begin_guide(app, [x, y]);
         return None;
     }
@@ -214,7 +216,9 @@ fn handle_move_pointer(app: &mut PhotocraftApp, ev: ToolEvent, tool: Tool, mods:
                     crate::guide_select::flip(app, vertical, i, [x, y]);
                     return true;
                 }
-                app.guide_drag = Some(crate::rulers::GuideDrag::existing(vertical, i, [x, y]));
+                let mut guide=crate::rulers::GuideDrag::existing(vertical,i,[x,y]);
+        guide.track([x,y],mods.alt);
+        app.guide_drag=Some(guide);
                 return true;
             }
             // Auto-Select (or ⌘-click while it is off) picks the layer under the pointer first
@@ -273,14 +277,14 @@ fn handle_move_pointer(app: &mut PhotocraftApp, ev: ToolEvent, tool: Tool, mods:
         }
         ToolEvent::Move { x, y, .. } => {
             if let Some(d) = app.guide_drag.as_mut().filter(|d| d.index.is_some()) {
-                d.pos = if d.vertical { x } else { y };
+                d.track([x,y],mods.alt);
                 return true;
             }
         }
         ToolEvent::Up { x, y } => {
             if let Some(mut d) = app.guide_drag.filter(|d| d.index.is_some()) {
                 app.guide_drag = None;
-                d.pos = if d.vertical { x } else { y };
+                d.track([x,y],mods.alt);
                 crate::rulers::finish_drag(app, d);
                 return true;
             }
