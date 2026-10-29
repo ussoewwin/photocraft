@@ -231,9 +231,13 @@ pub(super) fn parse_fill(v: &Value) -> std::result::Result<Option<Fill>, String>
                     let values = stop.as_array().filter(|a| a.len() == 2).ok_or("gradient stop must contain a location and colour")?;
                     let t = values.first().ok_or("missing stop location")?;
                     let c = values.get(1).ok_or("missing stop colour")?;
-                    Ok((fill_number(t, "stop location", 0.0, 1.0)?, paint_color(c)?))
+                    let location = fill_number(t, "stop location", 0.0, 1.0)?;
+                    Ok(paint_color(c).ok().map(|color| (location, color)))
                 })
-                .collect::<std::result::Result<Vec<_>, String>>()?,
+                .collect::<std::result::Result<Vec<_>, String>>()?
+                .into_iter()
+                .flatten()
+                .collect(),
             _ => return Err("gradient stops must contain at most 4096 location/colour pairs".into()),
         };
         let style = match g.get("style").map_or(Some("linear"), Value::as_str).ok_or("gradient style must be a string")? {
@@ -244,7 +248,7 @@ pub(super) fn parse_fill(v: &Value) -> std::result::Result<Option<Fill>, String>
             "diamond" => GradientStyle::Diamond,
             _ => return Err("unknown gradient style".into()),
         };
-        let opacity_stops = match g.get("opacityStops") {
+        let mut opacity_stops = match g.get("opacityStops") {
             None => Vec::new(),
             Some(Value::Array(stops)) if stops.len() <= 4096 => stops
                 .iter()
@@ -258,6 +262,7 @@ pub(super) fn parse_fill(v: &Value) -> std::result::Result<Option<Fill>, String>
                 .collect::<std::result::Result<Vec<_>, String>>()?,
             _ => return Err("opacityStops must contain at most 4096 location/opacity pairs".into()),
         };
+        opacity_stops.sort_by(|a, b| a.0.total_cmp(&b.0));
         let midpoints = match g.get("midpoints") {
             None => Vec::new(),
             Some(Value::Array(values)) if values.len() <= 4096 => {
@@ -294,7 +299,7 @@ pub(super) fn parse_fill(v: &Value) -> std::result::Result<Option<Fill>, String>
 }
 
 fn paint_color(v: &Value) -> std::result::Result<Color, String> {
-    let c = if let Some(raw) = v.get("color") {
+    let c = if let Some(raw) = v.get("color").or_else(|| (v.get("mode").is_some() && v.get("c").is_some()).then_some(v)) {
         serde_json::from_value::<Color>(raw.clone()).map_err(|e| format!("invalid model colour: {e}"))?
     } else {
         if let Some(values) = v.as_array() {

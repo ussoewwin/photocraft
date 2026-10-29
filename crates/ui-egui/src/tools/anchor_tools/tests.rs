@@ -133,7 +133,7 @@ fn shape_layer_paths_are_edited_and_a_direct_selection_is_cleared() {
     let mut app = app(Tool::DirectSelection);
     let id = app.run("shape.create", json!({"kind": "rect", "rect": [20, 20, 60, 60], "fill": "#3070c0"})).unwrap()["layer"].as_u64().unwrap();
     click(&mut app, [80.0, 80.0], Modifiers::NONE);
-    assert_eq!((app.ui.direct_selection.target.clone(), app.ui.direct_selection.anchors.clone()), (Some(PathRef::Layer(id)), vec![[0, 2]]));
+    assert_eq!((app.ui.direct_selection.target, app.ui.direct_selection.anchors.clone()), (Some(PathRef::Layer(id)), vec![[0, 2]]));
     app.ui.tool = Tool::AddAnchorPoint;
     click(&mut app, [50.0, 20.0], Modifiers::NONE);
     let info = app.run("shape.info", json!({"layer": id})).unwrap();

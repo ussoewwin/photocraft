@@ -6,7 +6,7 @@ use crate::commands;
 
 /// Names that are documented elsewhere and can't be found by spelling alone: a protocol method
 /// mistaken for the engine command that does the same thing.
-const ALIASES: &[(&str, &str)] = &[("engine.commands", "command.list")];
+const ALIASES: &[(&str, &str)] = &[("engine.commands", "command.list"), ("document.undo", "edit.undo"), ("document.redo", "edit.redo")];
 
 /// At most this many suggestions per error.
 const MAX_SUGGESTIONS: usize = 3;

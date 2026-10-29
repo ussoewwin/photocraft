@@ -700,6 +700,8 @@ fn canvas_drop_rect(app: &PhotocraftApp) -> egui::Rect {
     crate::rulers::content_rect(app, app.last_canvas_rect)
 }
 
+pub(crate) use panels::gradient_picker;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -924,5 +926,3 @@ mod tests {
         assert_eq!(crate::retouch_ui::source_marker_point(&app), None);
     }
 }
-
-pub(crate) use panels::gradient_picker;

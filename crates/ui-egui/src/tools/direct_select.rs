@@ -453,7 +453,7 @@ fn press(app: &mut PhotocraftApp, p: [f64; 2], mods: Modifiers, convert: bool) -
     let owner = Owner::current(app);
     let ds = &mut app.ui.direct_selection;
     if ds.target.as_ref() != Some(&target) {
-        *ds = DirectSelection { target: Some(target.clone()), ..Default::default() };
+        *ds = DirectSelection { target: Some(target), ..Default::default() };
     }
     ds.owner = owner;
     let edit = match hit {
@@ -657,7 +657,7 @@ fn marquee(app: &mut PhotocraftApp, start: [f64; 2], end: [f64; 2], add: bool) {
 pub fn arrow_keys(app: &mut PhotocraftApp, ctx: &egui::Context) -> bool {
     cancel_stale(app);
     let ds = &app.ui.direct_selection;
-    let Some(target) = ds.target.clone().filter(|_| app.ui.tool == Tool::DirectSelection && !ds.anchors.is_empty() && ds.drag.is_none()) else {
+    let Some(target) = ds.target.filter(|_| app.ui.tool == Tool::DirectSelection && !ds.anchors.is_empty() && ds.drag.is_none()) else {
         return false;
     };
     // The anchors belong to a path the canvas no longer offers (another saved path picked in the

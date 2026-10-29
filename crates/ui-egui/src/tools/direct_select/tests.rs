@@ -64,7 +64,7 @@ fn dragging_an_anchor_moves_it_in_one_undoable_step() {
     assert_eq!(anchor(&app, 3), Point::new(50.0, 130.0));
     assert_eq!(anchor(&app, 0), Point::new(40.0, 40.0), "only the dragged anchor moved");
     assert_eq!(steps(&app), n + 1, "one history step for the whole drag");
-    assert_eq!((app.ui.direct_selection.target.clone(), app.ui.direct_selection.anchors.clone()), (Some(PathRef::Work), vec![[0, 3]]));
+    assert_eq!((app.ui.direct_selection.target, app.ui.direct_selection.anchors.clone()), (Some(PathRef::Work), vec![[0, 3]]));
     assert!(app.session.undo());
     assert_eq!(work(&app), before);
 }

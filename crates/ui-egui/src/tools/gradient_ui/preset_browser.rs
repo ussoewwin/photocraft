@@ -1,6 +1,6 @@
 //! Embedded preset selection, sharing the sidebar's folders, grid and management commands.
 
-use super::*;
+use super::{Fill, Marker, PhotocraftApp, Sense, Sink, Stroke, StrokeKind, Tokens, Value, json, paint_ramp, selected_gradient, strip_key, vec2};
 use photocraft_engine::presets::gradients::{GradientPreset, StopColor};
 
 fn target(app: &PhotocraftApp) -> Sink {

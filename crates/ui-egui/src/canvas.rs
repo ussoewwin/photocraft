@@ -1754,6 +1754,20 @@ fn sync_view_to_document(app: &PhotocraftApp, ctx: &egui::Context, view: &mut Vi
     aspect
 }
 
+fn update_polygon_camera(app: &mut PhotocraftApp, ctx: &egui::Context, (idx, primary): (usize, bool), rect: Rect, view: &mut View, ppp: f32, aspect: f32) {
+    let previous_center = view.center;
+    if primary {
+        polygon_cancel_stale(app);
+        polygon_edge_scroll(app, ctx, idx, rect, view, ppp);
+    }
+    if !app.session.prefs().tools.overscroll {
+        crate::scrollbars::clamp_view_with_aspect(view, rect.size(), ppp, aspect);
+    }
+    if view.center != previous_center {
+        ctx.request_repaint();
+    }
+}
+
 pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect: Rect, mut view: View, primary: bool) -> View {
     let ctx = ui.ctx().clone();
     // The camera as the app holds it before this frame's input. The canvas works on its own copy
@@ -1811,17 +1825,7 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
     let doc = app.session.documents()[idx].doc.clone();
     let size = [doc.size.width, doc.size.height];
     let aspect = sync_view_to_document(app, &ctx, &mut view, &doc, rect, ppp);
-    let previous_center = view.center;
-    if primary {
-        polygon_cancel_stale(app);
-        polygon_edge_scroll(app, &ctx, idx, rect, &mut view, ppp);
-    }
-    if !app.session.prefs().tools.overscroll {
-        crate::scrollbars::clamp_view_with_aspect(&mut view, rect.size(), ppp, aspect);
-    }
-    if view.center != previous_center {
-        ctx.request_repaint();
-    }
+    update_polygon_camera(app, &ctx, (idx, primary), rect, &mut view, ppp, aspect);
 
     let flip = app.ui.view.flip_horizontal;
     // Document rendering follows the target; only shader uniforms and overlay geometry ease.

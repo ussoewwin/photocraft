@@ -130,16 +130,6 @@ fn name_param(cmd: &str, p: &Value) -> Result<Option<String>> {
     }
 }
 
-/// History panel menu › Clear History: drops every state of the active document but its current
-/// one, keeping the snapshots (Edit › Purge › Histories clears every open document). Undoable in
-/// Photoshop only by its own Undo; here, as with Purge, it is not.
-fn clear_history(s: &mut Session, _: &Value) -> Result<Value> {
-    let st = s.active_mut().ok_or(EngineError::NoDocument)?;
-    st.history.clear();
-    st.coalesce = None;
-    Ok(Value::Null)
-}
-
 /// History panel › Create new snapshot (the camera button): a named copy of the document,
 /// "Snapshot N" by default. `from` is the New Snapshot dialog's From: the full document (default),
 /// its layers merged into one, or only the active layer. Not a history state.
@@ -301,16 +291,6 @@ pub fn specs() -> Vec<CommandSpec> {
             params: r##"{"name":str?="Snapshot N","from":"fullDocument"|"mergedLayers"|"currentLayer"="fullDocument","replaceExisting":bool=false (drop snapshots of the same name first)} → {snapshot,name}: a named copy of the document for the session (not a history state)"##,
             enabled: has_doc,
             run: new_snapshot,
-            journal: true,
-        },
-        CommandSpec {
-            id: "history.clear",
-            label: "Clear History",
-            menu: &[],
-            shortcut: None,
-            params: "{} (the active document's states; snapshots stay)",
-            enabled: has_doc,
-            run: clear_history,
             journal: true,
         },
         CommandSpec {
@@ -476,11 +456,11 @@ mod tests {
         let pixel = top_pixel(&s);
         s.execute("history.clear", json!({})).unwrap();
         assert_eq!(entries(&s).len(), 1, "only the current state is left");
-        assert!(!s.active().unwrap().history.can_undo());
+        assert!(s.active().unwrap().history.can_undo(), "the current Clear History remains undoable");
         assert_eq!(top_pixel(&s), pixel, "the document is unchanged");
         assert_eq!(snapshots(&s).as_array().map(Vec::len), Some(2), "snapshots stay");
-        // Nothing left to clear is not an error (an action may clear twice).
-        s.execute("history.clear", json!({})).unwrap();
+        // Current History menu semantics refuse a second clear; snapshots remain independent.
+        assert!(s.execute("history.clear", json!({})).is_err());
         assert!(Session::new().execute("history.clear", json!({})).is_err(), "no document");
     }
 

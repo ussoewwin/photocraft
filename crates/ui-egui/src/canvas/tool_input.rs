@@ -295,18 +295,25 @@ fn handle_move_pointer(app: &mut PhotocraftApp, ev: ToolEvent, tool: Tool, mods:
     false
 }
 
-/// Tool state machine. Shared by mouse input and automation.
-pub fn tool_event(app: &mut PhotocraftApp, ev: ToolEvent, mods: egui::Modifiers) {
+fn consumes_cancelled_vector_event(app: &mut PhotocraftApp, ev: ToolEvent) -> bool {
     cancel_stale_vector_drag(app);
     if app.cancelled_vector_drag {
         match ev {
             ToolEvent::Down { .. } => app.cancelled_vector_drag = false,
-            ToolEvent::Move { .. } => return,
+            ToolEvent::Move { .. } => return true,
             ToolEvent::Up { .. } => {
                 app.cancelled_vector_drag = false;
-                return;
+                return true;
             }
         }
+    }
+    false
+}
+
+/// Tool state machine. Shared by mouse input and automation.
+pub fn tool_event(app: &mut PhotocraftApp, ev: ToolEvent, mods: egui::Modifiers) {
+    if consumes_cancelled_vector_event(app, ev) {
+        return;
     }
     let Some((armed, mods)) = preflight_tool_event(app, ev, mods) else { return };
     let Some((raw, ev, mods)) = filter_event_before_tool(app, ev, mods, armed) else { return };

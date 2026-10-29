@@ -447,7 +447,8 @@ fn tab_switch_commits_only_the_valid_original_captured_saved_path() {
     draft(&mut app);
     let source = app.session.active().unwrap().doc.id;
     app.session.execute("file.new", json!({"width":200,"height":200})).unwrap();
-    seed(&mut app, "Destination", 100.0);
+    // Seed through the engine so UI sync cannot process the tab switch before this assertion.
+    app.session.execute("path.set", json!({"name":"Destination", "path":{"subpaths":[{"closed":false,"knots":[[10.0,100.0],[90.0,100.0]]}]}})).unwrap();
     app.ui.selected_path = Some("Destination".into());
     let current = app.session.active().unwrap().doc.clone();
     assert!(vector_ui::cancel_stale_pen(&mut app));
