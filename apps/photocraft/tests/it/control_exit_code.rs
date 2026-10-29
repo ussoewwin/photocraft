@@ -58,8 +58,8 @@ fn run_with(args: &[&str], vars: &[(&str, &str)]) -> Run {
     let output = child.wait_with_output().unwrap();
     let gpu_started = dir.join("gpu-starting.json").exists();
     std::fs::remove_dir_all(&dir).ok();
-    assert!(!timed_out,"PhotoCraft did not exit: {}",String::from_utf8_lossy(&output.stderr));
-    assert!(!gpu_started,"control setup errors must exit before GPU startup");
+    assert!(!timed_out, "PhotoCraft did not exit: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(!gpu_started, "control setup errors must exit before GPU startup");
     Run { status: output.status, stderr: String::from_utf8_lossy(&output.stderr).into_owned() }
 }
 
@@ -67,7 +67,7 @@ fn run_with(args: &[&str], vars: &[(&str, &str)]) -> Run {
 fn an_occupied_control_port_exits_with_status_2() {
     let held = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let port = held.local_addr().unwrap().port().to_string();
-    let Run {status,stderr} = run_photocraft(&["--control", &port, "--control-token", VALID_TOKEN]);
+    let Run { status, stderr } = run_photocraft(&["--control", &port, "--control-token", VALID_TOKEN]);
     assert_eq!(status.code(), Some(2), "occupied control port must exit 2, stderr: {stderr}");
     assert!(stderr.contains(&format!("failed to bind 127.0.0.1:{port}")), "stderr: {stderr}");
 }

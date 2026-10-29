@@ -292,9 +292,12 @@ fn control_setup(
         eprint!("{warning}");
     }
     let port = port?;
-    let listener=match std::net::TcpListener::bind(("127.0.0.1",port)) {
-        Ok(listener)=>listener,
-        Err(error)=>{eprintln!("photocraft: control server failed to bind 127.0.0.1:{port}: {error}");std::process::exit(2);}
+    let listener = match std::net::TcpListener::bind(("127.0.0.1", port)) {
+        Ok(listener) => listener,
+        Err(error) => {
+            eprintln!("photocraft: control server failed to bind 127.0.0.1:{port}: {error}");
+            std::process::exit(2);
+        }
     };
     let (supplied, token_file) = (auth.control_token, auth.control_token_file);
     let token = match photocraft_automation::security::server_token(supplied.as_deref(), token_file.as_deref()) {
