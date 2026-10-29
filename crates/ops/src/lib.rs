@@ -572,18 +572,19 @@ impl History {
     }
 
     /// Keep pixel memory within [`History::max_bytes`]: the current document's tiles plus the
-    /// tiles only history holds (newest states first), both with embedded smart object contents. The oldest undo states that don't fit are
-    /// dropped; the most recent one is always kept so the last step can be undone. The History
-    /// Brush's source state ([`History::set_brush_source`]) is never dropped: its unique tiles are
-    /// counted first, and the newest states fill what remains. Returns how many states were
-    /// dropped.
+    /// tiles only history holds (newest states first), both with embedded smart object contents.
+    /// The oldest undo states that don't fit are dropped; the most recent one is always kept so
+    /// the last step can be undone. The History Brush's source state ([`History::set_brush_source`])
+    /// is never dropped: its unique tiles are counted first, and the newest states fill what
+    /// remains. Returns how many states were dropped.
     pub fn trim(&mut self, current: &Document) -> usize {
         self.trim_with(current, &[])
     }
 
-    /// [`History::trim`] counting the tiles (and embedded smart object contents) only `pinned` documents hold (History panel
-    /// snapshots, which outlive the states) against the budget too, so they can't take memory
-    /// beyond it unseen (#4530). The most recent state is still always kept.
+    /// [`History::trim`] counting the tiles (and embedded smart object contents) only `pinned`
+    /// documents hold (History panel snapshots, which outlive the states) against the budget too,
+    /// so they can't take memory beyond it unseen (#4530). The most recent state is still always
+    /// kept.
     pub fn trim_with(&mut self, current: &Document, pinned: &[&Document]) -> usize {
         // While Clear History can be undone, the cleared states are what history holds: the
         // oldest of them go first, as the list's would.
@@ -667,7 +668,8 @@ fn merge_ids(into: &mut Vec<LayerId>, from: &[LayerId]) {
     }
 }
 
-/// Bytes of the pixel tiles of `doc` (layers, masks, fill caches, smart filter masks, alpha channels, selection) and the embedded contents of its smart objects not already in `seen`.
+/// Bytes of the pixel tiles of `doc` (layers, masks, fill caches, smart filter masks, alpha channels, selection) and the
+/// embedded contents of its smart objects not already in `seen`.
 fn tile_bytes(doc: &Document, seen: &mut HashSet<usize>) -> usize {
     let mut n = 0usize;
     tiles::blocks(doc, |ptr, len| {
