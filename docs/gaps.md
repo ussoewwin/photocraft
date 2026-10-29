@@ -73,8 +73,10 @@ what an agent can't finish alone.
 - **Estimate:** 60–100 h (2–9 h each, per the calibration).
 
 ### G7. Workspaces shown as parameter dialogs
-- **Missing:** Select and Mask workspace layout
-  (TOOL-214-1, Refine Hair #2671; its view modes preview live since #1754, Refine Edge Brush #2972); Content-Aware Fill workspace with a paintable sampling area
+- **Missing:** Select and Mask's Refine Hair (#2671), Object Aware refine mode (#2788) and Presets
+  (TOOL-214-1; the workspace landed 2026-10-23, #7069, #8148: Photoshop's layout with its own
+  Quick Selection, Refine Edge Brush, Brush, Object Selection, Lasso and Polygonal Lasso, Hand and
+  Zoom, the view modes since #1754, Real-Time Refinement and High Quality Preview); Content-Aware Fill workspace with a paintable sampling area
   (TOOL-214-15); Vanishing Point plane editor (TOOL-214-14). Content-Aware Move's live preview
   of the result is done (TOOL-213-4, 2026-10-16, #6680: every selection the command takes, coarse
   first for large ones, then the exact result), as are Transform On Drop and Content-Aware Scale
@@ -400,6 +402,7 @@ what an agent can't finish alone.
 |---|---|---|
 | 2026-10-27 | minor | G9: 12 of 181 preferences do nothing, the scorecard's count with integration batch 9 (#9775) on main; no estimate changed |
 | 2026-10-26 | minor | Expand/Contract/Border distance work, mask reads and replacement cropped to nonzero bounds; bounded distances for radii ≤5; 36 MP exact-output comparisons improve 1.54–37.82× across eight cases; percentages, estimates and scorecard budgets unchanged |
+| 2026-10-23 | minor | G7: Select and Mask workspace (Photoshop's layout, its tools as `select.refineEdge` edits, Real-Time Refinement, High Quality Preview), #7069, #8148; Refine Hair, Object Aware and Presets remain; no estimate changed |
 | 2026-10-25 | minor | G9: the count of preferences that do nothing is the scorecard's again, 12 of 178 (it still said 24 of 171, from 2026-10-15); no estimate changed |
 | 2026-10-25 | minor | G6: Art History Brush landed as partial (TOOL-213-20, #1610), so no toolbar tool is missing; no percentage or estimate changed |
 | 2026-10-23 | minor | G4: hard-round built-in presets use 5% spacing (#8842), guarded by large-stroke outline and pressure-opacity pixel regressions at 8/16/32-bit; percentages and estimates unchanged |
