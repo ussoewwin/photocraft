@@ -1278,18 +1278,21 @@
       ]
     }
   ],
-  "current_checkpoint_sha": "30a2b002be3754aff4297d887ec01c28dcf18037",
-  "updated_at": "2026-10-29T06:15:48.040076+00:00",
+  "current_checkpoint_sha": "964a47b51c268251c63884a93a4ba880d426f2d2",
+  "updated_at": "2026-10-29T06:34:28.720768+00:00",
   "active_subsystem": "All selected merges complete; running combined validation and preparing frozen protocol",
   "parent_decision_required": null,
   "validation": {
     "compositor_at_31ce2208": "PASSED: 402 passed, 0 failed, 2 ignored",
-    "current_full_workspace": "PENDING: exact-head full-sweep CI 40827875047",
-    "current_build_check": "PASSED: cargo check --workspace --all-targets --locked --offline at 30a2b002be3754aff4297d887ec01c28dcf18037 (1m20s)",
+    "current_full_workspace": "PENDING: exact-head full-sweep CI 40829702791",
+    "current_build_check": "PENDING successor check at 964a47b51; 30a2b002b workspace/all-target passed in 1m20s; UI helper extraction compile passed",
     "pattern_store_at_d98e4195": "PASSED: 35 tests, 0 failed, 1 benchmark ignored; final tree not yet tested",
     "manual": "NOT RUN",
     "portable_final_build": "NOT RUN: waits for validation",
-    "current_ci": "PENDING https://github.com/FredApps/photocraft/actions/runs/40827875047"
+    "current_ci": "PENDING https://github.com/FredApps/photocraft/actions/runs/40829702791",
+    "jxl_export": "PASSED 5/5 at 30a2b002b; no codec changes since",
+    "ownership": "16 passed / 1 failed at 11fdb1807; remaining setup preprocessed tab switch, corrected at964a47b51; rerun pending",
+    "engine": "PENDING local full engine library sweep started 06:30:56 UTC at964a47b51"
   },
   "currently_matching_approved_heads": 107,
   "selection_drift": [
