@@ -103,7 +103,7 @@ fn default_buttons_wrap_inside_the_page_column_with_long_labels() {
         app.run("file.new", json!({"width": 32, "height": 32})).unwrap();
         let l = Layer::raster("x", photocraft_doc::PixelFormat::RGBA8);
         let fields = initial_fields(&l, Some("dropShadow"), 120.0);
-        let mut h = egui_kittest::Harness::builder().with_size(vec2(900.0, 700.0)).build_ui_state(
+        let mut h = egui_kittest::Harness::builder().with_size(vec2(660.0, 700.0)).build_ui_state(
             move |ui, app: &mut PhotocraftApp| {
                 if !ui.ctx().fonts(|f| f.families().contains(&egui::FontFamily::Name("medium".into()))) {
                     return;
@@ -373,8 +373,9 @@ fn baked_gradient_overlay_keeps_endpoint_colours_on_reopen() {
     assert!(gradient.stops.len() > 2, "classic bakes intermediate stops");
     let f = initial_fields(layer, Some("gradientOverlay"), st.doc.global_light.angle);
     let params = &effects_of(&f)[0]["params"];
-    assert_eq!(params["from"], json!("#ff0000"));
-    assert_eq!(params["to"], json!("#0000ff"));
+    let source_stops = gradient_field::stops_of(params.get("stops")).expect("complete gradient stops");
+    assert_eq!(source_stops.first().unwrap().1, photocraft_color::Color::rgb(1.0, 0.0, 0.0));
+    assert_eq!(source_stops.last().unwrap().1, photocraft_color::Color::rgb(0.0, 0.0, 1.0));
     apply(&f, |cmd, p| s.execute(cmd, p).map_err(|e| e.to_string())).unwrap();
     let Effect::GradientOverlay { gradient, .. } = &s.active().unwrap().doc.layer(id).unwrap().effects.items[0] else { panic!() };
     assert!(gradient.stops.len() > 2);

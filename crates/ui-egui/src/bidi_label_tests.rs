@@ -43,7 +43,11 @@ fn persian_joiners_stay_inside_their_word() {
 
 /// An installed font covering `sample`, if any of the usual ones is present.
 fn system_font(candidates: &[&str]) -> Option<Vec<u8>> {
-    candidates.iter().find_map(|p| std::fs::read(p).ok())
+    candidates.iter().find_map(|p| {
+        let bytes = std::fs::read(p).ok()?;
+        eprintln!("rtl-test font: {p}");
+        Some(bytes)
+    })
 }
 
 const ARABIC_FONTS: [&str; 6] = [
@@ -117,31 +121,33 @@ fn a_long_right_to_left_layer_name_keeps_its_beginning() {
         return;
     };
     let name = "سلام عليكم يا أصدقاء الطبقات";
-    let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(400.0, 100.0)).build_ui_state(
-        |ui, out: &mut Option<Arc<egui::Galley>>| {
-            *out = crate::layer_row_ui::truncated(ui.painter(), name, egui::FontId::proportional(20.0), egui::Color32::WHITE, false, 90.0);
-        },
-        None,
-    );
     let mut defs = FontDefinitions::default();
     defs.font_data.insert("rtl-test".into(), Arc::new(FontData::from_owned(bytes)));
     if let Some(family) = defs.families.get_mut(&FontFamily::Proportional) {
         family.push("rtl-test".into());
     }
-    h.ctx.set_fonts(defs);
+    let long_fonts = defs.clone();
+    let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(400.0, 100.0)).with_context_setup(move |ctx| ctx.set_fonts(long_fonts)).build_ui_state(
+        |ui, out: &mut Option<Arc<egui::Galley>>| {
+            *out = crate::layer_row_ui::truncated(ui.painter(), name, egui::FontId::proportional(20.0), egui::Color32::WHITE, false, 90.0);
+        },
+        None,
+    );
     h.run_steps(3);
     let g = h.state().clone().expect("room for a cut name");
     let shown = g.job.text.clone();
     assert!(g.size().x <= 90.0, "{} wide", g.size().x);
     // Cut in logical order: the first word survives, and "…" sits at the reading end (left).
-    assert!(shown.starts_with('…') && shown.contains("سلام") && !shown.contains("الطبقات"), "{shown}");
+    assert!(shown.ends_with('…') && shown.starts_with("سلام") && !shown.contains("الطبقات"), "{shown}");
+    let glyphs: Vec<_> = g.rows.iter().flat_map(|r| r.glyphs.iter()).filter(|g| !g.uv_rect.is_nothing()).map(|g| (g.chr, g.pos.x)).collect();
+    assert!(x_of(&glyphs, '…') < x_of(&glyphs, 'س'), "ellipsis stays at the visual reading end: {glyphs:?}");
     // Short enough to fit: drawn whole.
-    let mut short = egui_kittest::Harness::builder().with_size(egui::vec2(400.0, 100.0)).build_ui_state(
+    let mut short = egui_kittest::Harness::builder().with_size(egui::vec2(400.0, 100.0)).with_context_setup(move |ctx| ctx.set_fonts(defs)).build_ui_state(
         |ui, out: &mut Option<Arc<egui::Galley>>| {
             *out = crate::layer_row_ui::truncated(ui.painter(), "سلام عليكم", egui::FontId::proportional(20.0), egui::Color32::WHITE, false, 300.0);
         },
         None,
     );
     short.run_steps(1);
-    assert_eq!(short.state().as_ref().map(|g| g.job.text.clone()).as_deref(), Some("عليكم سلام"));
+    assert_eq!(short.state().as_ref().map(|g| g.job.text.clone()).as_deref(), Some("سلام عليكم"));
 }

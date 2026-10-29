@@ -1,6 +1,6 @@
 use super::context_tests::*;
 use super::*;
-use egui::{PointerButton, pos2};
+use egui::PointerButton;
 use egui_kittest::kittest::{NodeT, Queryable};
 use std::sync::Arc;
 
@@ -156,8 +156,7 @@ fn existing_eye_and_name_double_click_remain_distinct_from_secondary_actions() {
     for ppp in [1.0, 2.0] {
         let (mut h, layer) = harness_at(8, ppp);
         let offset = text_position(&h, "Offset");
-        let layer_row = crate::layer_row_ui::recorded(&h.ctx).into_iter().find(|r| r.layer == layer.0).unwrap().row;
-        let eye = pos2(layer_row.left() + 15.0, offset.y);
+        let eye = h.get_by_role_and_label(egui::accesskit::Role::CheckBox, "Visibility Offset").rect().center();
         let history = h.state().session.active().unwrap().history.past_len();
         click(&mut h, eye, PointerButton::Primary);
         assert!(!filters(h.state(), layer)[0].visible);
@@ -169,7 +168,14 @@ fn existing_eye_and_name_double_click_remain_distinct_from_secondary_actions() {
         click(&mut h, offset, PointerButton::Primary);
         let dialog = h.state().ui.dialogs.last().unwrap();
         assert_eq!(dialog.fields["__command"], json!("filter.other.offset"));
-        assert_eq!(dialog.fields["__smartFilter"], json!({"layer":layer.0,"index":0}));
+        let target = &dialog.fields["__smartFilter"];
+        assert_eq!(target["layer"], json!(layer.0));
+        assert_eq!(target["index"], json!(0));
+        let state = h.state().session.active().unwrap();
+        assert_eq!(target["doc"], json!(state.doc.id.0));
+        assert_eq!(target["revision"], json!(state.revision));
+        assert_eq!(target["filter"], serde_json::to_value(&filters(h.state(), layer)[0]).unwrap());
+        assert!(target["guard"].as_u64().is_some_and(|guard| guard > 0));
         assert_eq!(h.state().session.active().unwrap().history.past_len(), history);
     }
 }

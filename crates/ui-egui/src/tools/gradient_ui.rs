@@ -858,7 +858,9 @@ fn stops_editor_for(app: &mut PhotocraftApp, ui: &mut egui::Ui, sink: Sink, f: F
         },
         None => {}
     }
-    properties_panel::stop_fields(app, ui, sink);
+    // A preset invalidates an in-progress numeric draft from the old stop list.
+    let generation = ui.data(|d| d.get_temp::<u64>(selection_key.with("generation"))).unwrap_or_default();
+    ui.push_id((selection_key, generation), |ui| properties_panel::stop_fields(app, ui, sink));
 }
 
 /// A shared stop strip keeps previews local; its caller chooses the command or paint target.
@@ -1047,7 +1049,18 @@ mod tests;
 
 fn stops_editor(app: &mut PhotocraftApp, ui: &mut egui::Ui, sink: Sink, f: Fill, picker: bool) {
     if picker {
-        preset_browser::layer_picker(app, ui, sink);
+        ui.horizontal_top(|ui| {
+            let strip_width = (ui.available_width() - 20.0 - ui.spacing().item_spacing.x).max(120.0);
+            ui.vertical(|ui| {
+                ui.set_width(strip_width);
+                stops_editor_for(app, ui, sink, f);
+            });
+            ui.vertical(|ui| {
+                ui.add_space(18.0); // Align the 20-point picker with the ramp center.
+                preset_browser::layer_picker(app, ui, sink);
+            });
+        });
+    } else {
+        stops_editor_for(app, ui, sink, f);
     }
-    stops_editor_for(app, ui, sink, f);
 }

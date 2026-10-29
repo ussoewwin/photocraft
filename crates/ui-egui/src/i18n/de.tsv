@@ -1920,8 +1920,8 @@
 	Slice Tool	Slice-Werkzeug
 	Smart Filters	Smart-Filter
 # Smart Filter row actions (#1265)
-	Move Up	Nach oben verschieben
-	Move Down	Nach unten verschieben
+	Move Up	Nach oben
+	Move Down	Nach unten
 	Delete Smart Filter	Smartfilter löschen
 
 	Smudge Tool	Wischfinger-Werkzeug
@@ -3451,8 +3451,6 @@ curves	Smooth	Glätten
 	The fastest and the softest, with colour fringing on fine detail.	Am schnellsten und weichsten, mit Farbsäumen an feinen Details.
 	“{name}” already exists. Replace it?	„{name}“ ist bereits vorhanden. Ersetzen?
 	The name in the save dialog was “{name}”.	Der Name im Speichern-Dialog war „{name}“.
-	Move Up	Nach oben
-	Move Down	Nach unten
 	Memory Usage	Speichernutzung
 	Per-document RAM limit (MB)	RAM-Limit pro Dokument (MB)
 	Installed RAM: {ram} MB; this limit: {percent}%	Installierter RAM: {ram} MB; dieses Limit: {percent}%

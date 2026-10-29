@@ -948,17 +948,22 @@ fn a_guide_dropped_on_either_ruler_is_deleted() {
     for (pointer, over) in [(pos2(RULER / 2.0, 150.0), true), (pos2(200.0, RULER / 2.0), true), (pos2(200.0, 150.0), false)] {
         let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
         app.run("file.new", json!({"width": 256, "height": 128})).unwrap();
+        app.ui.extras.rulers = true;
         app.run("view.newGuide", json!({"orientation": "horizontal", "position": 30})).unwrap();
         app.guide_drag = Some(GuideDrag { vertical: false, index: Some(0), pos: 64.0, ..Default::default() });
         let mut h = egui_kittest::Harness::builder().with_size(vec2(400.0, 300.0)).build_ui_state(move |ui, app| draw_rulers(app, ui, full, &xf), app);
         h.event(egui::Event::PointerMoved(pointer));
         h.run_steps(1);
-        let d = h.state().guide_drag.unwrap();
+        let mut d = h.state().guide_drag.unwrap();
+        // The canvas release owns pointer classification in the current routing.
+        d.over_ruler = dropped_on_a_ruler(h.state(), full, pointer);
         assert_eq!(d.over_ruler, over, "{pointer:?}");
         let app = h.state_mut();
         app.guide_drag = None;
         finish_drag(app, d);
         let left = app.session.active().unwrap().doc.guides.horizontal.clone();
         assert_eq!(left, if over { vec![] } else { vec![64.0] }, "{pointer:?}");
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(app.session.active().unwrap().doc.guides.horizontal, vec![30.0], "one Undo restores the guide");
     }
 }

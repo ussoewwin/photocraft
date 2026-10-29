@@ -1908,8 +1908,8 @@
 	Slice Tool	Alat Slice
 	Smart Filters	Smart Filter
 # Smart Filter row actions (#1265)
-	Move Up	Pindahkan ke Atas
-	Move Down	Pindahkan ke Bawah
+	Move Up	Pindah ke atas
+	Move Down	Pindah ke bawah
 	Delete Smart Filter	Hapus Smart Filter
 
 	Smudge Tool	Alat Smudge
@@ -3450,8 +3450,6 @@ curves	Smooth	Haluskan
 	The fastest and the softest, with colour fringing on fine detail.	Paling cepat dan paling lembut, dengan pinggiran warna pada detail halus.
 	“{name}” already exists. Replace it?	“{name}” sudah ada. Ganti?
 	The name in the save dialog was “{name}”.	Nama di dialog simpan adalah “{name}”.
-	Move Up	Pindah ke atas
-	Move Down	Pindah ke bawah
 	Previous Brush	Kuas sebelumnya
 	Next Brush	Kuas berikutnya
 	First Brush	Kuas pertama

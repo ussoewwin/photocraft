@@ -206,7 +206,9 @@ pub fn filter_rows(app: &mut PhotocraftApp, ui: &mut egui::Ui, doc: &Document, l
             open_editor(app, ui.ctx(), l.id.0, sm, i);
         }
         if let Some(i) = index {
-            context_menu::show(app, &resp, l.id, i, actions);
+            // The name is a child interaction target and owns secondary clicks too.
+            let menu_response = name_resp.as_ref().map_or_else(|| resp.clone(), |name| resp.clone().union(name.clone()));
+            context_menu::show(app, &menu_response, l.id, i, actions);
         }
         if let (Some(i), Some(r)) = (index, blend) {
             let blend_resp = ui.interact(r, ui.scope_id().with(("sf-blend", l.id.0, i)), Sense::click());

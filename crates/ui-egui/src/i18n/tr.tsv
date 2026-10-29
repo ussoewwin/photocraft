@@ -1821,8 +1821,8 @@
 	Slice Tool	Dilim Aracı
 	Smart Filters	Akıllı Filtreler
 # Smart Filter row actions.
-	Move Up	Yukarı Taşı
-	Move Down	Aşağı Taşı
+	Move Up	Yukarı taşı
+	Move Down	Aşağı taşı
 	Delete Smart Filter	Akıllı Filtreyi Sil
 
 	Smudge Tool	Leke Aracı
@@ -4157,8 +4157,6 @@ cameraData	Lens	Lens
 	The fastest and the softest, with colour fringing on fine detail.	En hızlı ve en yumuşak, ince ayrıntılarda renk saçağı.
 	“{name}” already exists. Replace it?	'{name}' zaten var. Değiştirilsin mi?
 	The name in the save dialog was “{name}”.	Kaydetme penceresindeki ad '{name}' idi.
-	Move Up	Yukarı taşı
-	Move Down	Aşağı taşı
 	Previous Brush	Önceki fırça
 	Next Brush	Sonraki fırça
 	First Brush	İlk fırça

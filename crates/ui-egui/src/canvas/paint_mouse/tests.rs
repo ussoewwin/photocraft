@@ -92,7 +92,7 @@ fn shift_right_mode_picker_selects_journals_and_clear_erases() {
     h.run_steps(2);
     assert!(h.state().ui.brush_mode_menu.is_none());
     assert_eq!(h.state().session.tools.brush.mode, photocraft_doc::BlendMode::Multiply);
-    assert_eq!(h.state().session.journal.last().unwrap(), &("tools.setBrush".into(), json!({"brush": {"mode": "Multiply"}})));
+    assert_eq!(h.state().session.journal.last().unwrap(), &("tools.setBrush".into(), json!({"brush": {"mode": "Multiply", "behind": false}})));
     let (a, b) = drag(&mut h, PointerButton::Primary);
     let mid = a + (b - a) * 0.5;
     assert!(alpha_at(&h, mid) > 0.9);
@@ -149,7 +149,7 @@ fn mode_control_can_pick_a_row_with_ui_click() {
     h.run_steps(2);
     assert!(h.state().ui.brush_mode_menu.is_none());
     assert_eq!(h.state().session.tools.brush.mode, photocraft_doc::BlendMode::Darken);
-    assert_eq!(h.state().session.journal.last().unwrap(), &("tools.setBrush".into(), json!({"brush": {"mode": "Darken"}})));
+    assert_eq!(h.state().session.journal.last().unwrap(), &("tools.setBrush".into(), json!({"brush": {"mode": "Darken", "behind": false}})));
 }
 
 #[test]

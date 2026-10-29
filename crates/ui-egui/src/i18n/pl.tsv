@@ -1931,8 +1931,8 @@
 	Slice Tool	Narzędzie Plasterek
 	Smart Filters	Filtry inteligentne
 # Smart Filter row actions (#1265)
-	Move Up	Przenieś w górę
-	Move Down	Przenieś w dół
+	Move Up	Przesuń w górę
+	Move Down	Przesuń w dół
 	Delete Smart Filter	Usuń filtr inteligentny
 
 	Smudge Tool	Narzędzie Palec
@@ -4052,8 +4052,6 @@ curves	Smooth	Wygładź
 	The fastest and the softest, with colour fringing on fine detail.	Najszybsza i najmiększa, z barwnymi obwódkami na drobnych szczegółach.
 	“{name}” already exists. Replace it?	„{name}” już istnieje. Zastąpić?
 	The name in the save dialog was “{name}”.	Nazwa w oknie zapisywania: „{name}”.
-	Move Up	Przesuń w górę
-	Move Down	Przesuń w dół
 	Previous Brush	Poprzedni pędzel
 	Next Brush	Następny pędzel
 	First Brush	Pierwszy pędzel

@@ -2762,7 +2762,7 @@ cameraRaw	Roughness	Неровность
 	Add to Swatches	Добавить в образцы
 	Blend If:	Изображение если:
 	Current Layer:	Текущий слой:
-	Underlying Layer:	Подлежащий слой:
+	Underlying Layer:	Нижележащий слой:
 	Channels:	Каналы:
 	Knockout	Просвечивание
 	Apply At Canvas Bounds	Применить эффект на границах холста
@@ -3878,7 +3878,6 @@ curves	Smooth	Сгладить
 	Hearts	Сердца
 	Heptagon	Семиугольник
 	Hexagon	Шестиугольник
-	Hidden	Скрыто
 	Hide Grid	Скрыть сетку
 	Hide Others	Скрыть остальные
 	Hide the layer's effects  (⌥-click: all layers)	Скрыть эффекты слоя  (⌥+щелчок: все слои)
@@ -3924,8 +3923,6 @@ curves	Smooth	Сгладить
 	The fastest and the softest, with colour fringing on fine detail.	Самый быстрый и самый мягкий, с цветной каймой на мелких деталях.
 	“{name}” already exists. Replace it?	«{name}» уже существует. Заменить?
 	The name in the save dialog was “{name}”.	В окне сохранения было указано имя «{name}».
-	Move Up	Переместить вверх
-	Move Down	Переместить вниз
 	Previous Brush	Предыдущая кисть
 	Next Brush	Следующая кисть
 	First Brush	Первая кисть
@@ -4527,7 +4524,6 @@ curves	Smooth	Сгладить
 	Type Options	Параметры текста
 	Unaltered	Без изменений
 	Undefined Areas	Неопределённые области
-	Underlying Layer:	Нижележащий слой:
 	Underpainting	Подмалёвок
 	Underwater	Под водой
 	Ungroup	Разгруппировать

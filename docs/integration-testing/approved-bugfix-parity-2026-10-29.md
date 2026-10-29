@@ -226,7 +226,7 @@ See the [executable case appendix](per-pr-regressions.md) for fixture/setup, act
 ## Frozen execution record and acceptance
 
 - Upstream base: `5f9b4391874aabc9deb2fcb905267613e4d93ec8`.
-- Complete 108-head candidate code SHA: `11fdb1807`. All selected heads are ancestors and all merges are committed.
+- Published 108-head checkpoint: `bd2b66dfce75dc40361665f5464a902d83591d07`; last code `2334a460f22ed2c09d7e5f73cbb2ebe9125d4fc1`. Subsequent reconciliation is under validation. Final source/build SHA is not frozen yet.
 - Acceptance build: **NOT YET PRODUCED**. The candidate above is under validation; record the final build/run/artifact and SHA below before acceptance testing. Later source changes require successor-SHA validation.
 - PR heads and approval receipts: `approved-selection.json`; current per-head ancestry/status: `integration-status.json`.
 - Dependencies: Cutout #8191 → #8192 → #8193 → #7903; Layer Style #4938 → #5010; #7848 prerequisite #7281 is merged upstream.
@@ -249,22 +249,19 @@ For Photoshop acceptance, record Photoshop version/platform, reference fixture i
 
 ## Current execution record
 
-Candidate code: `30a2b002be3754aff4297d887ec01c28dcf18037`. This is an execution ledger, not an acceptance pass.
+Final source SHA and portable artifact are **not frozen yet**. Historical results apply only to their recorded source, not automatically to later changes.
 
 | Gate | State | Evidence / limitation |
 |---|---|---|
-| Selected-head ancestry | PASSED | 108/108 immutable selected heads are ancestors of the candidate; no open merge. |
-| Formatting | PASSED | `cargo fmt --all` completed before the candidate commit; exact final check remains part of CI. |
-| Workspace/all-target compile | PASSED | Exact candidate `cargo check --workspace --all-targets --locked --offline`: 1m20s. |
-| Linux/Windows/web CI | IN PROGRESS | [Current run 40827875047](https://github.com/FredApps/photocraft/actions/runs/40827875047) targets `30a2b002be3754aff4297d887ec01c28dcf18037`. |
-| Previous 108-head CI | FAILED | [Run 40825263899](https://github.com/FredApps/photocraft/actions/runs/40825263899): corpus and web compilation found a missing JXL module import; corrected in the candidate. No pass inferred. |
-| Frozen ownership regressions | IN PROGRESS | 103-head run: 14 passed, 3 failed. Fixes applied; immutable `11fdb1807` rerun is compiling. |
-| Pattern persistence checkpoint | PASSED | 71-head `d98e419542d48ebfd52fef70f06d2c000bd8b8c0`: 35 passed, 0 failed, 1 benchmark ignored. Final-candidate coverage remains pending. |
-| Explicit full workspace sweep | IN PROGRESS | Current dispatch sets `PHOTOCRAFT_FULL_SWEEP=1`; retain executed counts and failures. |
-| Pinned corpus IO / engine rerender | IN PROGRESS | Current CI corpus job must establish these separately. |
-| Performance and large-image checks | IN PROGRESS | Quick suite and 36 MP selection morphology dispatched; other selected large-image hot paths remain NOT RUN. |
-| Photoshop/platform/manual cases | NOT RUN | Photoshop reopening, reference diffs, macOS interactions, and Windows Intel/DX12 claims require their specified environments. |
-| Windows portable build | NOT RUN | Dispatch only after applicable validation; no production release or installation is authorized. |
+| Selected-head ancestry | PASSED at published checkpoint | 108/108 frozen heads integrated; later unapproved #5493 head excluded. Recheck final source. |
+| Final formatting / compile / strict lint | NOT RUN | Local formatting completed; final exact-head checks required. |
+| Full engine sweep | PASSED at `e40cdadb6` | 2,420 passed, zero failed, 16 ignored; full sweep enabled. Successor coverage required. |
+| Previous aggregate CI | FAILED | [40833090784](https://github.com/FredApps/photocraft/actions/runs/40833090784) at `2334a460f`: Linux alias fixture and Windows text unit failures. Windows integration, corpus, no-HEIF, web/wasm, morphology and quick performance passed. |
+| Corrected-environment focused UI | PASSED on pending reconciliation | 244 executed tests passed, zero failures, one intentionally ignored capture test. Includes ownership, Direct Selection, Pen/vector, smart filters, gradient controls, polygon and catalog checks. Full UI sweep is in progress. |
+| Corrected text suite | PARTIAL | Runner: 283 passed, zero failed, five ignored. Two Cairo-dependent early-return cases are BLOCKED. Both hanging-row regressions executed and passed. |
+| Final workspace / corpus / engine rerender / performance | NOT RUN | Final source needs its own full-sweep aggregate and separate IO/rerender evidence. Previous green jobs are historical. |
+| Photoshop/platform/manual cases | NOT RUN | Photoshop reopening, macOS, Intel/DX12 hardware and PDB identity require the specified environments. |
+| Windows portable artifact | NOT RUN | Waiting for applicable validation; no installation or stable publication. |
 
 ### Windows portable execution sheet
 
@@ -286,7 +283,7 @@ Record final source SHA, resolved version, workflow run/job, artifact ID/name, a
 
 ### Validation correction record
 
-The prior bd52 run failed strict Clippy (Layer Style nested guards and Action mapping complexity) and JPEG XL extension discovery. Four JPEG XL encoder/independent-decoder cases passed before the capability-registration case failed. Its Windows integration job stopped on the same strict lint failures. The web build passed. Successor `11fdb1807` restores format discovery, extracts validated Action mappings into helpers, and corrects pen ownership regressions. Run [40827696354](https://github.com/FredApps/photocraft/actions/runs/40827696354) explicitly requests full sweep and morphology/performance checks; outcomes are PENDING. A local workspace/all-target check completed, but its mutable working-tree run is not immutable final-build evidence. Local Clippy is BLOCKED because the component is absent; hosted strict Clippy remains required. No portable artifact exists yet.
+The old CI failures were an alias fixture reusing a protected unknown file and hanging-row placement reading the final style table before population. Corrections preserve overwrite refusal and use resolved paragraph styles. UI reconciliation retains captured ownership, explicit retry and modular routing. Final validation remains pending.
 
 ### Selection refresh
 

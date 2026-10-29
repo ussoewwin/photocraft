@@ -197,7 +197,7 @@ fn sync_views_and_input_apis_discard_unowned_or_closed_document_drafts() {
                 vector_ui::pen_commit(&mut app, false);
             }
             "undo" => {
-                assert!(vector_ui::pen_undo_last_point(&mut app));
+                assert!(!vector_ui::pen_undo_last_point(&mut app), "a closed document has no current draft point to undo");
             }
             "toggle" => vector_ui::curvature_toggle(&mut app, 30.0, 60.0),
             "down" => vector_ui::curvature_down(&mut app, 160.0, 80.0),

@@ -3534,3 +3534,10 @@ curves	Smooth	تنعيم
 	Update and Restart	التحديث وإعادة التشغيل
 	X	X
 	Y	Y
+
+# Select and Mask target ownership diagnostics (#8896 integration)
+	Select and Mask was closed: its document is no longer the active one	أُغلقت مساحة تحديد وقناع: لم يعد مستندها هو المستند النشط
+	Select and Mask was closed: another layer was selected	أُغلقت مساحة تحديد وقناع: تم تحديد طبقة أخرى
+
+	The path was kept as the Work Path	تم الاحتفاظ بالمسار كمسار عمل
+	The path was discarded	تم تجاهل المسار

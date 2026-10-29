@@ -301,9 +301,10 @@ fn polygon_edge_scroll_places_the_next_vertex_in_the_panned_view_and_commits_onc
     assert!(h.state().ui.polygon.is_empty());
     assert!(selection(&h).is_some_and(|r| near(r, 170, 130, expected[0].ceil() as i32, 190)), "{:?}", selection(&h));
     assert_eq!(steps(&h), before + 1);
+    let finished_center = h.state().ui.views[0].center;
     h.event(egui::Event::PointerMoved(original.rect.right_center()));
     h.run_steps(4);
-    assert_eq!(h.state().ui.views[0].center, panned.center, "a finished polygon never scrolls");
+    assert_eq!(h.state().ui.views[0].center, finished_center, "a finished polygon never scrolls");
     h.state_mut().run("edit.undo", json!({})).unwrap();
     assert!(selection(&h).is_none(), "one undo removes the completed selection");
 }

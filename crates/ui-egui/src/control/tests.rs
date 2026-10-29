@@ -62,7 +62,8 @@ fn brush_mode_control_routes_modifiers_and_reports_choices_without_history() {
     for (tool, modifiers, expected) in [
         ("brush", json!({"shift": true}), "mode"),
         ("brush", json!({}), "erase"),
-        ("brush", json!({"shift": true, "alt": true}), "resize"),
+        ("brush", json!({"alt": true}), "resize"),
+        ("brush", json!({"shift": true, "alt": true}), "erase"),
         ("brush", json!({"shift": true, "ctrl": true}), if cfg!(target_os = "macos") { "erase" } else { "layer" }),
         ("brush", json!({"shift": true, "command": true}), "layer"),
         ("pencil", json!({"shift": true}), "preset"),
@@ -99,7 +100,10 @@ fn brush_mode_control_routes_modifiers_and_reports_choices_without_history() {
             "preset" => assert!(app.ui.brush_picker.is_some()),
             "layer" => assert!(app.ui.layer_menu.is_some()),
             "resize" => assert!(app.brush_resize.is_some()),
-            "erase" => assert!(app.drag.as_ref().is_some_and(|d| d.erase)),
+            "erase" => {
+                assert!(app.drag.as_ref().is_some_and(|d| d.erase));
+                assert!(app.brush_resize.is_none(), "Shift+Alt is not the resize gesture");
+            }
             _ => panic!("unknown fixture route: {expected}"),
         }
     }
@@ -301,10 +305,16 @@ fn full_window_workspaces_are_modal_for_menu_invocations() {
             "{workspace}: listed as enabled again"
         );
     }
-    // engine.execute stays programmatic: it is not a menu click.
+    // Programmatic edits cannot bypass the active workspace ownership gate.
     assert_eq!(call(&mut app, &ctx, "ui.menu.invoke", json!({"id":"filter.liquify"}))["ok"], true);
+    let before = app.session.active().unwrap().doc.clone();
+    let history = app.session.active().unwrap().history.past_len();
     let executed = call(&mut app, &ctx, "engine.execute", json!({"command":"select.all"}));
-    assert_eq!(executed["ok"], true, "{executed}");
+    assert_eq!(executed["ok"], false, "{executed}");
+    assert!(std::sync::Arc::ptr_eq(&before, &app.session.active().unwrap().doc));
+    assert_eq!(app.session.active().unwrap().history.past_len(), history);
+    assert_eq!(call(&mut app, &ctx, "ui.menu.invoke", json!({"id":"filter.liquify","params":{"ui":{"cancel":true}}}))["ok"], true);
+    assert_eq!(call(&mut app, &ctx, "engine.execute", json!({"command":"select.all"}))["ok"], true);
 }
 
 #[test]

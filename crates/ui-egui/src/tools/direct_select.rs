@@ -108,7 +108,7 @@ impl PartialEq for Owner {
 }
 
 impl Owner {
-    fn current(app: &PhotocraftApp) -> Option<Self> {
+    pub(crate) fn current(app: &PhotocraftApp) -> Option<Self> {
         let st = app.session.active()?;
         Some(Self {
             document: st.doc.id,
@@ -146,7 +146,7 @@ impl Owner {
 /// Is `ds` still about the document, revision and target it was made on? Convert Point works on
 /// the handles selected with Direct Selection, so an idle selection crosses those two tools; a
 /// drag keeps its own tool.
-fn still_valid(app: &PhotocraftApp, ds: &DirectSelection) -> bool {
+pub(crate) fn still_valid(app: &PhotocraftApp, ds: &DirectSelection) -> bool {
     ds.owner.as_ref().is_some_and(|owner| owner.valid(app) || (ds.drag.is_none() && owns(owner.tool) && owns(app.ui.tool) && owner.valid_path(app)))
 }
 
@@ -164,7 +164,7 @@ pub(crate) fn cancel_stale(app: &mut PhotocraftApp) -> bool {
 }
 
 /// Rebind a selection to the revision its own command made; another target or tool drops it.
-fn keep_after_command(app: &mut PhotocraftApp, mut selection: DirectSelection) {
+pub(crate) fn keep_after_command(app: &mut PhotocraftApp, mut selection: DirectSelection) {
     if selection.owner.as_ref().is_some_and(|owner| owner.same_target(app)) {
         selection.owner = Owner::current(app);
         app.ui.direct_selection = selection;
@@ -272,6 +272,11 @@ pub(crate) fn active_paths(app: &PhotocraftApp) -> Vec<(PathRef, Path)> {
     let saved = crate::vector_ui::selected_saved_path_index(app).map(|(i, p)| (PathRef::Saved(i), p));
     let work = app.session.active().and_then(|st| st.doc.work_path.clone()).filter(|_| crate::vector_ui::work_path_shown(app)).map(|p| (PathRef::Work, p));
     let mut out: Vec<_> = saved.into_iter().chain(layer).chain(work).collect();
+    if app.ui.selected_path.as_deref() == Some("work")
+        && let Some(index) = out.iter().position(|(target, _)| *target == PathRef::Work)
+    {
+        out.swap(0, index);
+    }
     out.retain(|(target, _)| writable(app, target));
     out
 }
@@ -576,7 +581,7 @@ fn curvature_press(app: &mut PhotocraftApp, p: [f64; 2]) -> bool {
         }
         Hit::Handle(..) => return false,
     };
-    app.ui.direct_selection = DirectSelection { target: Some(target), anchors: vec![k], coalesce, ..Default::default() };
+    app.ui.direct_selection = DirectSelection { target: Some(target), anchors: vec![k], coalesce, owner: Owner::current(app), ..Default::default() };
     app.ui.direct_selection.drag = Some(Drag::Edit { target, base, edit: Edit::Curvature(vec![k]), start: p, end: p, preview: None });
     true
 }

@@ -601,6 +601,7 @@ fn arrow_keys_nudge_the_selected_saved_path() {
 fn selected_saved_and_work_paths_win_overlapping_shape_hits() {
     for name in ["Saved", "work"] {
         let mut app = app(Tool::DirectSelection);
+        app.ui.extras.snap = false; // This case isolates hit priority and exact anchor movement.
         let id = app.run("shape.create", json!({"kind":"rect", "rect":[40,40,80,80]})).unwrap()["layer"].as_u64().unwrap();
         with_path(&mut app);
         save_path(&mut app);

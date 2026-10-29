@@ -1867,8 +1867,8 @@
 	Slice Tool	Segmentgereedschap
 	Smart Filters	Slimme filters
 # Smart Filter row actions (#1265)
-	Move Up	Omhoog verplaatsen
-	Move Down	Omlaag verplaatsen
+	Move Up	Omhoog
+	Move Down	Omlaag
 	Delete Smart Filter	Slim filter verwijderen
 
 	Smudge Tool	Uitsmeergereedschap
@@ -4194,8 +4194,6 @@ curves	Smooth	Vloeiend maken
 	The fastest and the softest, with colour fringing on fine detail.	Het snelst en het zachtst, met kleurranden in fijne details.
 	“{name}” already exists. Replace it?	“{name}” bestaat al. Vervangen?
 	The name in the save dialog was “{name}”.	De naam in het venster Opslaan was “{name}”.
-	Move Up	Omhoog
-	Move Down	Omlaag
 	Previous Brush	Vorig penseel
 	Next Brush	Volgend penseel
 	First Brush	Eerste penseel

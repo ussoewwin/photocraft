@@ -2905,7 +2905,7 @@ cameraRaw	Blending	Fusion
 	Add to Swatches	Ajouter au nuancier
 	Blend If:	Fusion si :
 	Current Layer:	Calque actif :
-	Underlying Layer:	Calque sous-jacent :
+	Underlying Layer:	Calque sous-jacent :
 	Channels:	Couches :
 	Knockout	Masquage
 	Apply At Canvas Bounds	Appliquer l’effet aux limites de la zone de travail
@@ -3455,8 +3455,6 @@ curves	Smooth	Lisser
 	The fastest and the softest, with colour fringing on fine detail.	Le plus rapide et le plus doux, avec des franges colorées sur les détails fins.
 	“{name}” already exists. Replace it?	« {name} » existe déjà. Le remplacer ?
 	The name in the save dialog was “{name}”.	Le nom dans la boîte de dialogue d'enregistrement était « {name} ».
-	Move Up	Déplacer vers le haut
-	Move Down	Déplacer vers le bas
 	Previous Brush	Pinceau précédent
 	Next Brush	Pinceau suivant
 	First Brush	Premier pinceau
@@ -3867,7 +3865,6 @@ curves	Smooth	Lisser
 	Hearts	Cœurs
 	Heptagon	Heptagone
 	Hexagon	Hexagone
-	Hidden	Masqué
 	Hide Grid	Masquer la grille
 	Hide Others	Masquer les autres
 	Hide {app}	Masquer {app}
@@ -4359,7 +4356,6 @@ curves	Smooth	Lisser
 	Twirl Counterclockwise	Tourbillon antihoraire
 	Unaltered	Inchangé
 	Undefined Areas	Zones non définies
-	Underlying Layer:	Calque sous-jacent :
 	Underpainting	Sous-couche
 	Underwater	Sous l'eau
 	Ungroup	Dissocier

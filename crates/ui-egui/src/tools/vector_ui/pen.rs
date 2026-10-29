@@ -139,7 +139,7 @@ pub(super) fn shift_45(origin: [f64; 2], p: [f64; 2], shift: bool) -> [f64; 2] {
 /// knot rather than undoing an unrelated, already committed document operation.
 pub fn pen_undo_last_point(app: &mut PhotocraftApp) -> bool {
     if cancel_stale_pen(app) {
-        return true;
+        return false;
     }
     if !cancel_stale(app) {
         return false;
@@ -323,19 +323,21 @@ pub fn pen_commit(app: &mut PhotocraftApp, closed: bool) -> bool {
 /// Finish the draft as [`pen_commit`] does. On failure the draft stays as it was, marked
 /// `commit_failed`, and the error is shown and returned.
 pub(super) fn try_pen_commit(app: &mut PhotocraftApp, closed: bool) -> Result<(), String> {
-    cancel_stale_pen(app);
+    // This is an explicit commit request; passive frame reconciliation never clears this flag.
+    if let Some(pen) = app.ui.pen.as_mut() {
+        pen.commit_failed = false;
+    }
+    if cancel_stale_pen(app) {
+        return if app.ui.pen.is_none() { Ok(()) } else { Err(app.ui.status.clone()) };
+    }
     let Some(mut pen) = app.ui.pen.take() else { return Ok(()) };
     if app.ui.direct_selection.target == Some(crate::direct_select::PathRef::Pen) {
         // Its anchors are no longer the Pen's: the committed path is another path.
         app.ui.direct_selection = Default::default();
     }
-    let original = fold_close(&pen)
-        .map(|mut folded| {
-            folded.dragging = false;
-            folded.adjusting_last = false;
-            folded
-        })
-        .unwrap_or_else(|| pen.clone());
+    let mut original = pen.clone();
+    original.dragging = false;
+    original.adjusting_last = false;
     if pen.curvature {
         curvature_refresh(&mut pen, closed);
     }
@@ -345,13 +347,20 @@ pub(super) fn try_pen_commit(app: &mut PhotocraftApp, closed: bool) -> Result<()
         app.ui.status_error = true;
         return Err(e);
     }
+    app.ui.pen_doc = None;
     Ok(())
 }
 
 /// Another tool finishes the Pen's draft, once: a draft whose commit failed waits for the user.
 pub(crate) fn finish_pen_if_left(app: &mut PhotocraftApp) {
     cancel_stale_pen(app);
-    if app.ui.pen.as_ref().is_some_and(|p| !p.commit_failed && !p.drawn_with(app.ui.tool)) {
+    let shape_fallback =
+        app.ui.pen.as_ref().is_some_and(|p| {
+            !p.drawn_with(app.ui.tool) && p.owner.as_ref().is_some_and(|o| o.valid(app) && matches!(o.target, super::PenTarget::Shape { .. }))
+        });
+    if shape_fallback {
+        pen_end(app);
+    } else if app.ui.pen.as_ref().is_some_and(|p| !p.commit_failed && !p.drawn_with(app.ui.tool)) {
         pen_commit(app, false);
     }
 }
@@ -393,7 +402,7 @@ pub fn pen_end(app: &mut PhotocraftApp) {
 /// work path. An added subpath takes the options bar's Path Operation (#1397). `false` when the
 /// document refused it, with the reason in the status bar.
 fn commit_path_current(app: &mut PhotocraftApp, pen: &PenPath, closed: bool) -> bool {
-    if pen.knots.len() < 2 {
+    if pen.knots.is_empty() || (pen.knots.len() < 2 && app.ui.tool_options.vector_mode == "shape") {
         return true;
     }
     let path = pen_to_json(pen, closed);

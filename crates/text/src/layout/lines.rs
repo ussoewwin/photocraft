@@ -499,7 +499,7 @@ impl Para<'_> {
                     };
                     let run = gr.run();
                     let si = gr.style().brush.0;
-                    let st = &out.styles[si as usize];
+                    let st = &self.env.styles[si as usize];
                     let hs = if st.horizontal_scale > 0.0 { st.horizontal_scale } else { 1.0 };
                     let synth = run.synthesis();
                     let face = out.faces.len() as u32;
@@ -513,12 +513,12 @@ impl Para<'_> {
                     for c in run.visual_clusters() {
                         n += 1;
                         cx += left.take().map_or(0.0, |(byte, size)| {
-                            let st_p = &out.styles[style_at(byte)];
+                            let st_p = &self.env.styles[style_at(byte)];
                             let units = if st_p.kern.is_finite() { st_p.kern } else { 0.0 };
                             units / 1000.0 * size
                         });
                         let r = c.text_range();
-                        let st_h = &out.styles[style_at(map(r.start))];
+                        let st_h = &self.env.styles[style_at(map(r.start))];
                         let kern = if st_h.kern.is_finite() { st_h.kern } else { 0.0 } / 1000.0 * run.font_size();
                         let drawn = c.advance() * hs;
                         // The glyph pen is local to the cluster: the growth is already in

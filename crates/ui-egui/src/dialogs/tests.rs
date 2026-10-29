@@ -589,12 +589,25 @@ fn file_info_multiline_fields_keep_enter_and_cancel_discards_edits() {
         let ctx = h.ctx.clone();
         crate::menus::invoke(h.state_mut(), &ctx, "file.fileInfo", json!({})).unwrap();
         h.run_steps(4);
-        let labels = ["Document Title", "Author", "Author title", "Description", "Keywords", "Copyright status", "Copyright Notice", "Copyright Info URL"];
-        for pair in labels.windows(2) {
-            assert!(h.get_by_label(pair[0]).rect().center().y < h.get_by_label(pair[1]).rect().center().y, "field order: {pair:?}");
+        use egui::accesskit::Role;
+        let fields = [
+            (Role::TextInput, "Document Title"),
+            (Role::TextInput, "Author"),
+            (Role::TextInput, "Author title"),
+            (Role::MultilineTextInput, "Description"),
+            (Role::MultilineTextInput, "Keywords"),
+            (Role::ComboBox, "Copyright status"),
+            (Role::MultilineTextInput, "Copyright Notice"),
+            (Role::TextInput, "Copyright Info URL"),
+        ];
+        for pair in fields.windows(2) {
+            assert!(
+                h.get_by_role_and_label(pair[0].0, pair[0].1).rect().center().y < h.get_by_role_and_label(pair[1].0, pair[1].1).rect().center().y,
+                "field order: {pair:?}"
+            );
         }
         for (label, key) in [("Description", "description"), ("Keywords", "keywords"), ("Copyright Notice", "copyright")] {
-            h.get_by_label(label).click();
+            h.get_by_role_and_label(Role::MultilineTextInput, label).click();
             h.run_steps(1);
             h.event(egui::Event::Text("First".into()));
             h.run_steps(1);

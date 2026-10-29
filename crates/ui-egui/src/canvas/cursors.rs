@@ -159,7 +159,7 @@ pub(crate) fn paint_bucket_cursor(ctx: &egui::Context, p: Pos2) -> egui::CursorI
 pub(super) fn alt_eyedropper(app: &mut PhotocraftApp, ev: ToolEvent, mods: egui::Modifiers) -> bool {
     if matches!(ev, ToolEvent::Down { .. }) {
         let physical_right = app.services.right_button_down.as_ref().is_some_and(|f| f());
-        app.alt_sampling = !physical_right && alt_samples(app.active_tool(), mods);
+        app.alt_sampling = !physical_right && !app.secondary_erase && alt_samples(app.active_tool(), mods);
     }
     if !app.alt_sampling {
         return false;

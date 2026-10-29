@@ -40,6 +40,9 @@ pub(crate) fn selected(app: &PhotocraftApp) -> Option<(PathRef, Path, Vec<usize>
         return None;
     }
     let sel = &app.ui.direct_selection;
+    if !crate::direct_select::still_valid(app, sel) {
+        return None;
+    }
     let r = sel.target.filter(|r| *r != PathRef::Pen)?;
     let (_, path) = active_paths(app).into_iter().find(|(p, _)| *p == r)?;
     let components = path.components();
@@ -73,7 +76,16 @@ pub(crate) fn set_op(app: &mut PhotocraftApp, op: &str) -> Result<(), String> {
     let mut params = r.params(app);
     params["subpaths"] = json!(heads);
     params["op"] = json!(op);
-    app.run("path.setOperation", params).map(|_| ())
+    run_selected_command(app, "path.setOperation", params)
+}
+
+fn run_selected_command(app: &mut PhotocraftApp, id: &str, params: serde_json::Value) -> Result<(), String> {
+    let selection = std::mem::take(&mut app.ui.direct_selection);
+    let result = app.run(id, params);
+    if result.is_ok() || crate::direct_select::still_valid(app, &selection) {
+        crate::direct_select::keep_after_command(app, selection);
+    }
+    result.map(|_| ())
 }
 
 /// The component of `path` under `at`: on its outline within `tol`, else inside it. The frontmost
@@ -143,7 +155,11 @@ pub(crate) fn press(app: &mut PhotocraftApp, at: [f64; 2], shift: bool) {
         .flat_map(|c| c.clone())
         .flat_map(|s| (0..path.subpaths.get(s).map_or(0, |sp| sp.knots.len())).map(move |k| [s, k]))
         .collect::<Vec<_>>();
-    app.ui.direct_selection = if anchors.is_empty() { DirectSelection::default() } else { DirectSelection { target: Some(r), anchors, ..Default::default() } };
+    app.ui.direct_selection = if anchors.is_empty() {
+        DirectSelection::default()
+    } else {
+        DirectSelection { target: Some(r), anchors, owner: crate::direct_select::Owner::current(app), ..Default::default() }
+    };
 }
 
 /// Path Selection's drag by `d` with components selected on the path it edits: moves those
@@ -157,7 +173,7 @@ pub(crate) fn move_selected(app: &mut PhotocraftApp, d: [f64; 2]) -> Option<Resu
     let mut params = r.params(app);
     params["anchors"] = json!(app.ui.direct_selection.anchors);
     params["move"] = json!(d);
-    Some(app.run("path.moveAnchors", params).map(|_| ()))
+    Some(run_selected_command(app, "path.moveAnchors", params))
 }
 
 /// Do `+` and `-` pick a Path Operation with `tool`? The tools whose options bar has the menu.

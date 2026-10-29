@@ -84,7 +84,8 @@ fn subtract_front_shape_cuts_a_hole_in_the_selected_shape_layer() {
 }
 
 /// A locked shape layer refuses the new component: the path drawn stays as the Pen's draft, and
-/// the document and History are as they were, so unlocking and committing again cuts the hole.
+/// the document and History are unchanged. Unlocking advances the source revision, so the old
+/// captured draft refuses; a fresh draft on the unlocked source cuts the hole.
 #[test]
 fn a_locked_shape_layer_keeps_the_drawn_path() {
     for lock in ["all", "pixels"] {
@@ -107,6 +108,9 @@ fn a_locked_shape_layer_keeps_the_drawn_path() {
         assert!(app.ui.pen.is_some(), "{lock}");
         assert!(super::pen_commit(&mut app, false), "{lock}: {}", app.ui.status); // ↩
         assert!(app.ui.pen.is_none(), "{lock}");
+        assert_eq!(shape_path(&app), (id, body.clone()), "a stale draft cannot overwrite the unlocked source");
+        assert!(app.ui.status_error && app.ui.status.contains("newer work was preserved"));
+        square(&mut app, 50.0, 50.0, 40.0);
         let (same, path) = shape_path(&app);
         assert_eq!(same, id, "{lock}");
         assert_eq!(path.subpaths.iter().map(|s| (s.op, s.closed)).collect::<Vec<_>>(), [(PathOp::Combine, true), (PathOp::Subtract, true)], "{lock}");

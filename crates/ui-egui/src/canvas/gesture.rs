@@ -271,6 +271,11 @@ pub fn commit_crop(app: &mut PhotocraftApp) {
             return;
         }
     }
+    // Reset intentionally keeps a full-canvas frame without trimming hidden off-canvas pixels.
+    if std::mem::take(&mut app.crop.reset_frame) {
+        app.ui.crop_angle = 0.0;
+        return;
+    }
     let (x, y) = (r[0].round(), r[1].round());
     let (w, h) = ((r[2] - r[0]).round().max(1.0), (r[3] - r[1]).round().max(1.0));
     let delete = app.ui.tool_options.crop_delete;

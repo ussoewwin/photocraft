@@ -747,9 +747,11 @@ fn trusted_root_names_are_not_validated_as_relative_request_names() {
     let alias = outside.join("CON");
     link_directory(&root, &alias);
     let workspace = AuthorizedWorkspace::new(Some(&alias), Some(&alias)).unwrap();
-    for spelling in [&root, &alias] {
-        workspace.write(&spelling.join("new.bin").to_string_lossy(), b"trusted").unwrap();
-        assert_eq!(workspace.read(&spelling.join("new.bin").to_string_lossy()).unwrap(), b"trusted");
+    for (index, spelling) in [&root, &alias].into_iter().enumerate() {
+        let fresh = spelling.join(format!("new-{index}.bin"));
+        workspace.write(&fresh.to_string_lossy(), b"trusted").unwrap();
+        assert_eq!(workspace.read(&fresh.to_string_lossy()).unwrap(), b"trusted");
+        assert!(workspace.write(&fresh.to_string_lossy(), b"replacement").is_err(), "unknown existing files remain protected");
         assert!(workspace.write(&spelling.join("NUL").to_string_lossy(), b"no").is_err());
     }
     assert!(!root.join("NUL").exists());

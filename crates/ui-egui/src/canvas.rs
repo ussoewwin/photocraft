@@ -1760,7 +1760,8 @@ fn update_polygon_camera(app: &mut PhotocraftApp, ctx: &egui::Context, (idx, pri
         polygon_cancel_stale(app);
         polygon_edge_scroll(app, ctx, idx, rect, view, ppp);
     }
-    if !app.session.prefs().tools.overscroll {
+    // Bounds belong to an actual edge-scroll update, not an idle/finished polygon.
+    if view.center != previous_center && !app.session.prefs().tools.overscroll {
         crate::scrollbars::clamp_view_with_aspect(view, rect.size(), ppp, aspect);
     }
     if view.center != previous_center {

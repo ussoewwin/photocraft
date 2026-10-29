@@ -255,6 +255,9 @@ pub(crate) fn cancel_stale_pen(app: &mut PhotocraftApp) -> bool {
             app.path_document = app.session.active().map(|st| (st.doc.id, st.revision, Arc::downgrade(&st.doc)));
             app.ui = saved_ui;
             app.ui.pen = if result.is_ok() { None } else { failed };
+            if result.is_ok() && app.ui.direct_selection.target == Some(crate::direct_select::PathRef::Pen) {
+                app.ui.direct_selection = Default::default();
+            }
             if result.is_err() {
                 app.ui.status = message;
                 app.ui.status_error = true;
