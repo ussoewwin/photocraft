@@ -919,10 +919,13 @@ fn color_picker_dialog(app: &mut PhotocraftApp, p: &Value) -> Outcome {
             return err("need integer `parent` and string `effect` and `field`");
         };
         let stop = match p.get("stop") {
- None | Some(Value::Null) => None,
- Some(v) => match v.as_u64().and_then(|i| usize::try_from(i).ok()) {Some(i)=>Some(i),None=>return err("`stop` must be a non-negative integer")},
-};
-return match crate::layer_style::color_picker::open(app, parent, effect, field, stop) {
+            None | Some(Value::Null) => None,
+            Some(v) => match v.as_u64().and_then(|i| usize::try_from(i).ok()) {
+                Some(i) => Some(i),
+                None => return err("`stop` must be a non-negative integer"),
+            },
+        };
+        return match crate::layer_style::color_picker::open(app, parent, effect, field, stop) {
             Ok(id) => ok(json!({"dialog": id})),
             Err(error) => err(error),
         };

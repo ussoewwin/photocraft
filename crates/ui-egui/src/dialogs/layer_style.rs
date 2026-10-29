@@ -81,7 +81,9 @@ fn kind_of(e: &Effect) -> &'static str {
 
 fn defaults(kind: &str) -> Value {
     let mut p = photocraft_engine::layer_style::effect_defaults(kind);
-    if kind == "gradientOverlay" { gradient_field::from_to_to_stops(&mut p); }
+    if kind == "gradientOverlay" {
+        gradient_field::from_to_to_stops(&mut p);
+    }
     p
 }
 

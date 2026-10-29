@@ -37,9 +37,12 @@ pub(super) fn stops_of(v: Option<&Value>) -> Option<Vec<(f32, Color)>> {
             let t = s.get(0)?.as_f64()?;
             let value = s.get(1)?;
             let color = if let Some(hex) = value.as_str() {
-                let [r,g,b] = color_picker_ui::parse_hex(hex)?; Color::rgb(r,g,b)
-            } else {serde_json::from_value::<Color>(value.clone()).ok()?};
-            (t.is_finite() && color.c.iter().all(|v| v.is_finite()) && color.alpha.is_finite()).then(|| (t.clamp(0.0,1.0) as f32,color))
+                let [r, g, b] = color_picker_ui::parse_hex(hex)?;
+                Color::rgb(r, g, b)
+            } else {
+                serde_json::from_value::<Color>(value.clone()).ok()?
+            };
+            (t.is_finite() && color.c.iter().all(|v| v.is_finite()) && color.alpha.is_finite()).then(|| (t.clamp(0.0, 1.0) as f32, color))
         })
         .collect();
     if stops.len() < 2 {
@@ -67,11 +70,16 @@ pub(super) fn opacity_of(v: Option<&Value>) -> Option<Vec<(f32, f32)>> {
 }
 
 pub(super) fn stops_json(stops: &[(f32, Color)]) -> Value {
-    Value::Array(stops.iter().map(|(t, c)| {
-        let [r,g,b,_] = c.to_rgba8();
-        let exact = Color::rgb(f32::from(r)/255.0,f32::from(g)/255.0,f32::from(b)/255.0);
-        if *c == exact {json!([t, super::hex(c)])} else {json!([t,c])}
-    }).collect())
+    Value::Array(
+        stops
+            .iter()
+            .map(|(t, c)| {
+                let [r, g, b, _] = c.to_rgba8();
+                let exact = Color::rgb(f32::from(r) / 255.0, f32::from(g) / 255.0, f32::from(b) / 255.0);
+                if *c == exact { json!([t, super::hex(c)]) } else { json!([t, c]) }
+            })
+            .collect(),
+    )
 }
 
 pub(super) fn opacity_json(os: &[(f32, f32)]) -> Value {
@@ -171,7 +179,7 @@ pub(super) fn row(app: &mut PhotocraftApp, ui: &mut egui::Ui, f: &mut Map<String
     let Fill::Gradient { stops, .. } = &fill else { return };
     let w = ui.available_width().max(120.0);
     let (outer, resp) = ui.allocate_exact_size(vec2(w, 46.0), Sense::click_and_drag());
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), tl!("Gradient stops")));
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!("Gradient stops")));
     let bar = Rect::from_min_max(pos2(outer.left() + 8.0, outer.top() + 2.0), pos2(outer.right() - 8.0, outer.top() + 24.0));
     ui.data_mut(|d| d.insert_temp(bar_id(), (effect.to_string(), bar)));
     let x_of = |loc: f32| bar.left() + loc.clamp(0.0, 1.0) * bar.width();
