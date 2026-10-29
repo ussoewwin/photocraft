@@ -1050,6 +1050,32 @@ fn a_zoom_field_follows_backspace_and_the_cursor_when_it_checks_the_separators()
     assert_eq!(*h.state(), (1.5, 1));
 }
 
+/// When the value changes under the focused field (ArrowUp, another zoom), the field shows the new
+/// number, and the separator rules check that number, not the text typed before it.
+#[test]
+fn a_zoom_field_checks_the_separators_against_a_value_that_changed_under_it() {
+    let mut h = zoom_harness(100.0, EscEater::Shortcuts, false);
+    click_and_type(&mut h, "1.5");
+    h.key_press(egui::Key::ArrowUp);
+    h.run();
+    assert_eq!(h.state().0, 101.0, "ArrowUp steps the zoom");
+    h.key_press(egui::Key::End);
+    h.run();
+    h.event(egui::Event::Text(".".into()));
+    h.run();
+    assert!(!crate::zoom_field::alert_pending(&h.ctx), "101 has no `.` yet: the new one is silent");
+
+    let mut h = zoom_harness(100.0, EscEater::Shortcuts, false);
+    click_and_type(&mut h, "1.5");
+    h.state_mut().0 = 400.0;
+    h.run();
+    h.key_press(egui::Key::End);
+    h.run();
+    h.event(egui::Event::Text(".".into()));
+    h.run();
+    assert!(!crate::zoom_field::alert_pending(&h.ctx), "another zoom made it 400: the new `.` is silent");
+}
+
 /// A pasted `100/5.0` stays in the field and asks for the alert; Enter puts the zoom back.
 #[test]
 fn a_pasted_ratio_with_a_point_alerts_and_enter_restores_the_zoom() {
@@ -1112,6 +1138,25 @@ fn a_click_on_the_pasteboard_selects_the_typed_zoom_and_applies_nothing() {
     click_and_type(&mut h, "50");
     click_at(&mut h, away, egui::PointerButton::Primary);
     assert_eq!(*h.state(), (50.0, 1), "a click elsewhere applies the typed zoom");
+}
+
+/// Enter right after a click on the pasteboard, in the frames egui draws next (the release's frame,
+/// one more for its events, then the Enter, with the mouse still): the typed zoom is applied.
+#[test]
+fn enter_right_after_a_click_on_the_pasteboard_applies_the_typed_zoom() {
+    let away = egui::pos2(250.0, 80.0);
+    let mut h = zoom_harness(40.0, EscEater::Shortcuts, true);
+    click_and_type(&mut h, "50");
+    h.event(egui::Event::PointerMoved(away));
+    for pressed in [true, false] {
+        h.event(egui::Event::PointerButton { pos: away, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE });
+        h.run_steps(1);
+    }
+    h.run_steps(1);
+    assert_eq!(*h.state(), (40.0, 0), "the click applied nothing");
+    h.key_press(egui::Key::Enter);
+    h.run_steps(1);
+    assert_eq!(*h.state(), (50.0, 1), "Enter applies the typed 50");
 }
 
 /// #5717: a value past the range shows as it is without reporting a change; an edit is clamped.

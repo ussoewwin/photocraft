@@ -27,7 +27,6 @@
 //! field about a press on the pasteboard, which only the app can recognise).
 
 use egui::{Context, FocusDirection, Id, Key, Modifiers, SurrenderFocusOn, Ui};
-use photocraft_doc::DocId;
 
 fn editing_id() -> Id {
     Id::unique("pc-zoom-field-editing")
@@ -45,6 +44,10 @@ fn alert_id() -> Id {
     Id::unique("pc-zoom-field-alert")
 }
 
+fn taken_key_id() -> Id {
+    Id::unique("pc-zoom-field-taken-key")
+}
+
 fn keep_pass_id() -> Id {
     Id::unique("pc-zoom-field-keep-pass")
 }
@@ -55,10 +58,6 @@ fn select_until_id() -> Id {
 
 fn title_bar_rect_id() -> Id {
     Id::unique("pc-zoom-field-title-bar-rect")
-}
-
-fn open_docs_id() -> Id {
-    Id::unique("pc-zoom-field-open-docs")
 }
 
 /// What [`before`] decided for this frame, for [`after`] and the field.
@@ -100,10 +99,12 @@ fn select_all_by_key(ui: &Ui) {
 /// its own copy under [`mirror_id`]: what the field showed when it got the keyboard, with the keys
 /// applied that are seen here (typed, pasted, cut, Backspace, Delete). A key that changes the text
 /// in a way not followed (undo, a word deletion) makes the copy empty: the rules then only look at
-/// what is typed from there on, and Enter still refuses text that [`violates`] them.
+/// what is typed from there on, and Enter still refuses text that [`violates`] them. The copy is kept
+/// with the `shown` it started from: when the value changes under the focused field (ArrowUp, the
+/// wheel, another zoom), the field shows the new number, and the copy starts again from it.
 fn drop_unwanted_chars(ui: &Ui, id: Id, shown: &str) -> bool {
     let mirror = mirror_id(id);
-    let stored = ui.data(|d| d.get_temp::<String>(mirror));
+    let stored = ui.data(|d| d.get_temp::<(String, String)>(mirror)).filter(|(from, _)| from == shown).map(|(_, text)| text);
     let mut text: Vec<char> = stored.clone().unwrap_or_else(|| shown.to_owned()).chars().collect();
     let len = text.len();
     let range = egui::TextEdit::load_state(ui.ctx(), id).and_then(|s| s.cursor.char_range());
@@ -181,7 +182,7 @@ fn drop_unwanted_chars(ui: &Ui, id: Id, shown: &str) -> bool {
     if stale {
         text.clear();
     }
-    ui.data_mut(|d| d.insert_temp(mirror, text.iter().collect::<String>()));
+    ui.data_mut(|d| d.insert_temp(mirror, (shown.to_owned(), text.iter().collect::<String>())));
     dropped
 }
 
@@ -207,14 +208,15 @@ pub(crate) fn before(ui: &Ui, id: Id, shown: &str) -> Guard {
     };
     // Only the field that owns the keyboard takes Esc: any other must leave it to whoever wants it.
     if owner && (ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape)) | raw_esc(ui)) {
-        ui.data_mut(|d| d.remove_temp::<String>(mirror_id(id)));
+        ui.data_mut(|d| d.remove_temp::<(String, String)>(mirror_id(id)));
         return Guard { esc: true, veto: true, ..Default::default() };
     }
     // The focus left before the field was drawn, and no click took it (egui drops the focus on
     // some keys and a shortcut may then eat them, so the `DragValue` cannot rely on seeing them):
-    // whatever was typed is dropped, never applied. A click away still applies.
+    // the copy of the typed text is dropped. Nothing vetoes the `DragValue` here, so a click away
+    // still applies what was typed.
     if !focused {
-        ui.data_mut(|d| d.remove_temp::<String>(mirror_id(id)));
+        ui.data_mut(|d| d.remove_temp::<(String, String)>(mirror_id(id)));
     }
     // A click that keeps what was typed (pasteboard, title bar, open menu), or a window that has
     // lost the keyboard: whatever egui does with the typed text, it does not reach the zoom. This
@@ -226,10 +228,14 @@ pub(crate) fn before(ui: &Ui, id: Id, shown: &str) -> Guard {
         ctx.data_mut(|d| d.insert_temp(keep_pass_id(), pass));
     }
     let recent = ctx.data(|d| d.get_temp::<u64>(keep_pass_id())).is_some_and(|p| pass <= p + 2);
-    let veto = recent || ui.input(|i| i.viewport().focused) == Some(false);
+    // Enter in the field is a commit of its own, however soon after the click: egui draws few frames
+    // with the mouse still, so the Enter can land in that window.
+    let enter = focused && ui.input(|i| i.key_pressed(Key::Enter));
+    let veto = (recent && !enter) || ui.input(|i| i.viewport().focused) == Some(false);
     if !focused {
         return Guard { veto, ..Default::default() };
     }
+    drop_taken_text(ctx);
     if drop_unwanted_chars(ui, id, shown) {
         request_alert(ctx);
     }
@@ -283,7 +289,7 @@ pub(crate) fn after(ui: &Ui, id: Id, guard: Guard) {
     }
     if guard.esc {
         // Esc: the typed text goes, and so does the keyboard, so the field shows the zoom again.
-        ui.data_mut(|d| d.remove_temp::<String>(mirror_id(id)));
+        ui.data_mut(|d| d.remove_temp::<(String, String)>(mirror_id(id)));
         ui.memory_mut(|m| m.surrender_focus(id));
         ctx.request_repaint();
         return;
@@ -294,7 +300,7 @@ pub(crate) fn after(ui: &Ui, id: Id, guard: Guard) {
     // Text the rules refuse, which only a paste can bring in: it stays (Enter then restores the zoom),
     // but every key or paste into it asks for the alert.
     let edited = ui.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::Text(_) | egui::Event::Paste(_))));
-    if edited && ui.data(|d| d.get_temp::<String>(mirror_id(id))).is_some_and(|t| violates(&t)) {
+    if edited && ui.data(|d| d.get_temp::<(String, String)>(mirror_id(id))).is_some_and(|(_, t)| violates(&t)) {
         request_alert(ctx);
     }
     let pass = ctx.cumulative_pass_nr();
@@ -331,6 +337,35 @@ pub fn editing(ctx: &Context) -> bool {
 /// A zoom field has the keyboard right now.
 pub fn is_focused(ctx: &Context) -> bool {
     editing_field(ctx).is_some_and(|id| ctx.memory(|m| m.focused()) == Some(id))
+}
+
+/// A key the open menu took (a row's letter, Space) also arrives as typed text, in the same frame
+/// or the next: while a zoom field has the keyboard, that text never reaches it, so the field
+/// neither types it nor alerts.
+pub(crate) fn drop_text(ctx: &Context, c: char) {
+    if is_focused(ctx) {
+        let pass = ctx.cumulative_pass_nr();
+        ctx.data_mut(|d| d.insert_temp(taken_key_id(), (c, pass)));
+        drop_taken_text(ctx);
+    }
+}
+
+/// Takes the text of the key [`drop_text`] noted out of this frame's input, once, until the frame
+/// after the key.
+fn drop_taken_text(ctx: &Context) {
+    let Some((c, pass)) = ctx.data(|d| d.get_temp::<(char, u64)>(taken_key_id())) else { return };
+    if pass + 1 < ctx.cumulative_pass_nr() {
+        ctx.data_mut(|d| d.remove_temp::<(char, u64)>(taken_key_id()));
+        return;
+    }
+    let same = |t: &str| t.chars().eq(c.to_lowercase()) || t.chars().eq(c.to_uppercase());
+    let found = ctx.input_mut(|i| {
+        let at = i.events.iter().position(|e| matches!(e, egui::Event::Text(t) if same(t)));
+        at.map(|at| i.events.remove(at)).is_some()
+    });
+    if found {
+        ctx.data_mut(|d| d.remove_temp::<(char, u64)>(taken_key_id()));
+    }
 }
 
 /// The system alert (Windows: Asterisk) is wanted; [`tick`] plays it in the next frame.
@@ -387,25 +422,8 @@ pub(crate) fn track_pasteboard(ctx: &Context, pressed: bool) {
 
 // ---- What needs the application: services and the document's geometry. ----
 
-/// A document that was open in the last frame and is not now has closed: the glide a typed zoom left
-/// for it is dropped ([`crate::zoom_levels::forget_pending`]), so nothing is left that another document
-/// could take. `open` is every open document, as of this frame.
-pub(crate) fn forget_closed(ctx: &Context, open: &[DocId]) {
-    let before = ctx.data(|d| d.get_temp::<Vec<DocId>>(open_docs_id())).unwrap_or_default();
-    if before == open {
-        return;
-    }
-    for gone in before.iter().filter(|doc| !open.contains(doc)) {
-        crate::zoom_levels::forget_pending(ctx, *gone);
-    }
-    ctx.data_mut(|d| d.insert_temp(open_docs_id(), open.to_vec()));
-}
-
-/// Once per frame, before the panels: plays a requested alert, follows a press on the pasteboard, and
-/// drops the glide of a document that closed.
+/// Once per frame, before the panels: plays a requested alert and follows a press on the pasteboard.
 pub fn tick(app: &mut crate::PhotocraftApp, ctx: &Context) {
-    let open: Vec<DocId> = app.session.documents().iter().map(|d| d.doc.id).collect();
-    forget_closed(ctx, &open);
     if ctx.data_mut(|d| d.remove_temp::<bool>(alert_id())).unwrap_or(false)
         // The platform's alert, else its plain beep: an app that only sets `beep` still answers.
         && let Some(play) = app.services.alert.or(app.services.beep)
@@ -471,26 +489,6 @@ mod tests {
         assert!(on_title_bar(&ctx, egui::pos2(790.0, 10.0)), "the far end: Essentials, Minimise, Close");
         assert!(on_title_bar(&ctx, egui::pos2(400.0, 10.0)), "the empty drag area between the menus and them");
         assert!(!on_title_bar(&ctx, egui::pos2(10.0, 100.0)), "below the bar is the app");
-    }
-
-    /// The glide a typed zoom leaves belongs to its document and goes when the document closes, so a
-    /// document that takes over its position in the views never inherits it.
-    #[test]
-    fn a_document_that_closed_leaves_no_zoom_glide() {
-        let ctx = Context::default();
-        let (a, b) = (DocId(10), DocId(20));
-        let pending = |doc| ctx.data(|d| d.get_temp::<f32>(crate::zoom_levels::pending_id(doc)));
-        let mut view = crate::state::View { zoom: 1.0, doc_size: [2000, 1500], ..Default::default() };
-        forget_closed(&ctx, &[a, b]);
-        crate::zoom_levels::set_from_field(&ctx, a, &mut view, false, 200.0);
-        crate::zoom_levels::set_from_field(&ctx, b, &mut view, false, 50.0);
-        // Nothing closed: both keep their glide.
-        forget_closed(&ctx, &[a, b]);
-        assert!(pending(a).is_some() && pending(b).is_some());
-        // `a` closes, `b` moves to `a`'s position: only `b` keeps its glide.
-        forget_closed(&ctx, &[b]);
-        assert_eq!(pending(a), None, "the closed document's glide is gone");
-        assert!(pending(b).is_some(), "the other document keeps its own");
     }
 
     /// The menu bar rect goes stale like the title bar's: not drawn for a while, it catches nothing.

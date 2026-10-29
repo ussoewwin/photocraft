@@ -117,12 +117,12 @@ pub(super) fn navigator(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                 }
                 app.ui.views[idx].fit_pending = false;
             };
-            let doc_id = app.session.documents()[idx].doc.id;
-            let mut pct = crate::zoom_levels::field_percent(ui.ctx(), doc_id, v.zoom);
+            let mut pct = v.zoom * 100.0;
             let field = widgets::compact_wrapping_value_field(ui, &mut pct, crate::zoom_levels::percent_range(&app.ui.views[idx]), "%", vec2(64.0, NAV_ROW_H))
                 .accessible_name(tl!("Zoom"));
             if field.changed() {
-                crate::zoom_levels::set_from_field(ui.ctx(), doc_id, &mut app.ui.views[idx], field.dragged() || field.drag_started(), pct);
+                let animated = app.session.prefs().general.animated_zoom;
+                crate::zoom_levels::set_from_field(&mut app.ui.views[idx], field.dragged() || field.drag_started(), pct, animated);
             }
             let out = crate::brush_picker::named(icons::button(ui, "minus", NAV_ROW_H, false, tl!("Zoom Out")), "Zoom Out");
             if out.clicked() {

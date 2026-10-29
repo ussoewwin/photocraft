@@ -12,8 +12,6 @@
 //! channel) clamps through here, so no control can pull the zoom back to a narrower range of
 //! its own.
 
-use photocraft_doc::DocId;
-
 /// 12800 %.
 pub const MAX: f32 = 128.0;
 
@@ -92,45 +90,15 @@ pub fn step(zoom: f32, dir: i32, size: [u32; 2]) -> f32 {
     step_in_range(zoom, dir, min(size), MAX)
 }
 
-/// Where a document keeps the zoom it still has to travel (`ln(target / zoom)`) after a zoom was
-/// typed into a zoom field. `canvas_view` spends it a little each frame, the way egui spends a wheel
-/// notch into `smooth_scroll_delta` (90 % of the way in 0.2 s), instead of jumping.
-///
-/// It is keyed by the document's [`DocId`], not by its index in the views: `PhotocraftApp::sync_views`
-/// moves views when documents are closed or reordered, and an index would hand a glide to another
-/// document. Close a document with [`forget_pending`], so nothing is left that another could take.
-pub fn pending_id(doc: DocId) -> egui::Id {
-    egui::Id::unique(("pc-zoom-pending", doc))
-}
-
-/// Drops the glide a document still had to travel. Call it when the document closes.
-pub fn forget_pending(ctx: &egui::Context, doc: DocId) {
-    ctx.data_mut(|d| d.remove::<f32>(pending_id(doc)));
-}
-
-/// The percent a zoom field shows: the zoom a typed value is still gliding to, else the zoom. The
-/// field then keeps the number that was typed for the whole glide, instead of counting through it.
-pub fn field_percent(ctx: &egui::Context, doc: DocId, zoom: f32) -> f32 {
-    let pending = ctx.data(|d| d.get_temp::<f32>(pending_id(doc))).filter(|p| p.is_finite()).unwrap_or(0.0);
-    zoom * pending.exp() * 100.0
-}
-
-/// Applies the percent a zoom field reported as changed. A scrub (a drag on the field or its
-/// label) follows the pointer at once; a typed or stepped value only leaves the distance to
-/// travel, for `canvas_view` to spend.
-pub fn set_from_field(ctx: &egui::Context, doc: DocId, view: &mut crate::state::View, scrub: bool, percent: f32) {
-    let target = clamp(percent / 100.0, view.doc_size);
+/// Applies the percent a zoom field reported as changed, as Zoom In/Out and Actual Pixels do: the
+/// zoom is set to the target at once, and the camera glides there when General › Animated Zoom is
+/// on. A scrub (a drag on the field or its label) follows the pointer, with no glide. Any later zoom
+/// replaces the transition, and the zoom lands exactly on the target.
+pub fn set_from_field(view: &mut crate::state::View, scrub: bool, percent: f32, animated_zoom: bool) {
+    view.zoom = clamp(percent / 100.0, view.doc_size);
     view.fit_pending = false;
-    // A zoom field sets the camera itself: no camera transition runs under it.
-    view.zoom_animating = false;
-    view.zoom_anchor = None;
-    let pending = if scrub || view.zoom.is_nan() || view.zoom <= 0.0 {
-        view.zoom = target;
-        0.0
-    } else {
-        (target / view.zoom).ln()
-    };
-    ctx.data_mut(|d| d.insert_temp(pending_id(doc), pending));
+    view.fill_pending = false;
+    view.request_zoom_animation(!scrub && animated_zoom);
 }
 
 #[cfg(test)]
@@ -215,71 +183,20 @@ mod tests {
     }
 
     #[test]
-    fn a_typed_zoom_waits_for_the_canvas_and_a_scrub_does_not() {
-        let ctx = egui::Context::default();
-        let pending = |doc| ctx.data(|d| d.get_temp::<f32>(pending_id(doc)));
-        let mut v = crate::state::View { zoom: 0.5, doc_size: PHOTO, fit_pending: true, ..Default::default() };
-        set_from_field(&ctx, DocId(0), &mut v, false, 150.0);
-        assert_eq!(v.zoom, 0.5, "typing does not move the zoom itself");
-        assert!(!v.fit_pending);
-        assert!((pending(DocId(0)).unwrap() - 3.0_f32.ln()).abs() < 1e-6, "the distance left is ln(150 / 50)");
-        set_from_field(&ctx, DocId(0), &mut v, true, 200.0);
-        assert_eq!(v.zoom, 2.0, "a scrub applies at once");
-        assert_eq!(pending(DocId(0)), Some(0.0), "and drops what was left");
-        set_from_field(&ctx, DocId(1), &mut v, false, 1.0e9);
-        assert!((pending(DocId(1)).unwrap() - (MAX / 2.0).ln()).abs() < 1e-5, "the target is clamped to the zoom range first");
-    }
-
-    /// The distance a typed zoom leaves is `ln(target / zoom)`, out or in, for a tiny step and a
-    /// huge one, and nothing for the zoom it already has.
-    #[test]
-    fn a_typed_zoom_leaves_the_log_distance_to_the_clamped_target() {
-        let ctx = egui::Context::default();
-        // (zoom now, percent typed)
-        let cases = [(2.0_f32, 25.0_f32), (0.1, 800.0), (1.0, 100.5), (0.37, 1234.0), (1.0, 100.0), (1.0, 1.0e9)];
-        for (i, (zoom, percent)) in cases.into_iter().enumerate() {
-            let doc = DocId(i as _);
-            let mut v = crate::state::View { zoom, doc_size: PHOTO, ..Default::default() };
-            set_from_field(&ctx, doc, &mut v, false, percent);
-            let left = ctx.data(|d| d.get_temp::<f32>(pending_id(doc))).expect("a distance is stored");
-            let want = (clamp(percent / 100.0, PHOTO) / zoom).ln();
-            assert!((left - want).abs() < 1e-5, "{percent} % over {zoom}: {left} vs {want}");
-            assert_eq!(v.zoom, zoom, "typing never moves the zoom itself");
-        }
-    }
-
-    #[test]
-    fn a_zoom_field_shows_the_zoom_it_is_gliding_to() {
-        let ctx = egui::Context::default();
-        let mut v = crate::state::View { zoom: 2.0, doc_size: PHOTO, ..Default::default() };
-        assert!((field_percent(&ctx, DocId(0), v.zoom) - 200.0).abs() < 1e-3, "no glide: the zoom");
-        set_from_field(&ctx, DocId(0), &mut v, false, 100.0);
-        assert!((field_percent(&ctx, DocId(0), v.zoom) - 100.0).abs() < 1e-3, "typed 100, zoom still 200 %");
-        // Halfway through the glide, the way `canvas_view` spends the distance.
-        let pending = ctx.data(|d| d.get_temp::<f32>(pending_id(DocId(0)))).unwrap();
-        v.zoom *= (pending / 2.0).exp();
-        ctx.data_mut(|d| d.insert_temp(pending_id(DocId(0)), pending / 2.0));
-        let shown = field_percent(&ctx, DocId(0), v.zoom);
-        assert!((shown - 100.0).abs() < 1e-3, "still 100 half way: {shown}");
-    }
-
-    /// The glide belongs to the document, not to the place its view has in the list: when views move
-    /// (`sync_views` after a close), each document keeps its own target, and a closed one leaves none.
-    #[test]
-    fn a_glide_follows_its_document_and_goes_when_it_closes() {
-        let ctx = egui::Context::default();
-        let (a, b) = (DocId(10), DocId(20));
-        let mut va = crate::state::View { zoom: 1.0, doc_size: PHOTO, ..Default::default() };
-        let mut vb = crate::state::View { zoom: 1.0, doc_size: PHOTO, ..Default::default() };
-        set_from_field(&ctx, a, &mut va, false, 200.0);
-        set_from_field(&ctx, b, &mut vb, false, 50.0);
-        // `a` closes, `b` moves to `a`'s old index: nothing about `a` may reach it.
-        forget_pending(&ctx, a);
-        assert_eq!(ctx.data(|d| d.get_temp::<f32>(pending_id(a))), None, "a closed document leaves no glide");
-        assert!((field_percent(&ctx, b, vb.zoom) - 50.0).abs() < 1e-3, "b keeps its own target");
-        assert!((field_percent(&ctx, a, 1.0) - 100.0).abs() < 1e-3, "nothing pending for a: just the zoom");
-        // A new document that happens to take a's old position starts with no glide.
-        let c = DocId(30);
-        assert!((field_percent(&ctx, c, 1.0) - 100.0).abs() < 1e-3);
+    fn a_typed_zoom_lands_exactly_and_glides_only_with_animated_zoom() {
+        let mut v = crate::state::View { zoom: 1.0, doc_size: PHOTO, fit_pending: true, ..Default::default() };
+        set_from_field(&mut v, false, 1600.0, true);
+        assert_eq!(v.zoom, 16.0, "the target, exactly");
+        assert!(v.zoom_animating && !v.fit_pending, "Animated Zoom on: the camera glides there");
+        let mut v = crate::state::View { zoom: 1.0 / 7.5, doc_size: PHOTO, ..Default::default() };
+        set_from_field(&mut v, false, 6400.0, false);
+        assert_eq!(v.zoom, 64.0);
+        assert!(!v.zoom_animating, "Animated Zoom off: a jump");
+        assert_eq!(v.display_camera, Some((64.0, v.center)));
+        set_from_field(&mut v, true, 200.0, true);
+        assert_eq!(v.zoom, 2.0);
+        assert!(!v.zoom_animating, "a scrub follows the pointer, with no glide");
+        set_from_field(&mut v, false, 1.0e9, true);
+        assert_eq!(v.zoom, MAX, "the target is clamped to the zoom range");
     }
 }

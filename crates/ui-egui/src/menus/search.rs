@@ -44,6 +44,12 @@ pub fn search_items<'a>(items: &'a [MenuItem], query: &str, lang: crate::i18n::L
     hits.into_iter().filter(|(_, _, it)| seen.insert(it.id.as_str())).take(HELP_SEARCH_MAX).map(|(_, _, it)| it).collect()
 }
 
+/// Help › Search was drawn in this frame (or the last): the open menu has a text field of its own.
+pub(super) fn shown(ctx: &egui::Context) -> bool {
+    let pass_id = egui::Id::unique("help-menu-search").with("pass");
+    ctx.data(|d| d.get_temp::<u64>(pass_id)).is_some_and(|p| p + 1 >= ctx.cumulative_pass_nr())
+}
+
 /// Help › Search : a field at the top of the Help menu that finds any menu command
 /// by name. Results show their menu path; click, ↓ then ↩, or ↩ in the field runs one.
 /// `opening`: this frame's release ends the click on the Help title that opened the menu.
