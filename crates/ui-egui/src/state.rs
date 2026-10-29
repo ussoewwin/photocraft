@@ -415,6 +415,10 @@ pub struct UiState {
     /// Which chip the Color panel edits, and how it shows the colour.
     #[serde(default)]
     pub color_panel: ColorPanelState,
+    /// The Color panel options as last synced with the preferences: a stored value that differs
+    /// from it was changed outside the panel (`prefs.set`, a reset) and is taken, not overwritten.
+    #[serde(skip)]
+    pub color_panel_synced: Option<serde_json::Value>,
     /// Histogram panel options: view, channel, statistics, colours, source.
     #[serde(default)]
     pub histogram_panel: crate::histogram_panel::HistogramPanelState,
@@ -571,6 +575,7 @@ impl Default for UiState {
             docking_collapsed: Vec::new(),
             docking_reveal: None,
             color_panel: Default::default(),
+            color_panel_synced: None,
             brush_section: 0,
             brush_tab: 0,
             brushes_panel: Default::default(),
