@@ -148,6 +148,23 @@ fn actions_shortcut_undo_and_redo_edit_script_without_undoing_pixels() {
 }
 
 #[test]
+fn shell_playback_resolves_recorded_eye_target_on_new_document() {
+    let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({"width": 8, "height": 8})).unwrap();
+    app.run("layer.new.layer", json!({"name": "Target"})).unwrap();
+    app.run("actions.record", json!({"name": "Hide"})).unwrap();
+    let id = app.session.active().unwrap().active_layer.unwrap();
+    app.run("layer.setProps", json!({"layer": id.0, "visible": false})).unwrap();
+    app.run("actions.stop", json!({})).unwrap();
+    app.run("file.new", json!({"width": 8, "height": 8})).unwrap();
+    app.run("layer.new.layer", json!({"name": "Target"})).unwrap();
+    let id = app.session.active().unwrap().active_layer.unwrap();
+    let result = play(&mut app, &json!({"action": "Hide"})).unwrap();
+    assert!(result.get("failed").is_none(), "{result}");
+    assert!(!app.session.active().unwrap().doc.layer(id).unwrap().visible);
+}
+
+#[test]
 fn double_clicking_an_action_name_renames_it_in_place() {
     use egui_kittest::{Harness, kittest::Queryable};
     let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());

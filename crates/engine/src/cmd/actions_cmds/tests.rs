@@ -156,6 +156,27 @@ fn undo_pending_step_deletion_does_not_duplicate_recording() {
 }
 
 #[test]
+fn recorded_eye_visibility_replays_on_another_document_and_duplicate_names() {
+    let mut s = Session::new();
+    s.execute("file.new", json!({"width": 8, "height": 8})).unwrap();
+    s.execute("layer.new.layer", json!({"name": "Same"})).unwrap();
+    let hidden = s.execute("layer.new.layer", json!({"name": "Same"})).unwrap()["layer"].as_u64().unwrap();
+    s.execute("actions.record", json!({"name": "Hide"})).unwrap();
+    s.execute("layer.setProps", json!({"layer": hidden, "visible": false, "coalesce": "eye-sweep"})).unwrap();
+    s.execute("actions.stop", json!({})).unwrap();
+    s.execute("file.new", json!({"width": 8, "height": 8})).unwrap();
+    let keep = s.execute("layer.new.layer", json!({"name": "Same"})).unwrap()["layer"].as_u64().unwrap();
+    let target = s.execute("layer.new.layer", json!({"name": "Same"})).unwrap()["layer"].as_u64().unwrap();
+    s.execute("select.deselectLayers", json!({})).unwrap();
+    let result = s.execute("actions.play", json!({"action": "Hide"})).unwrap();
+    assert!(result.get("failed").is_none(), "{result}");
+    assert!(s.active().unwrap().doc.layer(photocraft_doc::LayerId(keep)).unwrap().visible);
+    assert!(!s.active().unwrap().doc.layer(photocraft_doc::LayerId(target)).unwrap().visible);
+    s.execute("edit.undo", json!({})).unwrap();
+    assert!(s.active().unwrap().doc.layer(photocraft_doc::LayerId(target)).unwrap().visible);
+}
+
+#[test]
 fn rename_keeps_calls_and_function_key_and_rejects_bad_names() {
     let mut s = Session::new();
     s.actions.list.push(Action {

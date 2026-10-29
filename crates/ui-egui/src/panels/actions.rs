@@ -133,6 +133,14 @@ fn play_owned(app: &mut PhotocraftApp, params: &Value, suspended: Option<Value>)
             failed = Some(json!({"step": i, "id": id, "error": format!("action playback exceeded the {}-step limit", actions_cmds::MAX_PLAYBACK_STEPS)}));
             break;
         }
+        let resolved = match actions_cmds::playback_params(&app.session, id, p) {
+            Ok(p) => p,
+            Err(e) => {
+                failed = Some(json!({"step": i, "id": id, "error": e.to_string()}));
+                break;
+            }
+        };
+        let p = &resolved;
         // The gate judges the step before its dialog opens: a denied step neither runs nor
         // pauses.
         if let Some(auth) = app.session.authorize

@@ -164,6 +164,10 @@ deleting, renaming, creating and recording), independently of document History. 
 Ctrl/Cmd+Shift+Z target this history while the Actions panel has focus. Playing an
 action returns Undo to document edits.
 
+Newly recorded Layers eye gestures resolve their targets by layer name and duplicate-name
+ordinal during playback rather than retaining a document-local layer id. A missing target
+reports a failed step instead of changing another layer.
+
 The Actions panel shows replayable steps immediately while recording. Click an individual
 step to select it, then use the trash button to remove that step; selecting the action
 heading instead targets the whole action. Step deletion also works during recording
