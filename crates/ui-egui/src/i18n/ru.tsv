@@ -4697,3 +4697,19 @@ shape	Appearance	Оформление
 	No selection or layer	Нет выделения или слоя
 	{label}: empty	{label}: пусто
 	{label}: X {x}  Y {y}  W {w}  H {h}	{label}: X {x}  Y {y}  W {w}  H {h}
+	Color Aware	С учетом цвета
+	Decontaminate Colors	Очистить цвета
+	Edge Detection	Обнаружение краев
+	Global Refinements	Глобальное уточнение
+	High Quality Preview	Высококачественный просмотр
+	Object Aware	С учетом объектов
+	Real-Time Refinement	Уточнение в реальном времени
+	Refine Edge Brush Tool	Инструмент «Кисть уточнения края»
+	Refine Hair	Уточнить волосы
+	Refine Mode	Режим уточнения
+	Remember Settings	Запомнить параметры
+	View Mode	Режим просмотра
+	Object Aware needs a segmentation model, which isn't available yet	Для режима «С учетом объектов» нужна модель сегментации, которая пока недоступна
+	Refine Hair needs hair detection, which isn't available yet	Для уточнения волос нужно распознавание волос, которое пока недоступно
+	Select and Mask was closed: its document is no longer the active one	Окно «Выделение и маска» закрыто: его документ больше не активен
+	Select and Mask was closed: another layer was selected	Окно «Выделение и маска» закрыто: выбран другой слой

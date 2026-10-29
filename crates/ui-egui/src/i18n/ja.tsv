@@ -4173,3 +4173,20 @@ curves	Smooth	スムーズ
 	No selection or layer	選択範囲またはレイヤーがありません
 	{label}: empty	{label}: 空
 	{label}: X {x}  Y {y}  W {w}  H {h}	{label}: X {x}  Y {y}  W {w}  H {h}
+	Clear Selection	選択範囲をクリア
+	Color Aware	カラー認識
+	Decontaminate Colors	不要なカラーの除去
+	Edge Detection	エッジの検出
+	Global Refinements	グローバル調整
+	High Quality Preview	高品質プレビュー
+	Object Aware	オブジェクト認識
+	Real-Time Refinement	リアルタイム調整
+	Refine Edge Brush Tool	境界線調整ブラシツール
+	Refine Hair	髪の毛を調整
+	Refine Mode	調整モード
+	Remember Settings	設定を保存
+	View Mode	表示モード
+	Object Aware needs a segmentation model, which isn't available yet	オブジェクト認識にはセグメンテーションモデルが必要ですが、まだ利用できません
+	Refine Hair needs hair detection, which isn't available yet	髪の毛を調整には髪の毛の検出が必要ですが、まだ利用できません
+	Select and Mask was closed: its document is no longer the active one	「選択とマスク」を閉じました: 対象のドキュメントがアクティブではなくなりました
+	Select and Mask was closed: another layer was selected	「選択とマスク」を閉じました: 別のレイヤーが選択されました

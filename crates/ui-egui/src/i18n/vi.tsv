@@ -3992,3 +3992,20 @@ curves	Smooth	Làm mượt
 	No selection or layer	Không có vùng chọn hoặc lớp
 	{label}: empty	{label}: trống
 	{label}: X {x}  Y {y}  W {w}  H {h}	{label}: X {x}  Y {y}  W {w}  H {h}
+	Clear Selection	Xóa vùng chọn
+	Color Aware	Nhận biết màu
+	Decontaminate Colors	Khử nhiễm màu
+	Edge Detection	Phát hiện cạnh
+	Global Refinements	Tinh chỉnh tổng thể
+	High Quality Preview	Xem trước chất lượng cao
+	Object Aware	Nhận biết đối tượng
+	Real-Time Refinement	Tinh chỉnh theo thời gian thực
+	Refine Edge Brush Tool	Công cụ cọ tinh chỉnh cạnh
+	Refine Hair	Tinh chỉnh tóc
+	Refine Mode	Chế độ tinh chỉnh
+	Remember Settings	Ghi nhớ cài đặt
+	View Mode	Chế độ xem
+	Object Aware needs a segmentation model, which isn't available yet	Nhận biết đối tượng cần mô hình phân đoạn, hiện chưa có
+	Refine Hair needs hair detection, which isn't available yet	Tinh chỉnh tóc cần tính năng phát hiện tóc, hiện chưa có
+	Select and Mask was closed: its document is no longer the active one	Đã đóng Chọn và Mặt nạ: tài liệu của nó không còn là tài liệu đang hoạt động
+	Select and Mask was closed: another layer was selected	Đã đóng Chọn và Mặt nạ: một lớp khác đã được chọn

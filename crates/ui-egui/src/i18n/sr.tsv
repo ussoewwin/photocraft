@@ -4566,3 +4566,19 @@ shape	Appearance	Izgled
 	No selection or layer	Нема избора или слоја
 	{label}: empty	{label}: празно
 	{label}: X {x}  Y {y}  W {w}  H {h}	{label}: X {x}  Y {y}  W {w}  H {h}
+	Color Aware	Prema boji
+	Decontaminate Colors	Dekontaminiraj boje
+	Edge Detection	Detekcija ivice
+	Global Refinements	Globalna doterivanja
+	High Quality Preview	Pregled visokog kvaliteta
+	Object Aware	Prema objektu
+	Real-Time Refinement	Doterivanje u realnom vremenu
+	Refine Edge Brush Tool	Alatka četkica za doterivanje ivice
+	Refine Hair	Doteraj kosu
+	Refine Mode	Režim doterivanja
+	Remember Settings	Zapamti podešavanja
+	View Mode	Režim prikaza
+	Object Aware needs a segmentation model, which isn't available yet	Režim Prema objektu zahteva model segmentacije, koji još nije dostupan
+	Refine Hair needs hair detection, which isn't available yet	Doterivanje kose zahteva detekciju kose, koja još nije dostupna
+	Select and Mask was closed: its document is no longer the active one	Izaberi i maskiraj je zatvoren: njegov dokument više nije aktivan
+	Select and Mask was closed: another layer was selected	Izaberi i maskiraj je zatvoren: izabran je drugi sloj

@@ -4114,3 +4114,20 @@ curves	Smooth	Wygładź
 	No selection or layer	Brak zaznaczenia lub warstwy
 	{label}: empty	{label}: puste
 	{label}: X {x}  Y {y}  W {w}  H {h}	{label}: X {x}  Y {y}  W {w}  H {h}
+	Clear Selection	Wyczyść zaznaczenie
+	Color Aware	Według kolorów
+	Decontaminate Colors	Odkażanie kolorów
+	Edge Detection	Wykrywanie krawędzi
+	Global Refinements	Dopracowanie globalne
+	High Quality Preview	Podgląd wysokiej jakości
+	Object Aware	Według obiektów
+	Real-Time Refinement	Dopracowanie w czasie rzeczywistym
+	Refine Edge Brush Tool	Narzędzie Pędzel dopracowania krawędzi
+	Refine Hair	Dopracuj włosy
+	Refine Mode	Tryb dopracowania
+	Remember Settings	Zapamiętaj ustawienia
+	View Mode	Tryb widoku
+	Object Aware needs a segmentation model, which isn't available yet	Tryb Według obiektów wymaga modelu segmentacji, który nie jest jeszcze dostępny
+	Refine Hair needs hair detection, which isn't available yet	Dopracowanie włosów wymaga wykrywania włosów, które nie jest jeszcze dostępne
+	Select and Mask was closed: its document is no longer the active one	Zamknięto Zaznacz i maskuj: jego dokument nie jest już aktywny
+	Select and Mask was closed: another layer was selected	Zamknięto Zaznacz i maskuj: wybrano inną warstwę

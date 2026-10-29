@@ -4207,3 +4207,20 @@ curves	Smooth	Згладити
 	No selection or layer	Немає виділення або шару
 	{label}: empty	{label}: порожньо
 	{label}: X {x}  Y {y}  W {w}  H {h}	{label}: X {x}  Y {y}  W {w}  H {h}
+	Clear Selection	Очистити виділення
+	Color Aware	З урахуванням кольору
+	Decontaminate Colors	Очистити кольори
+	Edge Detection	Виявлення краю
+	Global Refinements	Глобальне уточнення
+	High Quality Preview	Високоякісний перегляд
+	Object Aware	З урахуванням об'єктів
+	Real-Time Refinement	Уточнення в реальному часі
+	Refine Edge Brush Tool	Інструмент «Пензель уточнення краю»
+	Refine Hair	Уточнити волосся
+	Refine Mode	Режим уточнення
+	Remember Settings	Запам'ятати параметри
+	View Mode	Режим перегляду
+	Object Aware needs a segmentation model, which isn't available yet	Для режиму «З урахуванням об'єктів» потрібна модель сегментації, яка ще недоступна
+	Refine Hair needs hair detection, which isn't available yet	Для уточнення волосся потрібне розпізнавання волосся, яке ще недоступне
+	Select and Mask was closed: its document is no longer the active one	Вікно «Виділити та маскувати» закрито: його документ більше не активний
+	Select and Mask was closed: another layer was selected	Вікно «Виділити та маскувати» закрито: вибрано інший шар

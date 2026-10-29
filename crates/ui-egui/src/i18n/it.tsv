@@ -4611,3 +4611,19 @@ shape	Appearance	Aspetto
 	No selection or layer	Nessuna selezione o livello
 	{label}: empty	{label}: vuoto
 	{label}: X {x}  Y {y}  W {w}  H {h}	{label}: X {x}  Y {y}  W {w}  H {h}
+	Color Aware	In base al colore
+	Decontaminate Colors	Decontamina colori
+	Edge Detection	Rilevamento bordi
+	Global Refinements	Perfezionamenti globali
+	High Quality Preview	Anteprima di alta qualità
+	Object Aware	In base all'oggetto
+	Real-Time Refinement	Perfezionamento in tempo reale
+	Refine Edge Brush Tool	Strumento Pennello per migliorare il bordo
+	Refine Hair	Migliora capelli
+	Refine Mode	Metodo di perfezionamento
+	Remember Settings	Ricorda impostazioni
+	View Mode	Modalità di visualizzazione
+	Object Aware needs a segmentation model, which isn't available yet	In base all'oggetto richiede un modello di segmentazione, non ancora disponibile
+	Refine Hair needs hair detection, which isn't available yet	Migliora capelli richiede il rilevamento dei capelli, non ancora disponibile
+	Select and Mask was closed: its document is no longer the active one	Seleziona e maschera è stato chiuso: il suo documento non è più quello attivo
+	Select and Mask was closed: another layer was selected	Seleziona e maschera è stato chiuso: è stato selezionato un altro livello

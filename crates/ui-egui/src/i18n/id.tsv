@@ -3516,3 +3516,20 @@ curves	Smooth	Haluskan
 	No selection or layer	Tidak ada seleksi atau layer
 	{label}: empty	{label}: kosong
 	{label}: X {x}  Y {y}  W {w}  H {h}	{label}: X {x}  Y {y}  W {w}  H {h}
+	Clear Selection	Hapus Seleksi
+	Color Aware	Berbasis Warna
+	Decontaminate Colors	Dekontaminasi Warna
+	Edge Detection	Deteksi Tepi
+	Global Refinements	Penyempurnaan Global
+	High Quality Preview	Pratinjau Kualitas Tinggi
+	Object Aware	Berbasis Objek
+	Real-Time Refinement	Penyempurnaan Waktu Nyata
+	Refine Edge Brush Tool	Alat Kuas Perhalus Tepi
+	Refine Hair	Perhalus Rambut
+	Refine Mode	Mode Penyempurnaan
+	Remember Settings	Ingat Pengaturan
+	View Mode	Mode Tampilan
+	Object Aware needs a segmentation model, which isn't available yet	Berbasis Objek memerlukan model segmentasi, yang belum tersedia
+	Refine Hair needs hair detection, which isn't available yet	Perhalus Rambut memerlukan deteksi rambut, yang belum tersedia
+	Select and Mask was closed: its document is no longer the active one	Seleksi dan Mask ditutup: dokumennya tidak lagi aktif
+	Select and Mask was closed: another layer was selected	Seleksi dan Mask ditutup: layer lain dipilih

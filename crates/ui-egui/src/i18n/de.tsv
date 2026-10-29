@@ -3518,3 +3518,20 @@ curves	Smooth	Glätten
 	No selection or layer	Keine Auswahl oder Ebene
 	{label}: empty	{label}: leer
 	{label}: X {x}  Y {y}  W {w}  H {h}	{label}: X {x}  Y {y}  W {w}  H {h}
+	Clear Selection	Auswahl löschen
+	Color Aware	Farbbezogen
+	Decontaminate Colors	Farben dekontaminieren
+	Edge Detection	Kantenerkennung
+	Global Refinements	Globale Verbesserungen
+	High Quality Preview	Hochwertige Vorschau
+	Object Aware	Objektbezogen
+	Real-Time Refinement	Verbesserung in Echtzeit
+	Refine Edge Brush Tool	Kante-verbessern-Pinsel-Werkzeug
+	Refine Hair	Haare verbessern
+	Refine Mode	Verbesserungsmodus
+	Remember Settings	Einstellungen merken
+	View Mode	Ansichtsmodus
+	Object Aware needs a segmentation model, which isn't available yet	Objektbezogen benötigt ein Segmentierungsmodell, das noch nicht verfügbar ist
+	Refine Hair needs hair detection, which isn't available yet	Haare verbessern benötigt eine Haarerkennung, die noch nicht verfügbar ist
+	Select and Mask was closed: its document is no longer the active one	Auswählen und maskieren wurde geschlossen: Das zugehörige Dokument ist nicht mehr aktiv
+	Select and Mask was closed: another layer was selected	Auswählen und maskieren wurde geschlossen: Es wurde eine andere Ebene ausgewählt

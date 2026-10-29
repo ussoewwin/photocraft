@@ -3133,3 +3133,20 @@ curves	Smooth	平滑
 	No selection or layer	沒有選取範圍或圖層
 	{label}: empty	{label}：空
 	{label}: X {x}  Y {y}  W {w}  H {h}	{label}: X {x}  Y {y}  W {w}  H {h}
+	Clear Selection	清除選取範圍
+	Color Aware	顏色感知
+	Decontaminate Colors	淨化顏色
+	Edge Detection	邊緣偵測
+	Global Refinements	整體調整
+	High Quality Preview	高品質預視
+	Object Aware	物件感知
+	Real-Time Refinement	即時調整
+	Refine Edge Brush Tool	調整邊緣筆刷工具
+	Refine Hair	調整毛髮
+	Refine Mode	調整模式
+	Remember Settings	記住設定
+	View Mode	檢視模式
+	Object Aware needs a segmentation model, which isn't available yet	物件感知需要分割模型，目前尚無法使用
+	Refine Hair needs hair detection, which isn't available yet	調整毛髮需要毛髮偵測，目前尚無法使用
+	Select and Mask was closed: its document is no longer the active one	已關閉「選取並遮住」：其文件已不是使用中的文件
+	Select and Mask was closed: another layer was selected	已關閉「選取並遮住」：已選取另一個圖層
