@@ -331,3 +331,4 @@ Paragraph; the rest open as in-app floating windows.
 | 2026-10-14 | minor | ⇧⌥ + letter blend mode keys for the painting tool or every selected layer; ⇧+ / ⇧− now step every selected layer and include Clear for Brush and Pencil |
 | 2026-10-15 | minor | ⇧⌥ blend mode letters work while a Free Transform box is open, without picking a tool |
 | 2026-10-14 | minor | Mode dropdowns for Clone Stamp, Pattern Stamp, History Brush, Healing and Paint Bucket; the blend mode keys reach them, and tools without a blend mode (not Dodge, Burn or Sponge) pass the keys to the layers |
+| 2026-10-16 | minor | Hand tool: ⌘ held zooms in and ⌥ zooms out, as in Photoshop (#6434) |
