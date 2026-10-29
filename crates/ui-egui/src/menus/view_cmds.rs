@@ -19,7 +19,7 @@ mod dispatch;
 mod options;
 
 pub use arrange::cells;
-pub(crate) use arrange::float_window;
+pub(crate) use arrange::{document_is_floating, float_window};
 pub(crate) use dialogs::write_copy;
 #[cfg(test)]
 use dialogs::{form, front, label_of};
