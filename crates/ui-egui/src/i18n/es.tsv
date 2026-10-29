@@ -11,31 +11,18 @@
 # resource, string table or product UI was consulted or copied; add entries the same way.
 # Product and technology names (PhotoCraft, ArtCraft, OpenType, CMYK, Lab ...) stay in Latin
 # letters; the trailing "…" of dialog commands is kept.
-
 # Layer Mask Display Options (the layer mask rubylith's colour and opacity)
-
 # Channel Options and New Spot Channel (#3761)
-
 # Guide layout dialog
-
 # Custom print paper (#3820)
-
 # Select and Mask dialog labels
 # Field Blur pins (#3373)
-
 # Dialogs and panels
-
 # Layers-panel trash confirmation
-
-
 # Tool names, brush and style option tables
-
 # Templates with placeholders
-
 # Preferences (labels are generated from the setting names)
-
 # Added with the rebase onto the dock / brush picker work
-
 # Strings added to the UI after this catalog was first written (rebase onto main, 2026-10).
 # Gradient Editor window, opened from the options bar's gradient swatch.
 # Tool, filter, warp-style, path, layer-comp and metadata names that fell outside the `tl!` test.
@@ -43,48 +30,25 @@
 # Command-id override: under Edit > Purge a bare "Deshacer" reads as an action, not the history.
 # Rendering mode and recovery
 # Camera Raw: contextual controls and window title
-
-
-
-
-
-
 # About ▸ Contributors / Models (credits, craftrules standards/contributors.md)
-
 # Swatches panel
 # Layer Style > Blending Options (Advanced Blending)
-
 # Shared screen eyedropper and text Color Picker (#1128).
-
 # Fill dialog, layer style contours and Image Size
-
-
-
 # Layer colour labels.
-
 # Pattern Stamp tool
-
 # Painting symmetry presets.
-
 # Eyedropper Sample Size and Sample (#1649).
-
 # Color Picker warnings
-
-
 # Shared Layer Style color picker
 # File Info ▸ Camera Data (read-only EXIF fields; "Make" is the camera maker, not the verb).
 # Shared panel docking
-
 # Add Noise, Reduce Noise and Smart Sharpen dialog controls (Filter > Noise, Filter > Sharpen).
 # Edit › Content-Aware Fill workspace
-
-
 # Smart Filter editors
 # Select and Mask view modes (#1754)
 # Select and Mask Refine Edge Brush (#2972)
-
 # Color Sampler (added with the i18n coverage repair)
-
 # History panel menu (#2966)
 # History panel › History Options… (#2966)
 # Print dialog (#2697)
@@ -93,40 +57,29 @@
 # Dynamic labels (filter and adjustment parameters, Camera Raw, panels, dialogs) that the
 # other catalogs already translate
 # Path, channel, layer style, status and System Info labels the Czech catalog added
-
 # Actions panel: Load/Save Actions (.atn) and kept Photoshop steps
-
 # Actions panel: set folders, dialog toggle, Insert Stop
 # Batch / Image Processor
-
 # Native Windows printing qualification
 # PhotoCraft release checks.
 # History panel › History Brush source (#2966)
 # Bevel & Emboss shading controls.
 # Embedded Profile Mismatch: profile names beside the choices, Remember this choice
-
 # Darken / Lighten Interface (⇧⌘F1 / ⇧⌘F2)
 # Bevel & Emboss Technique.
 # Export As metadata and profile options
-
 # View › Guides › right-click a guide
-
 # Image › Mode › Bitmap (#5559)
 # Free Transform: a new layer while the box is open (#5859)
 # Preferences › Performance › GPU Memory; the status bar and slow-redraw notice
-
 # DDS Options (#1327)
-
 # Color Table (.act) dialog
-
 # Graphics Adapter preference (#1885)
-
 # Styles panel: Import / Export Styles (.asl)
 # Actions: a step dialog holds a suspended recording (#7365)
 # Paragraph direction (TYPE-218-2)
 # Print preview image (#8236)
 # Color panel menu: modes, copy commands and colour ramps (#6000)
-
 # Pen draft after a refused commit (#7648)
 # Art History Brush (#213).
 	Mask Options…	Opciones de máscara…
@@ -511,8 +464,8 @@
 	Summation	Sumatoria
 	Variance	Varianza
 	Video Layers	Capas de vídeo
-	Interpret Footage…	Interpretar material de archivo…
-	Replace Footage…	Reemplazar material de archivo…
+	Interpret Footage…	Interpretar material de vídeo…
+	Replace Footage…	Reemplazar material de vídeo…
 	Reload Frame	Recargar fotograma
 	Show Altered Video	Mostrar vídeo alterado
 	Restore Frame	Restaurar fotograma
@@ -677,7 +630,7 @@
 	Drag the handles on the outline to resize and turn it; the ring sets the blur angle.	Arrastre los manejadores del contorno para cambiar su tamaño y girarlo; el anillo fija el ángulo de desenfoque.
 	Blur Angle	Ángulo de desenfoque
 	Iris Blur…	Desenfoque de iris…
-	Tilt-Shift…	Cambio de inclinación…
+	Tilt-Shift…	Desenfoque de inclinación y desplazamiento…
 	Path Blur…	Desenfoque de trazado…
 	Spin Blur…	Desenfoque de rotación…
 	Blur More	Desenfocar más
@@ -710,7 +663,7 @@
 	Crystallize…	Cristalizar…
 	Facet	Faceta
 	Fragment	Fragmento
-	Mezzotint…	Grabado…
+	Mezzotint…	Grabado a media tinta…
 	Mosaic…	Mosaico…
 	Pointillize…	Puntillista…
 	Render	Interpretar
@@ -726,7 +679,7 @@
 	Sharpen	Enfocar
 	Sharpen Edges	Enfocar bordes
 	Sharpen More	Enfocar más
-	Smart Sharpen…	Enfoque suavizado…
+	Smart Sharpen…	Enfoque inteligente…
 	Unsharp Mask…	Máscara de enfoque…
 	High Pass…	Paso alto…
 	Stylize	Estilizar
@@ -2952,29 +2905,29 @@ curves	Smooth	Suavizar
 	3D	3D
 	Toolbars	Barras de herramientas
 	Wand	Varita
-	Healing	Corrección
+	Healing	Corrector
 	Pen	Pluma
 	Hand	Mano
 	Sampler	Muestreador
 	Magnetic Lasso	Lazo magnético
 	Art History Brush	Pincel histórico artístico
-	Spot Healing	Corrección puntual
+	Spot Healing	Corrector puntual
 	Patch	Parche
 	Content-Aware Move	Mover con detección de contenido
-	Perspective Crop	Recorte con perspectiva
-	Dodge/Burn	Sobreexponer/Subexponer
+	Perspective Crop	Recortar con perspectiva
+	Dodge/Burn	Sobreexponer/subexponer
 	Dynamics	Dinámica
 	Tilt	Inclinación
 	Defaults restored.	Valores predeterminados restaurados.
 	Stop	Detener
 	Create new set	Crear nuevo conjunto
 	Technology Previews	Previsualizaciones de tecnología
-	Create new layer	Crear nueva capa
+	Create new layer	Crear una capa nueva
 	Group · {n} layer	Grupo · {n} capa
 	General Blend	Fusión general
 	Advanced Blending	Fusión avanzada
 	RGB	RGB
-	Spot Channel	Canal de tinta plana
+	Spot Channel	Canal de color plano
 	Working Gray Plate	Placa gris de trabajo
 	HSL/Grayscale	HSL/Escala de grises
 	Tone Curve	Curva de tonos
@@ -2998,7 +2951,7 @@ curves	Smooth	Suavizar
 	ProPhoto	ProPhoto
 	ACES	ACES
 	Industry Standard	Estándar del sector
-	Uncoated CMYK	CMYK sin estucar
+	Uncoated CMYK	CMYK para papel no estucado
 	Newspaper	Papel de periódico
 	Working Spaces	Espacios de trabajo
 	Color Management Policies	Normas de gestión de color
@@ -3054,7 +3007,7 @@ curves	Smooth	Suavizar
 	Hanging Punctuation	Puntuación colgante
 	Roman Hanging Punctuation	Puntuación latina colgante
 	Avoid Widows/Orphans	Evitar líneas viudas y huérfanas
-	Compose	Composición
+	Compose	Componer
 	Adobe Single-line Composer	Compositor de línea única de Adobe
 	Adobe Every-line Composer	Compositor multilínea de Adobe
 	Word Spacing	Espacio entre palabras
@@ -3121,7 +3074,7 @@ curves	Smooth	Suavizar
 	Select All Layers	Seleccionar todas las capas
 	Keep proportions	Mantener proporciones
 	Interpolation	Interpolación
-	Caption	Pie de foto
+	Caption	Leyenda
 	Caption Credits	Créditos del pie de foto
 	Keywords	Palabras clave
 	Copyright Info URL	URL de información de copyright
@@ -3190,7 +3143,7 @@ curves	Smooth	Suavizar
 	RGB:	RGB:
 	CMYK:	CMYK:
 	Gray:	Gris:
-	Spot:	Tinta plana:
+	Spot:	Color plano:
 	Advanced Controls	Controles avanzados
 	Desaturate Monitor Colors By	Desaturar colores del monitor un
 	Blend RGB Colors Using Gamma 1.0	Fusionar colores RGB con gamma 1,0
@@ -3220,7 +3173,7 @@ curves	Smooth	Suavizar
 	Recent Items	Elementos recientes
 	Delete Preset…	Eliminar ajuste preestablecido…
 	Preset Name:	Nombre del ajuste preestablecido:
-	Width and Height	Anchura y altura
+	Width and Height	Ancho y alto
 	Color Profile	Perfil de color
 	Units	Unidades
 	Create new count group	Crear nuevo grupo de recuento
@@ -3236,20 +3189,20 @@ curves	Smooth	Suavizar
 	Rotate Fixed	Rotación fija
 	Select Plane	Seleccionar plano
 	Measure	Medir
-	Heal	Corrección
+	Heal	Corregir
 	Heal Off	Corrección desactivada
 	Heal On	Corrección activada
 	Heal Auto	Corrección automática
-	Blend	Fusión
+	Blend	Fusionar
 	Brush Size	Tamaño del pincel
 	Heal Color	Color de corrección
 	Result	Resultado
 	Duplicate	Duplicar
-	Fast	Rápida
+	Fast	Rápido
 	Accurate	Precisa
 	Add to	Añadir a
 	Subtract from	Restar de
-	Intersect with	Formar intersección con
+	Intersect with	Intersecar con
 	Capture Comp	Capturar composición
 	No Layer Comps	No hay composiciones de capas
 	Adobe PDF Presets…	Ajustes preestablecidos de Adobe PDF…
@@ -3274,7 +3227,7 @@ curves	Smooth	Suavizar
 	General Brushes	Pinceles generales
 	Grid  (⌘')	Cuadrícula (⌘')
 	Intersect with selection  (⇧⌥)	Formar intersección con la selección (⇧⌥)
-	New document…     ⌘N	Nuevo documento…     ⌘N
+	New document…     ⌘N	Documento nuevo…     ⌘N
 	Open…     ⌘O	Abrir…     ⌘O
 	Rulers  (⌘R)	Reglas (⌘R)
 	Search commands (⌘K)	Buscar comandos (⌘K)
@@ -3291,8 +3244,8 @@ curves	Smooth	Suavizar
 	Show the layer's effects  (⌥-click: all layers)	Mostrar los efectos de la capa (⌥-clic: todas las capas)
 cameraRaw	Blacks	Negros
 cameraRaw	Masking	Enmascarado
-@id	edit.stroke	Contornear
-@id	edit.transform.scale	Escala
+@id	edit.stroke	Contornear…
+@id	edit.transform.scale	Escalar
 cameraRaw	Luminance	Luminancia
 cameraRaw	Color	Color
 cameraRaw	Vibrance	Intensidad
@@ -3312,14 +3265,14 @@ layerLabel	No Color	Sin color
 	Linear Dodge	Sobreexposición lineal
 	Preview Image	Previsualizar imagen
 	Save As	Guardar como
-	Remove All	Eliminar todo
+	Remove All	Quitar todo
 	Unlock	Desbloquear
 	Enable	Activar
 	Disable	Desactivar
 	On	Activado
 	Clear Selection	Borrar selección
 	Invert Selection	Invertir selección
-	Select Inverse	Seleccionar inverso
+	Select Inverse	Invertir selección
 	Contract	Contraer
 	Sample Size	Tamaño de muestra
 	Gamma	Gamma
@@ -3345,7 +3298,7 @@ layerLabel	No Color	Sin color
 	Hidden	Oculto
 	Duplicate Layer	Duplicar capa
 	Ungroup	Desagrupar
-	Guide Layout…	Composición de guías…
+	Guide Layout…	Diseño de guías…
 	Page Setup…	Configurar página…
 	Reset Preferences	Restablecer preferencias
 	Documentation	Documentación
@@ -3355,8 +3308,8 @@ layerLabel	No Color	Sin color
 	Saving…	Guardando…
 	Exporting…	Exportando…
 	Please wait…	Espere…
-	No selection	Ninguna selección
-	No layers	Ninguna capa
+	No selection	Sin selección
+	No layers	Sin capas
 	No recent files	Ningún archivo reciente
 	Unsupported file format	Formato de archivo no compatible
 	Failed to open file	No se pudo abrir el archivo
@@ -3371,7 +3324,7 @@ layerLabel	No Color	Sin color
 	Rendering…	Procesando…
 	Importing…	Importando…
 	Ready	Listo
-	Failed	Error
+	Failed	Falló
 	Warning	Advertencia
 	Information	Información
 	Retry	Reintentar
@@ -3397,18 +3350,18 @@ layerLabel	No Color	Sin color
 	Edit…	Editar…
 	Change…	Cambiar…
 	Transformation	Transformación
-	Scaling	Escala
+	Scaling	Escalado
 	Canvas Size	Tamaño de lienzo
 	Percentage	Porcentaje
 	Degrees	Grados
-	Middle	Medio
+	Middle	Centro
 	Diameter	Diámetro
 	Intensity	Intensidad
 	Sensitivity	Sensibilidad
 	Softness	Suavidad
 	Feather Radius	Radio de calado
 	Library	Biblioteca
-	Layer Properties	Propiedades de capa
+	Layer Properties	Propiedades de la capa
 	Groups	Grupos
 	Masks	Máscaras
 	Add Mask	Añadir máscara
@@ -3556,7 +3509,7 @@ layerLabel	No Color	Sin color
 	Center Y	Centro Y
 	Cell Size	Tamaño de celda
 	Generators	Generadores
-	Wavelength Min	Longitud de onda mínima
+	Wavelength Min	Longitud de onda mín.
 	Wavelength Max	Longitud de onda máxima
 	Amplitude Min	Amplitud mínima
 	Amplitude Max	Amplitud máxima
@@ -3667,8 +3620,8 @@ layerLabel	No Color	Sin color
 	Bamboo	Bambú
 	Bas Relief	Bajorrelieve
 	Berries	Bayas
-	Blast	Ráfaga
-	Bleach Bypass	Omisión de blanqueado
+	Blast	Explosión
+	Bleach Bypass	Retención de plata
 	Blocks	Bloques
 	Brick	Ladrillo
 	Brush Strokes	Trazos de pincel
@@ -3680,20 +3633,20 @@ layerLabel	No Color	Sin color
 	Colored Pencil	Lápiz de color
 	Contrasty	Contrastado
 	Cool	Frío
-	Craquelure	Cuarteado
+	Craquelure	Craquelado
 	Cross	Cruz
 	Cross Process	Proceso cruzado
 	Crosshatch	Sombreado cruzado
-	Cutout	Recortado
+	Cutout	Recortes
 	Daisies	Margaritas
 	Dark Rough	Oscuro rugoso
 	Dark Strokes	Trazos oscuros
 	Darken Only	Solo oscurecer
 	Day For Night	Noche americana
-	Deep Blue	Azul intenso
-	Deep Emerald	Esmeralda intenso
-	Deep Red	Rojo intenso
-	Deep Yellow	Amarillo intenso
+	Deep Blue	Azul profundo
+	Deep Emerald	Esmeralda profundo
+	Deep Red	Rojo profundo
+	Deep Yellow	Amarillo profundo
 	Dot	Punto
 	Double Line	Línea doble
 	Draft	Borrador
@@ -3704,7 +3657,7 @@ layerLabel	No Color	Sin color
 	Enlarged	Ampliado
 	Even Fields	Campos pares
 	Faded Film	Película desvanecida
-	Film Grain	Granulado de película
+	Film Grain	Grano de película
 	Fine	Fino
 	Fine Dots	Puntos finos
 	Flat	Plano
@@ -3714,7 +3667,7 @@ layerLabel	No Color	Sin color
 	Frosted	Escarchado
 	Generic	Genérico
 	Glass	Vidrio
-	Glowing Edges	Bordes resplandecientes
+	Glowing Edges	Bordes brillantes
 	Grainy Dots	Puntos granulados
 	Hearts	Corazones
 	Heptagon	Heptágono
@@ -3734,7 +3687,7 @@ layerLabel	No Color	Sin color
 	Medium Lines	Líneas medianas
 	Medium Strokes	Trazos medianos
 	Mono Contrast	Contraste monocromo
-	Mosaic Tiles	Azulejos de mosaico
+	Mosaic Tiles	Teselas de mosaico
 	Multiple Flames Along Path	Varias llamas a lo largo del trazado
 	Multiple Flames One Direction	Varias llamas en una dirección
 	Multiple Flames Path Directions	Varias llamas en las direcciones del trazado
@@ -3747,7 +3700,7 @@ layerLabel	No Color	Sin color
 	Overlay Edge	Borde superpuesto
 	Palette Knife	Espátula
 	Parallel	Paralelo
-	Patchwork	Retales
+	Patchwork	Retazos
 	Pentagon	Pentágono
 	Point	Punto
 	Pointed	Puntiagudo
@@ -3796,7 +3749,7 @@ layerLabel	No Color	Sin color
 	Correct C A	Corregir AC
 	Auto Scale	Escala automática
 	Red Cyan	Rojo/Cian
-	Blue Yellow	Azul/Amarillo
+	Blue Yellow	Azul/amarillo
 	Vignette Amount	Cantidad de viñeta
 	Vignette Midpoint	Punto medio de la viñeta
 	Constraints	Restricciones
@@ -3818,17 +3771,17 @@ layerLabel	No Color	Sin color
 	Grade Global	Gradación global
 	Grade Blending	Fusión de gradación
 	Grade Balance	Equilibrio de gradación
-	Sine	Seno
+	Sine	Sinusoidal
 	Sketch	Boceto
 	Snowflakes	Copos de nieve
 	Sparkle	Destellos
 	Spatter	Salpicadura
-	Speckle	Motas
+	Speckle	Moteado
 	Spin	Giro
 	Sprinkles	Espolvoreado
-	Squareness	Cuadratura
+	Squareness	Forma cuadrada
 	Stagger	Escalonado
-	Stained Glass	Vidriera
+	Stained Glass	Vitral
 	Star	Estrella
 	Stars	Estrellas
 	Stippled	Punteado
@@ -3836,9 +3789,9 @@ layerLabel	No Color	Sin color
 	Teal Orange	Verde azulado y naranja
 	Tiny Lens	Lente diminuta
 	To Center	Hacia el centro
-	Unaltered	Sin alterar
-	Underpainting	Pintura base
-	Underwater	Bajo el agua
+	Unaltered	Inalterado
+	Underpainting	Pintura de base
+	Underwater	Subacuático
 	Upper	Superior
 	Vertical Only	Solo vertical
 	Vine With Flowers	Enredadera con flores
@@ -3918,7 +3871,7 @@ layerLabel	No Color	Sin color
 	Highlight	Iluminación
 	Image Processor	Procesador de imágenes
 	Install Plug-in	Instalar plugin
-	Interpret Footage	Interpretar material de archivo
+	Interpret Footage	Interpretar material de vídeo
 	Iris Blur	Desenfoque de iris
 	Jag	Dentado
 	Label	Etiqueta
@@ -3936,18 +3889,18 @@ layerLabel	No Color	Sin color
 	Lum	Lum
 	Match Color	Igualar color
 	Merge to HDR Pro	Combinar en HDR Pro
-	Mezzotint	Grabado
+	Mezzotint	Grabado a media tinta
 	Mosaic	Mosaico
 	Motion Blur	Desenfoque de movimiento
 	Native file drag-and-drop is not supported on Wayland yet. Use File › Open, or run PhotoCraft under XWayland with `WAYLAND_DISPLAY= photocraft`.	Arrastrar y soltar archivos de forma nativa aún no es compatible con Wayland. Use Archivo › Abrir o ejecute PhotoCraft mediante XWayland con `WAYLAND_DISPLAY= photocraft`.
 	Neon Glow	Resplandor de neón
 	New Guide Layout	Nuevo diseño de guías
 	New Video Layer from File	Nueva capa de vídeo desde archivo
-	Ocean Ripple	Ondas marinas
+	Ocean Ripple	Ondulación oceánica
 	Oil Paint	Pintura al óleo
 	Open As	Abrir como
 	Package	Empaquetar
-	Paint Daubs	Pinceladas
+	Paint Daubs	Manchas de pintura
 	Path Blur	Desenfoque de trazado
 	Paths to Illustrator	Trazados a Illustrator
 	Photomerge	Photomerge
@@ -3956,11 +3909,11 @@ layerLabel	No Color	Sin color
 	Place Embedded	Colocar incrustado
 	Place Linked	Colocar vinculado
 	Place Scale Marker	Colocar marcador de escala
-	Plastic Wrap	Plastificado
+	Plastic Wrap	Envoltura de plástico
 	Pointillize	Puntillista
 	Polar Coordinates	Coordenadas polares
 	Polar To Rectangular	Polar a rectangular
-	Poster Edges	Bordes de cartel
+	Poster Edges	Bordes posterizados
 	Preset Manager	Gestor de ajustes preestablecidos
 	Profile	Perfil
 	Radial Blur	Desenfoque radial
@@ -3970,35 +3923,35 @@ layerLabel	No Color	Sin color
 	Render Video	Procesar vídeo
 	Replace Color	Reemplazar color
 	Replace Contents	Reemplazar contenido
-	Replace Footage	Reemplazar material de archivo
+	Replace Footage	Reemplazar material de vídeo
 	Resolve Missing Fonts	Resolver fuentes que faltan
 	Ripple	Ondulación
-	Rough Pastels	Pasteles rugosos
+	Rough Pastels	Pasteles ásperos
 	Sat	Sat
 	Save a Copy	Guardar una copia
 	Save for Web (Legacy)	Guardar para web (heredado)
 	Scale Effects	Escalar efectos
 	Script Events Manager	Administrador de eventos de secuencias de comandos
-	Search menus	Buscar en menús
-	Select and Mask	Seleccionar y aplicar máscara
+	Search menus	Buscar en los menús
+	Select and Mask	Selección y máscara
 	Set Measurement Scale	Definir escala de medida
 	Shadows/Highlights	Sombras/iluminaciones
 	Shape Blur	Desenfoque de forma
 	Shear	Inclinación
 	Smart Blur	Desenfoque inteligente
-	Smart Sharpen	Enfoque suavizado
-	Smudge Stick	Barra de difuminado
+	Smart Sharpen	Enfoque inteligente
+	Smudge Stick	Difumino
 	Solid Color	Color sólido
 	Spherize	Esferizar
 	Spin Blur	Desenfoque de rotación
-	Spot	Tinta plana
-	Sprayed Strokes	Trazos con spray
+	Spot	Foco
+	Sprayed Strokes	Trazos rociados
 	Strokes	Trazos
 	Sumi-e	Sumi-e
 	Surface Blur	Desenfoque de superficie
-	Texturizer	Texturizar
+	Texturizer	Texturizador
 	Tiles	Azulejos
-	Tilt-Shift	Cambio de inclinación
+	Tilt-Shift	Desenfoque de inclinación y desplazamiento
 	Trace Contour	Trazar contorno
 	Trap	Reventado
 	Tree	Árbol
@@ -4026,22 +3979,22 @@ layerLabel	No Color	Sin color
 	Hsb	HSB
 	Hsl	HSL
 	Movie Prime	Película Prime
-	Prime105	Prime 105
-	Prime35	Prime 35
+	Prime105	Objetivo fijo de 105 mm
+	Prime35	Objetivo fijo de 35 mm
 	Warming L B A	Calentamiento LBA
 	Warming81	Calentamiento 81
 	Warming85	Calentamiento 85
 @id	filter.sharpen.sharpen	Enfocar
 	Good	Buena
-	Best	Óptima
-	Adjustment Properties	Propiedades de ajuste
+	Best	Mejor
+	Adjustment Properties	Propiedades del ajuste
 	Default Foreground and Background Colors	Colores frontal y de fondo predeterminados
 	Move Layer	Mover capa
 	Rectangular Selection	Selección rectangular
 	Reorder Layer	Reordenar capa
 	Select Layer	Seleccionar capa
 	Set Colors	Definir colores
-	Switch Foreground and Background Colors	Intercambiar colores frontal y de fondo
+	Switch Foreground and Background Colors	Intercambiar los colores frontal y de fondo
 	Target	Destino
 	Make Work Path…	Crear trazado de trabajo…
 	Create Vector Mask	Crear máscara vectorial
@@ -4197,7 +4150,7 @@ navigator	Zoom	Zoom
 	manual	manual
 	Medium Gray	Gris medio
 	New document	Documento nuevo
-	New Selection	Selección nueva
+	New Selection	Nueva selección
 	No Document	Sin documento
 	Note tool	Herramienta Nota
 	off	desactivado
