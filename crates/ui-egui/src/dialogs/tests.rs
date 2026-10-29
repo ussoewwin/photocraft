@@ -224,7 +224,7 @@ fn dragging_the_title_bar_moves_the_dialog() {
     use egui_kittest::{Harness, kittest::Queryable};
 
     let app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
-    let mut harness = Harness::builder().with_size(egui::vec2(1400.0, 900.0)).build_ui_state(|ui, app| show(app, ui.ctx()), app);
+    let mut harness = Harness::builder().with_size(egui::vec2(1400.0, 1100.0)).build_ui_state(|ui, app| show(app, ui.ctx()), app);
     PhotocraftApp::setup_context(&harness.ctx, crate::theme::ThemeKind::ALL[0]);
     harness.state_mut().ui.open_dialog(DialogKind::LayerStyle, serde_json::Map::new());
     harness.run_steps(3);
@@ -245,6 +245,21 @@ fn dragging_the_title_bar_moves_the_dialog() {
     let moved = harness.get_by_label("Layer Style").rect().min - before.min;
     assert!((moved - egui::vec2(-120.0, 80.0)).length() < 1.0, "dialog moved by {moved:?}");
     assert_eq!(harness.state().ui.dialogs.len(), 1, "dragging must not close the dialog");
+}
+
+/// Layer Style open on Bevel & Emboss (its tallest page) for a pixel layer.
+fn layer_style_on_bevel(size: egui::Vec2) -> egui_kittest::Harness<'static, PhotocraftApp> {
+    use egui_kittest::kittest::Queryable;
+
+    let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({"width": 64, "height": 64})).unwrap();
+    app.run("layer.new.layer", json!({})).unwrap();
+    let mut h = egui_kittest::Harness::builder().with_size(size).build_ui_state(|ui, app| show(app, ui.ctx()), app);
+    PhotocraftApp::setup_context(&h.ctx, crate::theme::ThemeKind::ALL[0]);
+    crate::layer_style::open(h.state_mut(), Some("bevelEmboss")).expect("Layer Style opens");
+    h.run_steps(4);
+    assert!(h.query_by_label("Gloss Contour").is_some(), "the Bevel & Emboss page is showing");
+    h
 }
 
 /// #4872: an alert (Error, About) closes with ↩ as with OK, but not on the ↩ that raised it.
@@ -271,6 +286,40 @@ fn enter_closes_an_alert_but_not_the_enter_that_opened_it() {
     h.key_press(egui::Key::Escape);
     h.run_steps(2);
     assert!(h.state().ui.dialogs.is_empty(), "Esc too");
+}
+
+/// On a short screen Layer Style fits, its page scrolling, so OK and Cancel stay reachable
+/// (the Bevel & Emboss page used to push them off the bottom).
+#[test]
+fn layer_style_fits_a_short_screen() {
+    use egui_kittest::kittest::Queryable;
+
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1366.0, 640.0));
+    let h = layer_style_on_bevel(screen.size());
+    assert!(screen.contains_rect(frame(&h)), "{:?} fits on {screen:?}", frame(&h));
+    for button in ["OK", "Cancel"] {
+        assert!(screen.contains_rect(h.get_by_label(button).rect()), "{button} is on screen");
+    }
+}
+
+/// Layer Style keeps one size on every page, as Photoshop's does (it used to grow and shrink
+/// with each page), and has no resize grip: Photoshop's isn't resizable either.
+#[test]
+fn layer_style_keeps_one_size_on_every_page() {
+    let mut h = layer_style_on_bevel(egui::vec2(1400.0, 900.0));
+    let size = frame(&h).size();
+    let dialog = h.state().ui.dialogs[0].id;
+    for page in ["blendingOptions", "styles"] {
+        h.state_mut().ui.dialog_mut(dialog).expect("still open").fields.insert("selected".into(), json!(page));
+        h.run_steps(3);
+        assert_eq!(frame(&h).size(), size, "{page}");
+    }
+    let grip = egui::Id::unique(("dialog", dialog)).with("resize").with("__resize_corner");
+    assert!(h.ctx.read_response(grip).is_none(), "no resize grip");
+}
+
+fn frame(h: &egui_kittest::Harness<'_, PhotocraftApp>) -> egui::Rect {
+    rects(&h.ctx).first().copied().expect("the dialog is drawn")
 }
 
 fn dialog_harness(size: egui::Vec2, command: &str) -> egui_kittest::Harness<'static, PhotocraftApp> {

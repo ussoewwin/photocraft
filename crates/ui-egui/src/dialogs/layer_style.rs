@@ -851,10 +851,12 @@ pub fn body(app: &mut PhotocraftApp, ui: &mut egui::Ui, f: &mut Map<String, Valu
     let mut style_click: Option<String> = None;
     let mut new_style = false;
     let invalid = validate_params(f).err();
+    let height = (ui.available_height() - 48.0).max(120.0);
     ui.horizontal_top(|ui| {
         // Left: effect list.
         ui.vertical(|ui| {
             ui.set_width(190.0);
+            egui::ScrollArea::vertical().id_salt("layer-style-effects").max_height(height).auto_shrink(false).show(ui, |ui| {
             // Styles & Blending Options rows (matching the effect row layout & padding).
             for (id, label) in [(STYLES_PAGE, "Styles"), (BLENDING, "Blending Options")] {
                 let is_sel = selected == id;
@@ -952,11 +954,13 @@ pub fn body(app: &mut PhotocraftApp, ui: &mut egui::Ui, f: &mut Map<String, Valu
                     }
                 }
             }
+            });
         });
         widgets::vline(ui, 330.0);
         // Right: parameters of the selected page.
         ui.vertical(|ui| {
             ui.set_width(330.0);
+            egui::ScrollArea::vertical().id_salt("layer-style-page").max_height(height).auto_shrink(false).show(ui, |ui| {
             if selected == STYLES_PAGE {
                 ui.horizontal(|ui| {
                     ui.label(RichText::new(tl!("Styles")).font(crate::theme::semibold(14.0)).color(t.text));
@@ -1190,6 +1194,7 @@ pub fn body(app: &mut PhotocraftApp, ui: &mut egui::Ui, f: &mut Map<String, Valu
                         d.insert(sel_kind.to_string(), disp.clone());
                     }
                 });
+            });
             });
         });
     });

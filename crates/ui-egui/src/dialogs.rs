@@ -229,6 +229,7 @@ fn show_modal<T>(
     ctx: &egui::Context,
     id: egui::Id,
     resizable: Option<(egui::Vec2, egui::Vec2, egui::Vec2)>,
+    fixed: Option<egui::Vec2>,
     interactive: bool,
     contents: impl FnOnce(&mut egui::Ui) -> T,
 ) -> egui::ModalResponse<T> {
@@ -237,7 +238,12 @@ fn show_modal<T>(
         if !interactive {
             ui.disable();
         }
-        if let Some((size, min, max)) = resizable {
+        if let Some(size) = fixed {
+            egui::Resize::default().id(id.with("resize")).with_stroke(false).fixed_size(size).show(ui, |ui| {
+                ui.set_clip_rect(ui.clip_rect().expand(8.0));
+                contents(ui)
+            })
+        } else if let Some((size, min, max)) = resizable {
             // No stroke: Resize outlines its contents 2 points out, an inner box inside the
             // dialog's frame that left the title and buttons flush against it (#8199).
             egui::Resize::default().id(id.with("resize")).with_stroke(false).default_size(size.min(max)).min_size(min).max_size(max).show(ui, contents)
@@ -584,7 +590,10 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
             (remembered.unwrap_or(size), min, resizable_max(ctx, &fields, min))
         });
         let mut given = None;
-        let modal = show_modal(modal, ctx, id, resize, interactive, |ui| {
+        let fixed = (d.kind == DialogKind::LayerStyle).then(|| {
+            egui::vec2(600.0, 760.0).min((ctx.content_rect().size() - egui::vec2(40.0, 40.0)).max(egui::vec2(540.0, 380.0)))
+        });
+        let modal = show_modal(modal, ctx, id, resize, fixed, interactive, |ui| {
             sizing = ui.is_sizing_pass();
             let available = ui.available_size();
             given = Some(available);
@@ -611,7 +620,7 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
                 ui.set_min_width(700.0);
             }
             ui.set_max_width(wide.unwrap_or_else(|| default_max_width(&d, compact, curves, about_tabs, available.x)));
-            if web {
+            if web || fixed.is_some() {
                 ui.set_max_width(available.x);
                 ui.set_min_size(available);
             } else if let Some(w) = crate::file_ui::dialog_width(&d.fields) {
@@ -689,7 +698,7 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
             ctx.data_mut(|m| m.insert_persisted(size_id(place), size));
         }
         // Pin once laid out at its real size (the first frame is an invisible sizing pass).
-        if !sizing && (web || pinned.is_none() || drag != egui::Vec2::ZERO) {
+        if !sizing && (web || fixed.is_some() || pinned.is_none() || drag != egui::Vec2::ZERO) {
             let screen = ctx.content_rect();
             // Keep the whole dialog (and so its title bar) on screen.
             let room = (screen.size() - modal.response.rect.size()).max(egui::Vec2::ZERO);
