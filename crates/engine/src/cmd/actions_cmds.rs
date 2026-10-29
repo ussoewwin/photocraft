@@ -496,6 +496,11 @@ fn noop_step(s: &Session, id: &str) -> bool {
     id == "select.deselect" && s.active().is_some_and(|d| d.doc.selection.is_none())
 }
 
+pub const SAVE_CONTENTS: &str = "layer.smartObjects.saveContents";
+pub fn saves_smart_contents(s: &Session, id: &str) -> bool {
+    id == "file.save" && s.is_enabled(SAVE_CONTENTS)
+}
+
 fn run_recorded(s: &mut Session, action: &Action, from: usize) -> (u64, Option<Value>) {
     let mut ran = 0u64;
     let mut failed = None;
@@ -514,7 +519,7 @@ fn run_recorded(s: &mut Session, action: &Action, from: usize) -> (u64, Option<V
             ran += 1;
             continue;
         }
-        match playback_params(s, id, params).and_then(|p| s.execute(id, p)) {
+        match playback_params(s, id, params).and_then(|p| if saves_smart_contents(s, id) { s.execute(SAVE_CONTENTS, json!({})) } else { s.execute(id, p) }) {
             Ok(value) => {
                 if let Some(error) = nested_failure(id, &value) {
                     failed = Some(json!({"step": i, "id": id, "error": error}));

@@ -3285,7 +3285,10 @@ fn integration_adjustment_fill_opacity_masks_and_hdr_match_cpu() {
                         layer.fill_opacity = fill;
                         layer.opacity = opacity;
                         let mut mask = LayerMask::reveal_all();
-                        mask.surface = photocraft_raster::Surface::with_default(PixelFormat { mode: ColorMode::Grayscale, sample: SampleType::F32, alpha: false }, &[coverage]);
+                        mask.surface = photocraft_raster::Surface::with_default(
+                            PixelFormat { mode: ColorMode::Grayscale, sample: SampleType::F32, alpha: false },
+                            &[coverage],
+                        );
                         layer.mask = Some(mask);
                         d.layers = vec![base, layer];
                         check(&mut g, &d, &format!("combined {mode:?} fill={fill} opacity={opacity} mask={coverage} clipped={clipped}"));

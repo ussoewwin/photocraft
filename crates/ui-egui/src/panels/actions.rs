@@ -168,6 +168,8 @@ fn play_owned(app: &mut PhotocraftApp, params: &Value, suspended: Option<Value>)
         let target = app.session.active().map(|d| d.doc.id);
         let result = if id == "actions.play" {
             play(app, p)
+        } else if actions_cmds::saves_smart_contents(&app.session, id) {
+            app.session.execute(actions_cmds::SAVE_CONTENTS, json!({})).map_err(|e| e.to_string())
         } else if actions_cmds::shell_save_command(id) {
             // Write synchronously, so the next step doesn't meet a document locked by a
             // background save.

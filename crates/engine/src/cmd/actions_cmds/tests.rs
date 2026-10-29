@@ -5,6 +5,30 @@ fn pixel(s: &Session, layer: usize, x: i32, y: i32) -> Vec<f32> {
     s.active().unwrap().doc.layers[layer].surface().unwrap().pixel(x, y)
 }
 
+/// CopyCat's shape: Edit Contents, change the contents, Save. The Save step has no file to
+/// write: it updates the smart object, headless too.
+#[test]
+fn save_in_edit_contents_updates_the_smart_object() {
+    let mut s = Session::new();
+    s.execute("file.new", json!({"width": 8, "height": 8})).unwrap();
+    s.execute("layer.new.layer", json!({})).unwrap();
+    s.execute("edit.fill", json!({"contents": "color", "color": "#ff0000"})).unwrap();
+    s.execute("layer.smartObjects.convertToSmartObject", json!({})).unwrap();
+    s.execute("layer.smartObjects.editContents", json!({})).unwrap();
+    let steps = vec![("edit.fill".to_string(), json!({"contents": "color", "color": "#0000ff"})), ("file.save".to_string(), json!({}))];
+    s.actions.list.push(Action::new("Edit and save", steps));
+    let played = s.execute("actions.play", json!({"action": "Edit and save"})).unwrap();
+    assert!(played.get("failed").is_none(), "{played}");
+    s.set_active(0);
+    let doc = &s.active().unwrap().doc;
+    let flat = crate::file_cmds::flattened(doc, doc.pixel_format());
+    let p = flat.pixel(2, 2);
+    assert!(p[0] < 0.01 && p[2] > 0.99, "the smart object shows the saved contents: {p:?}");
+    // With no Edit Contents document, Save stays the shell's (it needs the document's file).
+    s.actions.list.push(Action::new("Save", vec![("file.save".to_string(), json!({}))]));
+    assert!(s.execute("actions.play", json!({"action": "Save"})).unwrap().get("failed").is_some());
+}
+
 #[test]
 fn deselect_with_nothing_selected_is_a_noop_in_playback() {
     // #6744: imported actions often start with Deselect; with no selection Photoshop plays on.
