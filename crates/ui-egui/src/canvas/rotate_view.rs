@@ -163,6 +163,31 @@ pub fn trackpad_delta(ctx: &egui::Context, enabled: bool, touch_gestures: bool) 
     apply_trackpad(0.0, true, rad).filter(|_| rad != 0.0)
 }
 
+/// Shift + middle-drag rotates the view instead of panning. Keep the document point
+/// under the pointer in place, including when the view is flipped or stretched.
+pub fn middle_drag(view: &mut View, xf: &ViewXform, pointer: Pos2, delta_x: f32) -> bool {
+    if !pointer.x.is_finite() || !pointer.y.is_finite() || !delta_x.is_finite() || delta_x == 0.0 {
+        return false;
+    }
+    let current = ViewXform { center: view.center, rotation: view.rotation, ..*xf };
+    let before = current.to_doc(pointer);
+    let rotation = wrap_deg(view.rotation + delta_x * 0.35);
+    if rotation == view.rotation {
+        return false;
+    }
+    let after = ViewXform { rotation, ..current }.to_doc(pointer);
+    if !before.into_iter().chain(after).all(f64::is_finite) {
+        return false;
+    }
+    let center = [view.center[0] + (before[0] - after[0]) as f32, view.center[1] + (before[1] - after[1]) as f32];
+    if !center.into_iter().all(f32::is_finite) {
+        return false;
+    }
+    view.center = center;
+    view.rotation = rotation;
+    true
+}
+
 /// `view.rotateView`: set or add degrees on the active document's camera.
 pub fn command(app: &mut PhotocraftApp, p: &Value) -> Result<Value, String> {
     let i = app.session.active_index().ok_or("no document open")?;
