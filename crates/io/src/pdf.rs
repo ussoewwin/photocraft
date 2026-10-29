@@ -4,8 +4,14 @@
 //! through [`export`], and File › Print through [`print_pdf`] (called by the engine, which adds
 //! paper geometry, printer marks and labels around the image). One page holds a
 //! Flate-compressed image XObject, optional printer marks as vector operators and optional
-//! Helvetica text; an embedded ICC profile rides in an ICCBased colour space. Multi-page PDF,
-//! layer-preserving PDF and PDF import stay open (FILE-215-10).
+//! Helvetica text; an embedded ICC profile rides in an ICCBased colour space.
+//!
+//! Spot channels leave as plates (FILE-215-17): one 8-bit image XObject per channel in a
+//! `/Separation` colour space named after the channel, painted over the composite with overprint
+//! on and its zero-ink samples stencil-masked, so a RIP or a separating rasteriser (Ghostscript
+//! `tiffsep`, `psdcmyk`) keeps each one as its own named plate instead of mixing it into CMYK, and
+//! a plain viewer still shows every plate's ink. Multi-page PDF, layer-preserving PDF and PDF
+//! import stay open (FILE-215-10).
 
 use std::io::Write as _;
 
@@ -24,6 +30,19 @@ pub struct PrintImage {
     pub icc: Option<Vec<u8>>,
 }
 
+/// One spot plate: a named `/Separation` colorant with 8-bit ink density over the whole image
+/// box (`width × height` samples, 255 = solid ink), and the CMYK a viewer mixes to show it.
+pub struct SpotPlate {
+    /// The colorant name, as the channel is named. A RIP names the plate after it.
+    pub name: String,
+    /// The alternate colour (`/DeviceCMYK`, 1 = full ink) of the tint transform: how a viewer
+    /// previews the ink. A RIP prints the plate, not this.
+    pub cmyk: [f32; 4],
+    pub width: u32,
+    pub height: u32,
+    pub data: Vec<u8>,
+}
+
 /// Printer marks around the image.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Marks {
@@ -32,14 +51,19 @@ pub struct Marks {
     pub registration: bool,
 }
 
-/// One page: paper (pt), image box (pt, origin bottom-left), marks and texts.
+/// One page: paper (pt), image box (pt, origin bottom-left), marks, texts and spot plates.
+///
+/// The image is optional: a Multichannel document is nothing but its plates. The plates are
+/// painted over the image box in order, each with overprint on, so painting one never knocks
+/// the others (or the image) out.
 pub struct PrintPage {
     pub paper: (f64, f64),
-    pub image: PrintImage,
+    pub image: Option<PrintImage>,
     pub rect: (f64, f64, f64, f64),
     pub marks: Marks,
     pub description: Option<String>,
     pub label: Option<String>,
+    pub plates: Vec<SpotPlate>,
 }
 
 fn pdf_string(s: &str) -> String {
@@ -55,6 +79,25 @@ fn pdf_string(s: &str) -> String {
         }
     }
     o.push(')');
+    o
+}
+
+/// `s` as a PDF name object (ISO 32000-1 §7.3.5): `/` then the UTF-8 bytes, every byte outside
+/// the regular printable ASCII range, `#` and the delimiters as `#xx`. An empty name would be
+/// the bare `/`, which some readers reject, so it becomes `/Spot`.
+fn pdf_name(s: &str) -> String {
+    let mut o = String::from("/");
+    for b in s.bytes() {
+        let regular = (0x21..=0x7e).contains(&b) && !matches!(b, b'#' | b'(' | b')' | b'<' | b'>' | b'[' | b']' | b'{' | b'}' | b'/' | b'%');
+        if regular {
+            o.push(char::from(b));
+        } else {
+            o.push_str(&format!("#{b:02X}"));
+        }
+    }
+    if o.len() == 1 {
+        o.push_str("Spot");
+    }
     o
 }
 
@@ -103,7 +146,43 @@ fn marks_ops(m: Marks, (x, y, w, h): (f64, f64, f64, f64)) -> String {
     s
 }
 
+/// An image XObject dictionary and its Flate-compressed samples, as one object body. `extra`
+/// is spliced into the dictionary (e.g. a stencil mask reference).
+fn image_object(width: u32, height: u32, colour_space: &str, extra: &str, data: &[u8]) -> Vec<u8> {
+    let z = deflate(data);
+    let mut body = format!(
+        "<< /Type /XObject /Subtype /Image /Width {width} /Height {height} /ColorSpace {colour_space} /BitsPerComponent 8 {extra}/Filter /FlateDecode /Length {} >>\nstream\n",
+        z.len()
+    )
+    .into_bytes();
+    body.extend_from_slice(&z);
+    body.extend_from_slice(b"\nendstream");
+    body
+}
+
+/// The stencil mask of a plate: one bit per sample, rows padded to a byte, set (masked out, not
+/// painted) where the plate has no ink.
+fn stencil_mask(width: u32, height: u32, data: &[u8]) -> Vec<u8> {
+    let (w, h) = (width as usize, height as usize);
+    let stride = w.div_ceil(8);
+    let mut out = vec![0u8; stride.saturating_mul(h)];
+    for (y, row) in data.chunks(w.max(1)).take(h).enumerate() {
+        for (x, &v) in row.iter().enumerate() {
+            if v == 0
+                && let Some(b) = out.get_mut(y * stride + x / 8)
+            {
+                *b |= 0x80 >> (x % 8);
+            }
+        }
+    }
+    out
+}
+
 /// A one-page PDF.
+///
+/// Objects: 1 catalog, 2 pages, 3 page, 4 contents, 5 font, then the image, its ICC profile,
+/// the overprint ExtGState and, per plate, its stencil mask then its image XObject, each only
+/// when present.
 pub fn print_pdf(page: &PrintPage) -> Vec<u8> {
     let mut out: Vec<u8> = b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n".to_vec();
     let mut offsets: Vec<usize> = Vec::new();
@@ -113,21 +192,49 @@ pub fn print_pdf(page: &PrintPage) -> Vec<u8> {
         out.extend_from_slice(body);
         out.extend_from_slice(b"\nendobj\n");
     };
-    let img = &page.image;
     let (pw, ph) = page.paper;
     let (x, y, w, h) = page.rect;
-    // 1 catalog, 2 pages, 3 page, 4 contents, 5 image, 6 font, 7 ICC (optional).
+    // Object numbers of the optional objects, in the order they are written.
+    let mut next = 6usize;
+    let mut take = |present: bool| {
+        let n = present.then_some(next);
+        next += usize::from(present);
+        n
+    };
+    let image_obj = take(page.image.is_some());
+    let icc_obj = take(page.image.as_ref().is_some_and(|i| i.icc.is_some()));
+    let gs_obj = take(!page.plates.is_empty());
+    // Per plate: the stencil mask at `first_plate + 2i`, the plate image right after it.
+    let first_plate = next;
+    let plate_objs: Vec<usize> = (0..page.plates.len()).map(|i| first_plate + 2 * i + 1).collect();
+
     obj(&mut out, b"<< /Type /Catalog /Pages 2 0 R >>");
     obj(&mut out, b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>");
+    let mut xobjects = String::new();
+    if let Some(n) = image_obj {
+        xobjects.push_str(&format!("/Im0 {n} 0 R "));
+    }
+    for (i, n) in plate_objs.iter().enumerate() {
+        xobjects.push_str(&format!("/Sp{i} {n} 0 R "));
+    }
+    let ext_gstate = gs_obj.map(|n| format!("/ExtGState << /GS0 {n} 0 R >> ")).unwrap_or_default();
     obj(
         &mut out,
         format!(
-            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {pw:.2} {ph:.2}] /Resources << /XObject << /Im0 5 0 R >> /Font << /F1 6 0 R >> >> /Contents 4 0 R >>"
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {pw:.2} {ph:.2}] /Resources << /XObject << {xobjects}>> {ext_gstate}/Font << /F1 5 0 R >> >> /Contents 4 0 R >>"
         )
         .as_bytes(),
     );
     // An explicit white page, so every viewer (and rasteriser) shows paper, not transparency.
-    let mut content = format!("q 1 g 0 0 {pw:.2} {ph:.2} re f Q\nq {w:.3} 0 0 {h:.3} {x:.3} {y:.3} cm /Im0 Do Q\n");
+    let mut content = format!("q 1 g 0 0 {pw:.2} {ph:.2} re f Q\n");
+    if image_obj.is_some() {
+        content.push_str(&format!("q {w:.3} 0 0 {h:.3} {x:.3} {y:.3} cm /Im0 Do Q\n"));
+    }
+    // Each plate overprints what is already on the page: with `/OP true` a Separation paints its
+    // own colorant only, leaving the others (and the composite) as they are.
+    for i in 0..page.plates.len() {
+        content.push_str(&format!("q /GS0 gs {w:.3} 0 0 {h:.3} {x:.3} {y:.3} cm /Sp{i} Do Q\n"));
+    }
     content.push_str(&marks_ops(page.marks, page.rect));
     let any_marks = page.marks.corner_crop || page.marks.center_crop || page.marks.registration;
     let pad = if any_marks { 30.0 } else { 6.0 };
@@ -142,30 +249,54 @@ pub fn print_pdf(page: &PrintPage) -> Vec<u8> {
     body.extend_from_slice(&c);
     body.extend_from_slice(b"\nendstream");
     obj(&mut out, &body);
-    let device = match img.channels {
-        1 => "/DeviceGray",
-        4 => "/DeviceCMYK",
-        _ => "/DeviceRGB",
-    };
-    let cs = if img.icc.is_some() { "[/ICCBased 7 0 R]".to_string() } else { device.to_string() };
-    let z = deflate(&img.data);
-    let mut body = format!(
-        "<< /Type /XObject /Subtype /Image /Width {} /Height {} /ColorSpace {cs} /BitsPerComponent 8 /Filter /FlateDecode /Length {} >>\nstream\n",
-        img.width,
-        img.height,
-        z.len()
-    )
-    .into_bytes();
-    body.extend_from_slice(&z);
-    body.extend_from_slice(b"\nendstream");
-    obj(&mut out, &body);
     obj(&mut out, b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>");
-    if let Some(icc) = &img.icc {
-        let z = deflate(icc);
-        let mut body = format!("<< /N {} /Alternate {device} /Filter /FlateDecode /Length {} >>\nstream\n", img.channels, z.len()).into_bytes();
+    if let Some(img) = &page.image {
+        let device = match img.channels {
+            1 => "/DeviceGray",
+            4 => "/DeviceCMYK",
+            _ => "/DeviceRGB",
+        };
+        let cs = match icc_obj {
+            Some(n) => format!("[/ICCBased {n} 0 R]"),
+            None => device.to_string(),
+        };
+        obj(&mut out, &image_object(img.width, img.height, &cs, "", &img.data));
+        if let Some(icc) = &img.icc {
+            let z = deflate(icc);
+            let mut body = format!("<< /N {} /Alternate {device} /Filter /FlateDecode /Length {} >>\nstream\n", img.channels, z.len()).into_bytes();
+            body.extend_from_slice(&z);
+            body.extend_from_slice(b"\nendstream");
+            obj(&mut out, &body);
+        }
+    }
+    if gs_obj.is_some() {
+        obj(&mut out, b"<< /Type /ExtGState /OP true /op true /OPM 1 >>");
+    }
+    for (i, p) in page.plates.iter().enumerate() {
+        // A tint transform from the colorant's density to its alternate: 0 → paper, 1 → `cmyk`
+        // (an exponential interpolation function with N = 1 is linear).
+        let cmyk = p.cmyk.map(|v| format!("{:.4}", v.clamp(0.0, 1.0))).join(" ");
+        let cs = format!("[/Separation {} /DeviceCMYK << /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [{cmyk}] /N 1 >>]", pdf_name(&p.name));
+        // Stencil masking (PDF 1.3, no transparency): where the plate has no ink, nothing is
+        // painted at all. A separating RIP sees the same plate either way (unpainted = no ink),
+        // but a viewer without overprint preview would otherwise paint every zero-ink pixel as
+        // opaque paper and show only the last plate. An explicit 1-bit mask stream, not a
+        // colour-key `/Mask [0 0]` range: Quartz (Preview, Quick Look, Safari) draws nothing for
+        // a colour-key-masked Separation image.
+        let mask = stencil_mask(p.width, p.height, &p.data);
+        let z = deflate(&mask);
+        let mut body = format!(
+            "<< /Type /XObject /Subtype /Image /Width {} /Height {} /ImageMask true /BitsPerComponent 1 /Filter /FlateDecode /Length {} >>\nstream\n",
+            p.width,
+            p.height,
+            z.len()
+        )
+        .into_bytes();
         body.extend_from_slice(&z);
         body.extend_from_slice(b"\nendstream");
         obj(&mut out, &body);
+        let mask_ref = format!("/Mask {} 0 R ", first_plate + 2 * i);
+        obj(&mut out, &image_object(p.width, p.height, &cs, &mask_ref, &p.data));
     }
     let xref = out.len();
     out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", offsets.len() + 1).as_bytes());
@@ -176,41 +307,99 @@ pub fn print_pdf(page: &PrintPage) -> Vec<u8> {
     out
 }
 
+/// The spot plates of `doc`, in channel order (the first channel prints first, underneath).
+///
+/// In a Multichannel document every channel is a plate: its spot channels at the ink density
+/// they store (1 = solid), an alpha-type channel as the transparent black ink the composite shows
+/// it as (1 − value, as `photocraft_compose::multichannel` prints it). Any other document keeps
+/// its alpha channels as masks and exports only its spot channels. The alternate colour is the
+/// ink colour separated through the CMYK profile in use (`Color::in_mode`); it only previews the
+/// plate, as Photoshop's does. Solidity is a preview attribute too and is not written.
+fn plates_of(doc: &Document, w: usize, h: usize) -> Vec<SpotPlate> {
+    let multichannel = doc.mode == ColorMode::Multichannel;
+    let canvas = photocraft_geom::Rect::new(0, 0, w as i32, h as i32);
+    let to8 = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+    doc.channels
+        .iter()
+        .filter(|ch| multichannel || ch.spot.is_some())
+        .map(|ch| {
+            let (ink, alpha_type) = match ch.spot {
+                Some((ink, _)) => (ink, false),
+                None => (photocraft_color::Color::BLACK, true),
+            };
+            let n = ch.surface.channels().max(1);
+            let values = ch.surface.read_region(canvas);
+            let data: Vec<u8> = values.chunks(n).map(|px| px.first().copied().unwrap_or(0.0)).map(|v| to8(if alpha_type { 1.0 - v } else { v })).collect();
+            SpotPlate { name: ch.name.clone(), cmyk: ink.in_mode(ColorMode::Cmyk).c, width: w as u32, height: h as u32, data }
+        })
+        .collect()
+}
+
 /// File › Save As / Save a Copy › PDF (#3401): the flattened document, at its print size
 /// (pixels ÷ resolution × 72 pt), as a one-page PDF. Layers and transparency are dropped — the
 /// warning says so — and the embedded profile travels with the image.
-pub fn export(doc: &Document) -> std::result::Result<ExportResult, IoError> {
+///
+/// With `spot_plates`, the document's spot channels follow the image as overprinting
+/// `/Separation` plates (FILE-215-17), and a Multichannel document, which is nothing but its
+/// channels, is written as plates alone. Without it a Multichannel document has nothing to
+/// write and is refused.
+pub fn export(doc: &Document, spot_plates: bool) -> std::result::Result<ExportResult, IoError> {
     let (w, h) = (usize::try_from(doc.size.width).unwrap_or(0), usize::try_from(doc.size.height).unwrap_or(0));
     if w == 0 || h == 0 {
         return Err(IoError::Unsupported("PDF needs a document with non-zero width and height; nothing was written".into()));
     }
     let device = match doc.mode {
-        ColorMode::Rgb => 3,
-        ColorMode::Grayscale => 1,
-        ColorMode::Cmyk => 4,
-        m => return Err(IoError::Unsupported(format!("PDF saves RGB, Grayscale and CMYK documents; {m:?} needs converting to RGB first (Image > Mode)"))),
-    };
-    let fmt = doc.pixel_format();
-    let n = fmt.channels().max(1);
-    let canvas = photocraft_geom::Rect::new(0, 0, w as i32, h as i32);
-    let surface = photocraft_compose::flatten_to_surface(doc, PixelFormat::new(fmt.mode, fmt.sample, true), None);
-    let values = surface.read_region(canvas);
-    let to8 = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
-    // Straight alpha, composited here over paper: white in RGB/Gray (1 = full light), zero ink
-    // in CMYK (0 = paper).
-    let paper = if doc.mode == ColorMode::Cmyk { 0.0 } else { 1.0 };
-    let mut data = Vec::with_capacity((w * h).saturating_mul(device));
-    for px in values.chunks(n) {
-        let a = px.last().copied().unwrap_or(1.0).clamp(0.0, 1.0);
-        for v in px.iter().take(device) {
-            data.push(to8(v * a + paper * (1.0 - a)));
+        ColorMode::Rgb => Some(3),
+        ColorMode::Grayscale => Some(1),
+        ColorMode::Cmyk => Some(4),
+        ColorMode::Multichannel if spot_plates && !doc.channels.is_empty() => None,
+        ColorMode::Multichannel => {
+            return Err(IoError::Unsupported(
+                "a Multichannel PDF is its channels as spot plates; with no channels, or spot plates left out, there is nothing to write".into(),
+            ));
         }
-    }
-    let image = PrintImage { width: doc.size.width, height: doc.size.height, channels: device, data, icc: doc.icc_profile.as_ref().map(|p| p.to_vec()) };
+        m => {
+            return Err(IoError::Unsupported(format!(
+                "PDF saves RGB, Grayscale, CMYK and Multichannel documents; {m:?} needs converting to RGB first (Image > Mode)"
+            )));
+        }
+    };
     let dpi = f64::from(doc.resolution_dpi.max(1.0));
     let (pw, ph) = (f64::from(doc.size.width) * 72.0 / dpi, f64::from(doc.size.height) * 72.0 / dpi);
-    let page = PrintPage { paper: (pw, ph), image, rect: (0.0, 0.0, pw, ph), marks: Marks::default(), description: None, label: None };
-    let mut warnings = vec!["PDF was saved flattened: layers, masks-as-editable and transparency are not preserved (#3401)".into()];
+    let mut warnings = Vec::new();
+    let image = device.map(|device| {
+        let fmt = doc.pixel_format();
+        let n = fmt.channels().max(1);
+        let canvas = photocraft_geom::Rect::new(0, 0, w as i32, h as i32);
+        let surface = photocraft_compose::flatten_to_surface(doc, PixelFormat::new(fmt.mode, fmt.sample, true), None);
+        let values = surface.read_region(canvas);
+        let to8 = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+        // Straight alpha, composited here over paper: white in RGB/Gray (1 = full light), zero ink
+        // in CMYK (0 = paper).
+        let paper = if doc.mode == ColorMode::Cmyk { 0.0 } else { 1.0 };
+        let mut data = Vec::with_capacity((w * h).saturating_mul(device));
+        for px in values.chunks(n) {
+            let a = px.last().copied().unwrap_or(1.0).clamp(0.0, 1.0);
+            for v in px.iter().take(device) {
+                data.push(to8(v * a + paper * (1.0 - a)));
+            }
+        }
+        warnings.push("PDF was saved flattened: layers, masks-as-editable and transparency are not preserved (#3401)".into());
+        PrintImage { width: doc.size.width, height: doc.size.height, channels: device, data, icc: doc.icc_profile.as_ref().map(|p| p.to_vec()) }
+    });
+    let plates = if spot_plates { plates_of(doc, w, h) } else { Vec::new() };
+    if !plates.is_empty() {
+        let names: Vec<&str> = plates.iter().map(|p| p.name.as_str()).collect();
+        warnings.push(format!(
+            "{} spot plate{} written as overprinting Separation colorants ({}), 8-bit; their preview colours are the inks separated to CMYK",
+            plates.len(),
+            if plates.len() == 1 { "" } else { "s" },
+            names.join(", ")
+        ));
+    } else if doc.channels.iter().any(|ch| ch.spot.is_some()) {
+        warnings.push("spot channels were not written: spot plates were left out".into());
+    }
+    let page = PrintPage { paper: (pw, ph), image, rect: (0.0, 0.0, pw, ph), marks: Marks::default(), description: None, label: None, plates };
     if !doc.metadata.text.is_empty() {
         warnings.push("free-form text metadata is not supported by PDF; it will be dropped".into());
     }
