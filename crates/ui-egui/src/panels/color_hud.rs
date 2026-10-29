@@ -52,7 +52,7 @@ pub struct Hud {
 }
 
 pub(crate) fn hud_id() -> egui::Id {
-    egui::Id::new("canvas-color-hud")
+    egui::Id::unique("canvas-color-hud")
 }
 
 /// Is the HUD open?

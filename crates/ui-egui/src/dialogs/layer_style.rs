@@ -1607,6 +1607,42 @@ fn page(app: &mut PhotocraftApp, ui: &mut egui::Ui, f: &mut Map<String, Value>, 
                     }
                 });
             }
+            P::GradientMethod => {
+                ui.horizontal(|ui| {
+                    widgets::row_label(ui, label, LABEL_W);
+                    let mut current = disp.get(key).and_then(Value::as_str).unwrap_or("custom").to_string();
+                    let mut options = vec![
+                        ("smooth".to_string(), "Smooth"),
+                        ("perceptual".to_string(), "Perceptual"),
+                        ("linear".to_string(), "Linear"),
+                        ("classic".to_string(), "Classic"),
+                    ];
+                    // Old/imported curves have no method record. Preserve them until
+                    // the user explicitly chooses an interpolation method.
+                    if photocraft_io::GradientMethod::from_name(&current).is_none() {
+                        current = "custom".into();
+                        options.insert(0, ("custom".into(), "Custom"));
+                    }
+                    if widgets::dropdown(ui, "fx-gradientOverlay-method", tl!("Method"), &mut current, &options, 150.0) {
+                        // The older dialog deliberately omits From/To for rich imported
+                        // curves. Once a method is chosen, show the real source ends.
+                        let snapshot = entry(f, selected).and_then(|e| e.get("fx")).cloned();
+                        if let Some(Effect::GradientOverlay { gradient, interpolation, .. }) = snapshot.and_then(|v| serde_json::from_value::<Effect>(v).ok()) {
+                            let stops = interpolation.as_ref().map_or(&gradient.stops, |source| &source.stops);
+                            for (key, stop) in [("from", stops.first()), ("to", stops.last())] {
+                                if entry(f, selected).and_then(|e| e.get("params")).and_then(|p| p.get(key)).is_none()
+                                    && let Some(stop) = stop
+                                {
+                                    set_param(f, selected, key, json!(hex(&stop.1)));
+                                }
+                            }
+                        }
+                        let value = json!(current);
+                        disp[key] = value.clone();
+                        set_param(f, selected, key, value);
+                    }
+                });
+            }
             P::Choice(options) => {
                 ui.horizontal(|ui| {
                     widgets::row_label(ui, label, LABEL_W);
