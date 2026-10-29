@@ -4216,3 +4216,4 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
 	Font size presets	Набори розмірів шрифту
 	Leading presets	Набори інтерліньяжу
 	Tracking presets	Набори трекінгу
+	Invalid numeric entry. An integer between {min}% and {max}% is required. Previous value was inserted.	Неприпустиме числове значення. Потрібне ціле число від {min}% до {max}%. Вставлено попереднє значення.

@@ -4252,3 +4252,4 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
 	Font size presets	Předvolby velikosti písma
 	Leading presets	Předvolby prokladu
 	Tracking presets	Předvolby prostrkání
+	Invalid numeric entry. An integer between {min}% and {max}% is required. Previous value was inserted.	Neplatná číselná hodnota. Je vyžadováno celé číslo mezi {min}% a {max}%. Byla vložena předchozí hodnota.

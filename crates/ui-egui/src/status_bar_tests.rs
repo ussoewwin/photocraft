@@ -260,3 +260,48 @@ fn a_typed_zoom_leaves_nothing_for_the_next_zoom_and_lands_exactly() {
         assert_eq!(h.state().ui.views[0].zoom, 1.0, "Actual Pixels after a typed 1600 %, animated {animated}");
     }
 }
+
+/// `80,,2` typed into the status bar's zoom field: Enter opens Photoshop's "Invalid numeric entry"
+/// message (the field's range with the system's decimal separator) and applies 80 %.
+#[test]
+fn a_second_separator_in_the_zoom_field_opens_the_invalid_entry_message_and_applies_the_leading_number() {
+    crate::i18n::with_decimal_separator(Some(','), || {
+        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", json!({"width": 1080, "height": 1080, "resolution": 72, "background": "white"})).unwrap();
+        app.sync_views();
+        let mut h = Harness::builder().with_size(SIZE).build_ui_state(
+            |ui, app: &mut PhotocraftApp| {
+                crate::zoom_field::tick(app, &ui.ctx().clone());
+                if ui.ctx().fonts(|f| f.families().contains(&egui::FontFamily::Name("medium".into()))) {
+                    crate::panels::status_bar(app, ui);
+                }
+            },
+            app,
+        );
+        PhotocraftApp::setup_context(&h.ctx, ThemeKind::ProMedium);
+        h.run_steps(3);
+        let range = crate::zoom_levels::percent_range(&h.state().ui.views[0]);
+        h.get_by_role(egui::accesskit::Role::SpinButton).click();
+        h.run_steps(2);
+        for c in "80,,2".chars() {
+            h.event(egui::Event::Text(c.to_string()));
+            h.run_steps(1);
+        }
+        assert!(h.state().ui.dialogs.is_empty(), "no message while typing");
+        h.key_press(egui::Key::Enter);
+        h.run_steps(3);
+        assert_eq!(h.state().ui.views[0].zoom, 0.8, "the number before the second separator");
+        let messages: Vec<String> = h
+            .state()
+            .ui
+            .dialogs
+            .iter()
+            .filter(|d| d.kind == crate::state::DialogKind::Error)
+            .filter_map(|d| d.fields.get("message")?.as_str().map(String::from))
+            .collect();
+        let pct = |v: f32| format!("{v:.2}").replace('.', ",");
+        let want =
+            format!("Invalid numeric entry. An integer between {}% and {}% is required. Previous value was inserted.", pct(*range.start()), pct(*range.end()));
+        assert_eq!(messages, [want], "one message, in the dialog the app shows errors in");
+    });
+}

@@ -4,21 +4,24 @@
 //! then the image keeps its zoom, and these keys never apply what was typed:
 //!
 //! * Esc drops it: the field shows the current zoom again.
-//! * Tab and ⇧Tab keep the focus in the field, select its text so typing replaces it, and play
-//!   the system alert (Windows: the Asterisk sound).
+//! * Tab and ⇧Tab keep the focus in the field, write the typed number as the field shows a zoom
+//!   (`045` and `45,0` become `45`, `1/2` becomes `50`; the `%` is drawn beside the field), select
+//!   it so typing replaces it, and play the system alert (Windows: the Asterisk sound).
 //! * Alt (tapped) does only that alert: it neither puts the keyboard on the menu bar nor leaves
 //!   the field.
 //! * A click, with either button, on the pasteboard (the canvas around the image), anywhere on the
 //!   title bar (menu titles, the empty drag area, the workspace switcher, search, the theme
 //!   button, Minimise / Maximise / Close), or on an open menu or dropdown (Help's "Search menus"
-//!   field included), keeps the typed number unapplied and selects the text again, as Tab does.
+//!   field included), keeps the typed number unapplied, rewritten and selected as Tab does it.
 //! * Whatever the key or click, a typed number is never applied while the window is not focused.
-//! * Only digits, `.`, `,` and `/` can be typed or pasted; any other character is dropped and asks for
-//!   the same alert, without touching the text.
-//! * `,` is a decimal point like `.` (`100,90` is `100.90`). The text holds at most one of them: a
-//!   second `.` or `,`, a `,` next to a `.` (`1,000.5`) and a `.` next to a `/` (`100/5.0`; the ratio
-//!   takes `100/5,0`) are typed away like any other character: dropped, with the alert. A paste is
-//!   not cut up: `100/5.0` stays in the field, asks for the alert, and Enter puts the current zoom back.
+//! * Only digits, `/` and the system's decimal separator ([`crate::i18n::decimal_separator`]: `,` on
+//!   a German Windows, `.` on an English one, in ratios too: `100/5,0`) can be typed or pasted; any
+//!   other character (the other separator too) is dropped and asks for the same alert, without
+//!   touching the text. Where the system's separator is not known, both `.` and `,` are taken. The
+//!   field shows its zoom with that separator (`33,33`).
+//! * A second separator can be typed (`80,,2`), and pasted. Enter (or a click that applies) then
+//!   shows Photoshop's "Invalid numeric entry" message with the field's range and applies the number
+//!   before the second separator (`80`), as Photoshop does after its OK.
 //!
 //! The field itself is `widgets::number_edit` (with `hold_typed`), which calls [`before`] and
 //! [`after`] around the egui `DragValue`. The rest is bookkeeping other parts of the app read:
@@ -86,22 +89,25 @@ fn select_all_by_key(ui: &Ui) {
     ui.input_mut(|i| i.events.push(ctrl_a));
 }
 
-/// A zoom takes digits, `.`, `,` and `/` only (`/` for a ratio: `1/2` is 50 %, `5/2` is 250 %;
-/// the `%` is drawn beside the field, never typed). Anything else typed or pasted is taken out of this
-/// frame's input before the field sees it; true when something was.
-///
-/// A typed `.`, `,` or `/` that would make the text [`violates`] the rules (a second separator, `,`
-/// with `.`, `.` with `/`) is taken out too. The text it would land in is the one the `DragValue`
-/// keeps (`shown` before the first key), minus the selection. A paste is only filtered by
-/// character, so what is invalid stays in the field, for the alert in [`after`] and for Enter.
+/// Can `c` be typed into a zoom field? Digits, `/` (for a ratio: `1/2` is 50 %, `5/2` is 250 %;
+/// the `%` is drawn beside the field, never typed) and the decimal separator `sep` (both `.` and `,`
+/// when it is not known).
+fn accepted(c: char, sep: Option<char>) -> bool {
+    c.is_ascii_digit() || c == '/' || sep.map_or(matches!(c, '.' | ','), |s| c == s)
+}
+
+/// Takes out of this frame's input whatever a zoom field does not take ([`accepted`]) before the
+/// field sees it; true when something was. A second separator is not refused here (Photoshop types
+/// it, and refuses the number on Enter: [`read`]).
 ///
 /// egui keeps the text being edited in a private `EditState`, out of reach, so this module keeps
-/// its own copy under [`mirror_id`]: what the field showed when it got the keyboard, with the keys
-/// applied that are seen here (typed, pasted, cut, Backspace, Delete). A key that changes the text
-/// in a way not followed (undo, a word deletion) makes the copy empty: the rules then only look at
-/// what is typed from there on, and Enter still refuses text that [`violates`] them. The copy is kept
-/// with the `shown` it started from: when the value changes under the focused field (ArrowUp, the
-/// wheel, another zoom), the field shows the new number, and the copy starts again from it.
+/// its own copy under [`mirror_id`], for Tab and a click that keeps the number to rewrite it
+/// ([`canonical`]): what the field showed when it got the keyboard, with the keys applied that are
+/// seen here (typed, pasted, cut, Backspace, Delete). A key that changes the text in a way not
+/// followed (undo, a word deletion) makes the copy empty and marks it lost ([`lost_id`]): the text
+/// is then only selected, never rewritten, until the field is left. The copy is kept with the `shown` it started from: when the value changes under the
+/// focused field (ArrowUp, the wheel, another zoom), the field shows the new number, and the copy
+/// starts again from it.
 fn drop_unwanted_chars(ui: &Ui, id: Id, shown: &str) -> bool {
     let mirror = mirror_id(id);
     let stored = ui.data(|d| d.get_temp::<(String, String)>(mirror)).filter(|(from, _)| from == shown).map(|(_, text)| text);
@@ -117,36 +123,24 @@ fn drop_unwanted_chars(ui: &Ui, id: Id, shown: &str) -> bool {
         (Some(_), None) => (len, len),
         (None, _) => (0, len),
     };
-    let allowed = |c: char| c.is_ascii_digit() || matches!(c, '.' | ',' | '/');
+    let sep = crate::i18n::decimal_separator();
+    let allowed = |c: char| accepted(c, sep);
     let mut stale = false;
     let dropped = ui.input_mut(|i| {
         let mut dropped = false;
         i.events.retain_mut(|e| match e {
-            egui::Event::Text(t) => {
-                let mut kept = String::new();
-                for c in t.chars() {
-                    let mut next = text.clone();
-                    next.drain(sel.0..sel.1);
-                    next.insert(sel.0, c);
-                    if c.is_ascii_digit() || (allowed(c) && !violates(&next.iter().collect::<String>())) {
-                        text = next;
-                        sel = (sel.0 + 1, sel.0 + 1);
-                        kept.push(c);
-                    }
-                }
-                dropped |= kept.chars().count() != t.chars().count();
-                *t = kept;
-                !t.is_empty()
-            }
-            egui::Event::Paste(t) => {
+            egui::Event::Text(t) | egui::Event::Paste(t) => {
                 let kept: String = t.chars().filter(|&c| allowed(c)).collect();
                 dropped |= kept.chars().count() != t.chars().count();
-                text.drain(sel.0..sel.1);
-                for (n, c) in kept.chars().enumerate() {
-                    text.insert(sel.0 + n, c);
+                // Nothing kept: the event goes, and the text stays as it is.
+                if !kept.is_empty() {
+                    text.drain(sel.0..sel.1);
+                    for (n, c) in kept.chars().enumerate() {
+                        text.insert(sel.0 + n, c);
+                    }
+                    let at = sel.0 + kept.chars().count();
+                    sel = (at, at);
                 }
-                let at = sel.0 + kept.chars().count();
-                sel = (at, at);
                 *t = kept;
                 !t.is_empty()
             }
@@ -181,6 +175,9 @@ fn drop_unwanted_chars(ui: &Ui, id: Id, shown: &str) -> bool {
     });
     if stale {
         text.clear();
+        // Lost for good, until the field is left or shows another value: what is typed from here on
+        // is only part of the text.
+        ui.data_mut(|d| d.insert_temp(lost_id(id), shown.to_owned()));
     }
     ui.data_mut(|d| d.insert_temp(mirror, (shown.to_owned(), text.iter().collect::<String>())));
     dropped
@@ -191,9 +188,24 @@ fn mirror_id(id: Id) -> Id {
     id.with("pc-zoom-field-text")
 }
 
-/// Call right before the field's `DragValue` is added; `id` is that `DragValue`'s id and `shown` the
-/// text it shows when nothing was typed yet.
-pub(crate) fn before(ui: &Ui, id: Id, shown: &str) -> Guard {
+/// Where this module notes that its copy of the text lost track of it (with the `shown` it was
+/// kept for), so the copy is never written back over the real text ([`rewrite`]).
+fn lost_id(id: Id) -> Id {
+    id.with("pc-zoom-field-text-lost")
+}
+
+/// Drops the copy of the typed text, and with it the note that it was lost.
+fn forget_text(ui: &Ui, id: Id) {
+    ui.data_mut(|d| {
+        d.remove_temp::<(String, String)>(mirror_id(id));
+        d.remove_temp::<String>(lost_id(id));
+    });
+}
+
+/// Call right before the field's `DragValue` is added; `id` is that `DragValue`'s id, `shown` the
+/// text it shows when nothing was typed yet, and `canon` writes a typed text as the field would
+/// show the zoom Enter makes of it (`None`: it makes none).
+pub(crate) fn before(ui: &Ui, id: Id, shown: &str, canon: &dyn Fn(&str) -> Option<String>) -> Guard {
     let ctx = ui.ctx();
     let pass = ctx.cumulative_pass_nr();
     let focused = ui.memory(|m| m.has_focus(id));
@@ -208,7 +220,7 @@ pub(crate) fn before(ui: &Ui, id: Id, shown: &str) -> Guard {
     };
     // Only the field that owns the keyboard takes Esc: any other must leave it to whoever wants it.
     if owner && (ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape)) | raw_esc(ui)) {
-        ui.data_mut(|d| d.remove_temp::<(String, String)>(mirror_id(id)));
+        forget_text(ui, id);
         return Guard { esc: true, veto: true, ..Default::default() };
     }
     // The focus left before the field was drawn, and no click took it (egui drops the focus on
@@ -216,7 +228,7 @@ pub(crate) fn before(ui: &Ui, id: Id, shown: &str) -> Guard {
     // the copy of the typed text is dropped. Nothing vetoes the `DragValue` here, so a click away
     // still applies what was typed.
     if !focused {
-        ui.data_mut(|d| d.remove_temp::<(String, String)>(mirror_id(id)));
+        forget_text(ui, id);
     }
     // A click that keeps what was typed (pasteboard, title bar, open menu), or a window that has
     // lost the keyboard: whatever egui does with the typed text, it does not reach the zoom. This
@@ -246,6 +258,7 @@ pub(crate) fn before(ui: &Ui, id: Id, shown: &str) -> Guard {
     if tab {
         ctx.memory_mut(|m| m.move_focus(FocusDirection::None));
         request_alert(ctx);
+        rewrite(ui, id, shown, canon);
         select_all_by_key(ui);
         ctx.data_mut(|d| d.insert_temp(select_until_id(), pass + 3));
         ctx.request_repaint();
@@ -274,11 +287,34 @@ pub(crate) fn before(ui: &Ui, id: Id, shown: &str) -> Guard {
         ctx.options_mut(|o| o.input_options.surrender_focus_on = SurrenderFocusOn::Never);
         // Selected when the button goes down and when it comes up, not on every frame it is held.
         if ui.input(|i| i.pointer.any_pressed() || i.pointer.any_released()) {
+            rewrite(ui, id, shown, canon);
             select_all_by_key(ui);
         }
         return Guard { restore: Some(prev), veto: true, ..Default::default() };
     }
     Guard { veto, ..Default::default() }
+}
+
+/// Writes the typed text as the field shows its zoom ([`canonical`]), as Photoshop does on Tab and
+/// on a click that keeps it: all of it is selected and replaced in this frame's input.
+fn rewrite(ui: &Ui, id: Id, shown: &str, canon: &dyn Fn(&str) -> Option<String>) {
+    // The copy lost track of the text (an undo, a word deletion): the text is only selected.
+    if ui.data(|d| d.get_temp::<String>(lost_id(id))).is_some_and(|from| from == shown) {
+        return;
+    }
+    let mirror = mirror_id(id);
+    let text = ui.data(|d| d.get_temp::<(String, String)>(mirror)).filter(|(from, _)| from == shown).map_or_else(|| shown.to_owned(), |(_, t)| t);
+    let Some(new) = canonical(&text, canon) else { return };
+    select_all_by_key(ui);
+    ui.input_mut(|i| i.events.push(egui::Event::Text(new.clone())));
+    ui.data_mut(|d| d.insert_temp(mirror, (shown.to_owned(), new)));
+}
+
+/// What [`rewrite`] puts in place of `text`, when that changes it: `canon` of it, for text that
+/// holds a number Enter takes as it is. Text Enter refuses ([`read`]) stays.
+fn canonical(text: &str, canon: &dyn Fn(&str) -> Option<String>) -> Option<String> {
+    let Entry::Number(_) = read(text) else { return None };
+    canon(text).filter(|new| new != text && !new.is_empty())
 }
 
 /// Call right after the field's `DragValue` was added.
@@ -289,7 +325,7 @@ pub(crate) fn after(ui: &Ui, id: Id, guard: Guard) {
     }
     if guard.esc {
         // Esc: the typed text goes, and so does the keyboard, so the field shows the zoom again.
-        ui.data_mut(|d| d.remove_temp::<(String, String)>(mirror_id(id)));
+        forget_text(ui, id);
         ui.memory_mut(|m| m.surrender_focus(id));
         ctx.request_repaint();
         return;
@@ -297,28 +333,73 @@ pub(crate) fn after(ui: &Ui, id: Id, guard: Guard) {
     if !ui.memory(|m| m.has_focus(id)) {
         return;
     }
-    // Text the rules refuse, which only a paste can bring in: it stays (Enter then restores the zoom),
-    // but every key or paste into it asks for the alert.
-    let edited = ui.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::Text(_) | egui::Event::Paste(_))));
-    if edited && ui.data(|d| d.get_temp::<(String, String)>(mirror_id(id))).is_some_and(|(_, t)| violates(&t)) {
-        request_alert(ctx);
-    }
     let pass = ctx.cumulative_pass_nr();
     ctx.data_mut(|d| d.insert_temp(editing_id(), (id, pass)));
 }
 
-/// What a zoom field's text must not hold: more than one `.`, more than one `,`, a `,` with a `.`
-/// (`1,000.5`), or a `.` with a `/` (`100/5.0`: the decimal separator of a ratio is the comma,
-/// `100/5,0`).
-fn violates(text: &str) -> bool {
-    let (points, commas) = (text.matches('.').count(), text.matches(',').count());
-    points + commas > 1 || (points > 0 && text.contains('/'))
+/// How Enter reads the text of a zoom field.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum Entry {
+    /// At most one decimal separator: this text (`,` made `.`) for the number parser.
+    Number(String),
+    /// More than one (`80,,2`, `1,5,2`): an invalid numeric entry. Photoshop says so and then takes
+    /// the number before the second separator: this text for the parser (`80,` as `80.`), if any.
+    Invalid(Option<String>),
 }
 
-/// The text of a zoom field as the number parser must read it: `,` is a decimal point, and text that
-/// [`violates`] the rules is no number at all (`None`).
-pub(crate) fn parse_ready(text: &str) -> Option<String> {
-    (!violates(text)).then(|| text.replace(',', "."))
+/// Reads a zoom field's text for Enter: a decimal separator is `,` or `.` (only the system's one
+/// can be typed, [`accepted`]), and the text holds at most one.
+pub(crate) fn read(text: &str) -> Entry {
+    let is_sep = |c: char| matches!(c, '.' | ',');
+    let Some((second, _)) = text.char_indices().filter(|&(_, c)| is_sep(c)).nth(1) else {
+        return Entry::Number(text.replace(',', "."));
+    };
+    let lead = text.get(..second).unwrap_or_default();
+    Entry::Invalid((!lead.is_empty()).then(|| lead.replace(',', ".")))
+}
+
+/// `text` (a number formatted with `.`) with the system's decimal separator, as the field shows it.
+pub(crate) fn localize(text: String) -> String {
+    match crate::i18n::decimal_separator() {
+        Some(',') => text.replace('.', ","),
+        _ => text,
+    }
+}
+
+fn invalid_entry_id() -> Id {
+    Id::unique("pc-zoom-field-invalid-entry")
+}
+
+/// The field with `id` read an invalid entry ([`Entry::Invalid`]) this frame; see [`take_invalid`].
+pub(crate) fn note_invalid(ctx: &Context, id: Id) {
+    ctx.data_mut(|d| d.insert_temp(invalid_entry_id().with(id), true));
+}
+
+/// Did the field with `id` read an invalid entry this frame ([`note_invalid`])? Taken once.
+pub(crate) fn take_invalid(ctx: &Context, id: Id) -> bool {
+    ctx.data_mut(|d| d.remove_temp::<bool>(invalid_entry_id().with(id))).unwrap_or(false)
+}
+
+/// Photoshop's "Invalid numeric entry" message for a field whose range is `range` (in %): [`tick`]
+/// opens it in the next frame.
+pub(crate) fn request_invalid_entry(ctx: &Context, range: (f32, f32)) {
+    ctx.data_mut(|d| d.insert_temp(invalid_entry_id(), range));
+    ctx.request_repaint();
+}
+
+/// The message waiting to be shown, with its range (tests).
+#[cfg(test)]
+pub(crate) fn invalid_entry_pending(ctx: &Context) -> Option<(f32, f32)> {
+    ctx.data(|d| d.get_temp::<(f32, f32)>(invalid_entry_id()))
+}
+
+/// The English text of the message; `{min}` and `{max}` are the range, with two decimals.
+pub const INVALID_ENTRY: &str = "Invalid numeric entry. An integer between {min}% and {max}% is required. Previous value was inserted.";
+
+/// The message for a range, in the UI language and with the system's decimal separator.
+pub fn invalid_entry_message((min, max): (f32, f32)) -> String {
+    let pct = |v: f32| localize(format!("{v:.2}"));
+    crate::i18n::fmt(tl!(INVALID_ENTRY), &[("min", &pct(min)), ("max", &pct(max))])
 }
 
 fn editing_field(ctx: &Context) -> Option<Id> {
@@ -422,8 +503,18 @@ pub(crate) fn track_pasteboard(ctx: &Context, pressed: bool) {
 
 // ---- What needs the application: services and the document's geometry. ----
 
-/// Once per frame, before the panels: plays a requested alert and follows a press on the pasteboard.
+/// Once per frame, before the panels: shows a requested "Invalid numeric entry" message, plays a
+/// requested alert and follows a press on the pasteboard.
 pub fn tick(app: &mut crate::PhotocraftApp, ctx: &Context) {
+    if let Some(range) = ctx.data_mut(|d| d.remove_temp::<(f32, f32)>(invalid_entry_id())) {
+        let message = invalid_entry_message(range);
+        // One commit can be read in more than one pass of a frame: one message, not a stack of them.
+        let open =
+            app.ui.dialogs.iter().any(|d| d.kind == crate::state::DialogKind::Error && d.fields.get("message").and_then(|m| m.as_str()) == Some(&message));
+        if !open {
+            app.ui.open_dialog(crate::state::DialogKind::Error, serde_json::json!({ "message": message }).as_object().cloned().unwrap_or_default());
+        }
+    }
     if ctx.data_mut(|d| d.remove_temp::<bool>(alert_id())).unwrap_or(false)
         // The platform's alert, else its plain beep: an app that only sets `beep` still answers.
         && let Some(play) = app.services.alert.or(app.services.beep)
@@ -468,16 +559,41 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_comma_is_a_decimal_point_and_a_point_with_a_ratio_is_invalid() {
-        assert_eq!(parse_ready("100,90").as_deref(), Some("100.90"));
-        assert_eq!(parse_ready("100.90").as_deref(), Some("100.90"));
-        assert_eq!(parse_ready("100/5,0").as_deref(), Some("100/5.0"));
-        assert_eq!(parse_ready("100/5.0"), None);
-        assert_eq!(parse_ready("1.5/2"), None);
-        assert_eq!(parse_ready("1,5/2").as_deref(), Some("1.5/2"));
-        for refused in ["1,000.5", "1.000,5", "1.5.2", "1,5,2", "1,5/2,5"] {
-            assert_eq!(parse_ready(refused), None, "{refused}");
+    fn enter_reads_one_separator_and_the_number_before_a_second_one() {
+        let number = |t: &str| Entry::Number(t.into());
+        assert_eq!(read("100,90"), number("100.90"));
+        assert_eq!(read("100.90"), number("100.90"));
+        assert_eq!(read("100/5,0"), number("100/5.0"));
+        assert_eq!(read("100/5.0"), number("100/5.0"));
+        assert_eq!(read("45"), number("45"));
+        assert_eq!(read(""), number(""));
+        let invalid = |t: Option<&str>| Entry::Invalid(t.map(str::to_owned));
+        assert_eq!(read("80,,2"), invalid(Some("80.")));
+        assert_eq!(read("1,5,2"), invalid(Some("1.5")));
+        assert_eq!(read("1,000.5"), invalid(Some("1.000")));
+        assert_eq!(read("100/5,0,1"), invalid(Some("100/5.0")));
+        assert_eq!(read(",,"), invalid(Some(".")));
+        assert_eq!(read("..5"), invalid(Some(".")));
+    }
+
+    #[test]
+    fn only_the_systems_decimal_separator_can_be_typed() {
+        for (sep, point, comma) in [(Some(','), false, true), (Some('.'), true, false), (None, true, true)] {
+            assert_eq!(accepted('.', sep), point, "{sep:?}");
+            assert_eq!(accepted(',', sep), comma, "{sep:?}");
+            assert!(accepted('7', sep) && accepted('/', sep) && !accepted('%', sep) && !accepted('a', sep));
         }
+    }
+
+    #[test]
+    fn the_invalid_entry_message_names_the_range_with_the_systems_separator() {
+        let want = |s: &str| format!("Invalid numeric entry. An integer between {s} is required. Previous value was inserted.");
+        crate::i18n::with_decimal_separator(Some(','), || {
+            assert_eq!(invalid_entry_message((0.25, 12800.0)), want("0,25% and 12800,00%"));
+            assert_eq!(localize("33.33".into()), "33,33");
+        });
+        crate::i18n::with_decimal_separator(Some('.'), || assert_eq!(invalid_entry_message((0.25, 12800.0)), want("0.25% and 12800.00%")));
+        assert_eq!(localize("33.33".into()), "33.33", "unknown: as formatted");
     }
 
     #[test]
