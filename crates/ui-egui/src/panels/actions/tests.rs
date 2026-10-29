@@ -33,7 +33,7 @@ fn panel_menu_lists_load_save_and_existing_action_commands() {
 fn loading_json_actions_uses_engine_import_and_selects_the_new_action() {
     let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
     let action = Action::new("Portable", vec![("select.all".into(), json!({}))]);
-    let file = actions_cmds::ActionsFile { version: 1, actions: vec![action.clone()] };
+    let file = actions_cmds::ActionsFile { version: 1, defaults_version: 0, actions: vec![action.clone()] };
     let bytes = serde_json::to_vec(&file).unwrap();
     assert_eq!(load_bytes(&mut app, "Actions.JSON", &bytes).unwrap()["imported"], 1);
     assert_eq!(app.session.actions.list, [action]);
@@ -175,7 +175,7 @@ fn actions_shortcut_undo_and_redo_edit_script_without_undoing_pixels() {
     let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
     app.run("file.new", json!({"width": 8, "height": 8})).unwrap();
     app.run("layer.new.layer", json!({})).unwrap();
-    app.session.actions.list.push(Action { name: "A".into(), steps: vec![("select.all".into(), json!({}))], disabled: Default::default() });
+    app.session.actions.list.push(Action::new("A", vec![("select.all".into(), json!({}))]));
     let doc = app.session.active().unwrap().doc.clone();
     let mut h = Harness::builder().with_size(vec2(320.0, 260.0)).build_ui_state(|ui, app| panel(app, ui), app);
     h.run_steps(3);

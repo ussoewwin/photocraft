@@ -682,7 +682,7 @@ fn preview_cache_tracks_working_profiles_but_prefers_embedded_profiles() {
         fields.insert("profile".into(), json!("srgb"));
         let st = app.session.active().unwrap();
         let revision = st.revision;
-        let key = egui::Id::new(("export-preview", st.doc.id.0, revision, None::<u64>));
+        let key = egui::Id::unique(("export-preview", st.doc.id.0, revision, None::<u64>));
         let ctx = egui::Context::default();
         PhotocraftApp::setup_context(&ctx, crate::theme::ThemeKind::Pro);
         let draw = |app: &mut PhotocraftApp, fields: &mut Map<String, Value>| {
@@ -718,15 +718,15 @@ fn preview_workers_keep_the_captured_source_profile() {
     let profile = effective_source_profile(&app, &doc);
     let fields = json!({"format": "png", "profile": "srgb", "transparency": true}).as_object().unwrap().clone();
     let expected = preview_sync(&app, &doc, &fields, &profile).unwrap();
-    let expected_size = default_exact_estimate(&doc, &fields, &profile).unwrap();
+    let expected_size = super::exact_estimate(&doc, &fields, &profile).unwrap();
     let ctx = egui::Context::default();
-    let key = egui::Id::new("captured-profile-worker");
+    let key = egui::Id::unique("captured-profile-worker");
     let mut preview = None;
     let mut size = None;
     let mut poll = || {
         let mut output = ctx.run_ui(Default::default(), |ui| {
             if preview.is_none() {
-                preview = default_poll_or_start_preview(ui, key, "p3", doc.clone(), &fields, profile.clone());
+                preview = super::poll_or_start_preview(ui, key, "p3", doc.clone(), &fields, profile.clone());
             }
             if size.is_none() {
                 size = poll_or_start_exact_estimate(ui, key, "p3", doc.clone(), &fields, profile.clone());
