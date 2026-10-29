@@ -138,13 +138,7 @@ mod tests {
             if let Some(Separable::Kernel(k)) = Separable::of(&params) {
                 // Calibrated subpixel kernels have tails below the visibility threshold.
                 let center = k.len() / 2;
-                let visible = k
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, w)| **w * k[center] > 1e-6)
-                    .map(|(i, _)| i.abs_diff(center))
-                    .max()
-                    .unwrap_or(0);
+                let visible = k.iter().enumerate().filter(|(_, w)| **w * k[center] > 1e-6).map(|(i, _)| i.abs_diff(center)).max().unwrap_or(0);
                 assert_eq!(touched, dot.inflate(visible as i32), "radius {radius}");
             }
         }
