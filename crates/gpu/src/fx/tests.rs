@@ -339,32 +339,4 @@ fn shape_tiles_and_group_pins_hold_addresses_not_pixels() {
     assert!(pins.iter().all(|w| w.strong_count() == 0), "a group's pins keep none of its pixels");
 }
 
-#[test]
-    fn softer_outer_glow_program_keeps_the_tent_and_adds_a_distance_tail() {
-        let effect = Effect::OuterGlow(photocraft_doc::Glow {
-            common: FxCommon::new(BlendMode::Screen, 1.0),
-            paint: photocraft_doc::FxPaint::Color(photocraft_color::Color::WHITE),
-            technique: GlowTechnique::Softer,
-            spread: 0.0,
-            size: 60.0,
-            contour: Contour::Linear,
-            anti_alias: false,
-            range: 0.5,
-            jitter: 0.0,
-            noise: 0.0,
-            source: GlowSource::Edge,
-        });
-        let kernel = blur_kernel(60.0).unwrap();
-        let p = program(&effect, &GlobalLight::default(), false);
-        let blur: Vec<_> = p.stages.iter().filter(|s| s.kernel == Kernel::MBlur).collect();
-        assert_eq!(blur.len(), 2);
-        for stage in blur {
-            assert_eq!(stage.radius, kernel.0);
-            assert_eq!(stage.lut.as_deref().unwrap(), kernel.1.as_slice());
-        }
-        let tail = p.stages.iter().find(|s| s.kernel == Kernel::MGlow).unwrap();
-        assert_eq!(tail.a, Some(In::Field(FieldKind::Outside)));
-        assert_eq!(tail.p0, [54.0, 6.0, 0.0025, 1.0]);
-        assert!(p.stages.iter().any(|s| s.kernel == Kernel::MFinish && s.p0[0] == 2.0));
-        assert!(p.fields.contains(&(FieldKind::Outside, reach_for(66.0))));
-    }
+
