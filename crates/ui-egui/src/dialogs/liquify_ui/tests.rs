@@ -15,10 +15,13 @@ fn alt_right_drag_resizes_the_liquify_brush_and_does_not_paint() {
     assert!(brush_resize_gesture(egui::Modifiers::CTRL | egui::Modifiers::ALT, false));
     assert!(!brush_resize_gesture(egui::Modifiers::ALT, false), "Alt+left stays the tool's opposite");
     assert!(!brush_resize_gesture(egui::Modifiers::NONE, true));
-    let (size, density) = resized_brush(40.0, 50.0, 25.0, crate::brush_resize::HARDNESS_TRAVEL);
-    assert_eq!((size, density), (65.0, 100.0));
-    let (size, density) = resized_brush(40.0, 50.0, -100.0, 0.0);
+    let (size, density) = resized_brush(40.0, 50.0, 25.0, crate::brush_resize::HARDNESS_TRAVEL, 1.0);
+    assert_eq!((size, density), (90.0, 100.0), "native brush movement grows the radius by screen pixels");
+    let (size, density) = resized_brush(40.0, 50.0, -100.0, 0.0, 1.0);
     assert_eq!((size, density), (1.0, 50.0));
+    // Screen travel changes density identically at different preview zoom levels.
+    assert_eq!(resized_brush(40.0, 50.0, 25.0, 100.0, 2.0).1, 100.0);
+    assert_eq!(resized_brush(40.0, 50.0, 0.0, -100.0, 1.0).1, 0.0);
 }
 
 fn app_with_layer() -> PhotocraftApp {

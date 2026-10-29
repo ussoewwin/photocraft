@@ -796,6 +796,7 @@ pub const OPENTYPE_KEYS: [(&str, &str); 8] = [
 mod tysh_geometry_tests {
     use super::*;
 use crate::psd::{usable_tysh_transform, write_tysh};
+use photocraft_psd::descriptor::UnicodeString;
 
     #[test]
     fn overflowing_legacy_origin_does_not_escape_as_a_nonfinite_transform() {

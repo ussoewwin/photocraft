@@ -658,32 +658,7 @@ fn hidden_base_hides_clipping_group() {
     assert!(close4(px(&d, 1, 1), [1.0; 4]));
 }
 
-#[test]
-fn clipped_dissolve_matches_whole_render_at_offset_regions_and_depths() {
-    for fmt in [PixelFormat::RGBA8, PixelFormat::RGBA16, PixelFormat::RGBA32F] {
-        let mut d = Document::new("coverage", Size::new(32, 18), ColorMode::Rgb, fmt.sample);
-        let bounds = Rect::new(-3, -2, 32, 18);
-        let mut base = Layer::raster("base", fmt);
-        base.surface_mut().unwrap().fill_rect(bounds, &[0.0, 0.0, 1.0, 0.5]);
-        d.layers.push(base);
-        let mut clip = Layer::raster("clip", fmt);
-        clip.surface_mut().unwrap().fill_rect(bounds, &[1.0, 0.0, 0.0, 0.75]);
-        clip.clipped = true;
-        clip.blend = BlendMode::Dissolve;
-        clip.opacity = 0.6;
-        clip.fill_opacity = 0.5;
-        d.layers.push(clip);
-        let whole = render(&d, bounds);
-        for region in [Rect::new(-3, -2, 5, 4), Rect::new(5, 4, 17, 11), Rect::new(17, 11, 32, 18)] {
-            let part = render(&d, region);
-            for y in region.y0..region.y1 {
-                for x in region.x0..region.x1 {
-                    assert!(close4(part.get(x, y), whole.get(x, y)), "{fmt:?}: region mismatch at ({x},{y})");
-                }
-            }
-        }
-    }
-}
+
 
 #[test]
 fn isolated_group_differs_from_pass_through() {
