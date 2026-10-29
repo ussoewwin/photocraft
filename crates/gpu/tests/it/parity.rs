@@ -2219,6 +2219,8 @@ fn blend_if() {
             // An adjustment judged by its result, and a clipped layer.
             let mut adj = Layer::new("inv", LayerContent::Adjustment(Adjustment::Invert));
             adj.blend_if.set(e, pair);
+            // Judged by its result before Opacity (#9542).
+            adj.opacity = 0.4;
             d.layers[1] = l.clone();
             d.layers[1].blend_if = Default::default();
             d.layers.push(adj);

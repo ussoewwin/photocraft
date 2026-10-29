@@ -1038,8 +1038,8 @@ fn fs_lerp(in: VOut) -> @location(0) vec4<f32> {
         return vec4(clamp(pm.rgb / al, vec3(0.0), vec3(1.0)), al);
     }
     if ((op.flags & F_BLEND_IF) != 0u) {
-        // compose::apply_blend_if: "This Layer" is C (the layer's own content with its masks),
-        // or B itself for an adjustment layer; "Underlying Layer" is A.
+        // compose::apply_blend_if: "This Layer" is C (the layer's own content with its masks, or an
+        // adjustment's result before Opacity, #9542), B when p4.y is set; "Underlying Layer" is A.
         var this_px = b;
         if (op.p4.y < 0.5) {
             this_px = textureLoad(tex_c, p, 0);
