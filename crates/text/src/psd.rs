@@ -52,7 +52,7 @@ pub struct TySh {
 /// Whether a type transform can reach rendering or egui. Pixel coordinates use i32 throughout
 /// the document, so non-finite and unrepresentable affine terms are rejected (#4758).
 pub fn transform_is_safe(t: &Affine) -> bool {
-    t.m.iter().all(|v| v.is_finite() && v.abs() <= f64::from(i32::MAX))
+    t.m.iter().all(|v| v.is_finite() && v.abs() <= 1.0e9)
 }
 
 /// Parses a `TySh` block.
@@ -292,3 +292,6 @@ mod nonfinite_tests {
         assert!(out.contains("/FontSize 12.0"), "{out}");
     }
 }
+
+/// Bounded finite affine terms accepted before type layout.
+pub fn usable_tysh_transform(matrix:&[f64;6])->bool {transform_is_safe(&Affine{m:*matrix})}
