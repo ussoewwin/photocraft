@@ -50,7 +50,10 @@ fn loading_json_actions_uses_engine_import_and_selects_the_new_action() {
 fn default_actions_load_from_empty_panel_and_play() {
     use egui_kittest::{Harness, kittest::Queryable};
     let app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
-    let mut h = Harness::builder().with_size(vec2(360.0, 400.0)).build_ui_state(|ui, app| panel(app, ui), app);
+    let mut h = Harness::builder()
+        .with_size(vec2(360.0, 400.0))
+        .with_context_setup(|ctx| PhotocraftApp::setup_context(ctx, Default::default()))
+        .build_ui_state(|ui, app| panel(app, ui), app);
     h.run_steps(3);
     h.get_by_label("Load Default Actions").click();
     h.run_steps(3);

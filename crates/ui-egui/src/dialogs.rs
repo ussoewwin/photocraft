@@ -787,8 +787,8 @@ fn about_tab_body(app: &mut PhotocraftApp, ui: &mut egui::Ui, tab: &str) {
 /// The dialog title as shown: [`title`] in the UI language.
 fn display_title(d: &Dialog) -> String {
     match d.fields.get("__colorPicker").and_then(Value::as_str) {
-        Some("foreground") => return crate::color_picker_ui::title_for(tl!("Foreground Color")),
-        Some("background") => return crate::color_picker_ui::title_for(tl!("Background Color")),
+        Some("foreground") => return tl!("Color Picker (Foreground Color)").to_string(),
+        Some("background") => return tl!("Color Picker (Background Color)").to_string(),
         _ => {}
     }
     if crate::smart_filter_dialog::owns(&d.fields) {
