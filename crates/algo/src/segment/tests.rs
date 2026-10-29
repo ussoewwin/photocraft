@@ -289,6 +289,48 @@ fn grabcut_trimap_on_disc() {
 }
 
 #[test]
+fn grabcut_small_disc_mask_is_pinned() {
+    // The mask GrabCut produced with the push/relabel solver, before the switch to BK. Min-cut
+    // ties may break differently between solvers, so any drift here is a visible change.
+    let (img, _) = disc_scene(32, 24, 16.0, 12.0, 8.0, 3);
+    let mut tri = vec![grabcut::BG; img.w * img.h];
+    for y in 2..22 {
+        for x in 6..26 {
+            tri[y * img.w + x] = grabcut::PR_FG;
+        }
+    }
+    grabcut::grabcut(&img, &mut tri, 8).unwrap();
+    let got: Vec<String> = tri.chunks(img.w).map(|r| r.iter().map(|t| if *t == grabcut::PR_FG || *t == grabcut::FG { '#' } else { '.' }).collect()).collect();
+    let want = [
+        "................................",
+        "................................",
+        "................................",
+        "................................",
+        ".............######.............",
+        "...........##########...........",
+        "..........############..........",
+        ".........##############.........",
+        ".........##############.........",
+        "........################........",
+        "........################........",
+        "........################........",
+        "........################........",
+        "........################........",
+        "........################........",
+        ".........##############.........",
+        ".........##############.........",
+        "..........############..........",
+        "...........##########...........",
+        ".............######.............",
+        "................................",
+        "................................",
+        "................................",
+        "................................",
+    ];
+    assert_eq!(got, want);
+}
+
+#[test]
 fn object_select_disc_full_resolution() {
     let (img, truth) = disc_scene(200, 160, 100.0, 80.0, 50.0, 2);
     let s = ImageSampler { img: &img, origin: (0, 0) };
@@ -1092,6 +1134,32 @@ fn grid_energy(img: &RgbImage, cf: &[f32], cb: &[f32], cut: &[bool], weight: imp
 }
 
 #[test]
+fn bk_and_default_grid_cut_label_a_tie_alike() {
+    // Uniform pixels, equal data costs and a hard border: every free node is a coin flip between
+    // the two sides, so only the solvers' tie-breaking decides the labelling.
+    let (w, h) = (120usize, 100usize);
+    let img = RgbImage::from_fn(w, h, |_, _| [0.5, 0.5, 0.5]);
+    let (cf, cb) = (vec![1.0f32; w * h], vec![1.0f32; w * h]);
+    let fixed: Vec<u8> = (0..w * h)
+        .map(|i| {
+            if i % w == 0 {
+                HARD_BG
+            } else if i == 50 * w + 60 {
+                HARD_FG
+            } else {
+                FREE
+            }
+        })
+        .collect();
+    let weight = |_: f32| 2.0;
+    let a = grid_cut_cancellable(&img, &cf, &cb, &fixed, weight, &|| false).expect("default cut");
+    let b = grid_cut_bk_cancellable(&img, &cf, &cb, &fixed, weight, &|| false).expect("bk cut");
+    let (ea, eb) = (grid_energy(&img, &cf, &cb, &a, weight), grid_energy(&img, &cf, &cb, &b, weight));
+    assert!((ea - eb).abs() <= 1e-3 * ea.abs().max(1.0), "default {ea} vs bk {eb}");
+    assert_eq!(a, b, "tie broken differently");
+}
+
+#[test]
 fn bk_and_default_grid_cut_reach_the_same_minimum_energy() {
     // Large enough (>= 4096 free nodes, both terminals) that the default solver is push/relabel.
     let (w, h) = (120usize, 100usize);
@@ -1119,5 +1187,6 @@ fn bk_and_default_grid_cut_reach_the_same_minimum_energy() {
     let b = grid_cut_bk_cancellable(&img, &cf, &cb, &fixed, weight, &|| false).expect("bk cut");
     let (ea, eb) = (grid_energy(&img, &cf, &cb, &a, weight), grid_energy(&img, &cf, &cb, &b, weight));
     assert!((ea - eb).abs() <= 1e-3 * ea.abs().max(1.0), "default {ea} vs bk {eb}");
+    assert_eq!(a, b, "same labelling, not just the same energy");
     assert!(grid_cut_bk_cancellable(&img, &cf, &cb, &fixed, weight, &|| true).is_none(), "BK honours cancel");
 }
