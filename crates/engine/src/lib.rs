@@ -93,6 +93,7 @@ pub use cmd::fill_cmds;
 pub use cmd::fill_key_cmds;
 pub use cmd::float_cmds;
 pub use cmd::font_library_cmds;
+pub use cmd::frequency_separation_cmds;
 use cmd::frame_cmds;
 pub use cmd::fx_view_cmds;
 pub use cmd::fx_visibility_cmds;
