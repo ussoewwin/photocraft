@@ -104,6 +104,7 @@ pub use dialogs::adjust_dialog;
 pub use dialogs::adjust_editors;
 pub use dialogs::adjust_preview;
 pub(crate) use dialogs::bitmap_dialog;
+pub(crate) use dialogs::adjust_presets;
 pub use dialogs::blur_pins;
 pub use dialogs::brush_preset_dialog;
 pub use dialogs::caf_ui;
