@@ -1,11 +1,12 @@
 {
   "selected_count": 108,
-  "integrated_count": 61,
-  "pending_count": 47,
+  "integrated_count": 70,
+  "pending_count": 38,
   "integrated_prs": [
     9703,
     9651,
     9623,
+    9606,
     9598,
     9597,
     9596,
@@ -15,6 +16,7 @@
     9589,
     9584,
     9523,
+    9517,
     9512,
     9509,
     9504,
@@ -25,6 +27,7 @@
     9436,
     9418,
     9416,
+    9401,
     9354,
     9342,
     9339,
@@ -33,15 +36,20 @@
     9019,
     9015,
     9004,
+    8985,
     8931,
+    8905,
     8903,
+    8897,
     8896,
     8193,
     8192,
     8191,
     7903,
     7743,
+    7742,
     7648,
+    7255,
     7153,
     6510,
     6387,
@@ -49,6 +57,7 @@
     6236,
     5939,
     5870,
+    5515,
     5165,
     5090,
     5010,
@@ -66,22 +75,14 @@
     1991
   ],
   "pending_prs": [
-    9606,
-    9517,
     9478,
-    9401,
     9282,
     8986,
-    8985,
-    8905,
-    8897,
     8892,
     8347,
     8074,
     8039,
     7848,
-    7742,
-    7255,
     6621,
     6492,
     6449,
@@ -89,7 +90,6 @@
     6026,
     5744,
     5650,
-    5515,
     5493,
     5453,
     5270,
@@ -114,7 +114,7 @@
     3139,
     2300
   ],
-  "state": "PARTIAL INTEGRATION — RESOLVING CONFLICTS; NOT READY FOR PORTABLE ACCEPTANCE BUILD",
+  "state": "PARTIAL INTEGRATION \u00e2\u20ac\u201d RESOLVING CONFLICTS; NOT READY FOR PORTABLE ACCEPTANCE BUILD",
   "manual_tests": "NOT RUN",
   "integrated_validation": "NOT RUN",
   "branch": "integration/approved-bugfix-parity-2026-10-29",
@@ -149,7 +149,7 @@
       "number": 9606,
       "title": "fix(ui): the Color panel remembers its options across restarts",
       "head": "6cc516a3d20120b678040050d95ccadc8d1dfd3f",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/9606#pullrequestreview-5647898187",
       "conflicts": [
         "crates/ui-egui/src/panels.rs",
@@ -244,7 +244,7 @@
       "number": 9517,
       "title": "fix(ui): Layer Style scrolls on a short window so OK stays on screen",
       "head": "81b434c6149732eadc94e0465fea81bd075facd4",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/9517#pullrequestreview-5644911791",
       "conflicts": [
         "crates/ui-egui/src/dialogs.rs"
@@ -271,7 +271,7 @@
     },
     {
       "number": 9504,
-      "title": "fix(ui): Keyboard Shortcuts records ⌘Z instead of undoing the capture",
+      "title": "fix(ui): Keyboard Shortcuts records \u00e2\u0152\u02dcZ instead of undoing the capture",
       "head": "993c9ed167c6acd9bc8f87c6cff6e2c7abba17a8",
       "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/9504#pullrequestreview-5644657832",
@@ -350,7 +350,7 @@
       "number": 9401,
       "title": "fix(format): a save on macOS keeps the file's creation time (#9388)",
       "head": "f241bba1adfb9c7ec5dd5ed9d86f95b63c7bc2c3",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/9401#pullrequestreview-5642877921",
       "conflicts": [
         "crates/automation/src/workspace.rs"
@@ -458,7 +458,7 @@
       "number": 8985,
       "title": "Color panel and Color Picker: clip the round cursor to the colour field",
       "head": "8e695caf885b529f01f482b3f0c90cdb34df1915",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/8985#pullrequestreview-5638975214",
       "conflicts": [
         "crates/ui-egui/src/dialogs/color_picker_ui.rs",
@@ -477,7 +477,7 @@
       "number": 8905,
       "title": "fix(plugins): bound a run's total plug-in memory, not just each instance",
       "head": "0fdc6259193aab32b8feab7347ddc36196f40a19",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/8905#pullrequestreview-5638989196",
       "conflicts": [
         "crates/plugins/tests/abi.rs"
@@ -495,7 +495,7 @@
       "number": 8897,
       "title": "fix(io): read linked smart objects for PSD export as regular files only",
       "head": "eb06798f15516eb7e4fac24c98346fd9052e7f8e",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/8897#pullrequestreview-5638990476",
       "conflicts": [
         "crates/io/src/psd_export.rs"
@@ -538,7 +538,7 @@
     },
     {
       "number": 8193,
-      "title": "Filter Gallery › Cutout 3/4: edges and curves stage",
+      "title": "Filter Gallery \u00e2\u20ac\u00ba Cutout 3/4: edges and curves stage",
       "head": "864024609b872de3d869879f1632b951c896c6cd",
       "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/8193#pullrequestreview-5643244034",
@@ -546,7 +546,7 @@
     },
     {
       "number": 8192,
-      "title": "Filter Gallery › Cutout 2/4: regions stage",
+      "title": "Filter Gallery \u00e2\u20ac\u00ba Cutout 2/4: regions stage",
       "head": "412e3b7cf1f4836a5772d93391d21728dbe1f74f",
       "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/8192#pullrequestreview-5642599218",
@@ -554,7 +554,7 @@
     },
     {
       "number": 8191,
-      "title": "Filter Gallery › Cutout 1/4: colour and palette stage",
+      "title": "Filter Gallery \u00e2\u20ac\u00ba Cutout 1/4: colour and palette stage",
       "head": "91e4cec43525ca739c05cff614701fbd3576e389",
       "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/8191#pullrequestreview-5642584382",
@@ -585,7 +585,7 @@
     },
     {
       "number": 7903,
-      "title": "Filter Gallery › Cutout 4/4: trace the image into flat paper shapes",
+      "title": "Filter Gallery \u00e2\u20ac\u00ba Cutout 4/4: trace the image into flat paper shapes",
       "head": "5c30699087b02edcaa23397a0f7076bf503be048",
       "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/7903#pullrequestreview-5643279271",
@@ -613,7 +613,7 @@
       "number": 7742,
       "title": "Actions: a fractional setting an integer field cannot hold is refused, not rounded",
       "head": "ab844f9cbcd1f1839ed7f286776331cb72e399aa",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/7742#pullrequestreview-5586281249",
       "conflicts": [
         "crates/engine/src/atn_cmds.rs",
@@ -632,7 +632,7 @@
       "number": 7255,
       "title": "fix(engine): guard trim and duplicate merged against documents exceeding render limits (#7223)",
       "head": "1b810052bc3a876c1eaf1a8766870ffdba9f8a80",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/7255#pullrequestreview-5579038009",
       "conflicts": [
         "crates/engine/src/image_cmds.rs"
@@ -794,7 +794,7 @@
     },
     {
       "number": 5650,
-      "title": "Guides: ⌥ turns a dragged guide; dropping one on either ruler deletes it (#5034)",
+      "title": "Guides: \u00e2\u0152\u00a5 turns a dragged guide; dropping one on either ruler deletes it (#5034)",
       "head": "4b1bd6fb6d264f885cb9caa3b8a6578ee527bd7b",
       "status": "CONFLICT_PENDING",
       "receipt": "https://github.com/storytold/photocraft/pull/5650#pullrequestreview-5593380251",
@@ -808,9 +808,9 @@
     },
     {
       "number": 5515,
-      "title": "Selecting subject now automatically applies to selected layer, and us…",
+      "title": "Selecting subject now automatically applies to selected layer, and us\u00e2\u20ac\u00a6",
       "head": "375d4894a119b6cd5933d53e8fe7f506d2783392",
-      "status": "CONFLICT_PENDING",
+      "status": "MERGED",
       "receipt": "https://github.com/storytold/photocraft/pull/5515#pullrequestreview-5593377843",
       "conflicts": [
         "crates/engine/src/cmd/smartselect_cmds.rs"
@@ -1279,19 +1279,15 @@
       ]
     }
   ],
-  "current_checkpoint_sha": "6c225b13c35652e50a797109ab9b6d2ae00cad98",
-  "updated_at": "2026-10-29T03:37:43.872223+00:00",
+  "current_checkpoint_sha": "889018cabba18184713f6ea1d5d790137ea7d4bf",
+  "updated_at": "2026-10-29T04:06:45.328085+00:00",
   "active_subsystem": "Layer Style complete; continuing independent ports and build compatibility checks",
-  "parent_decision_required": {
-    "pr": 5176,
-    "conflict": "main uses patterns.pat; PR uses patterns.json and per-pattern files with lazy loading",
-    "proposal": "Use new index as authoritative after a successful migration. Dual-read valid legacy PAT only when no index/migration marker exists. Preserve legacy and corrupt data; never resurrect deletions from stale legacy data. Add migration/corruption/deletion/renamed-pattern regressions."
-  },
+  "parent_decision_required": null,
   "validation": {
     "compositor_at_31ce2208": "PASSED: 402 passed, 0 failed, 2 ignored",
     "current_full_workspace": "NOT RUN",
-    "current_build_check": "IN PROGRESS: correcting API/module compatibility failures",
+    "current_build_check": "PASSED: cargo check --workspace --all-targets --locked --offline at 889018cab",
     "manual": "NOT RUN",
-    "portable_final_build": "NOT RUN — waits for 100+ complete integration and validation"
+    "portable_final_build": "NOT RUN \u00e2\u20ac\u201d waits for 100+ complete integration and validation"
   }
 }
