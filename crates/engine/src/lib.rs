@@ -7,6 +7,7 @@
 #![forbid(unsafe_code)]
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
+pub mod action_defaults;
 pub mod adjust_params;
 mod allocation;
 pub mod build_info;
@@ -67,6 +68,7 @@ pub use cmd::analysis_cmds;
 pub use cmd::artboard_cmds;
 pub use cmd::atn_cmds;
 pub use cmd::automate_cmds;
+pub use cmd::background_blur_cmds;
 pub use cmd::background_cmds;
 pub use cmd::brush_cmds;
 pub use cmd::brush_key_cmds;

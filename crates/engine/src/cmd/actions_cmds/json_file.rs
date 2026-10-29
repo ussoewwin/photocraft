@@ -176,7 +176,7 @@ pub(super) fn export(s: &mut Session, p: &Value) -> Result<Value> {
         Some(Value::String(path)) if !path.trim().is_empty() => Some(path.as_str()),
         Some(_) => return Err(bad(CMD, "path must be a non-empty string")),
     };
-    let file = ActionsFile { version: 1, actions: s.actions.list.clone() };
+    let file = ActionsFile { version: 1, defaults_version: 0, actions: s.actions.list.clone() };
     validate(&file, CMD)?;
     let data = serde_json::to_string_pretty(&file).map_err(|e| bad(CMD, e.to_string()))?;
     if data.len() as u64 > crate::preset_store::MAX_ACTIONS_BYTES {
@@ -236,7 +236,7 @@ mod tests {
         let mut s = Session::new();
         s.actions.list.push(Action::new("Child", vec![]));
         let file = ActionsFile {
-            version: 1,
+            version: 1, defaults_version: 0,
             actions: vec![
                 Action::new("Parent", vec![("actions.play".into(), json!({"action": 1}))]),
                 Action::new("Child", vec![("layer.new.layer".into(), json!({}))]),
@@ -263,7 +263,7 @@ mod tests {
             assert_eq!(s.actions, before);
         }
         for target in [json!(-1), json!(0.5), json!(1), Value::Null] {
-            let file = ActionsFile { version: 1, actions: vec![Action::new("A", vec![("actions.play".into(), json!({"action": target}))])] };
+            let file = ActionsFile { version: 1, defaults_version: 0, actions: vec![Action::new("A", vec![("actions.play".into(), json!({"action": target}))])] };
             assert!(s.execute("actions.import", json!({"data": serde_json::to_string(&file).unwrap()})).is_err());
             assert_eq!(s.actions, before);
         }
@@ -279,7 +279,7 @@ mod tests {
         let mut s = Session::new();
         let name = "界".repeat(85);
         s.actions.list.push(Action::new(&name, vec![]));
-        let file = ActionsFile { version: 1, actions: vec![Action::new(&name, vec![("select.all".into(), json!({}))])] };
+        let file = ActionsFile { version: 1, defaults_version: 0, actions: vec![Action::new(&name, vec![("select.all".into(), json!({}))])] };
         let params = json!({"data": serde_json::to_string(&file).unwrap()});
         assert_eq!(s.execute("actions.import", params.clone()).unwrap()["imported"], 1);
         assert!(s.actions.list[1].name.len() <= MAX_NAME_BYTES);

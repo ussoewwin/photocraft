@@ -80,6 +80,9 @@ impl Action {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ActionsFile {
     pub version: u32,
+    /// Starter set last seeded. Older stores default to zero; deletions after seeding persist.
+    #[serde(default)]
+    pub defaults_version: u32,
     pub actions: Vec<Action>,
 }
 

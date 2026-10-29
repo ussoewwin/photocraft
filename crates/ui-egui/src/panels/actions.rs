@@ -655,6 +655,9 @@ pub fn stopped(app: &mut PhotocraftApp, fields: &serde_json::Map<String, Value>)
 /// The Actions entries of the panel group's menu ("…").
 pub fn panel_menu(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     let mut act: Option<&str> = None;
+    if ui.add_enabled(app.session.is_enabled("actions.loadDefaults"), egui::Button::new(tl!("Load Default Actions"))).clicked() {
+        act = Some("defaults");
+    }
     let recording = app.session.actions.recording.is_some();
     let any = !app.session.actions.list.is_empty();
     let selected = app.ui.actions.selected.is_some_and(|i| i < app.session.actions.list.len());
@@ -692,6 +695,7 @@ pub fn panel_menu(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     let Some(a) = act else { return };
     ui.close();
     let r = match a {
+        "defaults" => load_defaults(app),
         "new" => {
             begin_recording(app, false);
             Ok(Value::Null)
@@ -721,6 +725,21 @@ pub fn panel_menu(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
         app.ui.status = e;
         app.ui.status_error = true;
     }
+}
+
+fn load_defaults(app: &mut PhotocraftApp) -> Result<Value, String> {
+    let result = app.run("actions.loadDefaults", json!({}))?;
+    if let Some(name) = result["added"].as_array().and_then(|names| names.first()).and_then(Value::as_str)
+        && let Some(index) = app.session.actions.list.iter().position(|action| action.name == name)
+    {
+        app.ui.actions.selected = Some(index);
+        app.ui.actions.selected_step = None;
+        app.ui.actions.renaming = None;
+        if let Some(set) = result["set"].as_str() {
+            app.ui.actions.collapsed_sets.retain(|collapsed| collapsed != set);
+        }
+    }
+    Ok(result)
 }
 
 #[derive(Clone, Copy)]
@@ -1005,6 +1024,12 @@ pub fn panel(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     }
     egui::ScrollArea::vertical().id_salt("actions-rows").max_height(max_h).min_scrolled_height(max_h).auto_shrink([false, false]).show(ui, |ui| {
         if rows.is_empty() {
+            if ui.button(tl!("Load Default Actions")).clicked()
+                && let Err(error) = load_defaults(app)
+            {
+                app.ui.status = error;
+                app.ui.status_error = true;
+            }
             ui.label(egui::RichText::new(tl!("Record ● a sequence of edits, then play ▶ it on any document.")).color(t.text_faint).size(11.5));
         }
         scroll_actions_during_drag(ui);

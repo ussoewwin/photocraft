@@ -47,6 +47,53 @@ fn loading_json_actions_uses_engine_import_and_selects_the_new_action() {
 }
 
 #[test]
+fn default_actions_load_from_empty_panel_and_play() {
+    use egui_kittest::{Harness, kittest::Queryable};
+    let app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+    let mut h = Harness::builder().with_size(vec2(360.0, 400.0)).build_ui_state(|ui, app| panel(app, ui), app);
+    h.run_steps(3);
+    h.get_by_label("Load Default Actions").click();
+    h.run_steps(3);
+    assert!(h.query_by_label("PhotoCraft Essentials").is_some());
+    for name in ["Auto Tone", "Auto Contrast", "Auto Color", "Select Subject", "Blur Background"] {
+        assert!(h.query_by_label(name).is_some(), "missing preset {name}");
+    }
+    assert_eq!(h.state().ui.actions.selected, Some(0));
+    h.state_mut().run("file.new", json!({"width": 16, "height": 16})).unwrap();
+    h.run_steps(3);
+    h.get_by_label("Play selection").click();
+    h.run_steps(3);
+    assert!(!h.state().ui.status_error, "{}", h.state().ui.status);
+    assert!(h.state().session.journal.iter().any(|(id, _)| id == "image.autoTone"));
+}
+
+#[test]
+fn default_actions_flyout_preserves_custom_actions_and_reveals_restored_set() {
+    use egui_kittest::{Harness, kittest::Queryable};
+    let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+    let custom = Action::new("Auto Tone", vec![("view.fitOnScreen".into(), json!({}))]);
+    app.session.actions.list.push(custom.clone());
+    app.ui.actions.collapsed_sets.push("PhotoCraft Essentials".into());
+    let mut h = Harness::builder().with_size(vec2(360.0, 400.0)).build_ui_state(
+        |ui, app| {
+            ui.menu_button("Actions menu", |ui| panel_menu(app, ui));
+            panel(app, ui);
+        },
+        app,
+    );
+    h.run_steps(3);
+    h.get_by_label("Actions menu").click();
+    h.run_steps(3);
+    h.get_by_label("Load Default Actions").click();
+    h.run_steps(3);
+    assert_eq!(h.state().session.actions.list[0], custom);
+    assert_eq!(h.state().session.actions.list.len(), 5);
+    assert_eq!(h.state().ui.actions.selected, Some(1));
+    assert!(h.state().ui.actions.collapsed_sets.is_empty());
+    assert!(h.query_by_label("Select Subject").is_some());
+}
+
+#[test]
 fn selected_layer_name_is_visible_during_recording_and_after_stop() {
     use egui_kittest::{Harness, kittest::Queryable};
     let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());

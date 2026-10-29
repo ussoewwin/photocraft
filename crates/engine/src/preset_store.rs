@@ -558,6 +558,8 @@ pub struct PresetStore {
     index: Option<IndexFile>,
     /// [`crate::actions_cmds::ActionState::rev`] last written (or loaded).
     actions_rev: u64,
+    /// Starter set last offered to this store, independent of later user deletions or renames.
+    actions_defaults_version: u32,
     /// `actions.json` exists but failed to load: left on disk untouched, so it is never written.
     actions_skipped: bool,
     /// [`patterns_key`] of the user patterns last written (or loaded).
@@ -659,7 +661,7 @@ pub fn open(backend: Box<dyn PresetBackend>) -> Opened {
 
     let loaded_actions = load_actions(backend.as_ref(), &mut warnings);
     let actions_skipped = loaded_actions.is_none();
-    let actions = loaded_actions.unwrap_or_default();
+    let (actions, actions_defaults_version) = loaded_actions.map(|f| (f.actions, f.defaults_version)).unwrap_or_default();
     let loaded_patterns = load_patterns(backend.as_ref(), &mut warnings);
     let patterns_skipped = loaded_patterns.is_none();
     let patterns = loaded_patterns.unwrap_or_default();
@@ -671,6 +673,7 @@ pub fn open(backend: Box<dyn PresetBackend>) -> Opened {
         tips: HashMap::new(),
         index: None,
         actions_rev: 0,
+        actions_defaults_version,
         actions_skipped,
         patterns_key: patterns_key(&patterns, 0),
         patterns_skipped,
@@ -770,17 +773,17 @@ fn patterns_key(patterns: &[photocraft_doc::Pattern], pixels_rev: u64) -> u64 {
 
 /// `actions.json`: a missing file is an empty list. Anything else unreadable is a warning.
 /// The saved actions; `None` when `actions.json` exists but could not be loaded.
-fn load_actions(backend: &dyn PresetBackend, warnings: &mut Vec<String>) -> Option<Vec<crate::actions_cmds::Action>> {
+fn load_actions(backend: &dyn PresetBackend, warnings: &mut Vec<String>) -> Option<crate::actions_cmds::ActionsFile> {
     let bytes = match backend.read(ACTIONS_FILE, MAX_ACTIONS_BYTES) {
         Ok(b) => b,
-        Err(e) if missing_file(&e) => return Some(Vec::new()),
+        Err(e) if missing_file(&e) => return Some(crate::actions_cmds::ActionsFile { version: 1, defaults_version: 0, actions: Vec::new() }),
         Err(e) => {
             warnings.push(format!("actions: {ACTIONS_FILE} skipped: {e}"));
             return None;
         }
     };
     match serde_json::from_slice::<crate::actions_cmds::ActionsFile>(&bytes) {
-        Ok(file) if file.version == 1 => Some(file.actions),
+        Ok(file) if file.version == 1 => Some(file),
         Ok(file) => {
             warnings.push(format!("actions: {ACTIONS_FILE} skipped: unsupported version {}", file.version));
             None
@@ -1109,7 +1112,7 @@ impl PresetStore {
             self.actions_rev = rev;
             return;
         }
-        let file = crate::actions_cmds::ActionsFile { version: 1, actions: list.to_vec() };
+        let file = crate::actions_cmds::ActionsFile { version: 1, defaults_version: self.actions_defaults_version, actions: list.to_vec() };
         let bytes = match serde_json::to_vec_pretty(&file) {
             Ok(b) => b,
             Err(e) => {
@@ -1223,7 +1226,8 @@ impl Session {
         }
         self.preset_store = Some(store);
         // In-memory actions (created before the store finished loading) win on name. Disk-only
-        // names are appended. An empty session takes the disk list and does not rewrite it.
+        // names are appended. An empty session takes the disk list without rewriting it,
+        // except when the one-time starter set migration below is needed.
         if self.actions.list.is_empty() {
             self.actions.list = disk;
             self.actions.rev = 1;
@@ -1237,6 +1241,16 @@ impl Session {
                 }
             }
             self.actions.rev = self.actions.rev.saturating_add(1).max(1);
+        }
+        if let Some(st) = self.preset_store.as_mut()
+            && !st.actions_skipped
+            && st.actions_defaults_version < crate::action_defaults::VERSION
+        {
+            // Merge after disk and early in-memory actions so neither is overwritten. Persist
+            // the marker even when all names collide, so a later deletion stays deleted.
+            crate::action_defaults::append_missing(&mut self.actions);
+            st.actions_defaults_version = crate::action_defaults::VERSION;
+            self.actions.touch();
         }
         self.brush_presets_changed();
         self.sync_preset_store();
