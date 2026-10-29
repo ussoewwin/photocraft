@@ -1,4 +1,4 @@
-use super::fields::{FieldOpts, value_field_in};
+use super::fields::{FieldOpts, VALUE_FIELD_H, value_field_in};
 use super::panel::surface;
 use super::scrub::scrub_label_within;
 use super::{Color32, Pos2, Rect, Response, Sense, Stroke, Tokens, Ui, Vec2, pos2, vec2};
@@ -315,7 +315,7 @@ pub fn slider_line(ui: &mut Ui, label: &str, label_w: f32, value: &mut f32, rang
                     slider_with(ui, value, range.clone(), None, RowGestures::default())
                 })
                 .inner;
-            field = Some(value_field_in(ui, value, range.clone(), suffix, FIELD_W, 0.0, FieldOpts::default()).0);
+            field = Some(value_field_in(ui, value, range.clone(), suffix, FIELD_W, 0.0, FieldOpts::default(), Some(label)).0);
             s
         })
         .inner;

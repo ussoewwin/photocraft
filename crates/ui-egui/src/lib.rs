@@ -199,6 +199,7 @@ pub use panels::brushes_tab;
 pub use panels::channels_panel;
 pub use panels::chrome_ui;
 pub use panels::clip_line_ui;
+pub use panels::color_hud;
 pub use panels::color_panel_ui;
 pub use panels::comps_ui;
 pub use panels::doc_props_ui;

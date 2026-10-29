@@ -1600,7 +1600,7 @@ fn page(app: &mut PhotocraftApp, ui: &mut egui::Ui, f: &mut Map<String, Value>, 
                     widgets::row_label(ui, label, LABEL_W);
                     let mut cur = disp.get(key).and_then(Value::as_str).unwrap_or("Normal").to_string();
                     let opts: Vec<(String, &str)> = photocraft_color::BlendMode::LAYER_MODES.iter().map(|m| (m.label().to_string(), m.label())).collect();
-                    if widgets::dropdown(ui, &format!("fx-blend-{sel_kind}"), &mut cur, &opts, 150.0) {
+                    if widgets::dropdown(ui, &format!("fx-blend-{sel_kind}"), tl!(&label), &mut cur, &opts, 150.0) {
                         let value = json!(cur);
                         disp[key] = value.clone();
                         set_param(f, selected, key, value);
@@ -1612,7 +1612,7 @@ fn page(app: &mut PhotocraftApp, ui: &mut egui::Ui, f: &mut Map<String, Value>, 
                     widgets::row_label(ui, label, LABEL_W);
                     let mut cur = disp.get(key).and_then(Value::as_str).unwrap_or(options[0].0).to_string();
                     let opts: Vec<(String, &str)> = options.iter().map(|(v, l)| (v.to_string(), *l)).collect();
-                    if widgets::dropdown(ui, &format!("fx-{sel_kind}-{key}"), &mut cur, &opts, 150.0) {
+                    if widgets::dropdown(ui, &format!("fx-{sel_kind}-{key}"), tl!(&label), &mut cur, &opts, 150.0) {
                         let value = json!(cur);
                         disp[key] = value.clone();
                         set_param(f, selected, key, value);
@@ -1635,7 +1635,7 @@ fn page(app: &mut PhotocraftApp, ui: &mut egui::Ui, f: &mut Map<String, Value>, 
                         .or_else(|| list.first().map(|l| l.0.clone()))
                         .unwrap_or_default();
                     let opts: Vec<(String, &str)> = list.iter().map(|(id, n)| (id.clone(), n.as_str())).collect();
-                    if widgets::dropdown(ui, &format!("fx-{sel_kind}-{key}"), &mut cur, &opts, 180.0)
+                    if widgets::dropdown(ui, &format!("fx-{sel_kind}-{key}"), tl!(&label), &mut cur, &opts, 180.0)
                         || disp.get(key).and_then(Value::as_str).is_none_or(str::is_empty)
                     {
                         let value = json!(cur);
@@ -1713,7 +1713,7 @@ fn preview_swatch(app: &PhotocraftApp, ui: &mut egui::Ui, f: &Map<String, Value>
     let scale = if ui.input(|i| i.pointer.any_down()) { 1.0 } else { ui.ctx().pixels_per_point() };
     let px = (size * scale).round().clamp(8.0, 256.0) as u32;
     let key = (preview_hash(f), px);
-    let id = egui::Id::new("layer-style-swatch");
+    let id = egui::Id::unique("layer-style-swatch");
     let cached = ui.data(|d| d.get_temp::<(u64, u32, egui::TextureHandle)>(id)).filter(|c| (c.0, c.1) == key).map(|c| c.2);
     let tex = cached.or_else(|| {
         let rgba = photocraft_engine::presets::styles::thumbnail(&app.session, &pending_style(app, f)?, px);
@@ -1745,6 +1745,7 @@ fn pending_style(app: &PhotocraftApp, f: &Map<String, Value>) -> Option<photocra
         name: String::new(),
         effects: l.effects.items.clone(),
         blend: Some(l.blend),
+        opacity: Some(l.opacity),
         fill_opacity: Some(l.fill_opacity),
     })
 }

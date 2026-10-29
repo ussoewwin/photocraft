@@ -26,7 +26,7 @@ use dialogs::{form, front, label_of};
 pub use dialogs::{form_body, form_keys, reset_form};
 #[cfg(test)]
 use dispatch::is_enabled_with_engine;
-pub use dispatch::{checked, handles, invoke, is_enabled};
+pub use dispatch::{checked, handles, invoke, is_enabled, leave_full_screen_without_document};
 #[cfg(test)]
 use options::screen_mode_commands;
 pub use options::{persist, pixel_aspect_ratio, restore};
