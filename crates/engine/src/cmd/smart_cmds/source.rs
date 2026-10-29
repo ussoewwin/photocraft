@@ -1,5 +1,7 @@
 use std::sync::PoisonError;
 
+use photocraft_geom::TILE_SIZE;
+
 use super::{
     Arc, ColorMode, Document, Layer, LayerContent, LayerId, Metadata, Mutex, PixelFormat, Rect, Result, SampleType, Session, SmartObject, SmartSource, Surface,
     base_name, decode_source, json, other,
@@ -199,7 +201,7 @@ pub(super) fn source_surface_from_buffer(src: &Document, buf: &photocraft_compos
     convert_source(src, fmt, raster)
 }
 
-/// `src` composited straight into `fmt` in strips, without the full-size RGBA buffer
+/// `src` composited straight into `fmt` in blocks, without the full-size RGBA buffer
 /// [`photocraft_compose::flatten`] allocates (16 bytes a pixel on top of the surface).
 pub(super) fn flattened_source(src: &Document, fmt: PixelFormat) -> Result<Surface> {
     let b = src.bounds();
@@ -212,34 +214,49 @@ pub(super) fn flattened_source(src: &Document, fmt: PixelFormat) -> Result<Surfa
     if native(src.mode) || native(fmt.mode) {
         return source_surface_from_buffer(src, &photocraft_compose::flatten(src), fmt);
     }
-    convert_source(src, fmt, |f| composite_in_strips(src, f))
+    convert_source(src, fmt, |f| composite_in_blocks(src, f))
 }
 
-/// Pixels per strip of [`composite_in_strips`]: the compositor's own bands are 8 Mpx, which for
+/// Pixels per block of [`composite_in_blocks`]: the compositor's own bands are 8 Mpx, which for
 /// most sources is the whole image again (a band and its f32 conversion are 32 bytes a pixel).
-const STRIP_PIXELS: u64 = 1 << 20;
+const BLOCK_PIXELS: u64 = 1 << 20;
 
-/// [`photocraft_compose::flatten_to_surface`] of `src`, composited a strip of rows at a time
-/// so the float composite and its conversion never cover more than [`STRIP_PIXELS`].
-fn composite_in_strips(src: &Document, fmt: PixelFormat) -> Surface {
+/// [`photocraft_compose::flatten_to_surface`] of `src`, composited a block at a time so the float
+/// composite and its conversion never cover more than [`BLOCK_PIXELS`]. Blocks are whole tiles,
+/// so each block's tiles move into the result as they are: nothing is allocated outside the
+/// block, and nothing is copied.
+fn composite_in_blocks(src: &Document, fmt: PixelFormat) -> Surface {
     let b = src.bounds();
-    let rows = strip_rows(b.width());
+    let (bw, bh) = block_size(b.width());
     let mut out = Surface::new(fmt);
-    let mut y = b.y0;
+    // On the tile grid even if the bounds aren't, so no tile is shared by two blocks.
+    let mut y = b.y0 - b.y0.rem_euclid(TILE_SIZE);
     while y < b.y1 {
-        let strip = Rect::new(b.x0, y, b.x1, y.saturating_add(rows).min(b.y1));
-        out.write_region(strip, &photocraft_compose::composite_to_surface(src, strip, fmt, None).read_region(strip));
-        y = strip.y1;
+        let y1 = y.saturating_add(bh);
+        let mut x = b.x0 - b.x0.rem_euclid(TILE_SIZE);
+        while x < b.x1 {
+            let x1 = x.saturating_add(bw);
+            let block = Rect::new(x, y, x1, y1).intersect(&b);
+            if !block.is_empty() {
+                let mut part = photocraft_compose::composite_to_surface(src, block, fmt, None);
+                out.put_tiles(part.take_tiles(block));
+            }
+            x = x1;
+        }
+        y = y1;
     }
     out.prune();
     out
 }
 
-/// Rows per strip of a `width`-pixel source: as many as fit in [`STRIP_PIXELS`], at least one.
-/// Not rounded up to the compositor's tile height, which for a very wide source would be many
-/// times the budget (a 300000 px row is already 0.3 Mpx).
-fn strip_rows(width: u32) -> i32 {
-    i32::try_from((STRIP_PIXELS / u64::from(width.max(1))).max(1)).unwrap_or(i32::MAX)
+/// Width and height of a block of [`composite_in_blocks`] for a `width`-pixel source: whole tiles,
+/// the full width (up to [`BLOCK_PIXELS`] over one row of tiles) and as many rows of tiles as fit.
+fn block_size(width: u32) -> (i32, i32) {
+    let tile = TILE_SIZE.unsigned_abs() as u64;
+    let across = u64::from(width.max(1)).div_ceil(tile) * tile;
+    let bw = across.min((BLOCK_PIXELS / tile / tile).max(1) * tile);
+    let bh = (BLOCK_PIXELS / bw / tile).max(1) * tile;
+    (i32::try_from(bw).unwrap_or(TILE_SIZE), i32::try_from(bh).unwrap_or(TILE_SIZE))
 }
 
 /// Runs the gray and 32-bit conversions a source needs to reach `fmt`; `raster` yields the
@@ -329,13 +346,15 @@ mod tests {
     }
 
     #[test]
-    fn strips_stay_within_their_pixel_budget_however_wide_the_source() {
+    fn blocks_are_whole_tiles_within_their_pixel_budget_however_wide_the_source() {
         for width in [1u32, 255, 4096, 5000, 300_000, u32::MAX] {
-            let rows = strip_rows(width);
-            assert!(rows >= 1, "{width}: {rows}");
-            assert!(rows == 1 || u64::from(width) * rows as u64 <= STRIP_PIXELS, "{width} px × {rows} rows");
+            let (bw, bh) = block_size(width);
+            assert!(bw > 0 && bh > 0 && bw % TILE_SIZE == 0 && bh % TILE_SIZE == 0, "{width}: {bw}×{bh}");
+            assert!(u64::from(bw.unsigned_abs()) * u64::from(bh.unsigned_abs()) <= BLOCK_PIXELS, "{width}: {bw}×{bh}");
         }
-        assert_eq!(strip_rows(4096), 256);
+        assert_eq!(block_size(4096), (4096, 256));
+        assert_eq!(block_size(1000), (1024, 1024));
+        assert_eq!(block_size(300_000), (4096, 256));
     }
 
     #[test]

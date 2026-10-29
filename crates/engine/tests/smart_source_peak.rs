@@ -1,5 +1,5 @@
 //! #10030: decoding a smart object's source (what its first re-render does) composites it in
-//! strips, so the peak memory growth stays a small multiple of the source's pixels, not the 32
+//! tile-aligned blocks, so the peak memory growth stays a small multiple of the source's pixels, not the 32
 //! bytes a pixel the full-size RGBA buffer and its f32 copy took on top of the decoded document.
 //!
 //! The one test here runs in its own process: it reads the process's peak RSS (`VmHWM`, Linux

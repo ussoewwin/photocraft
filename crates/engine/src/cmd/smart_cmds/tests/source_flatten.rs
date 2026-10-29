@@ -108,14 +108,15 @@ fn an_rgb_source_in_a_cmyk_or_lab_document_matches() {
     }
 }
 
-/// Wide enough that strips are 256 rows (on the compositor's tile grid) or 209 (off it): the
-/// shadow, mask and blur cross the strip edges.
+/// Blocks are 256 rows of the full width at 4096 px, and split at x = 4096 at 5000 px: the shadow
+/// and mask cross the block edges both ways.
 #[test]
-fn effects_across_strip_edges_match() {
+fn effects_across_block_edges_match() {
     for (width, depth) in [(4096, SampleType::U8), (4096, SampleType::F32), (5000, SampleType::U8)] {
         let mut doc = Document::new("wide", Size::new(width, 700), ColorMode::Rgb, depth);
         let fmt = doc.pixel_format();
-        let mut base = Layer::new("base", LayerContent::Raster(block(&fmt, Rect::new(100, 200, 900, 560))));
+        let x0 = if width > 4096 { 3800 } else { 100 };
+        let mut base = Layer::new("base", LayerContent::Raster(block(&fmt, Rect::new(x0, 200, x0 + 800, 560))));
         let mut glow = photocraft_doc::Effect::default_drop_shadow();
         if let photocraft_doc::Effect::DropShadow(d) = &mut glow {
             d.size = 40.0;
@@ -127,6 +128,6 @@ fn effects_across_strip_edges_match() {
         mask.surface.fill_rect(Rect::new(0, 240, width as i32, 270), &[0.3]);
         base.mask = Some(mask);
         doc.layers = vec![base];
-        same(&format!("strips {width} {depth:?}"), &doc, fmt);
+        same(&format!("blocks {width} {depth:?}"), &doc, fmt);
     }
 }
