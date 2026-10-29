@@ -452,15 +452,22 @@ mod tests {
         s.execute("history.newSnapshot", json!({"name": "Result"})).unwrap();
         s.execute("history.newSnapshot", json!({"name": "Other"})).unwrap();
         s.execute("history.newSnapshot", json!({"name": "Result", "replaceExisting": true})).unwrap();
-        assert_eq!(snapshots(&s), json!([{"id": 2, "name": "Other"}, {"id": 3, "name": "Result"}]));
+        let opening = json!({"id": 0, "name": s.active().unwrap().doc.name});
+        assert_eq!(snapshots(&s), json!([opening, {"id": 2, "name": "Other"}, {"id": 3, "name": "Result"}]));
+        let kept_snapshots = snapshots(&s);
+        let history_before = entries(&s);
         let pixel = top_pixel(&s);
         s.execute("history.clear", json!({})).unwrap();
         assert_eq!(entries(&s).len(), 1, "only the current state is left");
         assert!(s.active().unwrap().history.can_undo(), "the current Clear History remains undoable");
         assert_eq!(top_pixel(&s), pixel, "the document is unchanged");
-        assert_eq!(snapshots(&s).as_array().map(Vec::len), Some(2), "snapshots stay");
+        assert_eq!(snapshots(&s), kept_snapshots, "opening and named snapshots stay unchanged");
         // Current History menu semantics refuse a second clear; snapshots remain independent.
         assert!(s.execute("history.clear", json!({})).is_err());
+        s.execute("edit.undo", json!({})).unwrap();
+        assert_eq!(entries(&s), history_before, "Undo restores the cleared states");
+        assert_eq!(snapshots(&s), kept_snapshots, "Undo also preserves every snapshot");
+        assert_eq!(top_pixel(&s), pixel);
         assert!(Session::new().execute("history.clear", json!({})).is_err(), "no document");
     }
 
