@@ -33,6 +33,7 @@ use options::{corner_radii_patch, solid_paint};
 pub(crate) use options::{enabled_stroke_width, paint_gesture};
 pub use options::{options_bar, shape_properties};
 pub use overlay::draw_overlay;
+pub(crate) use overlay::selected_saved_path_index;
 #[cfg(test)]
 use overlay::{MAX_CURVE_PIECES, bezier};
 #[cfg(test)]

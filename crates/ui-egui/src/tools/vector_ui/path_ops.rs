@@ -1,3 +1,4 @@
+use super::overlay::selected_saved_path_index;
 use super::paths_panel::{PathEntry, PathRow, path_rows};
 use super::pen::pen_commit;
 use super::{Affine, Document, LayerContent, Path, PhotocraftApp, Tool, Value, json};
@@ -117,6 +118,8 @@ pub(super) enum PathTarget {
     Shape(u64),
     /// The active layer's vector mask, when its Layers thumbnail is targeted (#196).
     VectorMask(u64),
+    /// The saved path selected in the Paths panel, by name (#8478).
+    Saved(String),
     Work,
 }
 
@@ -162,14 +165,19 @@ pub(crate) fn delete_key_deletes_work_path(app: &PhotocraftApp) -> bool {
         && matches!(target_path(app), Some((PathTarget::Work, _)))
 }
 
-/// The path Path Selection edits: the targeted vector mask, the active shape layer's path, else
-/// the work path.
+/// The path Path Selection edits: the targeted vector mask, the active shape layer's path, the
+/// saved path selected in the Paths panel (#8478), else the work path.
 pub(super) fn target_path(app: &PhotocraftApp) -> Option<(PathTarget, Path)> {
     if let Some((id, p)) = targeted_vector_mask(app) {
         return Some((PathTarget::VectorMask(id), p));
     }
     if let Some((id, p)) = active_shape_path(app) {
         return Some((PathTarget::Shape(id), p));
+    }
+    if let Some(name) = app.ui.selected_path.as_deref()
+        && let Some((_, p)) = selected_saved_path_index(app)
+    {
+        return Some((PathTarget::Saved(name.to_string()), p));
     }
     if !work_path_shown(app) {
         return None;
@@ -187,6 +195,7 @@ pub(crate) fn free_transform_path(app: &PhotocraftApp) -> Option<(Value, Path)> 
     path.control_bounds()?;
     let params = match target {
         PathTarget::Shape(id) | PathTarget::VectorMask(id) => json!({"name": "layer", "layer": id}),
+        PathTarget::Saved(name) => json!({"name": name}),
         PathTarget::Work => json!({"name": "work"}),
     };
     Some((params, path))
@@ -298,6 +307,10 @@ pub fn path_selection_finish(app: &mut PhotocraftApp, start: [f64; 2], end: [f64
         PathTarget::VectorMask(id) => {
             let moved = path.transform(&Affine::translate(dx.round(), dy.round()));
             app.run("layer.vectorMask.edit", json!({"layer": id, "path": photocraft_engine::vector_cmds::path_json(&moved)}))
+        }
+        PathTarget::Saved(name) => {
+            let moved = path.transform(&Affine::translate(dx.round(), dy.round()));
+            app.run("path.set", json!({"name": name, "path": photocraft_engine::vector_cmds::path_json(&moved)}))
         }
         PathTarget::Work => {
             let moved = path.transform(&Affine::translate(dx.round(), dy.round()));
