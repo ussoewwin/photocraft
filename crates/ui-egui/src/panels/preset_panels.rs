@@ -701,7 +701,6 @@ fn canvas_drop_rect(app: &PhotocraftApp) -> egui::Rect {
     crate::rulers::content_rect(app, app.last_canvas_rect)
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

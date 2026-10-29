@@ -1,4 +1,4 @@
-use super::blur::{blur, dilate, softer_glow_tail_width, softer_glow_tail_amplitude};
+use super::blur::{blur, dilate, softer_glow_tail_amplitude, softer_glow_tail_width};
 use super::distance::{dist_inside, dist_outside};
 use super::{
     BlendMode, Buffer, Contour, Effect, FxPaint, GlobalLight, Glow, GlowSource, GlowTechnique, Gradient, GradientStyle, Map, Placement, PreparedPatterns, Rect,
