@@ -150,9 +150,9 @@ fn blend_if_weight(layer: &Layer, mode: photocraft_color::ColorMode, this: Optio
         let Some(p) = px else { continue };
         let v = |c: usize| blend_if_level(p[c]);
         match mode {
-            // Gray is the colour channels' luma (Rec. 601 weights), then R, G, B.
+            // Gray, then R, G, B.
             M::Rgb => {
-                let gray = 0.299 * v(0) + 0.587 * v(1) + 0.114 * v(2);
+                let gray = blend_if_gray(v(0), v(1), v(2));
                 k *= bi.get(0)[side].weight(gray);
                 for c in 0..3 {
                     k *= bi.get(c + 1)[side].weight(v(c));
@@ -169,15 +169,28 @@ fn blend_if_weight(layer: &Layer, mode: photocraft_color::ColorMode, this: Optio
     k
 }
 
-/// A channel value on Blend If's 0..=255 scale. Compositing can leave an 8- or 16-bit level a few
-/// millionths off (a level-20 backdrop composited at partial alpha reads 19.999998), which would
-/// put it on the wrong side of a hard point at that level: a value that close to a level is that
-/// level. Values of those depths that aren't on a level are at least 1/257 away from one. The GPU
-/// compositor (`compose.wgsl` `blend_if_weight`) snaps alike.
+/// A channel value on Blend If's 0..=255 scale. Photoshop compares Blend If at its 16-bit
+/// precision (0..=32768): a cutoff at level `c` falls on the step `round(c · 32768 / 255)`, and a
+/// value on that step is exactly level `c`, inside both a black point and a white point there
+/// (#9521: RGB16 32895 is step 16448, level 128's, so it passes a hard black point at 128; read as
+/// 127.996 it didn't). Every 8-bit level is on its own step, which also absorbs compositing's few
+/// millionths of drift (a level-20 backdrop at partial alpha reads 19.999998). The GPU compositor
+/// (`compose.wgsl` `blend_if_weight`) snaps alike.
 fn blend_if_level(x: f32) -> f32 {
-    let v = x.clamp(0.0, 1.0) * 255.0;
-    let r = v.round();
-    if (v - r).abs() < 1e-4 { r } else { v }
+    let x = x.clamp(0.0, 1.0);
+    let v = x * 255.0;
+    let level = v.round();
+    if (x * 32768.0).round() == (level * 32768.0 / 255.0).round() { level } else { v }
+}
+
+/// Blend If's Gray from channel levels: Photoshop's (30 R + 59 G + 11 B) / 100, rounded half down
+/// on 8-bit levels (#9522). Measured in Photoshop 2025: pure red passes a black point at 20 from
+/// 66 (19.8) but not 65 (19.5), pure blue at 28 from 251 (27.61) but not 250 (27.5); (123, 126,
+/// 151) is 128 (127.85) and (120, 129, 149) is 128 (128.5), where Rec. 601 luma gave 127.95 and
+/// 128.59. Levels between whole ones (deeper documents) keep the unrounded weighting.
+fn blend_if_gray(r: f32, g: f32, b: f32) -> f32 {
+    let sum = 30.0 * r + 59.0 * g + 11.0 * b;
+    if [r, g, b].iter().all(|c| c.fract() == 0.0) { ((sum + 49.0) / 100.0).floor() } else { sum / 100.0 }
 }
 
 /// Blend If groups inside one another whose own colour is still rendered separately. Each extra

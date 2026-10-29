@@ -2471,6 +2471,71 @@ fn blend_if_hard_point_includes_its_own_level() {
     }
 }
 
+/// #9521: Photoshop compares Blend If at its 16-bit precision (0..32768). A hard point at level
+/// `c` sits on the step `round(c · 32768 / 255)`, inclusive for both black and white points:
+/// measured in Photoshop 2025 at 1, 64, 128 and 200 (black first shown at steps 129, 8224, 16448,
+/// 25700; white last shown at the same steps). RGB16 32895 is step 16448, so a white layer with
+/// Underlying Blue black at 128 shows over it; 32894 (step 16447) hides it.
+#[test]
+fn blend_if_16_bit_cutoffs_follow_photoshops_steps() {
+    let shown = |v16: u16, black: u8, white: u8| {
+        let v = f32::from(v16) / 65535.0;
+        let mut d = Document::new("t", Size::new(1, 1), ColorMode::Rgb, SampleType::U16);
+        let layer16 = |name: &str, c: [f32; 4]| {
+            let mut l = Layer::raster(name, PixelFormat::RGBA16);
+            l.surface_mut().unwrap().fill_rect(Rect::new(0, 0, 1, 1), &c);
+            l
+        };
+        d.layers.push(layer16("under", [v, v, v, 1.0]));
+        let mut l = layer16("top", [1.0, 1.0, 1.0, 1.0]);
+        l.blend_if.set(3, [FULL, range([black, black], [white, white])]);
+        d.layers.push(l);
+        px(&d, 0, 0)[0] > 0.999
+    };
+    // 16-bit file values for Photoshop's steps n: round(n · 65535 / 32768).
+    let at = |n: u32| ((n * 65535 + 16384) / 32768) as u16;
+    for (c, step) in [(1u8, 129u32), (64, 8224), (128, 16448), (200, 25700)] {
+        assert!(shown(at(step), c, 255), "black {c}: step {step} shows");
+        assert!(!shown(at(step - 1), c, 255), "black {c}: step {} hides", step - 1);
+        assert!(shown(at(step), 0, c), "white {c}: step {step} shows");
+        assert!(!shown(at(step + 1), 0, c), "white {c}: step {} hides", step + 1);
+    }
+    assert!(shown(32895, 128, 255) && !shown(32894, 128, 255), "the reporter's RGB16 boundary");
+}
+
+/// #9522: Blend If's Gray is Photoshop's (30 R + 59 G + 11 B) / 100 rounded half down, measured
+/// in Photoshop 2025 with a white layer over one 8-bit backdrop colour and a hard Gray point on
+/// Underlying Layer. Rec. 601 luma hid both of the reporter's colours.
+#[test]
+fn blend_if_gray_follows_photoshops_weights_and_rounding() {
+    let shown = |rgb: [u8; 3], black: u8, white: u8| {
+        let mut d = Document::new("t", Size::new(1, 1), ColorMode::Rgb, SampleType::U8);
+        let c = rgb.map(|v| f32::from(v) / 255.0);
+        d.layers.push(solid_layer("under", Rect::new(0, 0, 1, 1), [c[0], c[1], c[2], 1.0]));
+        let mut l = solid_layer("top", Rect::new(0, 0, 1, 1), [1.0, 1.0, 1.0, 1.0]);
+        l.blend_if.set(0, [FULL, range([black, black], [white, white])]);
+        d.layers.push(l);
+        px(&d, 0, 0)[0] > 0.999 && px(&d, 0, 0)[2] > 0.999
+    };
+    // (colour hidden by a black point at `cut`, the next colour shown), single channels.
+    for (cut, below, at) in [
+        (20, [65, 0, 0], [66, 0, 0]),
+        (25, [81, 0, 0], [82, 0, 0]),
+        (28, [91, 0, 0], [92, 0, 0]),
+        (20, [0, 33, 0], [0, 34, 0]),
+        (28, [0, 46, 0], [0, 47, 0]),
+        (20, [0, 0, 177], [0, 0, 178]),
+        (28, [0, 0, 250], [0, 0, 251]),
+    ] {
+        assert!(!shown(below, cut, 255), "{below:?} hidden by black {cut}");
+        assert!(shown(at, cut, 255), "{at:?} shown by black {cut}");
+    }
+    // The reporter's mixed colours, and the white point's half-down rounding.
+    assert!(shown([123, 126, 151], 128, 255), "127.85 is 128");
+    assert!(shown([120, 129, 149], 0, 128), "128.5 is 128");
+    assert!(!shown([121, 129, 149], 0, 128), "128.8 is 129");
+}
+
 #[test]
 fn blend_if_split_point_fades_like_opacity() {
     // A split black point (Alt-drag) at 50/150 shows a value-100 layer at half strength, which
