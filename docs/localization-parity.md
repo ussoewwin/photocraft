@@ -54,7 +54,7 @@ Polish `pl` (3,366), Greek `el` (3,481), Dutch `nl` (3,568), Italian `it` (4,164
 other catalogs translate; reviewed by a native speaker, [notes](localization-it.md)). Turkish `tr`
 (3,731 rows) also covers every measured key. Serbian `sr` (4,022 rows, Latin script, Ekavian, added 2026-10-12) covers every
 measured key and the union of the other catalogs' dynamic labels; its one/few/many plurals reuse
-the Russian rule. Swedish `sv` (4,537 rows, added 2026-10-28) covers every measured key and the
+the Russian rule. Swedish `sv` (4,552 rows, added 2026-10-28) covers every measured key and the
 other catalogs' dynamic labels; combined from the community catalogs in #5985 and #9536 with one
 term per concept; the contested terms follow a native speaker's questionnaire answers. Finnish
 `fi` (4,552 rows, combined from #5666 and #6961), Danish `da` (4,552 rows, based on #7267 and
