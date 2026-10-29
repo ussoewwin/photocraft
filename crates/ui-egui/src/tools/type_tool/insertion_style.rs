@@ -1,5 +1,6 @@
 //! A caret's pending font is view state; inserted runs still travel through `type.edit`.
-use super::*;
+use super::options_bar::styles_at;
+use super::{LayerId, PhotocraftApp, json, text_layer};
 use crate::state::TypeInsertionStyle;
 
 pub(super) fn pending(app: &PhotocraftApp) -> Option<&TypeInsertionStyle> {

@@ -1,7 +1,10 @@
 use super::ime::interrupt_incoming;
 use super::ime_edit::note_ime_application_change;
 use super::layout::{hit_layer, hit_offset, shows_own_layout};
-use super::*;
+use super::{
+    Arc, FontFieldEdit, HashMap, LayerId, PhotocraftApp, TextEdit, TextLayer, accept_row, active_doc_id, apply, byte_range, current_text, families,
+    font_labels_id, font_menu_rows, insertion_style, json, selected_range, session_key, text_layer,
+};
 
 /// Start editing an existing type layer. Like Photoshop, editing shows the text as the type
 /// engine lays it out, so a PSD layer is re-rendered first (inside the edit session's history
