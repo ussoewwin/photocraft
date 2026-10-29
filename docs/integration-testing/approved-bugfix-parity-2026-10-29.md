@@ -17,6 +17,21 @@ pass/fail/ignored counts, duration, output log/artifact URLs, and every skipped 
 Require every selected head to be an ancestor of the tested SHA. Never equate a merged-head ancestry
 check with preservation of its behavior: rerun the regressions after conflict resolutions.
 
+## Source checkout checks (PowerShell)
+
+These commands require a source checkout, Rust and the repository's documented dependencies. They are separate from testing the portable ZIP. Use a dedicated PowerShell session in the checkout:
+
+```powershell
+$env:PHOTOCRAFT_NO_PRINT = '1'
+$env:LPDEST = 'photocraft-no-such-printer'
+$env:PHOTOCRAFT_FULL_SWEEP = '1'
+# Optional isolated build output (can require rebuilding dependencies):
+$env:CARGO_TARGET_DIR = Join-Path $PWD 'target\integration-approved'
+cargo test --workspace --locked
+```
+
+Only the Windows Intel/DX12 case (#9110) requests `$env:WGPU_BACKEND = 'dx12'`; set it in that dedicated test session and record the actual adapter/backend. Do not infer GPU execution from a green test that returned early. Portable ZIP testers do not need Cargo; use the Windows execution sheet below.
+
 ## Automated execution
 
 Set `PHOTOCRAFT_NO_PRINT=1` and `LPDEST=photocraft-no-such-printer` before tests.
@@ -135,7 +150,7 @@ See the [executable case appendix](per-pr-regressions.md) for fixture/setup, act
 
 - [#4763](https://github.com/storytold/photocraft/pull/4763) refactor(liquify): reuse native brush resizing and anchored HUD feedback — NOT RUN
 - [#4985](https://github.com/storytold/photocraft/pull/4985) feat(ui): add Shift+right-click brush mode picker — NOT RUN
-- [#5082](https://github.com/storytold/photocraft/pull/5082) fix(mixer-brush): Alt-click samples the foreground colour like the Brush (#4873) — NOT RUN
+- [#5082](https://github.com/storytold/photocraft/pull/5082) Mixer Brush Alt-click loads reservoir while preserving foreground — NOT RUN
 - [#5165](https://github.com/storytold/photocraft/pull/5165) Fix: brush section selection — NOT RUN
 - [#5939](https://github.com/storytold/photocraft/pull/5939) fix(paint): scale blur sigma with brush size (#5892) — NOT RUN
 - [#6139](https://github.com/storytold/photocraft/pull/6139) Fix painting workflows, File Info and layer selection — NOT RUN
@@ -211,13 +226,13 @@ See the [executable case appendix](per-pr-regressions.md) for fixture/setup, act
 ## Frozen execution record and acceptance
 
 - Upstream base: `5f9b4391874aabc9deb2fcb905267613e4d93ec8`.
-- Current partial integration/checkpoint SHA: `46c1347951eac7f62d4be317c915f73ec6ee5d43` (41 selected heads).
-- Final complete integration SHA: **PENDING**. Freeze it before acceptance testing; a later code change invalidates affected outcomes.
+- Complete 108-head candidate code SHA: `11fdb1807`. All selected heads are ancestors and all merges are committed.
+- Acceptance build: **NOT YET PRODUCED**. The candidate above is under validation; record the final build/run/artifact and SHA below before acceptance testing. Later source changes require successor-SHA validation.
 - PR heads and approval receipts: `approved-selection.json`; current per-head ancestry/status: `integration-status.json`.
 - Dependencies: Cutout #8191 → #8192 → #8193 → #7903; Layer Style #4938 → #5010; #7848 prerequisite #7281 is merged upstream.
 - Executable per-PR cases and blank result fields: [per-pr-regressions.md](per-pr-regressions.md) and [regression-results.json](regression-results.json).
 
-Entry: exact frozen build; all selected heads ancestors; no unresolved integration conflicts; fixtures, fonts, corpus pins and adapter available. The current partial branch does not meet entry.
+Entry: exact frozen build; all selected heads ancestors; no unresolved integration conflicts; fixtures, fonts, corpus pins and adapter available. The branch meets the ancestry and resolved-merge prerequisites. Acceptance entry still requires the exact portable artifact and available fixtures/fonts/oracles; manual execution has not begun.
 Exit: relevant automated gates PASSED; P0 manual cases PASSED; no crash/data-loss regression; residual exclusions, unsupported cases and skipped stages explicitly listed. Do not lower corpus/parity floors or tolerances. PASSED means executed with supporting output; FAILED means an assertion or expected result failed; BLOCKED means a prerequisite prevented execution; SKIPPED needs a deliberate reason; NOT RUN means no execution was attempted.
 
 P0 scenarios are M01 file exchange, M02 profile fidelity, M03 combined precision/Fill, M04 Blend If, M09 bounded/authorized automation and M11 real engine rerender. Also prioritize these combined flows on synthetic/public fixtures:
@@ -232,10 +247,43 @@ P0 scenarios are M01 file exchange, M02 profile fidelity, M03 combined precision
 
 For Photoshop acceptance, record Photoshop version/platform, reference fixture identity, profiles and depth, rendering/export options, expected tolerance and its exact repository-document source, and actual image/diff evidence. Use the repository's established oracle thresholds for the specific path; do not invent one universal tolerance. A PhotoCraft CPU/GPU comparison is a separate test from a Photoshop oracle. Reopen exported PSD/PSB in Photoshop before claiming Photoshop acceptance.
 
-## Actual checkpoint outcomes
+## Current execution record
 
-- Formatting: PASSED on the 41-head partial tree.
-- Local dependency/build gate: BLOCKED. Default cache was unwritable; workspace-local cache fetched git dependencies but crates.io access repeatedly failed with the host Schannel credential/TLS error. The metadata check was stopped after recording that failure; no credentials or global settings changed.
-- Hosted partial-tree CI: RUNNING at `46c1347951eac7f62d4be317c915f73ec6ee5d43`: https://github.com/FredApps/photocraft/actions/runs/40807734803 . This is a checkpoint run, not final 108-head validation.
-- Full sweep, pinned corpus engine rerender, performance and all manual cases: NOT RUN locally.
-- CI selection-morphology comparison and optional fuzz were SKIPPED by the existing manual workflow inputs; record remaining job outcomes when finished.
+Candidate code: `11fdb1807`. This is an execution ledger, not an acceptance pass.
+
+| Gate | State | Evidence / limitation |
+|---|---|---|
+| Selected-head ancestry | PASSED | 108/108 immutable selected heads are ancestors of the candidate; no open merge. |
+| Formatting | PASSED | `cargo fmt --all` completed before the candidate commit; exact final check remains part of CI. |
+| Workspace/all-target compile | IN PROGRESS | Candidate check in progress; the earlier 103-head working-tree check passed, which does not establish final-candidate validity. |
+| Linux/Windows/web CI | IN PROGRESS | [Current run 40827696354](https://github.com/FredApps/photocraft/actions/runs/40827696354) targets `11fdb1807`. |
+| Previous 108-head CI | FAILED | [Run 40825263899](https://github.com/FredApps/photocraft/actions/runs/40825263899): corpus and web compilation found a missing JXL module import; corrected in the candidate. No pass inferred. |
+| Frozen ownership regressions | IN PROGRESS | 103-head `4f23f459ba6f1a056238b1019aee0821f8347ca1`; final-candidate rerun is still required. |
+| Pattern persistence checkpoint | PASSED | 71-head `d98e419542d48ebfd52fef70f06d2c000bd8b8c0`: 35 passed, 0 failed, 1 benchmark ignored. Final-candidate coverage remains pending. |
+| Explicit full workspace sweep | NOT RUN | Requires `PHOTOCRAFT_FULL_SWEEP=1 cargo test --workspace --locked`; ordinary daily/CI quarter sweeps do not substitute. |
+| Pinned corpus IO / engine rerender | IN PROGRESS | Current CI corpus job must establish these separately. |
+| Performance and large-image checks | NOT RUN | Record quick suite and selected hot-path outputs; no claims from contended debug builds. |
+| Photoshop/platform/manual cases | NOT RUN | Photoshop reopening, reference diffs, macOS interactions, and Windows Intel/DX12 claims require their specified environments. |
+| Windows portable build | NOT RUN | Dispatch only after applicable validation; no production release or installation is authorized. |
+
+### Windows portable execution sheet
+
+Record final source SHA, resolved version, workflow run/job, artifact ID/name, archive SHA256, toolchain, Windows version, GPU/driver/backend and fonts. Download from the verified run; extract into a new owned test directory with its portable marker. Keep fixtures and outputs in separate owned test directories. Do not replace an installed application or the user's preferences/documents.
+
+1. Launch the portable executable. Record About version and startup log; create a synthetic 8-bit RGB document, paint, save `.pcraft`, close and reopen. Check portable data stays in the test directory.
+2. Execute P0 cases M01/M02/M03/M04/M09/M11 and the per-PR appendix applicable to Windows. Record actual results/evidence independently for automated and manual subcases.
+3. Check modal/focus ownership, tab switches, Pen captured targets, Polygonal Lasso edge scrolling, Undo/Redo and preview Cancel; preserve the source document and unrelated tabs.
+4. Exercise 8/16/32f and supported RGB/Gray/CMYK paths, tagged/untagged profiles, PSD and native save/reopen, and malformed-input refusal.
+5. Reopen exported PSD/PSB in the recorded Photoshop version before any Photoshop acceptance claim. Save reference images/diffs and the repository tolerance used.
+6. Record crashes/data loss as release blockers. Every unexecuted or unavailable platform/oracle case remains NOT RUN or BLOCKED with its reason.
+
+| Build record | Value |
+|---|---|
+| Validated source SHA | Pending final validation |
+| Portable workflow/run | NOT RUN |
+| Portable artifact/hash | NOT RUN |
+| Tester / date / actual evidence | |
+
+### Validation correction record
+
+The prior bd52 run failed strict Clippy (Layer Style nested guards and Action mapping complexity) and JPEG XL extension discovery. Four JPEG XL encoder/independent-decoder cases passed before the capability-registration case failed. Its Windows integration job stopped on the same strict lint failures. The web build passed. Successor `11fdb1807` restores format discovery, extracts validated Action mappings into helpers, and corrects pen ownership regressions. Run [40827696354](https://github.com/FredApps/photocraft/actions/runs/40827696354) explicitly requests full sweep and morphology/performance checks; outcomes are PENDING. A local workspace/all-target check completed, but its mutable working-tree run is not immutable final-build evidence. Local Clippy is BLOCKED because the component is absent; hosted strict Clippy remains required. No portable artifact exists yet.

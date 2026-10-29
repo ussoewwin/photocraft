@@ -2,7 +2,7 @@
 
 use super::{
     Color32, Fill, GradientStyle, Layer, LayerId, Marker, PhotocraftApp, Rect, Sense, Sink, Stroke, StrokeKind, Tokens, c32, cmds, edit_stop_color, fill_of,
-    json, preset_stop_color, selection_after_edit, stops_editor, stops_editor_for, strip_key, vec2, widgets,
+    json, preset_stop_color, selection_after_edit, stops_editor, strip_key, vec2, widgets,
 };
 use crate::{icons, props_layout, theme};
 

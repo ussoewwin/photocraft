@@ -96,7 +96,7 @@ These proposals are pending parent semantic review. Mechanical moved-test/catalo
 
 - [#4763](https://github.com/storytold/photocraft/pull/4763) refactor(liquify): reuse native brush resizing and anchored HUD feedback — INTEGRATED
 - [#4985](https://github.com/storytold/photocraft/pull/4985) feat(ui): add Shift+right-click brush mode picker — INTEGRATED
-- [#5082](https://github.com/storytold/photocraft/pull/5082) fix(mixer-brush): Alt-click samples the foreground colour like the Brush (#4873) — INTEGRATED
+- [#5082](https://github.com/storytold/photocraft/pull/5082) Mixer Brush Alt-click loads reservoir while preserving foreground — INTEGRATED
 - [#5165](https://github.com/storytold/photocraft/pull/5165) Fix: brush section selection — INTEGRATED
 - [#5939](https://github.com/storytold/photocraft/pull/5939) fix(paint): scale blur sigma with brush size (#5892) — INTEGRATED
 - [#6139](https://github.com/storytold/photocraft/pull/6139) Fix painting workflows, File Info and layer selection — INTEGRATED
@@ -2786,7 +2786,7 @@ index 83cb16a83..a52d33827 100644
  /// The saved actio
 ```
 
-### #5082: fix(mixer-brush): Alt-click samples the foreground colour like the Brush (#4873)
+### #5082: Mixer Brush Alt-click loads reservoir while preserving foreground
 
 `crates/engine/src/cmd/brush_cmds.rs`, `crates/paint/src/mixer.rs`, `crates/ui-egui/src/canvas.rs`, `crates/ui-egui/src/input/alt_grab.rs`
 

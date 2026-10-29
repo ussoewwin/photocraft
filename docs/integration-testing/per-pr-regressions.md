@@ -19,6 +19,19 @@ Locate preserved equivalent assertions when a test moved; never substitute an un
 Automated and native/manual subcases have separate results. Use owned temporary settings/outputs;
 never migrate actual user settings, publish a release, bypass security or force a driver crash.
 
+## Final-tree path guide
+
+Reviewed-head links below retain historical provenance. Use these current paths after module ports; the named test must still be discovered and executed on the frozen build.
+
+| Case / area | Current source path |
+|---|---|
+| #6492 occupied control port | `apps/photocraft/tests/it/control_exit_code.rs` |
+| #8347 type-tool checkbox/canvas coverage | `crates/ui-egui/src/tools/type_tool/canvas_tests.rs` |
+| Engine command regressions | `crates/engine/src/cmd/` and the command's live test submodule; do not use deleted root monoliths |
+| #7153 Liquify smart-filter editing | `crates/ui-egui/src/dialogs/liquify_ui/tests.rs` |
+| #8896 Select and Mask | `crates/ui-egui/src/dialogs/select_mask_ui/tests.rs` |
+
+
 ## PR-3455: Undo and redo action definition edits from the Actions panel
 
 - Fixture/setup and action: execute **all** identified changed regression functions below on the final frozen tree. Their checked-in setup constructs the concrete inputs; preserve those inputs, capability prerequisites and assertions.
@@ -31,12 +44,12 @@ never migrate actual user settings, publish a release, bypass security or force 
 
 - Expected behavior: recording and appending steps can be undone without restarting recording; definition edits undo redo without touching document or journal; enabled step edits undo and invalidate redo; undo pending step deletion does not duplicate recording; actions shortcut undo and redo edit script without undoing pixels. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `recording_and_appending_steps_can_be_undone_without_restarting_recording` setup/action excerpt:
 
 ```rust
-        let mut s = Session::new();
+let mut s = Session::new();
         s.execute("file.new", json!({"width": 8, "height": 8})).unwrap();
         s.execute("actions.record", json!({"name": "A"})).unwrap();
         s.execute("layer.new.layer", json!({})).unwrap();
@@ -50,27 +63,24 @@ never migrate actual user settings, publish a release, bypass security or force 
         assert_eq!(s.actions.list[0].steps.len(), 1);
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert_eq!(s.actions.list[0].steps.len(), 2);
+assert_eq!(s.actions.list[0].steps.len(), 2);
         s.execute("actions.undo", json!({})).unwrap();
         assert_eq!(s.actions.list[0].steps.len(), 1);
         assert!(s.actions.recording.is_none());
-        assert_eq!(s.actions.list[0].steps.len(), 1);
-        assert!(s.actions.recording.is_none());
         s.execute("actions.redo", json!({})).unwrap();
         assert_eq!(s.actions.list[0].steps.len(), 2);
         assert!(s.actions.recording.is_none());
-        s.execute("actions.redo", json!({})).unwrap();
-        assert_eq!(s.actions.list[0].steps.len(), 2);
-        assert!(s.actions.recording.is_none());
+        assert_eq!(s.active().unwrap().doc, doc);
+    }
 ```
 
 `definition_edits_undo_redo_without_touching_document_or_journal` setup/action excerpt:
 
 ```rust
-        let mut s = Session::new();
+let mut s = Session::new();
         s.execute("file.new", json!({"width": 8, "height": 8})).unwrap();
         s.actions.list.push(Action {
             name: "A".into(),
@@ -84,24 +94,23 @@ Expected assertions from that fixture:
         let before = s.actions.list.clone();
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert_eq!(s.actions.list, before);
+assert_eq!(s.actions.list, before);
         assert_eq!(s.prefs().shortcuts.get("actions.play:A").map(String::as_str), Some("F6"));
-        assert!(!s.prefs().shortcuts.contains_key("actions.play:B"));
-        for _ in 0..3 {
-        assert_eq!(s.prefs().shortcuts.get("actions.play:A").map(String::as_str), Some("F6"));
-        assert!(!s.prefs().shortcuts.contains_key("actions.play:B"));
-        for _ in 0..3 {
-            s.execute("actions.redo", json!({})).unwrap();
         assert!(!s.prefs().shortcuts.contains_key("actions.play:B"));
         for _ in 0..3 {
             s.execute("actions.redo", json!({})).unwrap();
         }
+        assert_eq!(s.actions.list, after);
+        assert_eq!(s.active().unwrap().doc, doc);
+        assert_eq!(s.journal, journal);
+        s.execute("actions.undo", json!({})).unwrap();
+        s.execute("actions.delete", json!({"action": "Caller"})).unwrap();
+        assert!(!can_redo(&s));
+    }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -126,12 +135,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: unknown names suggest the right method or command; errors are tool errors not crashes; protocol listing method points at command list; near misses suggest registered ids; suggestions are capped and ordered; protocol method hints; tokenizer and distance; unknown names suggest the right method or command. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `unknown_names_suggest_the_right_method_or_command` setup/action excerpt:
 
 ```rust
-        let mut h = Headless::new();
+let mut h = Headless::new();
         let err = |h: &mut Headless, m: &str, p: Value| h.handle(m, p).unwrap_err().to_string();
         let e = err(&mut h, "engine.execute", json!({"command": "engine.commands"}));
         assert!(e.contains("did you mean `command.list`") && e.contains("protocol method"), "{e}");
@@ -145,27 +154,25 @@ The companion JSON retains setup and assertions for every listed regression. The
         assert!(e.contains("engine.execute {\"command\": \"edit.undo\"}"), "{e}");
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert!(e.contains("did you mean `command.list`") && e.contains("protocol method"), "{e}");
+assert!(e.contains("did you mean `command.list`") && e.contains("protocol method"), "{e}");
         let e = err(&mut h, "engine.execute", json!({"command": "doc.inspect"}));
         assert!(e.contains("`doc.inspect` is a protocol method"), "{e}");
         let e = err(&mut h, "engine.execute", json!({"command": "edit.undoo"}));
-        assert!(e.contains("`doc.inspect` is a protocol method"), "{e}");
-        let e = err(&mut h, "engine.execute", json!({"command": "edit.undoo"}));
-        assert!(e.contains("did you mean `edit.undo`"), "{e}");
-        let e = err(&mut h, "doc.inspct", Value::Null);
         assert!(e.contains("did you mean `edit.undo`"), "{e}");
         let e = err(&mut h, "doc.inspct", Value::Null);
         assert!(e.contains("did you mean `doc.inspect`") && e.contains("(try `methods`)"), "{e}");
         let e = err(&mut h, "edit.undo", Value::Null);
+        assert!(e.contains("engine.execute {\"command\": \"edit.undo\"}"), "{e}");
+    }
 ```
 
 `errors_are_tool_errors_not_crashes` setup/action excerpt:
 
 ```rust
-    let client = connect(PhotocraftMcp::headless()).await;
+let client = connect(PhotocraftMcp::headless()).await;
     let r = call(&client, "command_run", json!({"id": "no.such.command"})).await;
     assert_eq!(r.is_error, Some(true));
     assert!(text(&r).contains("unknown command"));
@@ -179,24 +186,28 @@ Expected assertions from that fixture:
     assert_eq!(r.is_error, Some(true));
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-    assert_eq!(r.is_error, Some(true));
+assert_eq!(r.is_error, Some(true));
     assert!(text(&r).contains("unknown command"));
     // #3674: the error names the nearest registered id.
     let r = call(&client, "command_run", json!({"id": "engine.commands"})).await;
-    assert!(text(&r).contains("unknown command"));
-    // #3674: the error names the nearest registered id.
-    let r = call(&client, "command_run", json!({"id": "engine.commands"})).await;
-    assert_eq!(r.is_error, Some(true));
     assert_eq!(r.is_error, Some(true));
     assert!(text(&r).contains("did you mean `command.list`"), "{}", text(&r));
     let r = call(&client, "doc_inspect", json!({"index": 0})).await;
     assert_eq!(r.is_error, Some(true));
+    let r = call(&client, "doc_open", json!({"path": "/definitely/missing.png"})).await;
+    assert_eq!(r.is_error, Some(true));
+    let r = call(&client, "ui_inspect", json!({})).await;
+    assert_eq!(r.is_error, Some(true));
+    assert!(text(&r).contains("bridge"));
+    let r = call(&client, "doc_export", json!({})).await;
+    assert_eq!(r.is_error, Some(true));
+    // Server still alive.
+    json_of(&call(&client, "session_list", json!({})).await);
+    client.cancel().await.unwrap();
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -214,12 +225,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: engine execute cannot change document behind adjustment dialog. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `engine_execute_cannot_change_document_behind_adjustment_dialog` setup/action excerpt:
 
 ```rust
-        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
         let ctx = egui::Context::default();
         app.run("file.new", json!({"width": 60, "height": 40, "background": "#3366cc"})).unwrap();
         let opened = call(&mut app, &ctx, "ui.menu.invoke", json!({"id": "image.adjustments.hueSaturation"}));
@@ -233,10 +244,10 @@ The companion JSON retains setup and assertions for every listed regression. The
             assert_eq!(blocked["ok"], false, "{method}: {blocked}");
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert_eq!(opened["ok"], true, "{opened}");
+assert_eq!(opened["ok"], true, "{opened}");
         let dialog = opened["result"]["dialog"].as_u64().unwrap();
         let revision = app.session.active().unwrap().revision;
         let fields = call(&mut app, &ctx, "ui.inspect", json!({}))["result"]["dialogs"][0]["fields"].clone();
@@ -244,13 +255,14 @@ Expected assertions from that fixture:
             assert_eq!(app.session.active().unwrap().revision, revision, "{method} changed the document");
             let snapshot = call(&mut app, &ctx, "ui.inspect", json!({}));
             assert_eq!(snapshot["result"]["dialogs"][0]["id"], dialog);
-            assert_eq!(app.session.active().unwrap().revision, revision, "{method} changed the document");
-            let snapshot = call(&mut app, &ctx, "ui.inspect", json!({}));
-            assert_eq!(snapshot["result"]["dialogs"][0]["id"], dialog);
             assert_eq!(snapshot["result"]["dialogs"][0]["fields"], fields);
-```
+        }
 
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
+        assert_eq!(call(&mut app, &ctx, "ui.dialog.cancel", json!({"dialog": dialog}))["ok"], true);
+        assert_eq!(call(&mut app, &ctx, "engine.execute", json!({"command": "image.adjustments.invert"}))["ok"], true);
+        assert!(app.session.active().unwrap().revision > revision);
+    }
+```
 
 </details>
 
@@ -288,12 +300,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: generated defaults are persisted without unsaved user work; denied storage marks default edits unsaved and retry saves them; finishing default transaction keeps newer action edits unsaved; failed default transaction does not warn until a user edit; load defaults preserves names and edits and is idempotent; defaults seed once and restore only when requested; old store and early actions win over defaults; unreadable actions are not seeded or overwritten; auto defaults play on pixels and undo at every depth; subject default samples visible layers and undo restores selection; actions persist with the preset store; blur background preserves subject and undoes at every depth; blur background preserves selection alpha masks and other layers; background sampling excludes subject colors for both blur paths; blur background without subject or when cancelled changes nothing; blur background rejects invalid targets params and effective locks; blur background 24mp timing; group with sampled 8 and 16 bit tips round trips; commands persist and delete removes from disk; default actions load from empty panel and play; default actions flyout preserves custom actions and reveals restored set. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `generated_defaults_are_persisted_without_unsaved_user_work` setup/action excerpt:
 
 ```rust
-        let b = Bridge::default();
+let b = Bridge::default();
         let (s, warnings) = session(b.clone());
         assert!(warnings.is_empty());
         assert_eq!(s.actions.list.len(), 5);
@@ -307,27 +319,31 @@ The companion JSON retains setup and assertions for every listed regression. The
         for (name, bytes) in &batch {
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert!(warnings.is_empty());
+assert!(warnings.is_empty());
         assert_eq!(s.actions.list.len(), 5);
-        assert!(!b.unsaved());
-        let batch = b.begin().unwrap();
-        assert_eq!(s.actions.list.len(), 5);
-        assert!(!b.unsaved());
-        let batch = b.begin().unwrap();
-        let actions: serde_json::Value = serde_json::from_slice(batch.get(ACTIONS_FILE).unwrap().as_deref().unwrap()).unwrap();
         assert!(!b.unsaved());
         let batch = b.begin().unwrap();
         let actions: serde_json::Value = serde_json::from_slice(batch.get(ACTIONS_FILE).unwrap().as_deref().unwrap()).unwrap();
         assert_eq!(actions["defaults_version"], 1);
+        assert_eq!(actions["actions"].as_array().unwrap().len(), 5);
+        assert!(!b.unsaved(), "generated defaults in flight can be recreated on reload");
+        let restored = Bridge::default();
+        for (name, bytes) in &batch {
+            if let Some(bytes) = bytes {
+        assert!(warnings.is_empty());
+        assert_eq!(reloaded.actions.list, s.actions.list);
+        assert!(restored.begin().is_none(), "the persisted marker avoids reseeding on reload");
+        assert!(!b.unsaved());
+    }
 ```
 
 `denied_storage_marks_default_edits_unsaved_and_retry_saves_them` setup/action excerpt:
 
 ```rust
-        for command in ["actions.delete", "actions.rename"] {
+for command in ["actions.delete", "actions.rename"] {
             let b = Bridge::default();
             b.unavailable("SecurityError".into());
             let (mut s, _) = session(b.clone());
@@ -341,24 +357,29 @@ Expected assertions from that fixture:
             assert!(b.unsaved(), "the edit remains unsaved while its transaction runs");
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-            assert!(!b.unsaved());
+assert!(!b.unsaved());
             s.execute(command, json!({"action": "Auto Tone", "name": "My Tone"})).unwrap();
             assert!(b.unsaved(), "editing generated defaults is user work: {command}");
-            assert!(b.begin().is_none());
-            assert!(b.unsaved(), "editing generated defaults is user work: {command}");
-            assert!(b.begin().is_none());
-            assert!(b.error().unwrap().contains("SecurityError"));
-            b.retry();
             assert!(b.begin().is_none());
             assert!(b.error().unwrap().contains("SecurityError"));
             b.retry();
             let batch = b.begin().unwrap();
+            assert!(b.unsaved(), "the edit remains unsaved while its transaction runs");
+            let restored = Bridge::default();
+            for (name, bytes) in &batch {
+                if let Some(bytes) = bytes {
+            assert!(!b.unsaved());
+            assert!(b.error().is_none());
+            let (reloaded, warnings) = session(restored);
+            assert!(warnings.is_empty());
+            assert_eq!(reloaded.actions.list, s.actions.list);
+            assert!(!reloaded.actions.list.iter().any(|a| a.name == "Auto Tone"));
+        }
+    }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -413,12 +434,36 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: a fractional setting an integer field cannot hold is refused not rounded; whole number settings for integer fields still round trip. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
+
+`a_fractional_setting_an_integer_field_cannot_hold_is_refused_not_rounded` setup/action excerpt:
+
+```rust
+for (id, params) in [("filter.pixelate.crystallize", json!({"cellSize": 5.4})), ("filter.distort.ripple", json!({"amount": 81.4, "size": "small"}))] {
+        let mut s = Session::new();
+        s.actions.list.push(Action::new("A", vec![(id.into(), params)]));
+        let e = s.execute("actions.save", json!({"action": "A"})).unwrap_err().to_string();
+        assert!(e.contains(id), "{id}: {e}");
+        let r = s.execute("actions.save", json!({"action": "A", "skipUnsupported": true})).unwrap();
+        assert_eq!(r["skipped"], json!([{"action": "A", "step": 0, "id": id}]), "{id}");
+    }
+}
+```
+
+Expected assertion context (overlapping windows merged):
+
+```rust
+assert!(e.contains(id), "{id}: {e}");
+        let r = s.execute("actions.save", json!({"action": "A", "skipUnsupported": true})).unwrap();
+        assert_eq!(r["skipped"], json!([{"action": "A", "step": 0, "id": id}]), "{id}");
+    }
+}
+```
 
 `whole_number_settings_for_integer_fields_still_round_trip` setup/action excerpt:
 
 ```rust
-    for (id, params) in [
+for (id, params) in [
         ("filter.pixelate.crystallize", json!({"cellSize": 5})),
         ("filter.distort.ripple", json!({"amount": 81, "size": "small"})),
         ("edit.stroke", json!({"width": 2, "color": "#d03060", "location": "inside"})),
@@ -432,13 +477,12 @@ The companion JSON retains setup and assertions for every listed regression. The
         assert_eq!(back_id, id);
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert_eq!(r["skipped"], json!([]), "{id}");
+assert_eq!(r["skipped"], json!([]), "{id}");
         let imported = import(&photocraft_paint::tile::b64_decode(r["data"].as_str().unwrap()).unwrap()).unwrap();
         let (back_id, back) = &imported.actions[0].steps[0];
-        assert_eq!(back_id, id);
         assert_eq!(back_id, id);
         for (key, want) in params.as_object().unwrap() {
             let got = back.get(key);
@@ -447,35 +491,8 @@ Expected assertions from that fixture:
                 None => assert_eq!(got, Some(want), "{id}: {key} is {got:?}"),
             }
         }
-```
-
-`a_fractional_setting_an_integer_field_cannot_hold_is_refused_not_rounded` setup/action excerpt:
-
-```rust
-    for (id, params) in [("filter.pixelate.crystallize", json!({"cellSize": 5.4})), ("filter.distort.ripple", json!({"amount": 81.4, "size": "small"}))] {
-        let mut s = Session::new();
-        s.actions.list.push(Action::new("A", vec![(id.into(), params)]));
-        let e = s.execute("actions.save", json!({"action": "A"})).unwrap_err().to_string();
-        assert!(e.contains(id), "{id}: {e}");
-        let r = s.execute("actions.save", json!({"action": "A", "skipUnsupported": true})).unwrap();
-        assert_eq!(r["skipped"], json!([{"action": "A", "step": 0, "id": id}]), "{id}");
     }
-}
 ```
-
-Expected assertions from that fixture:
-
-```rust
-        assert!(e.contains(id), "{id}: {e}");
-        let r = s.execute("actions.save", json!({"action": "A", "skipUnsupported": true})).unwrap();
-        assert_eq!(r["skipped"], json!([{"action": "A", "step": 0, "id": id}]), "{id}");
-    }
-        assert_eq!(r["skipped"], json!([{"action": "A", "step": 0, "id": id}]), "{id}");
-    }
-}
-```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -494,12 +511,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: parallel bands fit the total memory budget; one band at a time matches parallel bands. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `parallel_bands_fit_the_total_memory_budget` setup/action excerpt:
 
 ```rust
-    let d = Limits::default();
+let d = Limits::default();
     assert_eq!(d.parallel_bands(16), 4);
     assert!(d.parallel_bands(64) * d.max_memory_bytes <= d.max_total_memory_bytes);
     assert_eq!(d.parallel_bands(2), 2, "fewer workers than the budget allows");
@@ -511,27 +528,24 @@ The companion JSON retains setup and assertions for every listed regression. The
 }
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-    assert_eq!(d.parallel_bands(16), 4);
+assert_eq!(d.parallel_bands(16), 4);
     assert!(d.parallel_bands(64) * d.max_memory_bytes <= d.max_total_memory_bytes);
-    assert_eq!(d.parallel_bands(2), 2, "fewer workers than the budget allows");
-    let small = Limits { max_memory_bytes: 64 << 20, ..Limits::default() };
-    assert!(d.parallel_bands(64) * d.max_memory_bytes <= d.max_total_memory_bytes);
-    assert_eq!(d.parallel_bands(2), 2, "fewer workers than the budget allows");
-    let small = Limits { max_memory_bytes: 64 << 20, ..Limits::default() };
-    assert_eq!(small.parallel_bands(16), 16, "small instances keep every worker busy");
     assert_eq!(d.parallel_bands(2), 2, "fewer workers than the budget allows");
     let small = Limits { max_memory_bytes: 64 << 20, ..Limits::default() };
     assert_eq!(small.parallel_bands(16), 16, "small instances keep every worker busy");
     let tight = Limits { max_total_memory_bytes: 1 << 20, ..Limits::default() };
+    assert_eq!(tight.parallel_bands(16), 1, "at least one band runs");
+    assert_eq!(d.parallel_bands(0), 1);
+}
 ```
 
 `one_band_at_a_time_matches_parallel_bands` setup/action excerpt:
 
 ```rust
-    let pool = rayon::ThreadPoolBuilder::new().num_threads(8).build().unwrap();
+let pool = rayon::ThreadPoolBuilder::new().num_threads(8).build().unwrap();
     let s = surface(PixelFormat::RGBA8, 600, 300);
     let canvas = Rect::new(0, 0, 600, 300);
     let run = |limits: Limits| {
@@ -545,17 +559,13 @@ Expected assertions from that fixture:
 }
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-    assert_eq!(serial, parallel);
-    assert_ne!(serial, s, "the filter ran");
-}
+assert_eq!(serial, parallel);
     assert_ne!(serial, s, "the filter ran");
 }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -573,12 +583,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: blend if alt split and drag behavior. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `blend_if_alt_split_and_drag_behavior` setup/action excerpt:
 
 ```rust
-        // Case 1: Alt-drag on unsplit black handle [0, 0, 255, 255] splits the right half
+// Case 1: Alt-drag on unsplit black handle [0, 0, 255, 255] splits the right half
         let mut mode = BlendDrag::Pair { pair: 0, origin_v: 0 };
         let q = [0, 0, 255, 255];
         let q1 = step_blend_drag(&mut mode, &q, 45, true);
@@ -592,10 +602,10 @@ The companion JSON retains setup and assertions for every listed regression. The
         let q3 = step_blend_drag(&mut mode, &q2, 0, false);
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert_eq!(q1, [0, 45, 255, 255], "Alt-drag right must split black triangle into [0, 45]");
+assert_eq!(q1, [0, 45, 255, 255], "Alt-drag right must split black triangle into [0, 45]");
 
         // Case 2: Moving the split right half further to 70
         let q2 = step_blend_drag(&mut mode, &q1, 70, false);
@@ -607,9 +617,17 @@ Expected assertions from that fixture:
 
         // Case 4: Alt-drag on unsplit white handle [0, 0, 255, 255] splits the left half
         let mut mode_w = BlendDrag::Pair { pair: 2, origin_v: 255 };
-```
+        assert_eq!(qw1, [0, 0, 200, 255], "Alt-drag left must split white triangle into [200, 255]");
 
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
+        // Case 5: Dragging without Alt moves both halves together
+        let mut mode_solid = BlendDrag::Pair { pair: 0, origin_v: 0 };
+        assert_eq!(qs1, [35, 35, 255, 255], "Drag without Alt moves solid handle together");
+
+        // Case 6: Clamping prevents black handle from crossing white handle
+        let q_close = [0, 100, 150, 255];
+        assert_eq!(q_clamped, [0, 150, 150, 255], "Black max cannot exceed white min");
+    }
+```
 
 </details>
 
@@ -639,12 +657,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: row menu moves and deletes the clicked filter with one undo step; two filter row context offers reorder and delete; existing filter move delete commands preserve source and undo at every depth; row menu disables edges and deletes the only remaining filter; stale row menu closes on edits undo redo document switch and same id reopen; parameter and camera raw modals close the row menu without mutation; pending document job closes row menu and refuses new choices; existing eye and name double click remain distinct from secondary actions; capture native popup at two scales and in french; row menu reorder keeps the selected filter identity; row menu delete before selection keeps the remaining filter selected; row menu delete selected filter clears its row selection; row menu refused edit preserves filter order and selection. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `row_menu_moves_and_deletes_the_clicked_filter_with_one_undo_step` setup/action excerpt:
 
 ```rust
-    let _language = crate::i18n::language_scope(crate::i18n::Lang::EN);
+let _language = crate::i18n::language_scope(crate::i18n::Lang::EN);
     for depth in [8, 16, 32] {
         for ppp in [1.0, 2.0] {
             let (mut h, layer) = harness_at(depth, ppp);
@@ -658,27 +676,53 @@ The companion JSON retains setup and assertions for every listed regression. The
             let other = st.doc.layer(active.unwrap()).unwrap().clone();
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-            assert!(h.query_by_label("Move Up").is_some(), "actual filter row has Move Up");
+assert!(h.query_by_label("Move Up").is_some(), "actual filter row has Move Up");
             h.get_by_label("Move Up").click();
             h.run_steps(4);
             assert_eq!(filters(h.state(), layer).iter().map(|f| f.command.as_str()).collect::<Vec<_>>(), ["filter.blur.gaussianBlur", "filter.other.offset"]);
-            assert_eq!(filters(h.state(), layer).iter().map(|f| f.command.as_str()).collect::<Vec<_>>(), ["filter.blur.gaussianBlur", "filter.other.offset"]);
-            assert!(text_position(&h, "Offset").y < text_position(&h, "Gaussian Blur").y);
-            assert_ne!(pixels(h.state(), layer), before_pixels);
-            assert_eq!(h.state().session.active().unwrap().history.past_len(), history + 1);
             assert!(text_position(&h, "Offset").y < text_position(&h, "Gaussian Blur").y);
             assert_ne!(pixels(h.state(), layer), before_pixels);
             assert_eq!(h.state().session.active().unwrap().history.past_len(), history + 1);
             assert_eq!(h.state().session.active().unwrap().active_layer, active);
+            assert_eq!(h.state().session.active().unwrap().selected_layers, selected);
+            assert_eq!(photocraft_engine::smart_cmds::contents_of(&h.state().session.active().unwrap().doc, layer).unwrap(), source);
+            h.state_mut().run("edit.undo", json!({})).unwrap();
+            h.run_steps(3);
+            assert_eq!(serde_json::to_value(filters(h.state(), layer)).unwrap(), serde_json::to_value(&before).unwrap());
+            assert_eq!(pixels(h.state(), layer), before_pixels);
+            h.state_mut().run("edit.redo", json!({})).unwrap();
+            h.run_steps(3);
+            let offset = text_position(&h, "Offset");
+            assert_eq!(serde_json::to_value(filters(h.state(), layer)).unwrap(), serde_json::to_value(&before).unwrap());
+            assert_eq!(pixels(h.state(), layer), before_pixels);
+            assert_eq!(h.state().session.active().unwrap().history.past_len(), history + 2);
+            let offset = text_position(&h, "Offset");
+            click(&mut h, offset, PointerButton::Secondary);
+            h.get_by_label("Delete Smart Filter").click();
+            assert_eq!(filters(h.state(), layer).len(), 1);
+            assert_eq!(filters(h.state(), layer)[0].command, "filter.blur.gaussianBlur");
+            assert_eq!(h.state().session.active().unwrap().history.past_len(), history + 3);
+            assert_eq!(h.state().session.active().unwrap().active_layer, active);
+            assert_eq!(h.state().session.active().unwrap().selected_layers, selected);
+            assert_eq!(photocraft_engine::smart_cmds::contents_of(&h.state().session.active().unwrap().doc, layer).unwrap(), source);
+            let unchanged = h.state().session.active().unwrap().doc.layer(other.id).unwrap();
+            assert_eq!(unchanged, &other);
+            h.state_mut().run("edit.undo", json!({})).unwrap();
+            assert_eq!(pixels(h.state(), layer), before_pixels);
+            h.state_mut().run("edit.redo", json!({})).unwrap();
+            assert_eq!(filters(h.state(), layer).len(), 1);
+        }
+    }
+}
 ```
 
 `two_filter_row_context_offers_reorder_and_delete` setup/action excerpt:
 
 ```rust
-    let _language = crate::i18n::language_scope(crate::i18n::Lang::EN);
+let _language = crate::i18n::language_scope(crate::i18n::Lang::EN);
     let (mut h, layer) = harness();
     let top = text_position(&h, "Gaussian Blur");
     let bottom = text_position(&h, "Offset");
@@ -692,10 +736,10 @@ Expected assertions from that fixture:
     assert!(missing.is_empty(), "filter row lacks context choices {missing:?}; stack has {} filters", smart(h.state(), layer).smart_filters.len());
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-    assert!(top.y < bottom.y, "index1 is visually above index0");
+assert!(top.y < bottom.y, "index1 is visually above index0");
     let before = h.state().session.active().unwrap().doc.clone();
     let history = h.state().session.active().unwrap().history.past_len();
     click(&mut h, bottom, PointerButton::Secondary);
@@ -703,13 +747,8 @@ Expected assertions from that fixture:
     assert_eq!(h.state().session.active().unwrap().history.past_len(), history);
     let missing = ["Move Up", "Move Down", "Delete Smart Filter"].into_iter().filter(|label| h.query_by_label(label).is_none()).collect::<Vec<_>>();
     assert!(missing.is_empty(), "filter row lacks context choices {missing:?}; stack has {} filters", smart(h.state(), layer).smart_filters.len());
-    assert_eq!(h.state().session.active().unwrap().history.past_len(), history);
-    let missing = ["Move Up", "Move Down", "Delete Smart Filter"].into_iter().filter(|label| h.query_by_label(label).is_none()).collect::<Vec<_>>();
-    assert!(missing.is_empty(), "filter row lacks context choices {missing:?}; stack has {} filters", smart(h.state(), layer).smart_filters.len());
 }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -721,9 +760,9 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 ## PR-4023: i18n(es): add 548 missing rows, fix five filter and video terms
 
-- Fixture/setup: Select Spanish UI; open a synthetic document and the filter/video menus affected by this PR.
-- Action: Inspect Interpret/Replace Footage, Tilt-Shift, Mezzotint and Smart Sharpen; exercise labels containing parameter placeholders.
-- Expected: All affected labels use the intended reviewed Spanish terminology; placeholders retain their values and no missing-key fallback appears.
+- Fixture/setup: Select Spanish UI, synthetic document, and menus/dialogs for video footage, Blur Gallery, Pixelate and Sharpen. Record Spanish language selection and screenshots.
+- Action: Check Interpret Footage = Interpretar material de vídeo; Replace Footage = Reemplazar material de vídeo; Tilt-Shift = Desenfoque de inclinación y desplazamiento; Mezzotint = Grabado a media tinta; Smart Sharpen = Enfoque inteligente. Check their ellipsis variants in menus. Exercise a Count label with value 3 and confirm Recuento: 3, with no literal {n}.
+- Expected: Specified Spanish strings match the final catalog, ellipses remain where defined, and values replace placeholders without English fallback or raw {n}/{file} tokens.
 - Status: NOT RUN
 - Actual:
 - Evidence:
@@ -748,12 +787,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: low and high composite back to the source at every depth; high must be on linear light; builds a named group above the source and targets high; low is the gaussian blur of the source at the radius; one undo removes everything and redo brings it back; works on the background; needs a pixel layer with pixels; refuses a channel or mask target; refuses cmyk and lab; a layer of transparent tiles is refused when run; bad params are rejected without changes; frequency separation sits in filter other after color to alpha. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `low_and_high_composite_back_to_the_source_at_every_depth` setup/action excerpt:
 
 ```rust
-        for (depth, mode, tol) in [(8, "rgb", 1.0 / 255.0), (16, "rgb", 1.0 / 65535.0), (32, "rgb", 1e-5), (8, "gray", 1.0 / 255.0), (32, "gray", 1e-5)] {
+for (depth, mode, tol) in [(8, "rgb", 1.0 / 255.0), (16, "rgb", 1.0 / 65535.0), (32, "rgb", 1e-5), (8, "gray", 1.0 / 255.0), (32, "gray", 1e-5)] {
             let tol = tol + 1e-6;
             let mut s = session(depth, mode);
             let source = active(&s);
@@ -767,27 +806,25 @@ The companion JSON retains setup and assertions for every listed regression. The
             assert!(err <= tol, "{depth} {mode}: Low + High is off by {err} (tolerance {tol})");
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-            assert!(err <= tol, "{depth} {mode}: Low + High is off by {err} (tolerance {tol})");
+assert!(err <= tol, "{depth} {mode}: Low + High is off by {err} (tolerance {tol})");
             assert!(max_diff(&composite(d), &rebuilt) <= 1e-6, "{depth} {mode}: the group covers the source");
             // Low alone is visibly smoother than the source; High carries what it lost.
             let low_only = composite(&without(&without(d, source), high));
-            assert!(max_diff(&composite(d), &rebuilt) <= 1e-6, "{depth} {mode}: the group covers the source");
-            // Low alone is visibly smoother than the source; High carries what it lost.
-            let low_only = composite(&without(&without(d, source), high));
-            assert!(max_diff(&before, &low_only) > 0.1, "{depth} {mode}: Low is blurred");
             assert!(max_diff(&before, &low_only) > 0.1, "{depth} {mode}: Low is blurred");
             let h = d.layer(high).unwrap().surface().unwrap();
             assert!((0..W).any(|x| (h.rgba(x, 5)[0] - 0.5).abs() > 0.05), "{depth} {mode}: High holds the detail");
             assert_ne!(pixels(d, low), pixels(d, source), "{depth} {mode}");
+        }
+    }
 ```
 
 `high_must_be_on_linear_light` setup/action excerpt:
 
 ```rust
-        let mut s = session(16, "rgb");
+let mut s = session(16, "rgb");
         let source = active(&s);
         let before = composite(doc(&s));
         s.execute(ID, json!({})).unwrap();
@@ -798,14 +835,12 @@ Expected assertions from that fixture:
     }
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert!(max_diff(&before, &composite(&d)) > 0.1);
+assert!(max_diff(&before, &composite(&d)) > 0.1);
     }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -829,12 +864,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: clipped dissolve is binary and preserves the base shape; clipped dissolve matches whole render at offset regions and depths; dissolve adjustment is a per pixel choice; clipped dissolve fill is a per pixel choice; color overlay keeps dissolve coverage; groups masks and clipping; dissolve adjustments and effects match cpu in offset regions. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `clipped_dissolve_is_binary_and_preserves_the_base_shape` setup/action excerpt:
 
 ```rust
-    let mut d = doc_white(40, 12);
+let mut d = doc_white(40, 12);
     d.layers.push(solid_layer("base", Rect::new(0, 0, 20, 12), [0.0, 0.0, 1.0, 1.0]));
     let mut clip = solid_layer("clip", d.bounds(), [1.0, 0.0, 0.0, 1.0]);
     clip.clipped = true;
@@ -848,17 +883,15 @@ The companion JSON retains setup and assertions for every listed regression. The
         for x in 0..20 {
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-                assert!(close4(p, [0.0, 0.0, 1.0, 1.0]), "Dissolve must not interpolate: {p:?} at ({x},{y})");
+assert!(close4(p, [0.0, 0.0, 1.0, 1.0]), "Dissolve must not interpolate: {p:?} at ({x},{y})");
                 blue += 1;
             }
         }
         assert!(close4(px(&d, 30, y), [1.0; 4]), "outside the base the clip is invisible");
     }
-    assert!(red > 0 && blue > 0, "Dissolve must expose both source and base: {red}/{blue}");
-    assert!((red as f32 / (red + blue) as f32 - 0.3).abs() < 0.1, "coverage should follow 60% opacity × 50% fill: {red}/{blue}");
     assert!(red > 0 && blue > 0, "Dissolve must expose both source and base: {red}/{blue}");
     assert!((red as f32 / (red + blue) as f32 - 0.3).abs() < 0.1, "coverage should follow 60% opacity × 50% fill: {red}/{blue}");
 }
@@ -867,7 +900,7 @@ Expected assertions from that fixture:
 `clipped_dissolve_matches_whole_render_at_offset_regions_and_depths` setup/action excerpt:
 
 ```rust
-    for fmt in [PixelFormat::RGBA8, PixelFormat::RGBA16, PixelFormat::RGBA32F] {
+for fmt in [PixelFormat::RGBA8, PixelFormat::RGBA16, PixelFormat::RGBA32F] {
         let mut d = Document::new("coverage", Size::new(32, 18), ColorMode::Rgb, fmt.sample);
         let bounds = Rect::new(-3, -2, 32, 18);
         let mut base = Layer::raster("base", fmt);
@@ -881,16 +914,14 @@ Expected assertions from that fixture:
         clip.fill_opacity = 0.5;
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-                    assert!(close4(part.get(x, y), whole.get(x, y)), "{fmt:?}: region mismatch at ({x},{y})");
+assert!(close4(part.get(x, y), whole.get(x, y)), "{fmt:?}: region mismatch at ({x},{y})");
                 }
             }
         }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -912,12 +943,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: clipped dissolve is binary and preserves the base shape; clipped dissolve matches whole render at offset regions and depths; groups masks and clipping; native rotate event reaches canvas when trackpad rotation is enabled; native pinch resets legacy gesture continuation. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `clipped_dissolve_is_binary_and_preserves_the_base_shape` setup/action excerpt:
 
 ```rust
-    let mut d = doc_white(40, 12);
+let mut d = doc_white(40, 12);
     d.layers.push(solid_layer("base", Rect::new(0, 0, 20, 12), [0.0, 0.0, 1.0, 1.0]));
     let mut clip = solid_layer("clip", d.bounds(), [1.0, 0.0, 0.0, 1.0]);
     clip.clipped = true;
@@ -931,17 +962,15 @@ The companion JSON retains setup and assertions for every listed regression. The
         for x in 0..20 {
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-                assert!(close4(p, [0.0, 0.0, 1.0, 1.0]), "Dissolve must not interpolate: {p:?} at ({x},{y})");
+assert!(close4(p, [0.0, 0.0, 1.0, 1.0]), "Dissolve must not interpolate: {p:?} at ({x},{y})");
                 blue += 1;
             }
         }
         assert!(close4(px(&d, 30, y), [1.0; 4]), "outside the base the clip is invisible");
     }
-    assert!(red > 0 && blue > 0, "Dissolve must expose both source and base: {red}/{blue}");
-    assert!((red as f32 / (red + blue) as f32 - 0.3).abs() < 0.1, "coverage should follow 60% opacity × 50% fill: {red}/{blue}");
     assert!(red > 0 && blue > 0, "Dissolve must expose both source and base: {red}/{blue}");
     assert!((red as f32 / (red + blue) as f32 - 0.3).abs() < 0.1, "coverage should follow 60% opacity × 50% fill: {red}/{blue}");
 }
@@ -950,7 +979,7 @@ Expected assertions from that fixture:
 `clipped_dissolve_matches_whole_render_at_offset_regions_and_depths` setup/action excerpt:
 
 ```rust
-    for fmt in [PixelFormat::RGBA8, PixelFormat::RGBA16, PixelFormat::RGBA32F] {
+for fmt in [PixelFormat::RGBA8, PixelFormat::RGBA16, PixelFormat::RGBA32F] {
         let mut d = Document::new("coverage", Size::new(32, 18), ColorMode::Rgb, fmt.sample);
         let bounds = Rect::new(-3, -2, 32, 18);
         let mut base = Layer::raster("base", fmt);
@@ -964,16 +993,14 @@ Expected assertions from that fixture:
         clip.fill_opacity = 0.5;
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-                    assert!(close4(part.get(x, y), whole.get(x, y)), "{fmt:?}: region mismatch at ({x},{y})");
+assert!(close4(part.get(x, y), whole.get(x, y)), "{fmt:?}: region mismatch at ({x},{y})");
                 }
             }
         }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -1040,12 +1067,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: rough pastels and angled strokes respond to every slider; cutout makes flat shapes with clean edges; cutout keeps the tone of surviving islands at low fidelity; a stack around a cutout is tile independent; oklab round trips and marks the gamut; out of gamut colours lose strength not hue; smoothing flattens noise and keeps edges; the palette finds the pictures own colours; a tone of two different hues splits in two; an empty image still has a palette; douglas peucker keeps only points off the line; lines cross where they should; rounding off keeps an open chains ends; a square keeps its four corners and straight sides; a rounded corner is squared back; an open chain ends where it started at any fidelity; curves pass through their vertices; fitting keeps small islands and their winding; bounds cover every point; the edge between two regions is one chain between junctions; an island is one closed chain; an anti aliased edge is placed inside its pixel; a square covers its area exactly; shapes cover every pixel once with no seams; edge fidelity changes the outlines; empty images stop before the transpose and row passes; filling does not depend on the tiling; noise merges into neighbours and noise apart colours are one; components are four connected and numbered in raster order; small regions merge into the neighbour they share most border with; slivers merge though they are large; paper is stretched towards black and white and keeps its hue; local colour drifts within a shape but never crosses a cut; transposing twice gives the image back; find returns the root and shortens the path. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `rough_pastels_and_angled_strokes_respond_to_every_slider` setup/action excerpt:
 
 ```rust
-        // #879: these smeared or drowned the image in texture, and some sliders did nothing.
+// #879: these smeared or drowned the image in texture, and some sliders did nothing.
         use crate::GalleryFilter as G;
         let b = Rect::new(0, 0, 56, 40);
         let s = pattern(SampleType::F32);
@@ -1059,13 +1086,12 @@ The companion JSON retains setup and assertions for every listed regression. The
                 let crate::GalleryParamKind::Range { min, max, .. } = prm.kind else { continue };
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-                    assert_ne!(a, base, "{} {} = {v} changed nothing", f.key(), prm.key);
+assert_ne!(a, base, "{} {} = {v} changed nothing", f.key(), prm.key);
                     let t = run(&e, 16);
                     let worst = a.iter().zip(&t).map(|(x, y)| (x - y).abs()).fold(0.0, f32::max);
-                    assert!(worst < 1e-3, "{} {} = {v} differs across tilings by {worst}", f.key(), prm.key);
                     assert!(worst < 1e-3, "{} {} = {v} differs across tilings by {worst}", f.key(), prm.key);
                 }
             }
@@ -1075,7 +1101,7 @@ Expected assertions from that fixture:
 `cutout_makes_flat_shapes_with_clean_edges` setup/action excerpt:
 
 ```rust
-        // It used to posterize every pixel after a blur: noise survived as speckle, edges were
+// It used to posterize every pixel after a blur: noise survived as speckle, edges were
         // ragged and smooth gradients banded instead of becoming flat paper.
         let noisy: Vec<Vec<f32>> = (0..32).map(|y| (0..64).map(|x| if x < 32 { 0.2 } else { 0.8 } + (hash01(x, y, 0, 7) - 0.5) * 0.16).collect()).collect();
         let out = cutout_on(&noisy, &[]);
@@ -1089,10 +1115,10 @@ Expected assertions from that fixture:
             let (lo, hi) = (out[y][16], out[y][48]);
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-            assert!(spread < 1e-4, "a noisy area should be one flat tone, spread {spread}");
+assert!(spread < 1e-4, "a noisy area should be one flat tone, spread {spread}");
         }
         // The cut is an anti-aliased pixel or two, not a blur.
         for y in 0..32 {
@@ -1104,9 +1130,11 @@ Expected assertions from that fixture:
             assert!(tones.windows(2).all(|t| t[0] < t[1]), "levels {levels}: tones {tones:?}");
         }
         // Edge Simplicity drops specks.
+        let speck: Vec<Vec<f32>> = (0..32).map(|y| (0..32).map(|x| if (15..18).contains(&x) && (15..18).contains(&y) { 0.9 } else { 0.2 }).collect()).collect();
+        assert!(detailed[16][16] - detailed[2][2] > 0.5, "the speck should survive at simplicity 0");
+        assert!((simple[16][16] - simple[2][2]).abs() < 1e-4, "the speck should go at simplicity 10");
+    }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -1126,12 +1154,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: softer outer glow keeps a fading tail past its size; softer outer glow margin includes its tail support; softer outer glow program keeps the tent and adds a distance tail. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `softer_outer_glow_keeps_a_fading_tail_past_its_size` setup/action excerpt:
 
 ```rust
-        let mut shape = Map::new(220, 220, 0.0);
+let mut shape = Map::new(220, 220, 0.0);
         for y in 0..shape.h {
             for x in 20..100 {
                 shape.v[y * shape.w + x] = 1.0;
@@ -1145,17 +1173,11 @@ The companion JSON retains setup and assertions for every listed regression. The
             size: 60.0,
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert!(at(50) > 0.024, "the softer shoulder should stay visible: {}", at(50));
+assert!(at(50) > 0.024, "the softer shoulder should stay visible: {}", at(50));
         assert!(at(60) > 1.0 / 255.0, "the glow must retain a visible tail at its Size: {}", at(60));
-        assert!(at(62) > 0.5 / 255.0, "the glow must extend beyond its Size: {}", at(62));
-        assert!(at(66) < 1e-6, "the added tail should fade to zero: {}", at(66));
-        assert!(at(60) > 1.0 / 255.0, "the glow must retain a visible tail at its Size: {}", at(60));
-        assert!(at(62) > 0.5 / 255.0, "the glow must extend beyond its Size: {}", at(62));
-        assert!(at(66) < 1e-6, "the added tail should fade to zero: {}", at(66));
-    }
         assert!(at(62) > 0.5 / 255.0, "the glow must extend beyond its Size: {}", at(62));
         assert!(at(66) < 1e-6, "the added tail should fade to zero: {}", at(66));
     }
@@ -1164,7 +1186,7 @@ Expected assertions from that fixture:
 `softer_outer_glow_margin_includes_its_tail_support` setup/action excerpt:
 
 ```rust
-        let glow = Glow {
+let glow = Glow {
             common: photocraft_doc::FxCommon::new(BlendMode::Screen, 1.0),
             paint: FxPaint::Color(photocraft_color::Color::WHITE),
             technique: GlowTechnique::Softer,
@@ -1178,14 +1200,12 @@ Expected assertions from that fixture:
             source: GlowSource::Edge,
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert_eq!(margin(&layer), 68);
+assert_eq!(margin(&layer), 68);
     }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -1210,12 +1230,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: oklab round trips and marks the gamut; out of gamut colours lose strength not hue; smoothing flattens noise and keeps edges; the palette finds the pictures own colours; a tone of two different hues splits in two; an empty image still has a palette; transposing twice gives the image back; find returns the root and shortens the path. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `oklab_round_trips_and_marks_the_gamut` setup/action excerpt:
 
 ```rust
-        let white = oklab([1.0, 1.0, 1.0]);
+let white = oklab([1.0, 1.0, 1.0]);
         assert!((white[0] - 1.0).abs() < 1e-3 && white[1].abs() < 1e-3 && white[2].abs() < 1e-3, "{white:?}");
         assert!(oklab([0.0, 0.0, 0.0])[0].abs() < 1e-6);
         for p in [[0.2, 0.5, 0.9], [0.95, 0.1, 0.3], [0.5, 0.5, 0.5], [0.0, 1.0, 0.0]] {
@@ -1227,27 +1247,24 @@ The companion JSON retains setup and assertions for every listed regression. The
     }
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert!((white[0] - 1.0).abs() < 1e-3 && white[1].abs() < 1e-3 && white[2].abs() < 1e-3, "{white:?}");
+assert!((white[0] - 1.0).abs() < 1e-3 && white[1].abs() < 1e-3 && white[2].abs() < 1e-3, "{white:?}");
         assert!(oklab([0.0, 0.0, 0.0])[0].abs() < 1e-6);
         for p in [[0.2, 0.5, 0.9], [0.95, 0.1, 0.3], [0.5, 0.5, 0.5], [0.0, 1.0, 0.0]] {
             let back = srgb(oklab(p)).unwrap_or([-1.0; 3]);
-        assert!(oklab([0.0, 0.0, 0.0])[0].abs() < 1e-6);
-        for p in [[0.2, 0.5, 0.9], [0.95, 0.1, 0.3], [0.5, 0.5, 0.5], [0.0, 1.0, 0.0]] {
-            let back = srgb(oklab(p)).unwrap_or([-1.0; 3]);
-            assert!(dist2(back, p) < 1e-6, "{p:?} came back as {back:?}");
             assert!(dist2(back, p) < 1e-6, "{p:?} came back as {back:?}");
         }
         // Very light and very colourful: no sRGB colour is that.
         assert_eq!(srgb([0.95, 0.3, 0.0]), None);
+    }
 ```
 
 `out_of_gamut_colours_lose_strength_not_hue` setup/action excerpt:
 
 ```rust
-        let (l, a, b) = (0.95, 0.3, 0.1);
+let (l, a, b) = (0.95, 0.3, 0.1);
         let c = in_gamut(l, a, b);
         let lab = oklab(c);
         assert!((lab[0] - l).abs() < 0.01, "lightness kept: {lab:?}");
@@ -1259,24 +1276,17 @@ Expected assertions from that fixture:
     }
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert!((lab[0] - l).abs() < 0.01, "lightness kept: {lab:?}");
+assert!((lab[0] - l).abs() < 0.01, "lightness kept: {lab:?}");
         let chroma = (lab[1] * lab[1] + lab[2] * lab[2]).sqrt();
         assert!(chroma > 0.01 && chroma < (a * a + b * b).sqrt(), "weaker but still coloured: {chroma}");
-        assert!((lab[2] / lab[1] - b / a).abs() < 0.05, "same hue: {lab:?}");
-        assert!(chroma > 0.01 && chroma < (a * a + b * b).sqrt(), "weaker but still coloured: {chroma}");
-        assert!((lab[2] / lab[1] - b / a).abs() < 0.05, "same hue: {lab:?}");
-        // In gamut it is just the conversion.
-        assert_eq!(in_gamut(0.6, 0.02, -0.03), srgb([0.6, 0.02, -0.03]).unwrap_or_default());
         assert!((lab[2] / lab[1] - b / a).abs() < 0.05, "same hue: {lab:?}");
         // In gamut it is just the conversion.
         assert_eq!(in_gamut(0.6, 0.02, -0.03), srgb([0.6, 0.02, -0.03]).unwrap_or_default());
     }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -1334,12 +1344,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: minified pattern is filtered not aliased; pattern fill layers. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `minified_pattern_is_filtered_not_aliased` setup/action excerpt:
 
 ```rust
-        // 1-px dark / light stripes (mean 0.5), shown at 25 %: every pixel covers 4 tile pixels.
+// 1-px dark / light stripes (mean 0.5), shown at 25 %: every pixel covers 4 tile pixels.
         // The 0.125 px phase puts each pixel centre on a light tile pixel's centre, so a single
         // bilinear tap would return pure white.
         let mut s = Surface::new(PixelFormat::RGBA8);
@@ -1353,13 +1363,11 @@ The companion JSON retains setup and assertions for every listed regression. The
         assert_eq!(t.sample(u, 0.5)[0], 1.0, "the single tap lands on a light stripe");
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert_eq!(t.sample(u, 0.5)[0], 1.0, "the single tap lands on a light stripe");
+assert_eq!(t.sample(u, 0.5)[0], 1.0, "the single tap lands on a light stripe");
         for p in render(&t, &place, Rect::new(0, 0, 8, 1)) {
-            assert!((p[0] - 0.5).abs() < 0.05, "{p:?}");
-        }
             assert!((p[0] - 0.5).abs() < 0.05, "{p:?}");
         }
         // 100 % stays exact.
@@ -1371,7 +1379,7 @@ Expected assertions from that fixture:
 `pattern_fill_layers` setup/action excerpt:
 
 ```rust
-    let Some(mut g) = gpu() else { return };
+let Some(mut g) = gpu() else { return };
     let pat = checker_pattern();
     for (link, scale, angle, masked) in [(true, 1.0, 0.0, false), (false, 0.7, 25.0, true), (true, 1.6, -40.0, false), (true, 0.3, 10.0, false)] {
         let mut d = base_doc(70, 50);
@@ -1385,13 +1393,11 @@ Expected assertions from that fixture:
         }
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
 
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -1410,12 +1416,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: displace psd filter with only a map path renders after replace contents; a map named only by its path imports as map path. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `displace_psd_filter_with_only_a_map_path_renders_after_replace_contents` setup/action excerpt:
 
 ```rust
-    use photocraft_psd::descriptor::{Descriptor, Id, UnicodeString, Value};
+use photocraft_psd::descriptor::{Descriptor, Id, UnicodeString, Value};
     let dir = std::env::temp_dir().join(format!("pcraft-9162-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let png = |name: &str, size: (u32, u32), c: [f32; 4]| {
@@ -1429,10 +1435,10 @@ The companion JSON retains setup and assertions for every listed regression. The
         let path = dir.join(name);
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert_eq!(out["warnings"], json!([]), "depth {depth}");
+assert_eq!(out["warnings"], json!([]), "depth {depth}");
         let cache = smart(&s2.active().unwrap().doc).1.cache.unwrap();
         // 10 % of 128 px at full map contrast: the design (x 8..80) moves 12.8 px left.
         let alpha = |x: i32| cache.pixel(x, 30)[3];
@@ -1445,7 +1451,7 @@ Expected assertions from that fixture:
 `a_map_named_only_by_its_path_imports_as_map_path` setup/action excerpt:
 
 ```rust
-        let with_file = |file: Value| {
+let with_file = |file: Value| {
             let mut i = item(Vec::new());
             let mut f = get_desc(&i, "Fltr").unwrap().clone();
             f.items.retain(|(k, _)| !k.is(MAP_KEY));
@@ -1459,24 +1465,29 @@ Expected assertions from that fixture:
         assert_eq!(f.params["mapPath"], json!("C:\\maps\\repro-map.psd"));
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert_eq!(f.command, COMMAND);
+assert_eq!(f.command, COMMAND);
         assert_eq!(f.params["mapPath"], json!("C:\\maps\\repro-map.psd"));
-        assert!(embedded_map(&f.params).is_none());
-        assert_eq!(item_for_filter(&f).unwrap(), src, "written back as it was");
-        assert_eq!(f.params["mapPath"], json!("C:\\maps\\repro-map.psd"));
-        assert!(embedded_map(&f.params).is_none());
-        assert_eq!(item_for_filter(&f).unwrap(), src, "written back as it was");
-        let mut moved = f.clone();
         assert!(embedded_map(&f.params).is_none());
         assert_eq!(item_for_filter(&f).unwrap(), src, "written back as it was");
         let mut moved = f.clone();
         moved.params["mapPath"] = json!("/elsewhere/map.png");
+        assert!(item_for_filter(&moved).is_err(), "another map path has no place in the template");
+        let mut no_path = f.clone();
+        no_path.params.as_object_mut().unwrap().remove("mapPath");
+        assert!(item_for_filter(&no_path).is_err(), "a path-only template needs its mapPath, or the PSD names a map the render never read");
+        // A record whose size field disagrees with its units, or without the final NUL.
+        let mut wrong_size = pth("map.psd");
+        if let Value::Path(b) = &mut wrong_size {
+            assert_eq!(filter_from_item(&src).command, UNSUPPORTED_FILTER);
+        }
+        // A damaged embedded map is never replaced by a readable path.
+        let mut damaged = item(vec![0; 4]);
+        assert_eq!(filter_from_item(&damaged).command, UNSUPPORTED_FILTER);
+    }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -1497,12 +1508,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: full coverage adjustment keeps its result over huge hdr values; reused render matches previous allocating stack; mixing through a selection matches sampling it per pixel; full coverage keeps the edit over huge hdr values. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `full_coverage_adjustment_keeps_its_result_over_huge_hdr_values` setup/action excerpt:
 
 ```rust
-    for v in [1.0e6_f32, 1.0e8, -1.0e6] {
+for v in [1.0e6_f32, 1.0e8, -1.0e6] {
         let mut d = Document::new("hdr", Size::new(2, 2), ColorMode::Rgb, SampleType::F32);
         let mut base = Layer::raster("b", PixelFormat::RGBA32F);
         base.surface_mut().unwrap().fill_rect(Rect::new(0, 0, 2, 2), &[v, v, v, 1.0]);
@@ -1516,10 +1527,10 @@ The companion JSON retains setup and assertions for every listed regression. The
 }
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-            assert!((c - 0.5).abs() < 1e-6, "{v}: {got:?}");
+assert!((c - 0.5).abs() < 1e-6, "{v}: {got:?}");
         }
     }
 }
@@ -1528,7 +1539,7 @@ Expected assertions from that fixture:
 `reused_render_matches_previous_allocating_stack` setup/action excerpt:
 
 ```rust
-    for depth in [SampleType::U8, SampleType::U16, SampleType::F32] {
+for depth in [SampleType::U8, SampleType::U16, SampleType::F32] {
         let mut doc = Document::new("equivalence", Size::new(513, 7), ColorMode::Rgb, depth);
         let rect = doc.bounds();
         for (name, color) in [("bottom", [0.2, 0.4, 0.8, 1.0]), ("top", [1.5, -0.25, 0.6, 0.5])] {
@@ -1542,13 +1553,11 @@ Expected assertions from that fixture:
         }
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
 
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -1567,12 +1576,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: adjustment fill changes the special blend modes; special eight fill on adjustment layers matches cpu. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `adjustment_fill_changes_the_special_blend_modes` setup/action excerpt:
 
 ```rust
-    for (mode, want) in [(BlendMode::ColorDodge, [80, 160, 240]), (BlendMode::LinearBurn, [13, 77, 141])] {
+for (mode, want) in [(BlendMode::ColorDodge, [80, 160, 240]), (BlendMode::LinearBurn, [13, 77, 141])] {
         let mut d = Document::with_background("fill", Size::new(1, 1), ColorMode::Rgb, SampleType::U8, Color::WHITE);
         let mut base = Layer::raster("b", PixelFormat::RGBA8);
         base.surface_mut().unwrap().fill_rect(Rect::new(0, 0, 1, 1), &[64.0 / 255.0, 128.0 / 255.0, 192.0 / 255.0, 1.0]);
@@ -1586,10 +1595,10 @@ The companion JSON retains setup and assertions for every listed regression. The
         let got: Vec<i32> = got[..3].iter().map(|v| (v * 255.0).round() as i32).collect();
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert!(got.iter().zip(want).all(|(g, w)| (g - w).abs() <= 1), "{mode:?}: {got:?} vs Photoshop {want:?}");
+assert!(got.iter().zip(want).all(|(g, w)| (g - w).abs() <= 1), "{mode:?}: {got:?} vs Photoshop {want:?}");
     }
 }
 ```
@@ -1597,7 +1606,7 @@ Expected assertions from that fixture:
 `special_eight_fill_on_adjustment_layers_matches_cpu` setup/action excerpt:
 
 ```rust
-    let Some(mut g) = gpu() else { return };
+let Some(mut g) = gpu() else { return };
     let special = [
         BlendMode::ColorBurn,
         BlendMode::LinearBurn,
@@ -1611,13 +1620,11 @@ Expected assertions from that fixture:
     for mode in special {
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
 
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -1636,12 +1643,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: blend if 16 bit cutoffs follow photoshops steps; blend if gray follows photoshops weights and rounding. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `blend_if_16_bit_cutoffs_follow_photoshops_steps` setup/action excerpt:
 
 ```rust
-    let shown = |v16: u16, black: u8, white: u8| {
+let shown = |v16: u16, black: u8, white: u8| {
         let v = f32::from(v16) / 65535.0;
         let mut d = Document::new("t", Size::new(1, 1), ColorMode::Rgb, SampleType::U16);
         let layer16 = |name: &str, c: [f32; 4]| {
@@ -1655,27 +1662,22 @@ The companion JSON retains setup and assertions for every listed regression. The
         d.layers.push(l);
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert!(shown(at(step), c, 255), "black {c}: step {step} shows");
+assert!(shown(at(step), c, 255), "black {c}: step {step} shows");
         assert!(!shown(at(step - 1), c, 255), "black {c}: step {} hides", step - 1);
-        assert!(shown(at(step), 0, c), "white {c}: step {step} shows");
-        assert!(!shown(at(step + 1), 0, c), "white {c}: step {} hides", step + 1);
-        assert!(!shown(at(step - 1), c, 255), "black {c}: step {} hides", step - 1);
-        assert!(shown(at(step), 0, c), "white {c}: step {step} shows");
-        assert!(!shown(at(step + 1), 0, c), "white {c}: step {} hides", step + 1);
-    }
         assert!(shown(at(step), 0, c), "white {c}: step {step} shows");
         assert!(!shown(at(step + 1), 0, c), "white {c}: step {} hides", step + 1);
     }
     assert!(shown(32895, 128, 255) && !shown(32894, 128, 255), "the reporter's RGB16 boundary");
+}
 ```
 
 `blend_if_gray_follows_photoshops_weights_and_rounding` setup/action excerpt:
 
 ```rust
-    let shown = |rgb: [u8; 3], black: u8, white: u8| {
+let shown = |rgb: [u8; 3], black: u8, white: u8| {
         let mut d = Document::new("t", Size::new(1, 1), ColorMode::Rgb, SampleType::U8);
         let c = rgb.map(|v| f32::from(v) / 255.0);
         d.layers.push(solid_layer("under", Rect::new(0, 0, 1, 1), [c[0], c[1], c[2], 1.0]));
@@ -1689,24 +1691,18 @@ Expected assertions from that fixture:
         (20, [65, 0, 0], [66, 0, 0]),
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert!(!shown(below, cut, 255), "{below:?} hidden by black {cut}");
+assert!(!shown(below, cut, 255), "{below:?} hidden by black {cut}");
         assert!(shown(at, cut, 255), "{at:?} shown by black {cut}");
     }
     // The reporter's mixed colours, and the white point's half-down rounding.
-        assert!(shown(at, cut, 255), "{at:?} shown by black {cut}");
-    }
-    // The reporter's mixed colours, and the white point's half-down rounding.
-    assert!(shown([123, 126, 151], 128, 255), "127.85 is 128");
     assert!(shown([123, 126, 151], 128, 255), "127.85 is 128");
     assert!(shown([120, 129, 149], 0, 128), "128.5 is 128");
     assert!(!shown([121, 129, 149], 0, 128), "128.8 is 129");
 }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -1725,12 +1721,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: adjustment blend if judges the result before opacity; blend if. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `adjustment_blend_if_judges_the_result_before_opacity` setup/action excerpt:
 
 ```rust
-    for (black, white, want) in [(150u8, 255u8, [115, 128, 140]), (0, 150, [64, 128, 192])] {
+for (black, white, want) in [(150u8, 255u8, [115, 128, 140]), (0, 150, [64, 128, 192])] {
         let mut d = Document::with_background("bi", Size::new(1, 1), ColorMode::Rgb, SampleType::U8, Color::WHITE);
         d.layers.push(solid_layer("base", Rect::new(0, 0, 1, 1), [64.0 / 255.0, 128.0 / 255.0, 192.0 / 255.0, 1.0]));
         let mut inv = Layer::new("invert", LayerContent::Adjustment(Adjustment::Invert));
@@ -1743,10 +1739,10 @@ The companion JSON retains setup and assertions for every listed regression. The
 }
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert!(got.iter().zip(want).all(|(g, w)| (g - w).abs() <= 1), "black {black} white {white}: {got:?} vs Photoshop {want:?}");
+assert!(got.iter().zip(want).all(|(g, w)| (g - w).abs() <= 1), "black {black} white {white}: {got:?} vs Photoshop {want:?}");
     }
 }
 ```
@@ -1754,7 +1750,7 @@ Expected assertions from that fixture:
 `blend_if` setup/action excerpt:
 
 ```rust
-    use photocraft_doc::BlendRange;
+use photocraft_doc::BlendRange;
     let Some(mut g) = gpu() else { return };
     let r = |b0: u8, b1: u8, w0: u8, w1: u8| BlendRange { black: [b0, b1], white: [w0, w1] };
     // (name, entry, [this layer, underlying], has a hard point)
@@ -1768,16 +1764,14 @@ Expected assertions from that fixture:
         ("everything hidden", 0, [r(255, 255, 0, 0), BlendRange::FULL], true),
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-            assert!(hits.prefix_hits > 0, "{depth:?} {name}: the edit above reuses the lower stack");
+assert!(hits.prefix_hits > 0, "{depth:?} {name}: the edit above reuses the lower stack");
 
             // Masked, with channel restrictions.
             let mut m = l.clone();
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -1796,12 +1790,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: pass through group with blend if is isolated; pass through group with blend if is isolated. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `pass_through_group_with_blend_if_is_isolated` setup/action excerpt:
 
 ```rust
-    for (gated, want) in [(true, [64, 128, 192]), (false, [191, 127, 63])] {
+for (gated, want) in [(true, [64, 128, 192]), (false, [191, 127, 63])] {
         let mut d = Document::with_background("pt", Size::new(1, 1), ColorMode::Rgb, SampleType::U8, Color::WHITE);
         d.layers.push(solid_layer("base", Rect::new(0, 0, 1, 1), [64.0 / 255.0, 128.0 / 255.0, 192.0 / 255.0, 1.0]));
         let mut g = Layer::group("group", vec![Layer::new("invert", LayerContent::Adjustment(Adjustment::Invert))]);
@@ -1815,10 +1809,10 @@ The companion JSON retains setup and assertions for every listed regression. The
     }
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert!(got.iter().zip(want).all(|(g, w)| (g - w).abs() <= 1), "Blend If {gated}: {got:?} vs Photoshop {want:?}");
+assert!(got.iter().zip(want).all(|(g, w)| (g - w).abs() <= 1), "Blend If {gated}: {got:?} vs Photoshop {want:?}");
     }
 }
 ```
@@ -1826,7 +1820,7 @@ Expected assertions from that fixture:
 `pass_through_group_with_blend_if_is_isolated` setup/action excerpt:
 
 ```rust
-    use photocraft_doc::BlendRange;
+use photocraft_doc::BlendRange;
     let Some(mut g) = gpu() else { return };
     for gated in [true, false] {
         let mut d = base_doc(64, 48);
@@ -1840,13 +1834,11 @@ Expected assertions from that fixture:
         check(&mut g, &d, &format!("pass-through group, Blend If {gated}"));
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
 
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -1865,12 +1857,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: matches scalar sharpen bit for bit across layouts edges and hdr; empty channel layout remains empty. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `matches_scalar_sharpen_bit_for_bit_across_layouts_edges_and_hdr` setup/action excerpt:
 
 ```rust
-    for (w, h) in [(1, 1), (3, 7), (37, 29)] {
+for (w, h) in [(1, 1), (3, 7), (37, 29)] {
         for ch in 1..=5 {
             for alpha in std::iter::once(None).chain((0..ch).map(Some)) {
                 let data: Vec<f32> = (0..w * h * ch)
@@ -1884,13 +1876,11 @@ The companion JSON retains setup and assertions for every listed regression. The
                             assert_eq!(actual.len(), expected.len());
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-                            assert_eq!(actual.len(), expected.len());
+assert_eq!(actual.len(), expected.len());
                             for (i, (a, b)) in actual.iter().zip(&expected).enumerate() {
-                                assert_eq!(
-                                    a.to_bits(),
                                 assert_eq!(
                                     a.to_bits(),
                                     b.to_bits(),
@@ -1900,18 +1890,16 @@ Expected assertions from that fixture:
 `empty_channel_layout_remains_empty` setup/action excerpt:
 
 ```rust
-    assert!(local_sharpen(&[], 5, 5, 0, None, (0, 0, 5, 5), 1.0, true).is_empty());
+assert!(local_sharpen(&[], 5, 5, 0, None, (0, 0, 5, 5), 1.0, true).is_empty());
 }
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-    assert!(local_sharpen(&[], 5, 5, 0, None, (0, 0, 5, 5), 1.0, true).is_empty());
+assert!(local_sharpen(&[], 5, 5, 0, None, (0, 0, 5, 5), 1.0, true).is_empty());
 }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -1930,12 +1918,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: a new adjustment or fill layer shows its settings until the mask thumbnail is clicked; adjustment names target contents instead of masks. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `a_new_adjustment_or_fill_layer_shows_its_settings_until_the_mask_thumbnail_is_clicked` setup/action excerpt:
 
 ```rust
-    for (command, settings) in [("layer.newAdjustmentLayer.curves", Some("Reset to defaults")), ("layer.newFillLayer.solidColor", None)] {
+for (command, settings) in [("layer.newAdjustmentLayer.curves", Some("Reset to defaults")), ("layer.newFillLayer.solidColor", None)] {
         let mut s = photocraft_engine::Session::new();
         s.execute("file.new", json!({"width": 200, "height": 100})).unwrap();
         s.execute("layer.new.layer", json!({})).unwrap();
@@ -1949,27 +1937,36 @@ The companion JSON retains setup and assertions for every listed regression. The
         assert!(h.state().ui.mask_target, "{command}: the new mask is targeted");
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert!(h.state().ui.mask_target, "{command}: the new mask is targeted");
+assert!(h.state().ui.mask_target, "{command}: the new mask is targeted");
         assert_eq!(crate::canvas::paint_target(h.state()), json!("mask"), "{command}: painting edits the mask");
-        assert!(h.query_all_by_label("Density").next().is_none(), "{command}: Properties shows the layer, not its mask");
-        if let Some(label) = settings {
-        assert_eq!(crate::canvas::paint_target(h.state()), json!("mask"), "{command}: painting edits the mask");
-        assert!(h.query_all_by_label("Density").next().is_none(), "{command}: Properties shows the layer, not its mask");
-        if let Some(label) = settings {
-            assert!(h.query_all_by_label(label).next().is_some(), "{command}: its settings show");
         assert!(h.query_all_by_label("Density").next().is_none(), "{command}: Properties shows the layer, not its mask");
         if let Some(label) = settings {
             assert!(h.query_all_by_label(label).next().is_some(), "{command}: its settings show");
         }
+        // Clicking the row (not a thumbnail) keeps the settings.
+        let row = h.get_by_label(&layer(&h, id).name).rect().center();
+        assert_eq!(h.state().ui.mask_target, command.starts_with("layer.newFillLayer."));
+        assert!(!h.state().ui.vector_mask_target);
+        assert!(h.query_all_by_label("Density").next().is_none(), "{command}: a row click keeps the settings");
+        // The mask thumbnail switches Properties to the mask.
+        let r = mask_rect(&h, id, MaskKind::Pixel);
+        click_with(&mut h, r.center(), Modifiers::NONE);
+        assert!(h.state().ui.mask_target);
+        assert!(h.query_all_by_label("Density").next().is_some(), "{command}: the mask thumbnail shows the mask controls");
+        if let Some(label) = settings {
+            assert!(h.query_all_by_label(label).next().is_none());
+        }
+    }
+}
 ```
 
 `adjustment_names_target_contents_instead_of_masks` setup/action excerpt:
 
 ```rust
-    for command in ["layer.newAdjustmentLayer.hueSaturation", "layer.newAdjustmentLayer.curves"] {
+for command in ["layer.newAdjustmentLayer.hueSaturation", "layer.newAdjustmentLayer.curves"] {
         for ppp in [1.0, 2.0] {
             let (mut s, _, other) = session();
             s.execute(command, json!({})).unwrap();
@@ -1983,24 +1980,32 @@ Expected assertions from that fixture:
                 assert_eq!(h.state().ui.mask_target, kind == MaskKind::Pixel);
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-                assert_eq!(h.state().ui.mask_target, kind == MaskKind::Pixel);
+assert_eq!(h.state().ui.mask_target, kind == MaskKind::Pixel);
                 assert_eq!(h.state().ui.vector_mask_target, kind == MaskKind::Vector);
                 let name = crate::layer_row_ui::recorded(&h.ctx).into_iter().find(|r| r.layer == id).unwrap().name.unwrap().center();
                 click_with(&mut h, name, Modifiers::NONE);
-                assert_eq!(h.state().ui.vector_mask_target, kind == MaskKind::Vector);
-                let name = crate::layer_row_ui::recorded(&h.ctx).into_iter().find(|r| r.layer == id).unwrap().name.unwrap().center();
-                click_with(&mut h, name, Modifiers::NONE);
-                assert!(!h.state().ui.mask_target && !h.state().ui.vector_mask_target, "{command} @{ppp}x after {kind:?}");
                 assert!(!h.state().ui.mask_target && !h.state().ui.vector_mask_target, "{command} @{ppp}x after {kind:?}");
                 let thumb = crate::layer_row_ui::recorded(&h.ctx).into_iter().find(|r| r.layer == id).unwrap().thumbnail.unwrap();
                 assert!(near(super::brackets(&h.ctx).unwrap(), thumb.expand(3.0)), "the content thumbnail is selected");
                 assert_eq!(h.state().session.active().unwrap().active_layer.unwrap().0, id);
+            }
+            let name = crate::layer_row_ui::recorded(&h.ctx).into_iter().find(|r| r.layer == other).unwrap().name.unwrap().center();
+            click_with(&mut h, name, Modifiers::NONE);
+            assert_eq!(h.state().session.active().unwrap().active_layer.unwrap().0, id);
+            assert!(!h.state().ui.mask_target && !h.state().ui.vector_mask_target, "{command} @{ppp}x from another layer");
+            assert_eq!(crate::canvas::paint_target(h.state()), json!("mask"));
+            let content = layer(&h, id).content;
+            h.state_mut().run("edit.fill", json!({"contents": "black"})).unwrap();
+            assert_eq!(layer(&h, id).content, content, "filling must preserve the adjustment or fill content");
+            assert_eq!(layer(&h, id).mask.unwrap().surface.sample_channel(50, 50, 0), 0.0, "Fill edits the mask");
+            assert!(!h.state().ui.mask_target && !h.state().ui.vector_mask_target, "painting leaves the content thumbnail selected");
+        }
+    }
+}
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -2024,12 +2029,49 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: automation rejects ambient path commands and preferences; json actions round trip preserves metadata; reimport after changing button color keeps names unique; parents before children are retargeted and reimport is idempotent; invalid json params and nested indices fail atomically; long unicode collision names remain portable and idempotent; loading json actions uses engine import and selects the new action. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
+
+`automation_rejects_ambient_path_commands_and_preferences` setup/action excerpt:
+
+```rust
+for (id, params) in [
+            ("brush.presets.importAbr", serde_json::json!({"path": "/outside/set.abr"})),
+            ("brush.presets.importImage", serde_json::json!({"path": "/outside/tip.png"})),
+            ("gradient.presets.importGrd", serde_json::json!({"path": "/outside/set.grd"})),
+            ("plugin.install", serde_json::json!({"path": "/outside/plugin.wasm"})),
+            ("plugin.reload", serde_json::json!({"path": "/outside/plugins"})),
+            ("plugin.reload", serde_json::json!({})),
+            ("plugin.install", serde_json::json!({"path": " "})),
+            ("swatches.import", serde_json::json!({"path": "/outside/set.aco"})),
+            ("swatches.export", serde_json::json!({"path": "/outside/set.ase"})),
+            ("actions.load", serde_json::json!({"path": "/outside/set.atn"})),
+            ("actions.save", serde_json::json!({"path": "/outside/set.atn"})),
+```
+
+Expected assertion context (overlapping windows merged):
+
+```rust
+assert!(authorize_engine_command(id, &params).is_err(), "{id}: {params}");
+        }
+        for (id, params) in [
+            ("brush.presets.importAbr", serde_json::json!({"data": "QUJD"})),
+            assert!(authorize_engine_command(id, &params).is_ok(), "{id}: {params}");
+        }
+        for path in [
+            "",
+            assert!(authorize_engine_command("prefs.set", &serde_json::json!({"path": path, "value": {}})).is_err(), "{path}");
+        }
+        assert!(
+            authorize_engine_command("prefs.set", &serde_json::json!({"values": {"interface.language": "fr", "historyLog.filePath": "/outside/log"}})).is_err()
+        );
+        assert!(authorize_engine_command("prefs.set", &serde_json::json!({"path": "interface.language", "value": "fr"})).is_ok());
+    }
+```
 
 `json_actions_round_trip_preserves_metadata` setup/action excerpt:
 
 ```rust
-        let mut s = Session::new();
+let mut s = Session::new();
         let mut action = Action::new("Draw", vec![("layer.new.layer".into(), json!({}))]);
         action.disabled.insert(0);
         action.dialogs.insert(0);
@@ -2043,57 +2085,16 @@ The companion JSON retains setup and assertions for every listed regression. The
         let rev = s.actions.rev;
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert_eq!(result["imported"], 1);
+assert_eq!(result["imported"], 1);
         assert_eq!(s.actions.list, [action]);
         let rev = s.actions.rev;
-        assert_eq!(s.execute("actions.import", json!({"data": exported["data"]})).unwrap()["imported"], 0);
-        assert_eq!(s.actions.list, [action]);
-        let rev = s.actions.rev;
-        assert_eq!(s.execute("actions.import", json!({"data": exported["data"]})).unwrap()["imported"], 0);
-        assert_eq!(s.actions.rev, rev);
         assert_eq!(s.execute("actions.import", json!({"data": exported["data"]})).unwrap()["imported"], 0);
         assert_eq!(s.actions.rev, rev);
     }
 ```
-
-`reimport_after_changing_button_color_keeps_names_unique` setup/action excerpt:
-
-```rust
-        let mut s = Session::new();
-        s.actions.list.push(Action::new("Draw", vec![]));
-        let data = s.execute("actions.export", json!({})).unwrap()["data"].clone();
-        s.execute("actions.setColor", json!({"action": "Draw", "color": "red"})).unwrap();
-        let params = json!({"data": data});
-        assert_eq!(s.execute("actions.import", params.clone()).unwrap()["imported"], 1);
-        assert_eq!(s.actions.list[0].name, "Draw");
-        assert_eq!(s.actions.list[0].color, "red");
-        assert_eq!(s.actions.list[1].name, "Draw (Imported 2)");
-        assert!(s.actions.list[1].color.is_empty());
-        let before = s.actions.clone();
-        assert_eq!(s.execute("actions.import", params).unwrap()["imported"], 0);
-```
-
-Expected assertions from that fixture:
-
-```rust
-        assert_eq!(s.execute("actions.import", params.clone()).unwrap()["imported"], 1);
-        assert_eq!(s.actions.list[0].name, "Draw");
-        assert_eq!(s.actions.list[0].color, "red");
-        assert_eq!(s.actions.list[1].name, "Draw (Imported 2)");
-        assert_eq!(s.actions.list[0].name, "Draw");
-        assert_eq!(s.actions.list[0].color, "red");
-        assert_eq!(s.actions.list[1].name, "Draw (Imported 2)");
-        assert!(s.actions.list[1].color.is_empty());
-        assert_eq!(s.actions.list[0].color, "red");
-        assert_eq!(s.actions.list[1].name, "Draw (Imported 2)");
-        assert!(s.actions.list[1].color.is_empty());
-        let before = s.actions.clone();
-```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -2117,12 +2118,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: measured image areas crop the borders without touching the rest; encrypted applied white balance and black reach the developer; plain levels win and invalid encrypted levels are ignored; hostile private metadata is bounded and optional; measured keystream recurrence and unencrypted tail; decode matches the measured oracles; developing produces the crop in 16bit rgb. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `measured_image_areas_crop_the_borders_without_touching_the_rest` setup/action excerpt:
 
 ```rust
-        let mut s = nef("NIKON D800E", 7424, 4924);
+let mut s = nef("NIKON D800E", 7424, 4924);
         apply(&mut s);
         assert_eq!(s.crop, Rect::new(8, 6, 7360, 4912));
         // Only the image area is measured: levels, colour and tone stay untouched.
@@ -2136,27 +2137,44 @@ The companion JSON retains setup and assertions for every listed regression. The
         let mut s = sensor("SONY", "ILCE-6000", 6048, 4024);
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert_eq!(s.crop, Rect::new(8, 6, 7360, 4912));
+assert_eq!(s.crop, Rect::new(8, 6, 7360, 4912));
         // Only the image area is measured: levels, colour and tone stay untouched.
         assert!(s.color.calibrations.is_empty() && s.tone_curve.is_empty());
-        assert_eq!(s.white, [16383.0; 3]);
-        assert!(s.color.calibrations.is_empty() && s.tone_curve.is_empty());
-        assert_eq!(s.white, [16383.0; 3]);
-
-        let mut s = sensor("SONY", "ILCE-7", 6048, 4024);
         assert_eq!(s.white, [16383.0; 3]);
 
         let mut s = sensor("SONY", "ILCE-7", 6048, 4024);
         apply(&mut s);
+        assert_eq!(s.crop, Rect::new(12, 12, 6000, 4000));
+
+        let mut s = sensor("SONY", "ILCE-6000", 6048, 4024);
+        apply(&mut s);
+        assert_eq!(s.crop, Rect::new(12, 12, 6000, 4000));
+        assert!(s.color.calibrations.is_empty() && s.tone_curve.is_empty());
+        // A file's explicit crop wins, including a different in-camera aspect ratio.
+        s.crop = Rect::new(12, 324, 6000, 3376);
+        apply(&mut s);
+        assert_eq!(s.crop, Rect::new(12, 324, 6000, 3376));
+
+        let mut s = sensor("SONY", "ILCE-6000", 3024, 2012);
+        apply(&mut s);
+        assert_eq!(s.crop, Rect::new(0, 0, 3024, 2012));
+
+        // Another size or model of the same maker is left alone.
+        let mut s = nef("NIKON D800E", 2496, 1646);
+        assert_eq!(s.crop, Rect::new(0, 0, 2496, 1646));
+        let mut s = nef("NIKON D800", 7424, 4924);
+        apply(&mut s);
+        assert_eq!(s.crop, Rect::new(0, 0, 7424, 4924));
+    }
 ```
 
 `encrypted_applied_white_balance_and_black_reach_the_developer` setup/action excerpt:
 
 ```rust
-        for be in [false, true] {
+for be in [false, true] {
             let bytes = fixture(be, false, [512, 513, 514, 515], [3072, 1024, 1024, 2048]);
             let s = decode(&bytes, &Limits::default()).unwrap();
             assert_eq!(s.format, RawFormat::Arw);
@@ -2170,24 +2188,20 @@ Expected assertions from that fixture:
         }
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-            assert_eq!(s.format, RawFormat::Arw);
+assert_eq!(s.format, RawFormat::Arw);
             assert_eq!(s.camera_wb, Some([3.0, 1.0, 2.0]));
-            assert_eq!(s.black.values, vec![512.0, 513.0, 514.0, 515.0]);
-            let dev = develop_sensor(&s, &DevelopOptions::default()).unwrap();
-            assert_eq!(s.camera_wb, Some([3.0, 1.0, 2.0]));
-            assert_eq!(s.black.values, vec![512.0, 513.0, 514.0, 515.0]);
-            let dev = develop_sensor(&s, &DevelopOptions::default()).unwrap();
-            assert_eq!(dev.info.wb_multipliers, [3.0, 1.0, 2.0]);
             assert_eq!(s.black.values, vec![512.0, 513.0, 514.0, 515.0]);
             let dev = develop_sensor(&s, &DevelopOptions::default()).unwrap();
             assert_eq!(dev.info.wb_multipliers, [3.0, 1.0, 2.0]);
             assert!(!dev.warnings.iter().any(|w| w.contains("grey world") || w.contains("assumed 0")));
+            let explicit = develop_sensor(&s, &DevelopOptions { white_balance: WhiteBalance::Multipliers([3.0, 1.0, 2.0]), ..Default::default() }).unwrap();
+            assert_eq!(dev.rgb, explicit.rgb);
+        }
+    }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -2281,12 +2295,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: appended work and saved components preserve existing geometry and undo; appending valid components cannot exceed total path budget; invalid path coordinates leave work and saved paths unchanged; large straight work and saved paths append and undo without shape coordinate limits; shape layer paths are edited and a direct selection is cleared; add and delete anchor tools edit the selected saved path; command with freeform and curvature edits the selected saved path after modifier release; command cannot edit an existing path when the freeform trace failed to finish; dragging an anchor moves it in one undoable step; arrow keys nudge the selected saved path; selected saved and work paths win overlapping shape hits; direct selection cannot apply to another document or a reopened identity; external revision cancels preview and preserves the new path; layer path and tool changes cancel the owned edit; closing a document and changing marquee target discard old events; serialized anchor selection has no runtime ownership and is not restored; command drag after failed pen commit preserves draft and existing work path; switching between selection and convert tools cancels an in flight drag; the convert point tool edits selected saved paths without changing the work path; changing the channel vector mask target cancels an owned edit; esc ends a pen path and keeps it; pen shows the close path pointer over the first anchor; real freeform freehand and alt straight segments append to the owned saved path once; real freeform stale target source revision and document cancel without finishing elsewhere; another freeform trace cannot replace a failed owned draft or retry it automatically; freeform alt release in the next press keeps the failed fit; clicking the vector mask targets it for the path tools; cmd enter while drawing finishes the path and loads it; freeform and path selection releases cannot edit a different document; freeform release cancels after revision or target change; freeform valid release is one undoable path edit; frame cancellation consumes old events after switching tools; selected work and saved paths append pen and curvature components once; deselected work path is replaced without touching saved paths; captured path and shape mode do not follow later ui selection; captured pen paint preserves float colour and alpha after toolbar changes; stale drafts are cancelled before tool switch or pointer input; sync views and input apis discard unowned or closed document drafts; same named saved paths do not share selection or drafts across tabs; reopened same id and revision do not reuse the saved path selection; ordinary path edits undo and redo preserve the explicit saved path selection; failed pen and curvature commits keep the exact draft and do not retry each frame; ordinary tool switch commits the owned draft once; selected saved paths move and free transform without changing work or shape; explicit work path precedes vector mask and deselection restores mask fallback; pen keeps its captured vector mask when another path is selected; freeform finish uses its captured saved path and rejects foreign documents; saved path drag visual fixture; enter selects a stroke style and escape closes its popups without committing pen; transparent and absent paints remain distinct and open pen keeps foreground; all shape tools and open pen use the complete stroke defaults; freeform straight segments keep the captured saved path and reject a foreign document; failed freeform straight segment commit keeps its owned fitted draft; show target path and extras hide the path outlines; pen last anchor hit tolerance tracks zoom and draft round trips; general paths keep large straight coordinates and shape limits stay put; general paths reject coordinates that overflow the ui or segment arithmetic; general paths bound total knots subpaths and combined tessellation. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `appended_work_and_saved_components_preserve_existing_geometry_and_undo` setup/action excerpt:
 
 ```rust
-    for name in ["work", "Saved drawing"] {
+for name in ["work", "Saved drawing"] {
         let mut session = session();
         let first = json!({"subpaths": [{"closed": false, "knots": [[20, 20], [80, 20]]}]});
         let second = json!({"subpaths": [{"closed": false, "knots": [[30, 60], [90, 60]]}]});
@@ -2300,27 +2314,23 @@ The companion JSON retains setup and assertions for every listed regression. The
         assert_eq!(session.execute("path.info", json!({"name": name})).unwrap(), before);
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert_eq!(after["path"]["subpaths"].as_array().unwrap().len(), 2);
+assert_eq!(after["path"]["subpaths"].as_array().unwrap().len(), 2);
         assert_eq!(after["path"]["subpaths"][0], before["path"]["subpaths"][0]);
         session.execute("edit.undo", json!({})).unwrap();
-        assert_eq!(session.execute("path.info", json!({"name": name})).unwrap(), before);
-        assert_eq!(after["path"]["subpaths"][0], before["path"]["subpaths"][0]);
-        session.execute("edit.undo", json!({})).unwrap();
-        assert_eq!(session.execute("path.info", json!({"name": name})).unwrap(), before);
-        session.execute("edit.redo", json!({})).unwrap();
         assert_eq!(session.execute("path.info", json!({"name": name})).unwrap(), before);
         session.execute("edit.redo", json!({})).unwrap();
         assert_eq!(session.execute("path.info", json!({"name": name})).unwrap(), after);
     }
+}
 ```
 
 `appending_valid_components_cannot_exceed_total_path_budget` setup/action excerpt:
 
 ```rust
-    let mut session = session();
+let mut session = session();
     let subpath = json!({"closed": false, "knots": []});
     session.execute("path.set", json!({"path": {"subpaths": vec![subpath.clone(); 2_049]}})).unwrap();
     let before = session.active().unwrap().doc.work_path.clone();
@@ -2332,21 +2342,14 @@ Expected assertions from that fixture:
 }
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-    assert!(error.to_string().contains("4096"));
+assert!(error.to_string().contains("4096"));
     assert_eq!(session.active().unwrap().doc.work_path, before);
-    assert_eq!(session.active().unwrap().history.entries().len(), history);
-}
-    assert_eq!(session.active().unwrap().doc.work_path, before);
-    assert_eq!(session.active().unwrap().history.entries().len(), history);
-}
     assert_eq!(session.active().unwrap().history.entries().len(), history);
 }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -2366,12 +2369,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: layers to files can trim transparent margins without changing the document; streamed layer export respects trim; trimming an empty layer keeps a valid nonzero canvas. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `layers_to_files_can_trim_transparent_margins_without_changing_the_document` setup/action excerpt:
 
 ```rust
-    let dir = tmp("layers-trim");
+let dir = tmp("layers-trim");
     for depth in [8, 16, 32] {
         let mut s = session(12, 11, depth);
         s.execute("layer.new.layer", json!({"name": "Ink"})).unwrap();
@@ -2385,17 +2388,15 @@ The companion JSON retains setup and assertions for every listed regression. The
         let full = photocraft_io::import("full.png", &full).unwrap().document;
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert_eq!((full.size.width, full.size.height), (12, 11), "default is unchanged");
+assert_eq!((full.size.width, full.size.height), (12, 11), "default is unchanged");
 
         let trimmed = s.execute("file.export.layersToFiles", json!({"dir": dir, "prefix": format!("trim-{depth}"), "format": "png", "trim": true})).unwrap();
         let image = std::fs::read(trimmed["files"][0].as_str().unwrap()).unwrap();
         assert_eq!((cropped.size.width, cropped.size.height), (4, 5), "depth {depth}");
         let px = photocraft_compose::render(&cropped, Rect::new(0, 0, 1, 1)).px[0];
-        assert!(px[0] > 0.95 && px[1] < 0.05 && px[2] < 0.05, "depth {depth}: {px:?}");
-        assert_eq!(*doc(&s), before, "export must not crop the original document");
         assert!(px[0] > 0.95 && px[1] < 0.05 && px[2] < 0.05, "depth {depth}: {px:?}");
         assert_eq!(*doc(&s), before, "export must not crop the original document");
     }
@@ -2405,7 +2406,7 @@ Expected assertions from that fixture:
 `streamed_layer_export_respects_trim` setup/action excerpt:
 
 ```rust
-    let mut s = session(12, 11, 8);
+let mut s = session(12, 11, 8);
     s.execute("layer.new.layer", json!({"name": "Ink"})).unwrap();
     s.execute("select.rect", json!({"x": 3, "y": 2, "width": 4, "height": 5})).unwrap();
     s.execute("edit.fill", json!({"color": "#ff0000"})).unwrap();
@@ -2419,18 +2420,14 @@ Expected assertions from that fixture:
     assert_eq!(names.len(), encoded.len());
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-    assert_eq!(names.len(), encoded.len());
+assert_eq!(names.len(), encoded.len());
     let cropped = photocraft_io::import(&encoded[0].0, &encoded[0].1).unwrap().document;
     assert_eq!((cropped.size.width, cropped.size.height), (4, 5));
 }
-    assert_eq!((cropped.size.width, cropped.size.height), (4, 5));
-}
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -2453,12 +2450,35 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: duplicate layer ids are rejected across the whole tree; duplicate extreme layer ids are not silently remapped; duplicate layer ids are rejected before fetching payloads; unique nested layer ids preserve comp targets in both load modes; layer identity validation keeps smart document and contents scopes independent; an empty layer tree loads in both modes. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
+
+`duplicate_layer_ids_are_rejected_across_the_whole_tree` setup/action excerpt:
+
+```rust
+let doc = sample();
+    let bytes = save_to_bytes(&doc, &SaveOptions::default()).unwrap();
+    // Top-level siblings, ancestor/descendant, nested siblings, and unrelated groups must all
+    // share one identity namespace. Reidentifying cannot recover an ambiguous comp target.
+    for (source, target) in [
+        ("/document/layers/1/id", "/document/layers/2/id"),
+        ("/document/layers/1/id", "/document/layers/1/content/children/1/content/children/0/id"),
+        ("/document/layers/1/content/children/0/id", "/document/layers/1/content/children/1/id"),
+        ("/document/layers/1/content/children/0/id", "/document/layers/2/content/children/0/id"),
+        ("/document/layers/0/id", "/document/layers/1/content/children/1/content/children/0/id"),
+    ] {
+        let mut duplicate = 0;
+```
+
+Expected assertion context (overlapping windows merged):
+
+```rust
+
+```
 
 `duplicate_extreme_layer_ids_are_not_silently_remapped` setup/action excerpt:
 
 ```rust
-    let bytes = save_to_bytes(&sample(), &SaveOptions::default()).unwrap();
+let bytes = save_to_bytes(&sample(), &SaveOptions::default()).unwrap();
     let damaged = rewrite_manifest(&bytes, |m| {
         m["document"]["layers"][0]["id"] = u64::MAX.into();
         m["document"]["layers"][2]["id"] = u64::MAX.into();
@@ -2470,47 +2490,11 @@ The companion JSON retains setup and assertions for every listed regression. The
 }
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
 
 ```
-
-`unique_nested_layer_ids_preserve_comp_targets_in_both_load_modes` setup/action excerpt:
-
-```rust
-    let doc = sample();
-    let bytes = save_to_bytes(&doc, &SaveOptions::default()).unwrap();
-    let original_ids: HashSet<_> = doc.walk().into_iter().map(|(_, _, l)| l.id).collect();
-    for preserve_ids in [true, false] {
-        let loaded = load_from_bytes_with(&bytes, &LoadOptions { preserve_ids, ..Default::default() }).unwrap();
-        let walk = loaded.walk();
-        let ids: HashSet<_> = walk.iter().map(|(_, _, l)| l.id).collect();
-        assert_eq!(ids.len(), walk.len());
-        for ((_, _, layer), state) in walk.iter().zip(&loaded.layer_comps[0].states) {
-            assert_eq!(state.layer, layer.id);
-            assert_eq!(loaded.layer(state.layer), Some(*layer));
-        }
-```
-
-Expected assertions from that fixture:
-
-```rust
-        assert_eq!(ids.len(), walk.len());
-        for ((_, _, layer), state) in walk.iter().zip(&loaded.layer_comps[0].states) {
-            assert_eq!(state.layer, layer.id);
-            assert_eq!(loaded.layer(state.layer), Some(*layer));
-            assert_eq!(state.layer, layer.id);
-            assert_eq!(loaded.layer(state.layer), Some(*layer));
-        }
-        if preserve_ids {
-            assert_eq!(loaded.layer(state.layer), Some(*layer));
-        }
-        if preserve_ids {
-            assert_eq!(loaded, doc);
-```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -2537,9 +2521,9 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 ## PR-8892: ui: larger Align icons and overflow button; Save for Web keeps its width on an invalid Matte
 
-- Fixture/setup: Open a layered synthetic document in Move tool and Save for Web; capture initial dialog geometry.
-- Action: Inspect alignment and overflow controls; enter an invalid Matte value and compare dialog width before/after.
-- Expected: Alignment and overflow controls keep the reviewed larger dimensions, and invalid Matte input does not change Save for Web width.
+- Fixture/setup: Studio Dark and Studio Light, UI scale 100% and 200%, 1280x800 then 900x600 logical-point window; synthetic document with at least two selected layers, Move tool, overflowing document/panel tabs, and Save for Web. Record physical pixel dimensions and pixels-per-point.
+- Action: Inspect Move alignment controls and Align and distribute ellipsis. Force tab overflow and open its chevron menu. Open Save for Web, record dialog width, enter an invalid Matte value such as not-a-colour, and record width/error placement; correct the value.
+- Expected: After the combined #8892/#9004 ports, Move icons and ellipsis use 20-point artwork in 28-point hit targets (40/56 physical pixels at 2x). Tab overflow uses a 16-point chevrons-right icon in its 18-point slot (32/36 pixels at 2x), with reachable menu items. Controls remain legible/unclipped. Invalid Matte displays its error without expanding Save for Web width; correction clears it.
 - Status: NOT RUN
 - Actual:
 - Evidence:
@@ -2578,12 +2562,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: direct selection drags an anchor of the selected saved path; direct selection marquee selects and arrow params name the saved path; the saved path is only edited while the paths panel selects it; the selected saved path comes before the work path; path selection moves the selected saved path; free transform path names the selected saved path; add and delete anchor point edit the selected saved path; a saved path read from a psd is editable; arrows leave a saved path the paths panel no longer selects. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `direct_selection_drags_an_anchor_of_the_selected_saved_path` setup/action excerpt:
 
 ```rust
-    let mut app = app(Tool::DirectSelection);
+let mut app = app(Tool::DirectSelection);
     with_saved_path(&mut app);
     let (before, n) = (saved(&app), steps(&app));
     drag(&mut app, [120.5, 120.5], [130.5, 135.5], Modifiers::NONE);
@@ -2597,27 +2581,23 @@ The companion JSON retains setup and assertions for every listed regression. The
     assert_eq!(saved(&app), before);
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-    assert_eq!(after.subpaths[0].knots[2].anchor, Point::new(130.0, 135.0), "the dragged anchor moved");
+assert_eq!(after.subpaths[0].knots[2].anchor, Point::new(130.0, 135.0), "the dragged anchor moved");
     assert_eq!(after.subpaths[0].knots[0].anchor, Point::new(40.0, 40.0), "the others stay");
-    assert_eq!(steps(&app), n + 1, "one history step");
-    assert_eq!((app.ui.direct_selection.target, app.ui.direct_selection.anchors.clone()), (Some(PathRef::Saved(0)), vec![[0, 2]]));
-    assert_eq!(after.subpaths[0].knots[0].anchor, Point::new(40.0, 40.0), "the others stay");
-    assert_eq!(steps(&app), n + 1, "one history step");
-    assert_eq!((app.ui.direct_selection.target, app.ui.direct_selection.anchors.clone()), (Some(PathRef::Saved(0)), vec![[0, 2]]));
-    assert!(app.session.active().unwrap().doc.work_path.is_none(), "no work path was made");
     assert_eq!(steps(&app), n + 1, "one history step");
     assert_eq!((app.ui.direct_selection.target, app.ui.direct_selection.anchors.clone()), (Some(PathRef::Saved(0)), vec![[0, 2]]));
     assert!(app.session.active().unwrap().doc.work_path.is_none(), "no work path was made");
     assert!(app.session.undo());
+    assert_eq!(saved(&app), before);
+}
 ```
 
 `direct_selection_marquee_selects_and_arrow_params_name_the_saved_path` setup/action excerpt:
 
 ```rust
-    let mut app = app(Tool::DirectSelection);
+let mut app = app(Tool::DirectSelection);
     with_saved_path(&mut app);
     drag(&mut app, [30.0, 30.0], [50.0, 50.0], Modifiers::NONE);
     assert_eq!((app.ui.direct_selection.target, app.ui.direct_selection.anchors.clone()), (Some(PathRef::Saved(0)), vec![[0, 0]]));
@@ -2628,23 +2608,16 @@ Expected assertions from that fixture:
 }
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-    assert_eq!((app.ui.direct_selection.target, app.ui.direct_selection.anchors.clone()), (Some(PathRef::Saved(0)), vec![[0, 0]]));
+assert_eq!((app.ui.direct_selection.target, app.ui.direct_selection.anchors.clone()), (Some(PathRef::Saved(0)), vec![[0, 0]]));
     assert_eq!(PathRef::Saved(0).params(&app), json!({"name": NAME}));
     // A path that is gone gets no name, which the engine refuses instead of editing another one.
-    assert_eq!(PathRef::Saved(7).params(&app), json!({"name": ""}));
-    assert_eq!(PathRef::Saved(0).params(&app), json!({"name": NAME}));
-    // A path that is gone gets no name, which the engine refuses instead of editing another one.
-    assert_eq!(PathRef::Saved(7).params(&app), json!({"name": ""}));
-    assert!(app.run("path.moveAnchors", json!({"name": "", "anchors": [[0, 0]], "move": [1, 1]})).is_err());
     assert_eq!(PathRef::Saved(7).params(&app), json!({"name": ""}));
     assert!(app.run("path.moveAnchors", json!({"name": "", "anchors": [[0, 0]], "move": [1, 1]})).is_err());
 }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -2679,12 +2652,39 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: ico export is available and rejects oversize output; nearest neighbor doubles each pixel into an exact block; resample choices are checked; export document scales height when rounded width is unchanged; export document proxy limits both dimensions before rounding; the estimate is the exported files size; export as downscales stroke only shapes and preview; export document scales and flattens; export document scales when only the height changes; layered preview runs outside the ui frame; exact pixels lock aspect and leave the source; untagged srgb export tags without rewriting pixels; untagged srgb export 24mp keeps pixel tiles; untagged jpeg export embeds the requested srgb profile; preview cache tracks working profiles but prefers embedded profiles; preview workers keep the captured source profile; replay converts untagged pixels from the original working profile; profile and metadata follow the existing exporter. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
+
+`ico_export_is_available_and_rejects_oversize_output` setup/action excerpt:
+
+```rust
+let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        let mut f = Map::new();
+        f.insert("format".into(), json!("ico"));
+        f.insert("scale".into(), json!(100));
+        assert!(FORMATS.iter().any(|(ext, _)| *ext == "ico"));
+        assert!(default_export_document(&app.session.active().unwrap().doc, &f, None).err().is_some_and(|e| e.contains("256")));
+        f.insert("scale".into(), json!(50));
+        let resized = default_export_document(&app.session.active().unwrap().doc, &f, None).unwrap();
+        assert_eq!((resized.size.width, resized.size.height), (150, 100));
+    }
+```
+
+Expected assertion context (overlapping windows merged):
+
+```rust
+assert!(FORMATS.iter().any(|(ext, _)| *ext == "ico"));
+        assert!(default_export_document(&app.session.active().unwrap().doc, &f, None).err().is_some_and(|e| e.contains("256")));
+        f.insert("scale".into(), json!(50));
+        let resized = default_export_document(&app.session.active().unwrap().doc, &f, None).unwrap();
+        assert_eq!((resized.size.width, resized.size.height), (150, 100));
+    }
+```
 
 `nearest_neighbor_doubles_each_pixel_into_an_exact_block` setup/action excerpt:
 
 ```rust
-        use photocraft_doc::SampleType;
+use photocraft_doc::SampleType;
         for depth in [SampleType::U8, SampleType::U16] {
             let doc = checker_doc(depth);
             let before = doc.clone();
@@ -2698,13 +2698,10 @@ The companion JSON retains setup and assertions for every listed regression. The
             let surf = out.layers[0].surface().unwrap();
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-            assert_eq!((out.size.width, out.size.height), (10, 6));
-            assert_eq!(out.depth, depth);
-            let surf = out.layers[0].surface().unwrap();
-            for y in 0..6 {
+assert_eq!((out.size.width, out.size.height), (10, 6));
             assert_eq!(out.depth, depth);
             let surf = out.layers[0].surface().unwrap();
             for y in 0..6 {
@@ -2713,43 +2710,19 @@ Expected assertions from that fixture:
                 }
             }
             assert_eq!(doc, before, "{depth:?}: export leaves the source document unchanged");
+
+            // The preview proxy keeps Nearest Neighbor's hard edges too.
+            let proxy = default_export_document(&doc, &f, Some(512)).unwrap();
+            assert_eq!(proxy.layers[0].surface().unwrap().rgba(1, 1), checker(0, 0), "{depth:?}: preview proxy is nearest as well");
+            assert_eq!(preview_filter(&f), egui::TextureOptions::NEAREST);
+
+            f.insert("resample".into(), json!(DEFAULT_RESAMPLE));
+            let smooth = default_export_document(&doc, &f, None).unwrap();
+            assert!(blended, "{depth:?}: Bicubic Automatic blends neighbouring squares");
+            assert_eq!(preview_filter(&f), egui::TextureOptions::LINEAR);
+        }
+    }
 ```
-
-`resample_choices_are_checked` setup/action excerpt:
-
-```rust
-        let doc = checker_doc(photocraft_doc::SampleType::U8);
-        let mut f = Map::new();
-        f.insert("scale".into(), json!(300));
-        for (method, _) in RESAMPLE {
-            f.insert("resample".into(), json!(method));
-            let out = default_export_document(&doc, &f, None).unwrap();
-            assert_eq!((out.size.width, out.size.height), (15, 9), "{method}");
-        }
-        for bad in [json!("lanczos"), json!("NEAREST"), json!(""), json!(1), json!({"m": "nearest"})] {
-            f.insert("resample".into(), bad.clone());
-            let err = default_export_document(&doc, &f, None).unwrap_err();
-            assert!(err.contains("resample must be"), "{bad}: {err}");
-```
-
-Expected assertions from that fixture:
-
-```rust
-            assert_eq!((out.size.width, out.size.height), (15, 9), "{method}");
-        }
-        for bad in [json!("lanczos"), json!("NEAREST"), json!(""), json!(1), json!({"m": "nearest"})] {
-            f.insert("resample".into(), bad.clone());
-            assert!(err.contains("resample must be"), "{bad}: {err}");
-            assert!(default_export_document(&doc, &f, Some(512)).is_err(), "{bad}: the preview reports it too");
-        }
-        f.remove("resample");
-            assert!(default_export_document(&doc, &f, Some(512)).is_err(), "{bad}: the preview reports it too");
-        }
-        f.remove("resample");
-        assert_eq!(resample_method(&f, None).unwrap(), "bicubicAutomatic");
-```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -2771,12 +2744,42 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: doc save rejects a bad quality instead of ignoring or clamping it; exif srgb jpeg round trip; embed color profile tags an untagged document srgb; untagged documents embed the profile they are assumed to be in; the estimate is the exported files size. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
+
+`doc_save_rejects_a_bad_quality_instead_of_ignoring_or_clamping_it` setup/action excerpt:
+
+```rust
+let dir = std::env::temp_dir().join(format!("pc-rpc-save-quality-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("x.webp");
+        let mut h = Headless::trusted_local();
+        h.handle("doc.new", json!({"width": 16, "height": 16})).unwrap();
+        for q in [json!(85.0), json!("85"), json!(0), json!(500), json!(-5), json!(true)] {
+            let err = h.handle("doc.save", json!({"path": path.to_string_lossy(), "quality": q})).unwrap_err().to_string();
+            assert!(err.contains("quality"), "{q}: {err}");
+            assert!(!path.exists(), "{q} wrote a file");
+        }
+        h.handle("doc.save", json!({"path": path.to_string_lossy(), "quality": 85})).unwrap();
+        let bytes = std::fs::read(&path).unwrap();
+```
+
+Expected assertion context (overlapping windows merged):
+
+```rust
+assert!(err.contains("quality"), "{q}: {err}");
+            assert!(!path.exists(), "{q} wrote a file");
+        }
+        h.handle("doc.save", json!({"path": path.to_string_lossy(), "quality": 85})).unwrap();
+        let bytes = std::fs::read(&path).unwrap();
+        assert!(bytes.windows(4).any(|c| c == b"VP8 ") && !bytes.windows(4).any(|c| c == b"VP8L"), "a WebP saved with a quality is lossy");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+```
 
 `exif_srgb_jpeg_round_trip` setup/action excerpt:
 
 ```rust
-        let mut s = Session::new();
+let mut s = Session::new();
         s.execute("edit.colorSettings", json!({"workingRgb": "display-p3"})).unwrap();
         // Embed Color Profile off: an untagged document is otherwise tagged sRGB on export (#9325).
         let mut opts = photocraft_io::ExportOptions::default();
@@ -2790,54 +2793,15 @@ The companion JSON retains setup and assertions for every listed regression. The
     }
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert!(back.icc_profile.is_none(), "no ICC profile in the file");
+assert!(back.icc_profile.is_none(), "no ICC profile in the file");
         let (_, r) = s.open_document(back, None);
         assert_eq!((r["action"].as_str(), r["exif"].as_bool()), (Some("kept"), Some(true)));
         assert!(desc(&s.active().unwrap().doc).unwrap().starts_with("sRGB"));
-        assert_eq!((r["action"].as_str(), r["exif"].as_bool()), (Some("kept"), Some(true)));
-        assert!(desc(&s.active().unwrap().doc).unwrap().starts_with("sRGB"));
-    }
-        assert!(desc(&s.active().unwrap().doc).unwrap().starts_with("sRGB"));
     }
 ```
-
-`embed_color_profile_tags_an_untagged_document_srgb` setup/action excerpt:
-
-```rust
-    let mut s = session(8);
-    assert!(s.active().unwrap().doc.icc_profile.is_none(), "a new document is untagged");
-    let dir = tmp("assumed-icc");
-    let profile = |path: &str| decode(path).icc.map(|b| photocraft_cms::Profile::parse(&b).unwrap().description);
-    for (format, ext) in [("jpeg", "jpg"), ("png24", "png")] {
-        let on = format!("{dir}/on.{ext}");
-        s.execute("file.export.saveForWebLegacy", json!({"format": format, "embedIcc": true, "path": on})).unwrap();
-        assert_eq!(profile(&on).as_deref(), Some(photocraft_cms::Builtin::Srgb.description()), "{format}");
-        let off = format!("{dir}/off.{ext}");
-        s.execute("file.export.saveForWebLegacy", json!({"format": format, "embedIcc": false, "path": off})).unwrap();
-        assert_eq!(profile(&off), None, "{format}");
-    }
-```
-
-Expected assertions from that fixture:
-
-```rust
-    assert!(s.active().unwrap().doc.icc_profile.is_none(), "a new document is untagged");
-    let dir = tmp("assumed-icc");
-    let profile = |path: &str| decode(path).icc.map(|b| photocraft_cms::Profile::parse(&b).unwrap().description);
-    for (format, ext) in [("jpeg", "jpg"), ("png24", "png")] {
-        assert_eq!(profile(&on).as_deref(), Some(photocraft_cms::Builtin::Srgb.description()), "{format}");
-        let off = format!("{dir}/off.{ext}");
-        s.execute("file.export.saveForWebLegacy", json!({"format": format, "embedIcc": false, "path": off})).unwrap();
-        assert_eq!(profile(&off), None, "{format}");
-        assert_eq!(profile(&off), None, "{format}");
-    }
-}
-```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -2857,12 +2821,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: write keeps the replaced files creation time; keeps the original creation time; keeps the creation time under a deny write acl. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `write_keeps_the_replaced_files_creation_time` setup/action excerpt:
 
 ```rust
-        use std::os::macos::fs::FileTimesExt;
+use std::os::macos::fs::FileTimesExt;
         let (inside, _, workspace) = roots("created");
         let path = inside.join("doc.psd");
         workspace.write("doc.psd", b"original").unwrap();
@@ -2874,12 +2838,10 @@ The companion JSON retains setup and assertions for every listed regression. The
     }
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert_eq!(std::fs::read(&path).unwrap(), b"replacement");
-        assert_eq!(std::fs::metadata(&path).unwrap().created().unwrap(), born, "the creation time survives the automation write");
-    }
+assert_eq!(std::fs::read(&path).unwrap(), b"replacement");
         assert_eq!(std::fs::metadata(&path).unwrap().created().unwrap(), born, "the creation time survives the automation write");
     }
 ```
@@ -2887,7 +2849,7 @@ Expected assertions from that fixture:
 `keeps_the_original_creation_time` setup/action excerpt:
 
 ```rust
-    use std::os::macos::fs::FileTimesExt;
+use std::os::macos::fs::FileTimesExt;
     let d = TempDir::new("created");
     let p = d.0.join("doc.psd");
     std::fs::write(&p, ORIGINAL).unwrap();
@@ -2901,23 +2863,16 @@ Expected assertions from that fixture:
     assert_no_temp(&d.0);
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-    assert_eq!(std::fs::metadata(&p).unwrap().created().unwrap(), born);
+assert_eq!(std::fs::metadata(&p).unwrap().created().unwrap(), born);
     atomic_write(&p, b"new").unwrap();
     assert_eq!(std::fs::read(&p).unwrap(), b"new");
-    assert_eq!(std::fs::metadata(&p).unwrap().created().unwrap(), born, "the creation time survives the save");
-    assert_eq!(std::fs::read(&p).unwrap(), b"new");
-    assert_eq!(std::fs::metadata(&p).unwrap().created().unwrap(), born, "the creation time survives the save");
-    assert_no_temp(&d.0);
-}
     assert_eq!(std::fs::metadata(&p).unwrap().created().unwrap(), born, "the creation time survives the save");
     assert_no_temp(&d.0);
 }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -2952,12 +2907,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: psd contours keep at most 16 points and their peaks; a point on a tiny straight span is not a bend. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `psd_contours_keep_at_most_16_points_and_their_peaks` setup/action excerpt:
 
 ```rust
-        let points: Vec<CurvePoint> = (0..29)
+let points: Vec<CurvePoint> = (0..29)
             .map(|i| {
                 let x = i as f32 / 28.0;
                 // Rings at x = 0.25 and 0.75, small wiggles between.
@@ -2971,27 +2926,25 @@ The companion JSON retains setup and assertions for every listed regression. The
         assert_eq!(out.first().copied(), Some((0.0, f64::from(points[0].output) * 255.0)));
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert_eq!(out.len(), 16);
+assert_eq!(out.len(), 16);
         assert_eq!(out.first().copied(), Some((0.0, f64::from(points[0].output) * 255.0)));
-        assert_eq!(out.last().map(|p| p.0), Some(255.0));
-        let peak = |x: f32| out.iter().any(|p| ((p.0 / 255.0) as f32 - x).abs() < 0.03 && p.1 > 240.0);
-        assert_eq!(out.first().copied(), Some((0.0, f64::from(points[0].output) * 255.0)));
-        assert_eq!(out.last().map(|p| p.0), Some(255.0));
-        let peak = |x: f32| out.iter().any(|p| ((p.0 / 255.0) as f32 - x).abs() < 0.03 && p.1 > 240.0);
-        assert!(peak(0.25) && peak(0.75), "both rings kept: {out:?}");
         assert_eq!(out.last().map(|p| p.0), Some(255.0));
         let peak = |x: f32| out.iter().any(|p| ((p.0 / 255.0) as f32 - x).abs() < 0.03 && p.1 > 240.0);
         assert!(peak(0.25) && peak(0.75), "both rings kept: {out:?}");
         assert!(out.windows(2).all(|w| w[0].0 < w[1].0), "in order: {out:?}");
+
+        let short = Contour::Custom { name: "Short".into(), points: points[..16].to_vec(), corners: vec![false; 16] };
+        assert_eq!(crv(&contour_value(&short)).len(), 16);
+    }
 ```
 
 `a_point_on_a_tiny_straight_span_is_not_a_bend` setup/action excerpt:
 
 ```rust
-        let p = |input: f32, output: f32| CurvePoint { input, output };
+let p = |input: f32, output: f32| CurvePoint { input, output };
         // Three distinct inputs a few ulps apart near 0.5, on a straight rise from 0 to 1.
         let (a, b) = (0.5_f32, f32::from_bits(0.5_f32.to_bits() + 2));
         let mid = f32::from_bits(0.5_f32.to_bits() + 1);
@@ -3005,17 +2958,13 @@ Expected assertions from that fixture:
         assert!(!kept.contains(&3), "the point on the tiny straight span was kept over a real bend: {kept:?}");
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert_eq!(kept.len(), 16);
-        assert!(!kept.contains(&3), "the point on the tiny straight span was kept over a real bend: {kept:?}");
-    }
+assert_eq!(kept.len(), 16);
         assert!(!kept.contains(&3), "the point on the tiny straight span was kept over a real bend: {kept:?}");
     }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -3027,9 +2976,9 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 ## PR-4763: refactor(liquify): reuse native brush resizing and anchored HUD feedback
 
-- Fixture/setup: Open Liquify on a synthetic grid; place the brush center at a known point and note the initial size.
-- Action: Use the native brush-resize gesture, vary size and restore it; inspect the HUD anchor while dragging.
-- Expected: Liquify reuses the native resize behavior and the HUD stays anchored to the gesture; no image edit is committed by resizing.
+- Fixture/setup: Windows portable build, synthetic grid in Liquify, Warp tool, brush diameter 40 px, density 50%, preview zoom 100%; repeat at 200%. Record document/history and brush settings before the gesture.
+- Action: Hold Alt and right-drag without Shift, or Ctrl+Alt and primary-drag. Move 25 screen points right: at 100% zoom diameter becomes 90 px, at 200% zoom 65 px. From density 50%, move 100 screen points down: density becomes 100% at either zoom; 100 points up becomes 0%. Release, then Cancel Liquify. Alt+primary alone remains the opposite-tool gesture; Shift+Alt+right is not brush resize.
+- Expected: HUD and circle remain anchored at press origin, show diameter/density, and follow the shared zoom-corrected resize formula. Resizing starts on the press and creates no paint stroke/history; releasing ends resize. Cancel restores original document and history.
 - Status: NOT RUN
 - Actual:
 - Evidence:
@@ -3050,12 +2999,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: shift right mode picker selects journals and clear erases; mode picker outside dismissal does not paint or erase; mode control can pick a row with ui click; shift right mode picker cancels and other gestures keep their routes; escape dismissal consumes a held secondary release; shift released before the right button still opens the mode picker; shift right brush does not open presets or paint; brush mode control routes modifiers and reports choices without history. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `shift_right_mode_picker_selects_journals_and_clear_erases` setup/action excerpt:
 
 ```rust
-    use egui_kittest::kittest::Queryable;
+use egui_kittest::kittest::Queryable;
     let mut h = harness(Some("erase"));
     let history = h.state().session.active().unwrap().history.past_len();
     let journal = h.state().session.journal.len();
@@ -3069,27 +3018,36 @@ The companion JSON retains setup and assertions for every listed regression. The
     assert!(h.state().ui.brush_mode_menu.is_none());
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-    assert!(h.state().ui.brush_mode_menu.is_some());
+assert!(h.state().ui.brush_mode_menu.is_some());
     assert!(h.state().ui.brush_picker.is_none() && h.state().drag.is_none());
-    assert_eq!(h.state().session.journal.len(), journal);
-    assert_eq!(h.state().session.active().unwrap().history.past_len(), history);
-    assert!(h.state().ui.brush_picker.is_none() && h.state().drag.is_none());
-    assert_eq!(h.state().session.journal.len(), journal);
-    assert_eq!(h.state().session.active().unwrap().history.past_len(), history);
-    h.get_by_label("Multiply").click();
     assert_eq!(h.state().session.journal.len(), journal);
     assert_eq!(h.state().session.active().unwrap().history.past_len(), history);
     h.get_by_label("Multiply").click();
     h.run_steps(2);
+    assert!(h.state().ui.brush_mode_menu.is_none());
+    assert_eq!(h.state().session.tools.brush.mode, photocraft_doc::BlendMode::Multiply);
+    assert_eq!(h.state().session.journal.last().unwrap(), &("tools.setBrush".into(), json!({"brush": {"mode": "Multiply"}})));
+    let (a, b) = drag(&mut h, PointerButton::Primary);
+    let mid = a + (b - a) * 0.5;
+    assert!(alpha_at(&h, mid) > 0.9);
+    mode_right_click(&mut h, Modifiers::SHIFT);
+    h.get_by_label("Clear").click();
+    h.run_steps(2);
+    assert!(h.state().ui.tool_options.brush_clear);
+    assert_eq!(h.state().session.tools.brush.mode, photocraft_doc::BlendMode::Multiply, "Clear keeps the underlying mode, as the options bar does");
+    drag(&mut h, PointerButton::Primary);
+    assert_eq!(alpha_at(&h, mid), 0.0);
+    assert!(strokes(&h).last().unwrap()["erase"].as_bool().unwrap());
+}
 ```
 
 `mode_picker_outside_dismissal_does_not_paint_or_erase` setup/action excerpt:
 
 ```rust
-    for button in [PointerButton::Primary, PointerButton::Secondary] {
+for button in [PointerButton::Primary, PointerButton::Secondary] {
         let mut h = harness(Some("erase"));
         drag(&mut h, PointerButton::Primary);
         let journal = h.state().session.journal.len();
@@ -3103,23 +3061,15 @@ Expected assertions from that fixture:
     }
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert!(h.state().ui.brush_mode_menu.is_none());
+assert!(h.state().ui.brush_mode_menu.is_none());
         assert_eq!(h.state().session.journal.len(), journal, "dismissal must not paint/erase with {button:?}");
-        assert_eq!(h.state().session.active().unwrap().history.past_len(), history);
-    }
-        assert_eq!(h.state().session.journal.len(), journal, "dismissal must not paint/erase with {button:?}");
-        assert_eq!(h.state().session.active().unwrap().history.past_len(), history);
-    }
-}
         assert_eq!(h.state().session.active().unwrap().history.past_len(), history);
     }
 }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -3129,7 +3079,10 @@ The companion JSON retains setup and assertions for every listed regression. The
 - Tester/date:
 - Tested SHA:
 
-## PR-5082: fix(mixer-brush): Alt-click samples the foreground colour like the Brush (#4873)
+## PR-5082: Mixer Brush Alt-click loads reservoir while preserving foreground
+
+Historical PR title: fix(mixer-brush): Alt-click samples the foreground colour like the Brush (#4873). The acceptance behavior is reservoir loading with foreground unchanged.
+
 
 - Fixture/setup: Red/green canvas with blue foreground from alt_click_tests.rs; engine 80×40 transparent canvas with blue stroke and red foreground.
 - Action: run each command separately:
@@ -3156,12 +3109,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: selecting a controls section keeps its enabled flag and brush history; controls section checkbox toggles without selecting its settings; f5 edits the default brush with every section; section boxes show a pressed state. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `selecting_a_controls_section_keeps_its_enabled_flag_and_brush_history` setup/action excerpt:
 
 ```rust
-    use egui_kittest::kittest::Queryable;
+use egui_kittest::kittest::Queryable;
 
     for (section, name) in [(1, "Shape Dynamics"), (2, "Scattering"), (3, "Texture")] {
         let mut h = harness(0, 0);
@@ -3175,17 +3128,11 @@ The companion JSON retains setup and assertions for every listed regression. The
         assert_eq!(h.state().session.tools.brush, before, "{name} remains disabled");
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert_eq!(h.state().ui.brush_section, section, "{name} settings are visible");
+assert_eq!(h.state().ui.brush_section, section, "{name} settings are visible");
         assert_eq!(h.state().session.tools.brush, before, "{name} remains disabled");
-        assert_eq!(h.state().session.journal.len(), journal, "selecting {name} is not a brush edit");
-    }
-        assert_eq!(h.state().session.tools.brush, before, "{name} remains disabled");
-        assert_eq!(h.state().session.journal.len(), journal, "selecting {name} is not a brush edit");
-    }
-}
         assert_eq!(h.state().session.journal.len(), journal, "selecting {name} is not a brush edit");
     }
 }
@@ -3194,7 +3141,7 @@ Expected assertions from that fixture:
 `controls_section_checkbox_toggles_without_selecting_its_settings` setup/action excerpt:
 
 ```rust
-    use egui_kittest::kittest::Queryable;
+use egui_kittest::kittest::Queryable;
 
     let mut h = harness(0, 0);
     let row = h.get_by_label("Scattering").rect();
@@ -3208,24 +3155,16 @@ Expected assertions from that fixture:
         h.run_steps(1);
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert_eq!(h.state().session.tools.brush.scattering.enabled, enabled);
+assert_eq!(h.state().session.tools.brush.scattering.enabled, enabled);
         assert_eq!(h.state().ui.brush_section, 0, "the checkbox does not select Scattering");
-        assert_eq!(last_journal(h.state()).unwrap().1["brush"], json!({"scattering": {"enabled": enabled}}));
-    }
-        assert_eq!(h.state().ui.brush_section, 0, "the checkbox does not select Scattering");
-        assert_eq!(last_journal(h.state()).unwrap().1["brush"], json!({"scattering": {"enabled": enabled}}));
-    }
-    assert_eq!(h.state().session.journal.len(), journal + 2);
         assert_eq!(last_journal(h.state()).unwrap().1["brush"], json!({"scattering": {"enabled": enabled}}));
     }
     assert_eq!(h.state().session.journal.len(), journal + 2);
 }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -3264,12 +3203,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: blur scales with brush size and diffuses pixels visibly. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `blur_scales_with_brush_size_and_diffuses_pixels_visibly` setup/action excerpt:
 
 ```rust
-    for depth in [8u64, 16] {
+for depth in [8u64, 16] {
         let run = |size: u32| {
             let mut s = session(120, 40, depth, "rgb");
             paint_layer(&mut s, |x, _| if x < 60 { [0.0, 0.0, 0.0, 1.0] } else { [1.0, 1.0, 1.0, 1.0] });
@@ -3283,24 +3222,19 @@ The companion JSON retains setup and assertions for every listed regression. The
         assert_eq!(p20[75], 1.0, "size 20 footprint does not reach x=75");
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert_eq!(p20[45], 0.0, "size 20 footprint does not reach x=45");
+assert_eq!(p20[45], 0.0, "size 20 footprint does not reach x=45");
         assert_eq!(p20[75], 1.0, "size 20 footprint does not reach x=75");
         // Size 60 (sigma = 9.0, radius 30, footprint [30, 90]) diffuses light and dark across a wider band.
-        assert!(p60[45] > 0.0, "size 60 diffuses light past x=45: {}", p60[45]);
-        assert_eq!(p20[75], 1.0, "size 20 footprint does not reach x=75");
-        // Size 60 (sigma = 9.0, radius 30, footprint [30, 90]) diffuses light and dark across a wider band.
-        assert!(p60[45] > 0.0, "size 60 diffuses light past x=45: {}", p60[45]);
-        assert!(p60[75] < 1.0, "size 60 diffuses dark past x=75: {}", p60[75]);
         assert!(p60[45] > 0.0, "size 60 diffuses light past x=45: {}", p60[45]);
         assert!(p60[75] < 1.0, "size 60 diffuses dark past x=75: {}", p60[75]);
         // Near the step edge (x=55), size 60 diffuses more than size 20 due to larger sigma.
         assert!(p60[55] > p20[55], "larger sigma diffuses deeper near edge: p60={} p20={}", p60[55], p20[55]);
+    }
+}
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -3329,12 +3263,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: a refresh outside command execution surfaces the denial instead of rendering unfiltered; behind brush and pencil preserve foreground and round trip history; behind preserves native channels and respects alpha selection and locks; live union of passes matches merging the finished passes after every chunk; german color picker fits its actions and translates the title; file info multiline fields keep enter and cancel discards edits; file info keeps multiline metadata on confirm and reopen; mask sampling sets gray swatches without changing pixel sampling; move alt copy cursor follows the latched duplication drag; assignable pick layer shortcut follows transformed canvas without editing; the wheel over the brush mode dropdown steps the painting mode; space repositions a pen anchor and keeps its handles. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `a_refresh_outside_command_execution_surfaces_the_denial_instead_of_rendering_unfiltered` setup/action excerpt:
 
 ```rust
-    // link-watch and transform paths re-render through Session::edit, not Session::execute or
+// link-watch and transform paths re-render through Session::edit, not Session::execute or
     // jobs::run; the gate must reach them and the denial must not silently pass pixels through
     // into the process-wide stack cache.
     for lookup in [false, true] {
@@ -3348,10 +3282,10 @@ The companion JSON retains setup and assertions for every listed regression. The
         assert_denied(h.session.edit("Re-render", |d, _| match smart_cmds::refresh(d, layer) {
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert!(Arc::ptr_eq(&before, &h.session.active().unwrap().doc));
+assert!(Arc::ptr_eq(&before, &h.session.active().unwrap().doc));
         // A trusted session (no gate) still renders the same document.
         let mut trusted = Session::new();
         trusted.add_document(doc, None);
@@ -3363,7 +3297,7 @@ Expected assertions from that fixture:
 `behind_brush_and_pencil_preserve_foreground_and_round_trip_history` setup/action excerpt:
 
 ```rust
-    for cmd in ["paint.stroke", "paint.pencil"] {
+for cmd in ["paint.stroke", "paint.pencil"] {
         let mut s = session(40, 20);
         s.execute(cmd, json!({"points": [[10, 10]], "size": 6, "color": "#ff0000", "hardness": 1.0})).unwrap();
         let before = surface(&s);
@@ -3377,24 +3311,19 @@ Expected assertions from that fixture:
         assert!(same_pixels(&surface(&s), &painted, Rect::new(0, 0, 40, 20)));
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert_eq!(rgba(&s, 10, 10), [1.0, 0.0, 0.0, 1.0], "{cmd}: existing opaque paint");
+assert_eq!(rgba(&s, 10, 10), [1.0, 0.0, 0.0, 1.0], "{cmd}: existing opaque paint");
         assert_eq!(rgba(&s, 25, 10), [0.0, 0.0, 1.0, 1.0], "{cmd}: transparent pixels");
         let painted = surface(&s);
         s.execute("edit.undo", json!({})).unwrap();
-        assert_eq!(rgba(&s, 25, 10), [0.0, 0.0, 1.0, 1.0], "{cmd}: transparent pixels");
-        let painted = surface(&s);
-        s.execute("edit.undo", json!({})).unwrap();
-        assert!(same_pixels(&surface(&s), &before, Rect::new(0, 0, 40, 20)));
         assert!(same_pixels(&surface(&s), &before, Rect::new(0, 0, 40, 20)));
         s.execute("edit.redo", json!({})).unwrap();
         assert!(same_pixels(&surface(&s), &painted, Rect::new(0, 0, 40, 20)));
     }
+}
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -3417,12 +3346,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: pressure shape and smoothing match replay; native modes selection and lock match replay; changed document refuses live pixels; smudge pickup matches full neighborhood when pressure expands; pressure sized live dabs commit only the requested mask or channel; pressure sized smudge release matches replay and undo redo. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `pressure_shape_and_smoothing_match_replay` setup/action excerpt:
 
 ```rust
-    let mut failures = Vec::new();
+let mut failures = Vec::new();
     for cmd in ["paint.smudge", "paint.blur", "paint.sharpen", "paint.dodge", "paint.burn", "paint.sponge"] {
         for case in ["pressure", "locked", "ellipse", "smoothing", "scattering"] {
             for depth in [8, 16, 32] {
@@ -3436,10 +3365,10 @@ The companion JSON retains setup and assertions for every listed regression. The
                         .unwrap();
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-                assert_eq!(result["fromLive"], true);
+assert_eq!(result["fromLive"], true);
                 let got = pixels(&s);
                 let count = got.iter().zip(&want).filter(|(a, b)| a != b).count();
                 let max = got.iter().zip(&want).map(|(a, b)| (a - b).abs()).fold(0.0f32, f32::max);
@@ -3450,7 +3379,7 @@ Expected assertions from that fixture:
 `native_modes_selection_and_lock_match_replay` setup/action excerpt:
 
 ```rust
-    for mode in ["rgb", "gray", "cmyk", "lab"] {
+for mode in ["rgb", "gray", "cmyk", "lab"] {
         for depth in [8, 16, 32] {
             let mut s = setup(depth, mode);
             s.edit("lock alpha", |doc, active| {
@@ -3464,24 +3393,16 @@ Expected assertions from that fixture:
                 let params = json!({"points":points,"size":30,"hardness":40,"strength":70,"opacity":37});
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-                assert_eq!(result["fromLive"], true);
+assert_eq!(result["fromLive"], true);
                 assert_eq!(result["damage"], expected_damage);
-                assert_eq!(pixels(&s), want, "{mode} {depth} {cmd}");
-                s.execute("edit.undo", json!({})).unwrap();
-                assert_eq!(result["damage"], expected_damage);
-                assert_eq!(pixels(&s), want, "{mode} {depth} {cmd}");
-                s.execute("edit.undo", json!({})).unwrap();
-            }
                 assert_eq!(pixels(&s), want, "{mode} {depth} {cmd}");
                 s.execute("edit.undo", json!({})).unwrap();
             }
         }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -3499,12 +3420,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: pencil 1px freehand line never breaks where it turns. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `pencil_1px_freehand_line_never_breaks_where_it_turns` setup/action excerpt:
 
 ```rust
-    // #8040: each segment of a freehand stroke samples its own line, so where the stroke turned
+// #8040: each segment of a freehand stroke samples its own line, so where the stroke turned
     // the last pixel of one segment and the first of the next could sit two pixels apart.
     let b = BrushSettings { aliased: true, hardness: 1.0, size: 1.0, ..brush() };
     let mut seed = 0x2545_f491_4f6c_dd1du64;
@@ -3518,15 +3439,13 @@ The companion JSON retains setup and assertions for every listed regression. The
         let mut pts = vec![StrokePoint::new(20.0 + rnd() * 8.0, 20.0 + rnd() * 8.0, 1.0)];
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert_eq!(reached.len(), painted.len(), "the line breaks along {path:?}");
+assert_eq!(reached.len(), painted.len(), "the line breaks along {path:?}");
     }
 }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -3580,12 +3499,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: field marker stays inside the field; color field cursor stays inside the field. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `field_marker_stays_inside_the_field` setup/action excerpt:
 
 ```rust
-        // Black in the default "h" mode: the marker is at the bottom-left corner.
+// Black in the default "h" mode: the marker is at the bottom-left corner.
         let h = picker("#000000");
         let mut field = None;
         let mut circles = Vec::new();
@@ -3599,13 +3518,12 @@ The companion JSON retains setup and assertions for every listed regression. The
                 _ => {}
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert!(!circles.is_empty(), "the marker is drawn");
+assert!(!circles.is_empty(), "the marker is drawn");
         for (center, radius, clip) in circles {
             let visible = Rect::from_center_size(center, vec2(2.0 * radius, 2.0 * radius)).intersect(clip);
-            assert!(field.contains_rect(visible), "marker {visible:?} leaves the field {field:?}");
             assert!(field.contains_rect(visible), "marker {visible:?} leaves the field {field:?}");
         }
     }
@@ -3614,7 +3532,7 @@ Expected assertions from that fixture:
 `color_field_cursor_stays_inside_the_field` setup/action excerpt:
 
 ```rust
-        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
         // Black is s = 0, v = 0: the bottom-left corner.
         app.session.tools.foreground = [0.0, 0.0, 0.0, 1.0];
         let h = field_harness(app);
@@ -3628,23 +3546,17 @@ Expected assertions from that fixture:
                 _ => {}
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert!(rings.iter().any(|(_, radius, _)| *radius == 5.0), "inner ring sits at the field's bottom-left corner");
+assert!(rings.iter().any(|(_, radius, _)| *radius == 5.0), "inner ring sits at the field's bottom-left corner");
         assert!(rings.iter().any(|(_, radius, _)| *radius == 6.5), "outer ring sits at the field's bottom-left corner");
         for (center, radius, clip) in rings {
             let visible = egui::Rect::from_center_size(center, vec2(2.0 * radius, 2.0 * radius)).intersect(clip);
-        assert!(rings.iter().any(|(_, radius, _)| *radius == 6.5), "outer ring sits at the field's bottom-left corner");
-        for (center, radius, clip) in rings {
-            let visible = egui::Rect::from_center_size(center, vec2(2.0 * radius, 2.0 * radius)).intersect(clip);
-            assert!(field.contains_rect(visible), "cursor ring {visible:?} leaves the field {field:?}");
             assert!(field.contains_rect(visible), "cursor ring {visible:?} leaves the field {field:?}");
         }
     }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -3662,12 +3574,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: unknown bench is rejected before updating the baseline. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `unknown_bench_is_rejected_before_updating_the_baseline` setup/action excerpt:
 
 ```rust
-        let root = std::env::temp_dir().join(format!("photocraft-perf-unknown-bench-{}", std::process::id()));
+let root = std::env::temp_dir().join(format!("photocraft-perf-unknown-bench-{}", std::process::id()));
         std::fs::create_dir(&root).unwrap();
         std::fs::create_dir(root.join("perf")).unwrap();
         std::fs::write(root.join(BUDGETS), "[[bench]]\nname = \"known\"\npackage = \"unused\"\nrequires = \"missing.rs\"\n").unwrap();
@@ -3681,18 +3593,14 @@ The companion JSON retains setup and assertions for every listed regression. The
         std::fs::remove_dir_all(root).unwrap();
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-            assert_eq!(result, Err(format!("perf: unknown bench `unknown` (see {BUDGETS})")));
+assert_eq!(result, Err(format!("perf: unknown bench `unknown` (see {BUDGETS})")));
         }
         assert_eq!(after, baseline, "an unknown bench must not update the baseline");
     }
-        assert_eq!(after, baseline, "an unknown bench must not update the baseline");
-    }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -3748,12 +3656,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: polygon edge scroll continues with button up and keeps vertices fixed; polygon edge scroll places the next vertex in the panned view and commits once; polygon edge scroll keeps pixel aspect and shift constrained segments; polygon edge scroll pauses for dialogs and temporary navigation; polygon edge scroll never moves an inactive pane or survives a document or tool switch. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `polygon_edge_scroll_continues_with_button_up_and_keeps_vertices_fixed` setup/action excerpt:
 
 ```rust
-    for (dx, dy, flip, rotation) in [
+for (dx, dy, flip, rotation) in [
         (-1.0, 0.0, false, 0.0),
         (1.0, 0.0, false, 0.0),
         (0.0, -1.0, false, 0.0),
@@ -3767,27 +3675,36 @@ The companion JSON retains setup and assertions for every listed regression. The
     ] {
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert!(movement.dot(direction) > 0.1, "edge ({dx},{dy}), flip={flip}, rotation={rotation}: {movement:?}");
+assert!(movement.dot(direction) > 0.1, "edge ({dx},{dy}), flip={flip}, rotation={rotation}: {movement:?}");
         assert!((movement.x * direction.y - movement.y * direction.x).abs() < 0.001, "scroll follows the displayed axes");
-        assert!((next[0] - first[0]).hypot(next[1] - first[1]) > 0.1, "stationary pointer keeps scrolling");
-        assert_eq!(h.state().ui.polygon, points, "view motion never adds or moves vertices");
-        assert!((movement.x * direction.y - movement.y * direction.x).abs() < 0.001, "scroll follows the displayed axes");
-        assert!((next[0] - first[0]).hypot(next[1] - first[1]) > 0.1, "stationary pointer keeps scrolling");
-        assert_eq!(h.state().ui.polygon, points, "view motion never adds or moves vertices");
-        assert_eq!(steps(&h), before);
         assert!((next[0] - first[0]).hypot(next[1] - first[1]) > 0.1, "stationary pointer keeps scrolling");
         assert_eq!(h.state().ui.polygon, points, "view motion never adds or moves vertices");
         assert_eq!(steps(&h), before);
         assert!(selection(&h).is_none());
+        assert!(!h.ctx.input(|i| i.pointer.any_down()));
+        assert!(h.output().viewport_output[&egui::ViewportId::ROOT].repaint_delay.is_zero());
+        h.event(egui::Event::PointerMoved(xf.rect.center()));
+        h.run_steps(1);
+        let stopped = h.state().ui.views[0].center;
+        assert_eq!(h.state().ui.views[0].center, stopped, "returning to the interior stops scrolling");
+    }
+
+    let mut h = zoomed_polygon();
+    assert!((center[0] - (400.0 - xf.rect.width() / (2.0 * xf.zoom))).abs() < 0.001, "Overscroll off stops at the image's right edge");
+    h.run_steps(10);
+    assert_eq!(h.state().ui.views[0].center, center, "a long edge hold stays clamped");
+    assert_eq!(h.state().ui.polygon, points);
+    assert_eq!(steps(&h), before);
+}
 ```
 
 `polygon_edge_scroll_places_the_next_vertex_in_the_panned_view_and_commits_once` setup/action excerpt:
 
 ```rust
-    let mut h = zoomed_polygon();
+let mut h = zoomed_polygon();
     let before = steps(&h);
     let original = ViewXform::active(h.state()).unwrap();
     h.event(egui::Event::PointerMoved(original.rect.right_center() - vec2(4.0, 0.0)));
@@ -3801,10 +3718,10 @@ Expected assertions from that fixture:
     button(&mut h, at, true, Modifiers::NONE);
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-    assert!(panned.center[0] > original.center[0], "the zoomed image pans toward the right edge");
+assert!(panned.center[0] > original.center[0], "the zoomed image pans toward the right edge");
     let at = panned.rect.center() + vec2(60.0, 0.0);
     let expected = panned.to_doc(at);
     h.event(egui::Event::PointerMoved(at));
@@ -3816,9 +3733,12 @@ Expected assertions from that fixture:
     assert!(selection(&h).is_some_and(|r| near(r, 170, 130, expected[0].ceil() as i32, 190)), "{:?}", selection(&h));
     assert_eq!(steps(&h), before + 1);
     h.event(egui::Event::PointerMoved(original.rect.right_center()));
+    h.run_steps(4);
+    assert_eq!(h.state().ui.views[0].center, panned.center, "a finished polygon never scrolls");
+    h.state_mut().run("edit.undo", json!({})).unwrap();
+    assert!(selection(&h).is_none(), "one undo removes the completed selection");
+}
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -3847,12 +3767,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: dragging the title bar moves the dialog; layer style keeps one size on every page; layer style fits a short screen; layer style is laid out like photoshops; layer style ok cancel and enter; layer style bin deletes the selected effect; every effect row shows a checkbox; move instance reorders within its kind; fx menu adds or shows an effect; pending style is the dialogs and leaves the document alone; body keeps invalid params and renders without panicking; blending page renders for every mode and odd fields. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `dragging_the_title_bar_moves_the_dialog` setup/action excerpt:
 
 ```rust
-        use egui_kittest::{Harness, kittest::Queryable};
+use egui_kittest::{Harness, kittest::Queryable};
 
         let app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
         let mut harness = Harness::builder().with_size(egui::vec2(1400.0, 1100.0)).build_ui_state(|ui, app| show(app, ui.ctx()), app);
@@ -3866,12 +3786,10 @@ The companion JSON retains setup and assertions for every listed regression. The
         harness.hover_at(from);
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert!((moved - egui::vec2(-120.0, 80.0)).length() < 1.0, "dialog moved by {moved:?}");
-        assert_eq!(harness.state().ui.dialogs.len(), 1, "dragging must not close the dialog");
-    }
+assert!((moved - egui::vec2(-120.0, 80.0)).length() < 1.0, "dialog moved by {moved:?}");
         assert_eq!(harness.state().ui.dialogs.len(), 1, "dragging must not close the dialog");
     }
 ```
@@ -3879,7 +3797,7 @@ Expected assertions from that fixture:
 `layer_style_keeps_one_size_on_every_page` setup/action excerpt:
 
 ```rust
-        let mut h = layer_style_on_bevel(egui::vec2(1400.0, 900.0));
+let mut h = layer_style_on_bevel(egui::vec2(1400.0, 900.0));
         let size = frame(&h).size();
         let dialog = h.state().ui.dialogs[0].id;
         for page in ["blendingOptions", "styles"] {
@@ -3892,18 +3810,15 @@ Expected assertions from that fixture:
     }
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-            assert_eq!(frame(&h).size(), size, "{page}");
+assert_eq!(frame(&h).size(), size, "{page}");
         }
         let grip = egui::Id::new(("dialog", dialog)).with("resize").with("__resize_corner");
         assert!(h.ctx.read_response(grip).is_none(), "no resize grip");
-        assert!(h.ctx.read_response(grip).is_none(), "no resize grip");
     }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -3943,12 +3858,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: select subject samples the selected layer else the composite; select subject repeat reuses the mask until pixels change. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `select_subject_samples_the_selected_layer_else_the_composite` setup/action excerpt:
 
 ```rust
-        let (mut s, inside) = disc(8);
+let (mut s, inside) = disc(8);
         // A layer above holding only a small square in the corner: the disc is not on it.
         s.execute("layer.new.layer", json!({})).unwrap();
         s.execute("paint.pencil", json!({"points": [[10, 10], [30, 10]], "size": 3, "color": "#000000"})).unwrap();
@@ -3962,10 +3877,10 @@ The companion JSON retains setup and assertions for every listed regression. The
     }
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert!(cov(&s, 100, 80) < 0.5, "the disc on the layer below was selected");
+assert!(cov(&s, 100, 80) < 0.5, "the disc on the layer below was selected");
         s.execute("select.deselect", json!({})).unwrap();
         // No layer selected: the whole image, so the disc is found.
         s.execute("select.deselectLayers", json!({})).unwrap();
@@ -3976,7 +3891,7 @@ Expected assertions from that fixture:
 `select_subject_repeat_reuses_the_mask_until_pixels_change` setup/action excerpt:
 
 ```rust
-        let (mut s, _) = disc(8);
+let (mut s, _) = disc(8);
         let sel = |s: &Session| {
             let mut v = Vec::new();
             s.active().unwrap().doc.selection.as_ref().unwrap().read_region_into(Rect::new(0, 0, 200, 160), &mut v);
@@ -3990,24 +3905,22 @@ Expected assertions from that fixture:
         assert!(std::sync::Arc::ptr_eq(&mask, &cached(&s)), "the repeat recomputed the mask");
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert!(std::sync::Arc::ptr_eq(&mask, &cached(&s)), "the repeat recomputed the mask");
+assert!(std::sync::Arc::ptr_eq(&mask, &cached(&s)), "the repeat recomputed the mask");
         assert_eq!(sel(&s), first);
         // Another sampled target (the composite rather than the layer) is a miss.
         s.execute("select.subject", json!({"sampleAllLayers": true})).unwrap();
-        assert_eq!(sel(&s), first);
-        // Another sampled target (the composite rather than the layer) is a miss.
-        s.execute("select.subject", json!({"sampleAllLayers": true})).unwrap();
-        assert!(!std::sync::Arc::ptr_eq(&mask, &cached(&s)));
         assert!(!std::sync::Arc::ptr_eq(&mask, &cached(&s)));
         // A pixel edit drops the entry; the next run recomputes it.
         s.edit("paint", |doc, _| {
             let bg = doc.layers[0].surface_mut().unwrap();
+        assert!(s.subject_cache.region.is_none());
+        s.execute("select.subject", json!({})).unwrap();
+        assert_eq!(sel(&s), first);
+    }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -4030,12 +3943,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: move guide turns a guide; layer panel hover outlines layer on canvas; guide drags create move and delete; alt turns a guide dragged out of a ruler; alt turns a guide moved with the move tool; a guide dropped on either ruler is deleted. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `move_guide_turns_a_guide` setup/action excerpt:
 
 ```rust
-        let mut s = Session::new();
+let mut s = Session::new();
         s.execute("file.new", json!({"width": 200, "height": 100})).unwrap();
         s.execute("view.newGuide", json!({"orientation": "horizontal", "position": 30, "color": "magenta"})).unwrap();
         s.execute("view.newGuide", json!({"orientation": "horizontal", "position": 70})).unwrap();
@@ -4049,27 +3962,33 @@ The companion JSON retains setup and assertions for every listed regression. The
         assert_eq!(s.active().unwrap().doc.guides.vertical, vec![20.0]);
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert_eq!((g.horizontal.clone(), g.vertical.clone()), (vec![70.0], vec![100.0]), "50% of the width");
+assert_eq!((g.horizontal.clone(), g.vertical.clone()), (vec![70.0], vec![100.0]), "50% of the width");
         assert_eq!(g.color(true, 100.0), Some([255, 0, 255]), "the colour moves with the guide");
-        assert_eq!(g.color(false, 30.0), None);
-        // The same orientation is a plain move.
-        assert_eq!(g.color(true, 100.0), Some([255, 0, 255]), "the colour moves with the guide");
-        assert_eq!(g.color(false, 30.0), None);
-        // The same orientation is a plain move.
-        s.execute("view.moveGuide", json!({"orientation": "vertical", "index": 0, "position": 20, "toOrientation": "vertical"})).unwrap();
         assert_eq!(g.color(false, 30.0), None);
         // The same orientation is a plain move.
         s.execute("view.moveGuide", json!({"orientation": "vertical", "index": 0, "position": 20, "toOrientation": "vertical"})).unwrap();
         assert_eq!(s.active().unwrap().doc.guides.vertical, vec![20.0]);
+        s.undo();
+        s.undo();
+        let g = &s.active().unwrap().doc.guides;
+        assert_eq!((g.horizontal.clone(), g.vertical.clone()), (vec![30.0, 70.0], vec![]), "one undo step per move");
+        // Bad params are refused and leave the guides alone.
+        assert!(s.execute("view.moveGuide", json!({"orientation": "horizontal", "index": 0, "position": 5, "toOrientation": "diagonal"})).is_err());
+        assert!(s.execute("view.moveGuide", json!({"orientation": "horizontal", "index": 0, "position": 5, "toOrientation": 1})).is_err());
+        assert!(s.execute("view.newGuide", json!({"orientation": "horizontal", "position": 5, "toOrientation": "vertical"})).is_err());
+        assert!(s.execute("view.moveGuide", json!({"orientation": "horizontal", "index": 9, "position": 5, "toOrientation": "vertical"})).is_err());
+        let g = &s.active().unwrap().doc.guides;
+        assert_eq!((g.horizontal.clone(), g.vertical.clone()), (vec![30.0, 70.0], vec![]));
+    }
 ```
 
 `layer_panel_hover_outlines_layer_on_canvas` setup/action excerpt:
 
 ```rust
-        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
         app.session.execute("file.new", json!({"width": 64, "height": 64})).unwrap();
         app.session.execute("layer.new.layer", json!({})).unwrap();
         app.session
@@ -4080,16 +3999,13 @@ Expected assertions from that fixture:
             .unwrap();
         let target_layer = app.session.active().unwrap().active_layer.unwrap();
         let a = Rect::new(8, 8, 24, 24);
-
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert_eq!(active_outline(&mut app, None, false, false), None);
+assert_eq!(active_outline(&mut app, None, false, false), None);
         app.hover_layer = Some(target_layer);
-        assert_eq!(active_outline(&mut app, None, false, false), Some(a));
-
         assert_eq!(active_outline(&mut app, None, false, false), Some(a));
 
         // When a drag or transform is in progress, no outline:
@@ -4098,9 +4014,9 @@ Expected assertions from that fixture:
         app.guide_drag = None;
 
         // When rollover preference is disabled, no outline:
+        assert_eq!(active_outline(&mut app, None, false, false), None);
+    }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -4119,12 +4035,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: fixed size px is exactly the size; fixed size selects exactly the entered size. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `fixed_size_px_is_exactly_the_size` setup/action excerpt:
 
 ```rust
-        use super::fixed_size_px;
+use super::fixed_size_px;
         // Down-right from (10.4, 20.6): 10 × 10 from the closest pixel edges.
         assert_eq!(fixed_size_px([10.4, 20.6], [20.4, 30.6], 10.0, 10.0), [10.0, 21.0, 20.0, 31.0]);
         // Up-left: the far corner is the low one; still exactly the size.
@@ -4135,17 +4051,13 @@ The companion JSON retains setup and assertions for every listed regression. The
     }
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert_eq!(fixed_size_px([10.4, 20.6], [20.4, 30.6], 10.0, 10.0), [10.0, 21.0, 20.0, 31.0]);
+assert_eq!(fixed_size_px([10.4, 20.6], [20.4, 30.6], 10.0, 10.0), [10.0, 21.0, 20.0, 31.0]);
         // Up-left: the far corner is the low one; still exactly the size.
         assert_eq!(fixed_size_px([10.4, 20.6], [-53.6, -11.4], 64.0, 32.0), [-54.0, -11.0, 10.0, 21.0]);
         // 1 × 1 is one pixel, and a fractional size rounds to whole pixels.
-        assert_eq!(fixed_size_px([10.4, 20.6], [-53.6, -11.4], 64.0, 32.0), [-54.0, -11.0, 10.0, 21.0]);
-        // 1 × 1 is one pixel, and a fractional size rounds to whole pixels.
-        assert_eq!(fixed_size_px([3.5, 3.5], [4.5, 4.5], 1.0, 1.0), [4.0, 4.0, 5.0, 5.0]);
-        assert_eq!(fixed_size_px([0.0, 0.0], [2.6, 2.4], 2.6, 2.4), [0.0, 0.0, 3.0, 2.0]);
         assert_eq!(fixed_size_px([3.5, 3.5], [4.5, 4.5], 1.0, 1.0), [4.0, 4.0, 5.0, 5.0]);
         assert_eq!(fixed_size_px([0.0, 0.0], [2.6, 2.4], 2.6, 2.4), [0.0, 0.0, 3.0, 2.0]);
     }
@@ -4154,7 +4066,7 @@ Expected assertions from that fixture:
 `fixed_size_selects_exactly_the_entered_size` setup/action excerpt:
 
 ```rust
-    for tool in [Tool::RectMarquee, Tool::EllipseMarquee] {
+for tool in [Tool::RectMarquee, Tool::EllipseMarquee] {
         for (w, ht) in [(10, 10), (1, 1), (64, 32)] {
             let mut h = harness(tool);
             let o = &mut h.state_mut().ui.tool_options;
@@ -4168,13 +4080,11 @@ Expected assertions from that fixture:
             // A click: the button goes down and up at one point.
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-            assert!(readout(&h, w, ht), "{tool:?} {w} × {ht}: the readout shows the entered size");
+assert!(readout(&h, w, ht), "{tool:?} {w} × {ht}: the readout shows the entered size");
             release_at(&mut h, 90.0, 90.0, Modifiers::NONE);
-            assert_eq!(selection(&h), Rect::new(50, 61, 50 + w, 61 + ht), "{tool:?} {w} × {ht}: dragged");
-
             assert_eq!(selection(&h), Rect::new(50, 61, 50 + w, 61 + ht), "{tool:?} {w} × {ht}: dragged");
 
             // A click: the button goes down and up at one point.
@@ -4184,8 +4094,6 @@ Expected assertions from that fixture:
     }
 }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -4214,12 +4122,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: shift alt right press opens the hud not the picker; quick selections shift alt right opens only the selection menu; a hud clamped under the still pointer picks nothing until it moves; dragging over the hud picks the foreground live and release keeps it; escape restores the starting colour; plain right click still opens the picker and alt drag still resizes; shift alt right drag does not resize the brush; the control channel opens and closes the hud; hue strip mesh indices stay within its rows; pick at maps the rects and ignores the gaps; shift alt right through the control channel respects the erase preference; a control channel up closes the hud without repeating its modifiers. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `shift_alt_right_press_opens_the_hud_not_the_picker` setup/action excerpt:
 
 ```rust
-        let mut h = harness();
+let mut h = harness();
         let c = h.state().last_canvas_rect.center();
         h.event(egui::Event::PointerMoved(c));
         h.run_steps(1);
@@ -4233,27 +4141,25 @@ The companion JSON retains setup and assertions for every listed regression. The
         assert!(strip.height() > 100.0 && square.width() > 100.0);
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert!(hud.hold);
+assert!(hud.hold);
         assert_eq!(hud.start, [0.0, 0.0, 1.0, 1.0], "seeded from the foreground");
-        assert_eq!(h.state().ui.brush_picker, None, "the Brush Preset picker stays closed");
-        // The HUD shows under the pointer, on screen.
-        assert_eq!(hud.start, [0.0, 0.0, 1.0, 1.0], "seeded from the foreground");
-        assert_eq!(h.state().ui.brush_picker, None, "the Brush Preset picker stays closed");
-        // The HUD shows under the pointer, on screen.
-        let (strip, square) = rects(&h);
         assert_eq!(h.state().ui.brush_picker, None, "the Brush Preset picker stays closed");
         // The HUD shows under the pointer, on screen.
         let (strip, square) = rects(&h);
         assert!(strip.height() > 100.0 && square.width() > 100.0);
+        assert!(square.right() < h.ctx.content_rect().right());
+        // Nothing painted.
+        assert!(!h.state().session.journal.iter().any(|(id, _)| id == "paint.stroke"));
+    }
 ```
 
 `quick_selections_shift_alt_right_opens_only_the_selection_menu` setup/action excerpt:
 
 ```rust
-        let mut h = harness();
+let mut h = harness();
         h.state_mut().ui.tool = Tool::QuickSelection;
         h.run_steps(1);
         let c = h.state().last_canvas_rect.center();
@@ -4267,23 +4173,16 @@ Expected assertions from that fixture:
         assert!(h.state().ui.canvas_tool_menu.is_some(), "the selection menu opens, once");
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert_eq!(h.state().ui.color_hud, None, "no HUD for Quick Selection");
+assert_eq!(h.state().ui.color_hud, None, "no HUD for Quick Selection");
         assert_eq!(h.state().ui.brush_picker, None, "and no Brush Preset picker");
         button(&mut h, c, false, SHIFT_ALT);
-        assert_eq!(h.state().ui.color_hud, None, "the release does not open it either");
-        assert_eq!(h.state().ui.brush_picker, None, "and no Brush Preset picker");
-        button(&mut h, c, false, SHIFT_ALT);
-        assert_eq!(h.state().ui.color_hud, None, "the release does not open it either");
-        assert!(h.state().ui.canvas_tool_menu.is_some(), "the selection menu opens, once");
         assert_eq!(h.state().ui.color_hud, None, "the release does not open it either");
         assert!(h.state().ui.canvas_tool_menu.is_some(), "the selection menu opens, once");
     }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -4310,12 +4209,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: canonical windows prefixes match without ambient resolution; windows root case variants keep io inside the grant; unix root prefixes remain case sensitive; configured parent components accept resolved absolute paths; relative configured root accepts resolved absolute paths; trusted root names are not validated as relative request names; linked root accepts both spellings and new nested exports; root alias tests work with an aliased windows temp; ungranted absolute aliases and link escapes are refused; retargeting root alias does not regrant the held authority. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `canonical_windows_prefixes_match_without_ambient_resolution` setup/action excerpt:
 
 ```rust
-    for (request, root) in [
+for (request, root) in [
         (r"c:\root\new.bin", r"\\?\C:\root"),
         (r"\\?\C:\root\new.bin", r"C:\root"),
         (r"\\server\share\root\new.bin", r"\\?\UNC\SERVER\SHARE\root"),
@@ -4329,13 +4228,12 @@ The companion JSON retains setup and assertions for every listed regression. The
     for request in [r"C:\root-sibling\new.bin", r"D:\root\new.bin", r"\\.\C:\root\new.bin", r"\\other\share\root\new.bin"] {
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert_eq!(remaining.as_path(), Path::new("new.bin"));
+assert_eq!(remaining.as_path(), Path::new("new.bin"));
     }
     for request in [r"C:\root-sibling\new.bin", r"D:\root\new.bin", r"\\.\C:\root\new.bin", r"\\other\share\root\new.bin"] {
-        assert!(path_beneath_root(Path::new(request), Path::new(r"\\?\C:\root")).is_none());
         assert!(path_beneath_root(Path::new(request), Path::new(r"\\?\C:\root")).is_none());
     }
 }
@@ -4344,7 +4242,7 @@ Expected assertions from that fixture:
 `windows_root_case_variants_keep_io_inside_the_grant` setup/action excerpt:
 
 ```rust
-    let (inside, outside, workspace) = roots("root-case");
+let (inside, outside, workspace) = roots("root-case");
     let configured = PathBuf::from(inside.to_string_lossy().to_ascii_uppercase());
     let canonical = PathBuf::from(std::fs::canonicalize(&inside).unwrap().to_string_lossy().to_ascii_uppercase());
     for spelling in [&configured, &canonical] {
@@ -4358,24 +4256,17 @@ Expected assertions from that fixture:
     assert!(!outside.join("blocked.bin").exists());
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert_eq!(workspace.read(&path.to_string_lossy()).unwrap(), b"inside");
+assert_eq!(workspace.read(&path.to_string_lossy()).unwrap(), b"inside");
         assert!(workspace.write(&spelling.join("..").join("outside").join("blocked.bin").to_string_lossy(), b"no").is_err());
     }
-    assert_eq!(std::fs::read(inside.join("new.bin")).unwrap(), b"inside");
-        assert!(workspace.write(&spelling.join("..").join("outside").join("blocked.bin").to_string_lossy(), b"no").is_err());
-    }
-    assert_eq!(std::fs::read(inside.join("new.bin")).unwrap(), b"inside");
-    assert!(workspace.write(&configured.with_file_name("INSIDE-SIBLING").join("blocked.bin").to_string_lossy(), b"no").is_err());
     assert_eq!(std::fs::read(inside.join("new.bin")).unwrap(), b"inside");
     assert!(workspace.write(&configured.with_file_name("INSIDE-SIBLING").join("blocked.bin").to_string_lossy(), b"no").is_err());
     assert!(!outside.join("blocked.bin").exists());
 }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -4404,12 +4295,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: crop menu ratio rows fit the frame like the options bar; crop menu gear rows toggle the shield options; crop menu reset cancel and commit act on the frame; crop menu lists saved presets and applies one; crop menu closes when the crop is no longer pending; right click on a pending crop opens the crop menu; right click without a pending crop opens no menu; reset then commit crops nothing; reset edit undo then commit crops nothing; reset then a still click keeps the no op; reset then frame edit back to bounds commits a real crop; type layers offer free transform but not distort or perspective. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `crop_menu_ratio_rows_fit_the_frame_like_the_options_bar` setup/action excerpt:
 
 ```rust
-        let mut app = crop_app();
+let mut app = crop_app();
         crop_open(&mut app);
         let menu = app.ui.canvas_tool_menu.clone().unwrap();
         assert!(menu.crop && available(&app, &menu, "crop.ratio.16:9"));
@@ -4423,27 +4314,26 @@ The companion JSON retains setup and assertions for every listed regression. The
         choose(&mut app, &Context::default(), "crop.ratio.1:1");
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert!(menu.crop && available(&app, &menu, "crop.ratio.16:9"));
+assert!(menu.crop && available(&app, &menu, "crop.ratio.16:9"));
         choose(&mut app, &Context::default(), "crop.ratio.16:9");
         assert_eq!(app.ui.tool_options.crop_ratio, "16:9");
-        assert!((frame_ratio(&app) - 16.0 / 9.0).abs() < 1e-9, "the frame is fitted to the ratio");
-        assert_eq!(app.ui.tool_options.crop_ratio, "16:9");
-        assert!((frame_ratio(&app) - 16.0 / 9.0).abs() < 1e-9, "the frame is fitted to the ratio");
-        // The current ratio shows checked; the others do not.
-        crop_open(&mut app);
         assert!((frame_ratio(&app) - 16.0 / 9.0).abs() < 1e-9, "the frame is fitted to the ratio");
         // The current ratio shows checked; the others do not.
         crop_open(&mut app);
         let menu = app.ui.canvas_tool_menu.clone().unwrap();
+        assert!(mode_checked(&app, &menu, "crop.ratio.16:9") && !mode_checked(&app, &menu, "crop.ratio.1:1"));
+        choose(&mut app, &Context::default(), "crop.ratio.1:1");
+        assert!((frame_ratio(&app) - 1.0).abs() < 1e-9);
+    }
 ```
 
 `crop_menu_gear_rows_toggle_the_shield_options` setup/action excerpt:
 
 ```rust
-        let mut app = crop_app();
+let mut app = crop_app();
         crop_open(&mut app);
         choose(&mut app, &Context::default(), CROP_SHOW_CROPPED);
         assert!(!app.ui.tool_options.crop_shield.show_cropped_area);
@@ -4457,24 +4347,23 @@ Expected assertions from that fixture:
         assert!(!entry_enabled(&app, &menu, CROP_SHOW_CROPPED) && !entry_enabled(&app, &menu, CROP_AUTO_CENTER));
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert!(!app.ui.tool_options.crop_shield.show_cropped_area);
+assert!(!app.ui.tool_options.crop_shield.show_cropped_area);
         crop_open(&mut app);
         assert!(!mode_checked(&app, app.ui.canvas_tool_menu.as_ref().unwrap(), CROP_SHOW_CROPPED), "the row shows the option's state");
         choose(&mut app, &Context::default(), CROP_CLASSIC);
-        assert!(!mode_checked(&app, app.ui.canvas_tool_menu.as_ref().unwrap(), CROP_SHOW_CROPPED), "the row shows the option's state");
-        choose(&mut app, &Context::default(), CROP_CLASSIC);
-        assert!(app.ui.tool_options.crop_shield.classic_mode);
-        // As in the gear menu, Classic Mode greys out the other two options.
         assert!(app.ui.tool_options.crop_shield.classic_mode);
         // As in the gear menu, Classic Mode greys out the other two options.
         crop_open(&mut app);
         let menu = app.ui.canvas_tool_menu.clone().unwrap();
+        assert!(!entry_enabled(&app, &menu, CROP_SHOW_CROPPED) && !entry_enabled(&app, &menu, CROP_AUTO_CENTER));
+        assert!(entry_enabled(&app, &menu, CROP_CLASSIC));
+        choose(&mut app, &Context::default(), CROP_CLASSIC);
+        assert!(!app.ui.tool_options.crop_shield.classic_mode);
+    }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -4523,12 +4412,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: merge shape components bakes a paths operations; merge shape components on a shape layer rerenders it; merging a vector mask to nothing keeps what it shows; set operation changes existing components; set operation on a joined subpath changes its component; set operation leaves the first component combining; bad set operation params change nothing; bad merge params change nothing; merge refuses open subpaths; ui set drives the pen path operation; a selected component takes the picked operation; plus and minus pick combine and subtract; path selection selects and moves components; a stale selection changes nothing; the first component keeps combining; the pen does not edit a hidden component selection; dragging a live shape keeps it live; the pen carries on an open shape path; an open component of a filled shape keeps its paint; the pen carries on a vector masks open subpath; subtract front shape cuts a hole in the selected shape layer; a locked shape layer keeps the drawn path; switching tools ends a refused draft once; esc ends a refused draft and return keeps it; an operation without a selected shape starts a new shape layer; path mode adds subpaths with the operation; the options bar menu sets the operation and merges; merge is disabled with fewer than two components; an unknown operation falls back to new layer; freeform refuses a locked shape before starting a stroke; failed stale pen commit preserves the draft until retry; stale pen commits to its owner across document changes. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `merge_shape_components_bakes_a_paths_operations` setup/action excerpt:
 
 ```rust
-        let mut s = session();
+let mut s = session();
         s.execute("path.set", json!({"path": square()})).unwrap();
         let hole = json!({"subpaths": [{"closed": true, "knots": [[25, 25], [45, 25], [45, 45], [25, 45]]}]});
         s.execute("path.set", json!({"path": hole, "op": "subtract"})).unwrap();
@@ -4542,27 +4431,30 @@ The companion JSON retains setup and assertions for every listed regression. The
             assert!((covered(&merged, x, y) - covered(&before, x, y)).abs() < 0.01, "({x}, {y})");
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert_eq!(r["name"], json!("work"));
+assert_eq!(r["name"], json!("work"));
         assert_eq!(s.active().unwrap().history.undo_label(), Some("Merge Shape Components"));
         let merged = work(&s);
-        assert_eq!(merged.subpaths.len(), 2, "the outline and its hole");
-        assert_eq!(s.active().unwrap().history.undo_label(), Some("Merge Shape Components"));
-        let merged = work(&s);
-        assert_eq!(merged.subpaths.len(), 2, "the outline and its hole");
-        for (x, y) in [(15, 15), (35, 35), (55, 50), (5, 5)] {
         assert_eq!(merged.subpaths.len(), 2, "the outline and its hole");
         for (x, y) in [(15, 15), (35, 35), (55, 50), (5, 5)] {
             assert!((covered(&merged, x, y) - covered(&before, x, y)).abs() < 0.01, "({x}, {y})");
         }
+        assert_eq!((covered(&merged, 35, 35), covered(&merged, 15, 15)), (0.0, 1.0), "the hole stays a hole");
+        assert!(s.undo());
+        assert_eq!(work(&s), before);
+        // A saved path and a vector mask merge the same way; an inverted mask stays inverted.
+        s.execute("path.set", json!({"name": "Mug", "path": square()})).unwrap();
+        s.execute("path.mergeShapeComponents", json!({"name": "Mug"})).unwrap();
+        assert!(vm.path.inverted && !vm.path.subpaths.is_empty());
+    }
 ```
 
 `merge_shape_components_on_a_shape_layer_rerenders_it` setup/action excerpt:
 
 ```rust
-        let mut s = session();
+let mut s = session();
         let id = s.execute("shape.create", json!({"kind": "rect", "rect": [10, 10, 50, 50], "fill": "#ff0000"})).unwrap()["layer"].as_u64().unwrap();
         s.execute("shape.create", json!({"kind": "rect", "rect": [25, 25, 20, 20], "addTo": id, "op": "subtract"})).unwrap();
         s.execute("path.mergeShapeComponents", json!({"name": "layer", "layer": id})).unwrap();
@@ -4573,17 +4465,13 @@ Expected assertions from that fixture:
     }
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert_eq!(covered(path, 35, 35), 0.0);
-        assert!(cache.is_some());
-    }
+assert_eq!(covered(path, 35, 35), 0.0);
         assert!(cache.is_some());
     }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -4602,12 +4490,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: tool options survive a restart; interpolation selection is reused for the next transform. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `tool_options_survive_a_restart` setup/action excerpt:
 
 ```rust
-        let (mut app, store) = app_with_store();
+let (mut app, store) = app_with_store();
         let ctx = egui::Context::default();
         tick(&mut app, &ctx);
         app.ui.tool_options.move_auto_select = false;
@@ -4621,10 +4509,10 @@ The companion JSON retains setup and assertions for every listed regression. The
         let (mut app2, _) = app_with_saved(Some(saved));
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert_eq!(stored(&store)["toolOptions"], json!({"move_auto_select": false, "feather": 12.0, "transform_interpolation": "nearestNeighbor"}));
+assert_eq!(stored(&store)["toolOptions"], json!({"move_auto_select": false, "feather": 12.0, "transform_interpolation": "nearestNeighbor"}));
         let saved = store.lock().unwrap().clone().unwrap();
         let (mut app2, _) = app_with_saved(Some(saved));
         tick(&mut app2, &ctx);
@@ -4632,16 +4520,19 @@ Expected assertions from that fixture:
         assert_eq!(app2.ui.tool_options.feather, 12.0);
         assert_eq!(app2.ui.tool_options.transform_interpolation, Some(photocraft_engine::prefs::Interpolation::Nearest));
         assert_eq!(app2.ui.tool_options.tolerance, crate::state::ToolOptions::default().tolerance);
-        assert_eq!(app2.ui.tool_options.feather, 12.0);
-        assert_eq!(app2.ui.tool_options.transform_interpolation, Some(photocraft_engine::prefs::Interpolation::Nearest));
-        assert_eq!(app2.ui.tool_options.tolerance, crate::state::ToolOptions::default().tolerance);
         // A hand-edited file: unreadable fields keep their defaults, the good ones still load.
+        for bad in [json!("junk"), json!({"move_auto_select": "no", "feather": 1e300, "tolerance": 5.0, "unknown": 1})] {
+            let (mut app3, _) = app_with_saved(Some(json!({"toolOptions": bad}).to_string()));
+            assert!(o.move_auto_select && o.feather == 0.0, "{bad}");
+            assert_eq!(o.tolerance, if bad.is_object() { 5.0 } else { 32.0 });
+        }
+    }
 ```
 
 `interpolation_selection_is_reused_for_the_next_transform` setup/action excerpt:
 
 ```rust
-        use egui::accesskit::Role;
+use egui::accesskit::Role;
         use egui_kittest::{Harness, kittest::Queryable};
 
         let app = app_with_square(64, photocraft_geom::Rect::new(8, 8, 24, 24));
@@ -4655,10 +4546,10 @@ Expected assertions from that fixture:
         );
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert!(h.state().ui.transform.is_some(), "transform stays open while the bar renders");
+assert!(h.state().ui.transform.is_some(), "transform stays open while the bar renders");
 
         h.get_by_role(Role::ComboBox).click();
         h.run();
@@ -4666,13 +4557,20 @@ Expected assertions from that fixture:
         h.key_press(egui::Key::ArrowDown);
         h.run();
         assert!(h.state().ui.transform.is_some(), "first interpolation step keeps the transform open");
-        assert!(h.state().ui.transform.is_some(), "first interpolation step keeps the transform open");
         h.key_press(egui::Key::ArrowDown);
         h.run();
         assert!(h.state().ui.transform.is_some(), "second interpolation step keeps the transform open");
-```
+        assert_eq!(h.state().ui.transform.as_ref().unwrap().interpolation, "nearest");
+        assert_eq!(h.state().ui.tool_options.transform_interpolation, Some(photocraft_engine::prefs::Interpolation::Nearest));
+        assert_eq!(h.state().session.prefs().general.image_interpolation, photocraft_engine::prefs::Interpolation::BicubicAutomatic);
 
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
+        let transform = h.state_mut().ui.transform.as_mut().unwrap();
+        transform.quad = transform.quad.map(|[x, y]| [x + 1.0, y]);
+        assert!(h.state().ui.transform.is_none());
+        begin(h.state_mut(), &ctx).unwrap();
+        assert_eq!(h.state().ui.transform.as_ref().unwrap().interpolation, "nearest");
+    }
+```
 
 </details>
 
@@ -4720,12 +4618,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: feather at the canvas edge continues the mask past it; soft shape matches an equal vector mask; parallel gaussian matches the sequential reference; padding each line matches padding the plane; benchmark 50mp mask blur; a maximum feather does not pad the whole plane; a failed line buffer never leaves a half blurred mask. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `feather_at_the_canvas_edge_continues_the_mask_past_it` setup/action excerpt:
 
 ```rust
-        let mut layer = Layer::raster("edge", PixelFormat::RGBA8);
+let mut layer = Layer::raster("edge", PixelFormat::RGBA8);
         let mut mask = photocraft_doc::LayerMask::hide_all();
         mask.surface.fill_rect(Rect::new(40, 20, 120, 60), &[1.0]);
         mask.feather = 32.0;
@@ -4739,10 +4637,10 @@ The companion JSON retains setup and assertions for every listed regression. The
         let mut half = photocraft_doc::LayerMask::hide_all();
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert!(worst < 1e-4, "the canvas edge changed the feather by {worst}");
+assert!(worst < 1e-4, "the canvas edge changed the feather by {worst}");
 
         let mut half = photocraft_doc::LayerMask::hide_all();
         half.surface.fill_rect(Rect::new(0, 0, 80, 80), &[1.0]);
@@ -4750,14 +4648,12 @@ Expected assertions from that fixture:
         }
         assert!(middle[0] > 0.99, "the left edge stays white: {}", middle[0]);
     }
-        assert!(middle[0] > 0.99, "the left edge stays white: {}", middle[0]);
-    }
 ```
 
 `soft_shape_matches_an_equal_vector_mask` setup/action excerpt:
 
 ```rust
-    // 40 px reaches past the canvas edge: both feather it the same way there (#9475).
+// 40 px reaches past the canvas edge: both feather it the same way there (#9475).
     for (density, feather) in [(1.0, 10.0), (0.45, 0.0), (0.3, 6.5), (0.0, 0.0), (1.0, 0.0), (0.5, 3.0), (1.0, 40.0)] {
         for depth in [SampleType::U8, SampleType::U16] {
             let (s, f) = (shape_doc(depth, density, feather, None), fill_doc(depth, density, feather));
@@ -4771,10 +4667,10 @@ Expected assertions from that fixture:
                     let d16 = max_diff(&row16(&s, y), &row16(&f, y));
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-                assert!(d8 <= i32::from(depth == SampleType::U8), "{depth:?} density {density} feather {feather}, row {y}: {d8} levels");
+assert!(d8 <= i32::from(depth == SampleType::U8), "{depth:?} density {density} feather {feather}, row {y}: {d8} levels");
                 // The compositor keeps masks at 16 bits (an 8-bit shape's pixels are 8-bit).
                 if depth == SampleType::U16 {
                     let d16 = max_diff(&row16(&s, y), &row16(&f, y));
@@ -4783,8 +4679,6 @@ Expected assertions from that fixture:
             }
         }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -4825,12 +4719,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: tysh fallback cannot reintroduce unusable finite or nonfinite transform; hostile type sizes without pixels import without a huge render; overflowing legacy origin does not escape as a nonfinite transform; reject unusable matrices before type layout. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `tysh_fallback_cannot_reintroduce_unusable_finite_or_nonfinite_transform` setup/action excerpt:
 
 ```rust
-        let mut tysh = vec![0u8; 52];
+let mut tysh = vec![0u8; 52];
         tysh[..2].copy_from_slice(&1u16.to_be_bytes());
         for (i, value) in [1.0f64, 0.0, 0.0, 1.0, 30.0, 40.0].iter().enumerate() {
             tysh[2 + 8 * i..10 + 8 * i].copy_from_slice(&value.to_be_bytes());
@@ -4843,13 +4737,12 @@ The companion JSON retains setup and assertions for every listed regression. The
     }
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert!(parse_tysh(&tysh).is_some(), "normal matrices still import");
+assert!(parse_tysh(&tysh).is_some(), "normal matrices still import");
         for value in [1e62f64, -1e62, f64::INFINITY, f64::NAN] {
             tysh[2..10].copy_from_slice(&value.to_be_bytes());
-            assert!(parse_tysh(&tysh).is_none(), "invalid matrix {value} cannot reach UI");
             assert!(parse_tysh(&tysh).is_none(), "invalid matrix {value} cannot reach UI");
         }
     }
@@ -4858,7 +4751,7 @@ Expected assertions from that fixture:
 `hostile_type_sizes_without_pixels_import_without_a_huge_render` setup/action excerpt:
 
 ```rust
-    // The import renders type layers that come without pixels; the model is untrusted, so an
+// The import renders type layers that come without pixels; the model is untrusted, so an
     // absurd size or scale must not make opening the file allocate gigabytes (or fail).
     let scaled = |s: f64| Affine { m: [s, 0.0, 0.0, s, 10.0, 10.0] };
     for (size, transform, big) in
@@ -4872,10 +4765,10 @@ Expected assertions from that fixture:
             assert!(photocraft_text::psd::text_layer_from_tysh(&data, 72.0).is_none(), "unsafe transform must be rejected before layout");
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-            assert!(photocraft_text::psd::text_layer_from_tysh(&data, 72.0).is_none(), "unsafe transform must be rejected before layout");
+assert!(photocraft_text::psd::text_layer_from_tysh(&data, 72.0).is_none(), "unsafe transform must be rejected before layout");
             continue;
         }
         let mut t = photocraft_text::psd::text_layer_from_tysh(&data, 72.0).expect("valid TySh transform");
@@ -4887,8 +4780,6 @@ Expected assertions from that fixture:
     }
 }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -4931,12 +4822,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: gauss gives the bits of the tap loop; box mean gives the bits of the column loop; the tap tables give the bits of the per pixel lookup; reduce pair gives the bits of two reductions. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `gauss_gives_the_bits_of_the_tap_loop` setup/action excerpt:
 
 ```rust
-        // Sizes below, around and above the kernel (edges only, a few interior samples, mostly interior).
+// Sizes below, around and above the kernel (edges only, a few interior samples, mostly interior).
         for (w, h) in [(1, 1), (5, 3), (13, 40), (64, 7), (65, 70), (131, 97), (300, 41)] {
             let v = noise(w * h, (w * 31 + h) as u64);
             for sigma in [0.04, 0.42, 1.0, 2.1, 4.2, 8.4, 13.44] {
@@ -4946,10 +4837,10 @@ The companion JSON retains setup and assertions for every listed regression. The
     }
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-                assert!(same(&gauss(&v, w, h, sigma), &gauss_ref(&v, w, h, sigma)), "{w}x{h} sigma {sigma}");
+assert!(same(&gauss(&v, w, h, sigma), &gauss_ref(&v, w, h, sigma)), "{w}x{h} sigma {sigma}");
             }
         }
     }
@@ -4958,7 +4849,7 @@ Expected assertions from that fixture:
 `box_mean_gives_the_bits_of_the_column_loop` setup/action excerpt:
 
 ```rust
-        for (w, h) in [(1, 1), (5, 3), (13, 40), (64, 7), (65, 70), (131, 97), (300, 41)] {
+for (w, h) in [(1, 1), (5, 3), (13, 40), (64, 7), (65, 70), (131, 97), (300, 41)] {
             let v = noise(w * h, (w * 17 + h) as u64);
             for r in [1, 2, 8, 32, 128] {
                 assert!(same(&box_mean(&v, w, h, r), &box_mean_ref(&v, w, h, r)), "{w}x{h} r {r}");
@@ -4967,16 +4858,14 @@ Expected assertions from that fixture:
     }
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-                assert!(same(&box_mean(&v, w, h, r), &box_mean_ref(&v, w, h, r)), "{w}x{h} r {r}");
+assert!(same(&box_mean(&v, w, h, r), &box_mean_ref(&v, w, h, r)), "{w}x{h} r {r}");
             }
         }
     }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -5023,12 +4912,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: closed rectangle left edge continues past the top left seam; closed ellipse upper left and apex cross the seam in both directions; closed path shows one lap without repeating glyph centres; open path clipping offsets and end tangents stay unchanged; closed path alignment uses one lap from the text left edge; closed path start offsets wrap and invalid coordinates are hidden; caret projection roundtrips closed seams and open offsets; closed path forward hit after last caret; open path hits keep endpoint clamping; closed path backward hit before first caret; closed path upstream caret rectangle left edge roundtrip; closed path aligned selection highlights every visible cluster. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `closed_rectangle_left_edge_continues_past_the_top_left_seam` setup/action excerpt:
 
 ```rust
-    let p = Subpath::polygon(&[(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)]);
+let p = Subpath::polygon(&[(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)]);
     let start = arc_length_at(&p, false, 0.0, 50.0).unwrap();
     assert!((start - 350.0).abs() < 1e-6);
     let f = PathFrame::new(&p, start as f32, false).unwrap();
@@ -5040,17 +4929,14 @@ The companion JSON retains setup and assertions for every listed regression. The
 }
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-    assert!((start - 350.0).abs() < 1e-6);
+assert!((start - 350.0).abs() < 1e-6);
     let f = PathFrame::new(&p, start as f32, false).unwrap();
     let m = f.frame(75.0).expect("glyph after the seam remains on the closed path");
     let q = centre(m, 75.0);
     assert!((q.0 - 25.0).abs() < 1e-6 && q.1.abs() < 1e-6, "{q:?}");
-    assert_eq!(&m[..4], &[1.0, 0.0, -0.0, 1.0], "text now travels right on the top side");
-    assert_eq!(f.apply(75.0, 0.0), q, "caret and glyph use the same wrapped parameter");
-}
     assert_eq!(&m[..4], &[1.0, 0.0, -0.0, 1.0], "text now travels right on the top side");
     assert_eq!(f.apply(75.0, 0.0), q, "caret and glyph use the same wrapped parameter");
 }
@@ -5059,7 +4945,7 @@ Expected assertions from that fixture:
 `closed_ellipse_upper_left_and_apex_cross_the_seam_in_both_directions` setup/action excerpt:
 
 ```rust
-    for reverse in [false, true] {
+for reverse in [false, true] {
         let mut p = ellipse();
         if reverse {
             p.knots.reverse();
@@ -5073,24 +4959,19 @@ Expected assertions from that fixture:
             for remaining in [0.001, 0.2, 30.0] {
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-                assert!((actual.0 - point.0).hypot(actual.1 - point.1) < 1e-6);
+assert!((actual.0 - point.0).hypot(actual.1 - point.1) < 1e-6);
                 assert!((m[0] - tangent.0).abs() < 1e-6 && (m[1] - tangent.1).abs() < 1e-6);
-                assert!((m[0] * m[3] - m[1] * m[2] - 1.0).abs() < 1e-6, "no reflection or scale jump");
-                let before = f.apply(remaining - 0.001, 0.0);
-                assert!((m[0] - tangent.0).abs() < 1e-6 && (m[1] - tangent.1).abs() < 1e-6);
-                assert!((m[0] * m[3] - m[1] * m[2] - 1.0).abs() < 1e-6, "no reflection or scale jump");
-                let before = f.apply(remaining - 0.001, 0.0);
-                let after = f.apply(remaining + 0.001, 0.0);
                 assert!((m[0] * m[3] - m[1] * m[2] - 1.0).abs() < 1e-6, "no reflection or scale jump");
                 let before = f.apply(remaining - 0.001, 0.0);
                 let after = f.apply(remaining + 0.001, 0.0);
                 assert!((before.0 - after.0).hypot(before.1 - after.1) < 0.01, "seam is continuous");
+            }
+        }
+    }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -5108,12 +4989,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: copied type keeps its pixel size across resolutions after an edit. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `copied_type_keeps_its_pixel_size_across_resolutions_after_an_edit` setup/action excerpt:
 
 ```rust
-    for (from, to) in [(72, 300), (300, 72)] {
+for (from, to) in [(72, 300), (300, 72)] {
         let mut s = Session::new();
         s.execute("file.new", json!({"width": 400, "height": 200, "resolution": from})).unwrap();
         let t = LayerId(s.execute("type.create", json!({"text": "H", "size": 24, "x": 128, "y": 100})).unwrap()["layer"].as_u64().unwrap());
@@ -5127,10 +5008,10 @@ The companion JSON retains setup and assertions for every listed regression. The
         s.execute("type.edit", json!({"layer": id.0, "text": "H"})).unwrap();
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert_eq!(bounds(&s, 1, id).size(), original.size(), "{from}→{to}: the copy");
+assert_eq!(bounds(&s, 1, id).size(), original.size(), "{from}→{to}: the copy");
         s.execute("type.edit", json!({"layer": id.0, "text": "M"})).unwrap();
         s.execute("type.edit", json!({"layer": id.0, "text": "H"})).unwrap();
         let after = bounds(&s, 1, id);
@@ -5138,8 +5019,6 @@ Expected assertions from that fixture:
     }
 }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -5157,12 +5036,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: a kept txt2 goes with the last type layer. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `a_kept_txt2_goes_with_the_last_type_layer` setup/action excerpt:
 
 ```rust
-        let mut doc = Document::new("t", photocraft_geom::Size::new(8, 6), ColorMode::Rgb, SampleType::U8);
+let mut doc = Document::new("t", photocraft_geom::Size::new(8, 6), ColorMode::Rgb, SampleType::U8);
         doc.layers.push(Layer::new("Layer 1", LayerContent::Raster(Surface::new(doc.pixel_format()))));
         doc.metadata.psd_global_blocks = vec![(*b"8BIM", *b"Txt2", std::sync::Arc::new(b"<< /0 << /1 (stale) >> >>".to_vec()))];
         let file = document_to_psd(&doc);
@@ -5174,18 +5053,16 @@ The companion JSON retains setup and assertions for every listed regression. The
     }
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert!(!file.global_blocks.iter().any(|b| b.key == *b"Txt2"), "no type layers: no Txt2");
+assert!(!file.global_blocks.iter().any(|b| b.key == *b"Txt2"), "no type layers: no Txt2");
 
         doc.layers.push(Layer::new("T", LayerContent::Text(photocraft_doc::TextLayer::default())));
         let file = document_to_psd(&doc);
         assert!(file.global_blocks.iter().any(|b| b.key == *b"Txt2"), "a type layer keeps its Txt2");
     }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -5222,12 +5099,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: native gradient icons persist reset and preserve legacy defaults; opaque ramp has no checkerboard fringe at fractional pixel edges; genuinely transparent ramp still shows checkerboard at both scales; options bar swatch opens the editor and reaches the gradients panel; the options bar ribbon opens the editor only in classic mode; the ramp covers its checkerboard at half pixel offsets; selected editor opacity commits once and delete preserves minimum; preset editor opacity fields do not edit document history; editor browser expands groups and selects without opening the sidebar; layer browser replaces color and opacity preserves geometry and undoes once; classic browser and editor edit the tool even with a gradient layer selected; picking a preset discards an uncommitted location draft; toolbar popup selects in both modes without creating a layer; editor browser can choose presets without a document; browser new saves the edited layer instead of the tool gradient; double clicking an editor preset does not create another layer; presets can collapse to reach controls in a small window across themes; properties dropdown edits the layer in both tool modes and saves it; style icons edit the selected layer with one undo step; native gradient icons apply cancel and restart. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `native_gradient_icons_persist_reset_and_preserve_legacy_defaults` setup/action excerpt:
 
 ```rust
-    let mut s = session();
+let mut s = session();
     let history = s.active().unwrap().history.past_len();
     assert!(!s.prefs().interface.native_gradient_icons);
     s.execute("prefs.set", json!({"path": "interface.nativeGradientIcons", "value": true})).unwrap();
@@ -5241,10 +5118,10 @@ The companion JSON retains setup and assertions for every listed regression. The
     for invalid in [json!("true"), json!(1), Value::Null] {
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-    assert!(!s.prefs().interface.native_gradient_icons);
+assert!(!s.prefs().interface.native_gradient_icons);
     s.execute("prefs.set", json!({"path": "interface.nativeGradientIcons", "value": true})).unwrap();
     let mut restarted = Session::new();
     restarted.load_prefs_json(&s.prefs_to_json()).unwrap();
@@ -5252,16 +5129,21 @@ Expected assertions from that fixture:
     assert_eq!(s.active().unwrap().history.past_len(), history);
     s.execute("prefs.reset", json!({"path": "interface.nativeGradientIcons"})).unwrap();
     assert!(!s.prefs().interface.native_gradient_icons);
-    assert_eq!(s.active().unwrap().history.past_len(), history);
-    s.execute("prefs.reset", json!({"path": "interface.nativeGradientIcons"})).unwrap();
-    assert!(!s.prefs().interface.native_gradient_icons);
     let before = s.prefs().to_json();
+    for invalid in [json!("true"), json!(1), Value::Null] {
+        assert!(s.execute("prefs.set", json!({"values": {"interface.showTooltips": false, "interface.nativeGradientIcons": invalid}})).is_err());
+        assert_eq!(s.prefs().to_json(), before, "invalid updates are atomic");
+    }
+    restarted.load_prefs_json(r#"{"interface":{"showTooltips":false}}"#).unwrap();
+    assert!(!restarted.prefs().interface.native_gradient_icons);
+    assert!(!restarted.prefs().interface.show_tooltips);
+}
 ```
 
 `opaque_ramp_has_no_checkerboard_fringe_at_fractional_pixel_edges` setup/action excerpt:
 
 ```rust
-        use egui_kittest::Harness;
+use egui_kittest::Harness;
         for scale in [1.0, 2.0] {
             let edge = 20.0 + 0.3 / scale;
             let rect = Rect::from_min_size(pos2(edge, edge), vec2(96.0, 20.0));
@@ -5275,16 +5157,14 @@ Expected assertions from that fixture:
             };
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-                    assert!(pixel[channel].abs_diff(background[channel]) <= 2, "scale={scale} at ({right}, {y}): {pixel:?} vs {background:?}");
+assert!(pixel[channel].abs_diff(background[channel]) <= 2, "scale={scale} at ({right}, {y}): {pixel:?} vs {background:?}");
                 }
             }
         }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -5303,12 +5183,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: recorded eye visibility replays on another document and duplicate names; shell playback resolves recorded eye target on new document. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `recorded_eye_visibility_replays_on_another_document_and_duplicate_names` setup/action excerpt:
 
 ```rust
-        let mut s = Session::new();
+let mut s = Session::new();
         s.execute("file.new", json!({"width": 8, "height": 8})).unwrap();
         s.execute("layer.new.layer", json!({"name": "Same"})).unwrap();
         let hidden = s.execute("layer.new.layer", json!({"name": "Same"})).unwrap()["layer"].as_u64().unwrap();
@@ -5322,17 +5202,11 @@ The companion JSON retains setup and assertions for every listed regression. The
         let result = s.execute("actions.play", json!({"action": "Hide"})).unwrap();
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert!(result.get("failed").is_none(), "{result}");
+assert!(result.get("failed").is_none(), "{result}");
         assert!(s.active().unwrap().doc.layer(photocraft_doc::LayerId(keep)).unwrap().visible);
-        assert!(!s.active().unwrap().doc.layer(photocraft_doc::LayerId(target)).unwrap().visible);
-        s.execute("edit.undo", json!({})).unwrap();
-        assert!(s.active().unwrap().doc.layer(photocraft_doc::LayerId(keep)).unwrap().visible);
-        assert!(!s.active().unwrap().doc.layer(photocraft_doc::LayerId(target)).unwrap().visible);
-        s.execute("edit.undo", json!({})).unwrap();
-        assert!(s.active().unwrap().doc.layer(photocraft_doc::LayerId(target)).unwrap().visible);
         assert!(!s.active().unwrap().doc.layer(photocraft_doc::LayerId(target)).unwrap().visible);
         s.execute("edit.undo", json!({})).unwrap();
         assert!(s.active().unwrap().doc.layer(photocraft_doc::LayerId(target)).unwrap().visible);
@@ -5342,7 +5216,7 @@ Expected assertions from that fixture:
 `shell_playback_resolves_recorded_eye_target_on_new_document` setup/action excerpt:
 
 ```rust
-        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
         app.run("file.new", json!({"width": 8, "height": 8})).unwrap();
         app.run("layer.new.layer", json!({"name": "Target"})).unwrap();
         app.run("actions.record", json!({"name": "Hide"})).unwrap();
@@ -5356,17 +5230,13 @@ Expected assertions from that fixture:
         assert!(result.get("failed").is_none(), "{result}");
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert!(result.get("failed").is_none(), "{result}");
-        assert!(!app.session.active().unwrap().doc.layer(id).unwrap().visible);
-    }
+assert!(result.get("failed").is_none(), "{result}");
         assert!(!app.session.active().unwrap().doc.layer(id).unwrap().visible);
     }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -5384,33 +5254,27 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: studio dark keeps square colour chips. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `studio_dark_keeps_square_colour_chips` setup/action excerpt:
 
 ```rust
-        assert!(!Tokens::for_kind(ThemeKind::Studio).round_chips);
+assert!(!Tokens::for_kind(ThemeKind::Studio).round_chips);
         // Only the dark variant changes; the light palette retains its layout.
         assert!(Tokens::for_kind(ThemeKind::StudioLight).round_chips);
         assert!(!Tokens::for_kind(ThemeKind::Pro).round_chips);
     }
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert!(!Tokens::for_kind(ThemeKind::Studio).round_chips);
+assert!(!Tokens::for_kind(ThemeKind::Studio).round_chips);
         // Only the dark variant changes; the light palette retains its layout.
         assert!(Tokens::for_kind(ThemeKind::StudioLight).round_chips);
         assert!(!Tokens::for_kind(ThemeKind::Pro).round_chips);
-        assert!(Tokens::for_kind(ThemeKind::StudioLight).round_chips);
-        assert!(!Tokens::for_kind(ThemeKind::Pro).round_chips);
-    }
-        assert!(!Tokens::for_kind(ThemeKind::Pro).round_chips);
     }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -5434,18 +5298,18 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: flatten keeps the inks of a single layer exactly; stamp visible keeps the inks of a single layer exactly; background from layer keeps the inks exactly; flatten of a partly transparent layer still composites over white; merge down separates through the document profile; merge visible separates through the document profile; cmyk merged composite reads through the embedded profile. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `flatten_keeps_the_inks_of_a_single_layer_exactly` setup/action excerpt:
 
 ```rust
-    exact("Flatten Image", |s| {
+exact("Flatten Image", |s| {
         s.execute("layer.flattenImage", json!({})).unwrap();
     });
 }
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
 
@@ -5454,19 +5318,17 @@ Expected assertions from that fixture:
 `stamp_visible_keeps_the_inks_of_a_single_layer_exactly` setup/action excerpt:
 
 ```rust
-    exact("Stamp Visible", |s| {
+exact("Stamp Visible", |s| {
         s.execute("layer.stampVisible", json!({})).unwrap();
     });
 }
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
 
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -5485,12 +5347,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: middle drag rotates about the pointer without panning; middle drag ignores invalid or stationary input. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `middle_drag_rotates_about_the_pointer_without_panning` setup/action excerpt:
 
 ```rust
-        let rect = Rect::from_min_size(pos2(0.0, 0.0), vec2(800.0, 600.0));
+let rect = Rect::from_min_size(pos2(0.0, 0.0), vec2(800.0, 600.0));
         let pointer = pos2(600.0, 180.0);
         for flip in [false, true] {
             let mut view = View { zoom: 2.0, center: [130.0, 80.0], ..Default::default() };
@@ -5504,17 +5366,12 @@ The companion JSON retains setup and assertions for every listed regression. The
     }
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-            assert!(middle_drag(&mut view, &xf, pointer, 90.0));
+assert!(middle_drag(&mut view, &xf, pointer, 90.0));
             assert!((view.rotation - 31.5).abs() < 0.001);
             let next = ViewXform { center: view.center, rotation: view.rotation, ..xf }.to_doc(pointer);
-            assert!((next[0] - original[0]).abs() < 0.001 && (next[1] - original[1]).abs() < 0.001, "{original:?} {next:?}");
-            assert!((view.rotation - 31.5).abs() < 0.001);
-            let next = ViewXform { center: view.center, rotation: view.rotation, ..xf }.to_doc(pointer);
-            assert!((next[0] - original[0]).abs() < 0.001 && (next[1] - original[1]).abs() < 0.001, "{original:?} {next:?}");
-        }
             assert!((next[0] - original[0]).abs() < 0.001 && (next[1] - original[1]).abs() < 0.001, "{original:?} {next:?}");
         }
     }
@@ -5523,7 +5380,7 @@ Expected assertions from that fixture:
 `middle_drag_ignores_invalid_or_stationary_input` setup/action excerpt:
 
 ```rust
-        let mut view = View::default();
+let mut view = View::default();
         let xf = ViewXform {
             rect: Rect::from_min_size(pos2(0.0, 0.0), vec2(600.0, 400.0)),
             zoom: 1.0,
@@ -5537,23 +5394,15 @@ Expected assertions from that fixture:
         assert!(!middle_drag(&mut view, &xf, pos2(f32::INFINITY, 120.0), 20.0));
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert!(!middle_drag(&mut view, &xf, pos2(200.0, 120.0), 0.0));
+assert!(!middle_drag(&mut view, &xf, pos2(200.0, 120.0), 0.0));
         assert!(!middle_drag(&mut view, &xf, pos2(200.0, 120.0), f32::NAN));
-        assert!(!middle_drag(&mut view, &xf, pos2(f32::INFINITY, 120.0), 20.0));
-        assert_eq!(view.rotation, 0.0);
-        assert!(!middle_drag(&mut view, &xf, pos2(200.0, 120.0), f32::NAN));
-        assert!(!middle_drag(&mut view, &xf, pos2(f32::INFINITY, 120.0), 20.0));
-        assert_eq!(view.rotation, 0.0);
-    }
         assert!(!middle_drag(&mut view, &xf, pos2(f32::INFINITY, 120.0), 20.0));
         assert_eq!(view.rotation, 0.0);
     }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -5571,12 +5420,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: windows and linux icons keep the round corners. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `windows_and_linux_icons_keep_the_round_corners` setup/action excerpt:
 
 ```rust
-        // rx=112 of 512 leaves (10, 10) of a 256 px render transparent; the old crop filled it (#4478).
+// rx=112 of 512 leaves (10, 10) of a 256 px render transparent; the old crop filled it (#4478).
         let png = include_bytes!("../../../assets/app-icon/hicolor/256x256/apps/ai.storyteller.photocraft.png");
         let icon = eframe::icon_data::from_png_bytes(png).unwrap();
         assert_eq!(icon.width, 256);
@@ -5585,21 +5434,14 @@ The companion JSON retains setup and assertions for every listed regression. The
     }
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert_eq!(icon.width, 256);
+assert_eq!(icon.width, 256);
         assert_eq!(icon.rgba[(10 * 256 + 10) * 4 + 3], 0, "corner is transparent");
-        assert_eq!(icon.rgba[(128 * 256 + 2) * 4 + 3], 255, "the tile is full bleed");
-    }
-        assert_eq!(icon.rgba[(10 * 256 + 10) * 4 + 3], 0, "corner is transparent");
-        assert_eq!(icon.rgba[(128 * 256 + 2) * 4 + 3], 255, "the tile is full bleed");
-    }
         assert_eq!(icon.rgba[(128 * 256 + 2) * 4 + 3], 255, "the tile is full bleed");
     }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -5618,12 +5460,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: status bounds follow the actual selection and active layer; status dimensions follow ruler units and document resolution. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `status_bounds_follow_the_actual_selection_and_active_layer` setup/action excerpt:
 
 ```rust
-        let d = doc();
+let d = doc();
         let id = d.layers[0].id;
         assert_eq!(status_bounds_text(&d, Some(id)), "Layer: X 0  Y 0  W 2400  H 1500");
         assert_eq!(status_bounds_text(&d, None), "No selection or layer");
@@ -5636,13 +5478,10 @@ The companion JSON retains setup and assertions for every listed regression. The
     }
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert_eq!(status_bounds_text(&d, Some(id)), "Layer: X 0  Y 0  W 2400  H 1500");
-        assert_eq!(status_bounds_text(&d, None), "No selection or layer");
-
-        let mut s = photocraft_engine::Session::new();
+assert_eq!(status_bounds_text(&d, Some(id)), "Layer: X 0  Y 0  W 2400  H 1500");
         assert_eq!(status_bounds_text(&d, None), "No selection or layer");
 
         let mut s = photocraft_engine::Session::new();
@@ -5654,7 +5493,7 @@ Expected assertions from that fixture:
 `status_dimensions_follow_ruler_units_and_document_resolution` setup/action excerpt:
 
 ```rust
-        use photocraft_engine::prefs::{PointSize, Unit, UnitsAndRulers};
+use photocraft_engine::prefs::{PointSize, Unit, UnitsAndRulers};
         let mut d = doc();
         d.resolution_dpi = 300.0;
         for (unit, expected) in [
@@ -5668,13 +5507,11 @@ Expected assertions from that fixture:
         ] {
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-            assert_eq!(status_info_text_with_units(&d, "dimensions", "", "", &units), expected);
+assert_eq!(status_info_text_with_units(&d, "dimensions", "", "", &units), expected);
             for (key, _) in STATUS_INFO.iter().filter(|(key, _)| *key != "dimensions" && *key != "coordinates") {
-                assert_eq!(status_info_text_with_units(&d, key, "Brush Tool", "sRGB", &units), status_info_text(&d, key, "Brush Tool", "sRGB"));
-            }
                 assert_eq!(status_info_text_with_units(&d, key, "Brush Tool", "sRGB", &units), status_info_text(&d, key, "Brush Tool", "sRGB"));
             }
         }
@@ -5682,8 +5519,6 @@ Expected assertions from that fixture:
         assert_eq!(status_info_text_with_units(&d, "dimensions", "", "", &units), "722.7 pt x 451.7 pt (240 ppi)");
     }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -5703,12 +5538,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: scrollbar visibility round trips and old preferences keep the theme default; scrollbar visibility applies in every theme and survives theme changes; hidden scrollbars keep wheel scrolling available. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `scrollbar_visibility_round_trips_and_old_preferences_keep_the_theme_default` setup/action excerpt:
 
 ```rust
-    let old = serde_json::from_value::<Preferences>(json!({"interface": {"uiFontSize": "small"}})).unwrap();
+let old = serde_json::from_value::<Preferences>(json!({"interface": {"uiFontSize": "small"}})).unwrap();
     assert_eq!(old.interface.scrollbar_visibility, ScrollbarVisibility::Default);
     assert_eq!(choices("interface.scrollbarVisibility"), Some(ScrollbarVisibility::NAMES));
     let mut s = Session::new();
@@ -5722,13 +5557,10 @@ The companion JSON retains setup and assertions for every listed regression. The
     let before = s.prefs().to_json();
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-    assert_eq!(old.interface.scrollbar_visibility, ScrollbarVisibility::Default);
-    assert_eq!(choices("interface.scrollbarVisibility"), Some(ScrollbarVisibility::NAMES));
-    let mut s = Session::new();
-    for mode in ScrollbarVisibility::NAMES {
+assert_eq!(old.interface.scrollbar_visibility, ScrollbarVisibility::Default);
     assert_eq!(choices("interface.scrollbarVisibility"), Some(ScrollbarVisibility::NAMES));
     let mut s = Session::new();
     for mode in ScrollbarVisibility::NAMES {
@@ -5737,12 +5569,17 @@ Expected assertions from that fixture:
         assert_eq!(saved["interface"]["scrollbarVisibility"], json!(mode));
     }
     let before = s.prefs().to_json();
+    assert!(s.execute("prefs.set", json!({"values": {"interface.scrollbarVisibility": "sometimes"}})).is_err());
+    assert_eq!(s.prefs().to_json(), before);
+    s.execute("prefs.reset", json!({"path": "interface.scrollbarVisibility"})).unwrap();
+    assert_eq!(s.prefs().interface.scrollbar_visibility, ScrollbarVisibility::Default);
+}
 ```
 
 `scrollbar_visibility_applies_in_every_theme_and_survives_theme_changes` setup/action excerpt:
 
 ```rust
-        use photocraft_engine::prefs::ScrollbarVisibility as Mode;
+use photocraft_engine::prefs::ScrollbarVisibility as Mode;
         let ctx = egui::Context::default();
         for kind in ThemeKind::ALL {
             apply(&ctx, kind);
@@ -5756,24 +5593,26 @@ Expected assertions from that fixture:
             assert!(ctx.global_style().spacing.scroll.floating);
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-            assert_eq!(ctx.global_style().spacing.scroll, original);
+assert_eq!(ctx.global_style().spacing.scroll, original);
             sync_scrollbars(&ctx, Mode::Always);
             assert!(!ctx.global_style().spacing.scroll.floating);
-            assert!(ctx.global_style().spacing.scroll.bar_width > 0.0);
-            assert!(!ctx.global_style().spacing.scroll.floating);
-            assert!(ctx.global_style().spacing.scroll.bar_width > 0.0);
-            sync_scrollbars(&ctx, Mode::AutoHide);
-            assert!(ctx.global_style().spacing.scroll.floating);
             assert!(ctx.global_style().spacing.scroll.bar_width > 0.0);
             sync_scrollbars(&ctx, Mode::AutoHide);
             assert!(ctx.global_style().spacing.scroll.floating);
             assert_eq!(ctx.global_style().spacing.scroll.dormant_handle_opacity, 0.0);
+            sync_scrollbars(&ctx, Mode::Hidden);
+            assert_eq!(ctx.global_style().spacing.scroll.bar_width, 0.0);
+            apply(&ctx, kind);
+            sync_scrollbars(&ctx, Mode::Hidden);
+            assert_eq!(ctx.global_style().spacing.scroll.bar_width, 0.0, "theme changes retain the saved override");
+            sync_scrollbars(&ctx, Mode::Default);
+            assert_eq!(ctx.global_style().spacing.scroll, original);
+        }
+    }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -5793,12 +5632,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: dragging the title bar moves the dialog; layer style keeps one size on every page; layer style fits a short screen. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `dragging_the_title_bar_moves_the_dialog` setup/action excerpt:
 
 ```rust
-        use egui_kittest::{Harness, kittest::Queryable};
+use egui_kittest::{Harness, kittest::Queryable};
 
         let app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
         let mut harness = Harness::builder().with_size(egui::vec2(1400.0, 1100.0)).build_ui_state(|ui, app| show(app, ui.ctx()), app);
@@ -5812,12 +5651,10 @@ The companion JSON retains setup and assertions for every listed regression. The
         harness.hover_at(from);
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert!((moved - egui::vec2(-120.0, 80.0)).length() < 1.0, "dialog moved by {moved:?}");
-        assert_eq!(harness.state().ui.dialogs.len(), 1, "dragging must not close the dialog");
-    }
+assert!((moved - egui::vec2(-120.0, 80.0)).length() < 1.0, "dialog moved by {moved:?}");
         assert_eq!(harness.state().ui.dialogs.len(), 1, "dragging must not close the dialog");
     }
 ```
@@ -5825,7 +5662,7 @@ Expected assertions from that fixture:
 `layer_style_keeps_one_size_on_every_page` setup/action excerpt:
 
 ```rust
-        let mut h = layer_style_on_bevel(egui::vec2(1400.0, 900.0));
+let mut h = layer_style_on_bevel(egui::vec2(1400.0, 900.0));
         let size = frame(&h).size();
         let dialog = h.state().ui.dialogs[0].id;
         for page in ["blendingOptions", "styles"] {
@@ -5838,18 +5675,15 @@ Expected assertions from that fixture:
     }
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-            assert_eq!(frame(&h).size(), size, "{page}");
+assert_eq!(frame(&h).size(), size, "{page}");
         }
         let grip = egui::Id::new(("dialog", dialog)).with("resize").with("__resize_corner");
         assert!(h.ctx.read_response(grip).is_none(), "no resize grip");
-        assert!(h.ctx.read_response(grip).is_none(), "no resize grip");
     }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -5880,12 +5714,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: gradient overlay takes explicit stops; layer style picker control binds previews confirms and cancels; every exposed color field uses the shared picker and only updates its target; preview cancel ok parent cancel and apply are transactional at every depth; unchanged ok preserves missing parameters and imported effect snapshot; stale targets and invalid colors never apply or leave preview; preview off and parent confirmation and cancellation keep their contract; eyedropper edits only the picker and invalid samples leave it unchanged; gradient stop colors go through the picker; ramp adds moves and deletes stops; presets delete and location; stops round trip through the field grammar; factory from to become two stops; the fill of a page never fails. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `gradient_overlay_takes_explicit_stops` setup/action excerpt:
 
 ```rust
-        let mut s = session();
+let mut s = session();
         let stops = json!([[0.0, "#ff0000"], [0.5, "#00ff00"], [1.0, "#0000ff"]]);
         s.execute("layer.layerStyle.gradientOverlay", json!({"stops": stops, "opacityStops": [[0, 100], [1, 50]]})).unwrap();
         let Effect::GradientOverlay { gradient, .. } = &effects(&s)[0] else { panic!() };
@@ -5899,27 +5733,44 @@ The companion JSON retains setup and assertions for every listed regression. The
         assert_eq!(gradient.stops.iter().map(|s| s.0).collect::<Vec<_>>(), vec![0.25, 1.0]);
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert_eq!(gradient.stops.len(), 3);
+assert_eq!(gradient.stops.len(), 3);
         assert_eq!(gradient.stops[1], (0.5, photocraft_color::Color::rgb(0.0, 1.0, 0.0)));
-        assert_eq!(gradient.opacity_stops, vec![(0.0, 1.0), (1.0, 0.5)]);
-        // Editing the same overlay: new stops replace the list (sorted), unsorted input is sorted,
-        assert_eq!(gradient.stops[1], (0.5, photocraft_color::Color::rgb(0.0, 1.0, 0.0)));
-        assert_eq!(gradient.opacity_stops, vec![(0.0, 1.0), (1.0, 0.5)]);
-        // Editing the same overlay: new stops replace the list (sorted), unsorted input is sorted,
-        // and a geometry-only edit keeps the three stops.
         assert_eq!(gradient.opacity_stops, vec![(0.0, 1.0), (1.0, 0.5)]);
         // Editing the same overlay: new stops replace the list (sorted), unsorted input is sorted,
         // and a geometry-only edit keeps the three stops.
         s.execute("layer.layerStyle.gradientOverlay", json!({"stops": [[1.0, "#ffffff"], [0.25, [0.0, 0.0, 0.0]]], "opacityStops": []})).unwrap();
+        assert_eq!(gradient.stops.iter().map(|s| s.0).collect::<Vec<_>>(), vec![0.25, 1.0]);
+        assert!(gradient.opacity_stops.is_empty(), "[] means opaque");
+        s.execute("layer.layerStyle.gradientOverlay", json!({"stops": stops})).unwrap();
+        // The dialog's path: the snapshot plus a geometry edit keeps the three stops.
+        let fx = serde_json::to_value(&effects(&s)[0]).unwrap();
+        assert_eq!((gradient.stops.len(), gradient.angle), (3, 45.0));
+        let e = s.execute("layer.layerStyle.replace", json!({"effects": [{"kind": "gradientOverlay", "params": {"stops": [[0, "#ff0000"]]}}]})).unwrap_err();
+        assert!(matches!(e, EngineError::BadParams { .. }), "{e}");
+        // A gradient stroke takes stops too.
+        s.execute("layer.layerStyle.stroke", json!({"size": 4, "stops": [[0, "#ff0000"], [0.5, "#00ff00"], [1, "#0000ff"]]})).unwrap();
+        assert!(effects(&s).iter().any(|e| matches!(e, Effect::Stroke(st) if matches!(&st.paint, FxPaint::Gradient(g) if g.stops.len() == 3))));
+        // Malformed lists are errors and change nothing.
+        for bad in [
+            json!({"stops": "red"}),
+            assert!(matches!(e, EngineError::BadParams { .. }), "{bad}: {e}");
+        }
+        let Effect::GradientOverlay { gradient, .. } = &effects(&s)[0] else { panic!() };
+        assert_eq!(gradient.stops.len(), 3, "a refused edit keeps the gradient");
+        // Positions outside 0..1 are clamped.
+        s.execute("layer.layerStyle.gradientOverlay", json!({"stops": [[-1, "#000000"], [2, "#ffffff"]]})).unwrap();
+        let Effect::GradientOverlay { gradient, .. } = &effects(&s)[0] else { panic!() };
+        assert_eq!(gradient.stops.iter().map(|s| s.0).collect::<Vec<_>>(), vec![0.0, 1.0]);
+    }
 ```
 
 `layer_style_picker_control_binds_previews_confirms_and_cancels` setup/action excerpt:
 
 ```rust
-        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
         let ctx = egui::Context::default();
         app.run("file.new", json!({"width":16,"height":16})).unwrap();
         let parent = call(&mut app, &ctx, "ui.dialog.open", json!({"kind":"layerStyle","effect":"gradientOverlay"}))["result"]["dialog"].as_u64();
@@ -5933,24 +5784,28 @@ Expected assertions from that fixture:
             let inspected = call(&mut app, &ctx, "ui.inspect", json!({}));
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-            assert_eq!(reply["ok"], true, "{reply}");
+assert_eq!(reply["ok"], true, "{reply}");
             let picker = app.ui.dialogs.last().unwrap().id;
             let inspected = call(&mut app, &ctx, "ui.inspect", json!({}));
             assert!(inspected.to_string().contains("__layerStyleColor"));
-            assert!(inspected.to_string().contains("__layerStyleColor"));
-            assert_eq!(call(&mut app, &ctx, "ui.dialog.confirm", json!({"dialog":parent}))["ok"], false);
-            assert_eq!(call(&mut app, &ctx, "ui.dialog.set", json!({"dialog":picker,"field":"color","value":"#123456"}))["ok"], true);
-            assert_eq!(call(&mut app, &ctx, "ui.dialog.confirm", json!({"dialog":picker}))["ok"], true);
             assert_eq!(call(&mut app, &ctx, "ui.dialog.confirm", json!({"dialog":parent}))["ok"], false);
             assert_eq!(call(&mut app, &ctx, "ui.dialog.set", json!({"dialog":picker,"field":"color","value":"#123456"}))["ok"], true);
             assert_eq!(call(&mut app, &ctx, "ui.dialog.confirm", json!({"dialog":picker}))["ok"], true);
             assert_eq!(app.ui.dialogs[0].fields["effects"][0]["params"]["stops"][stop][1], "#123456");
+        }
+        assert_ne!(app.ui.dialogs[0].fields, before);
+        let bad = call(&mut app, &ctx, "ui.dialog.open", json!({"kind":"colorPicker","parent":parent,"effect":"fx1","field":"stops","stop":"x"}));
+        assert_eq!(bad["ok"], false, "{bad}");
+        let bad = call(&mut app, &ctx, "ui.dialog.open", json!({"kind":"colorPicker","parent":parent,"effect":"fx1","field":"stops","stop":9}));
+        assert_eq!(bad["ok"], false, "{bad}");
+        call(&mut app, &ctx, "ui.dialog.open", json!({"kind":"colorPicker","parent":parent,"effect":"fx1","field":"stops","stop":1}));
+        assert_eq!(call(&mut app, &ctx, "ui.dialog.cancel", json!({"dialog":parent}))["ok"], true);
+        assert!(app.ui.dialogs.is_empty());
+    }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -5975,12 +5830,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: torn off document is not drawn again in the main window; tab reorder keeps floating documents in place; arrange layout only includes docked documents; dragging a tab off the strip floats it in a window; views and windows stay with their documents; float in window takes a document and position; float in window defaults to the active document; float all in windows gives each document its own view. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `torn_off_document_is_not_drawn_again_in_the_main_window` setup/action excerpt:
 
 ```rust
-        for kind in [crate::theme::ThemeKind::Pro, crate::theme::ThemeKind::Studio] {
+for kind in [crate::theme::ThemeKind::Pro, crate::theme::ThemeKind::Studio] {
             let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
             app.run("file.new", json!({"width": 80, "height": 60, "name": "floating"})).unwrap();
             app.run("file.new", json!({"width": 80, "height": 60, "name": "docked"})).unwrap();
@@ -5994,43 +5849,36 @@ The companion JSON retains setup and assertions for every listed regression. The
                 |ui, (app, ready): &mut (PhotocraftApp, bool)| {
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-            assert!(app.ui.windows[0].floating);
+assert!(app.ui.windows[0].floating);
             assert_eq!(app.session.active_index(), Some(0), "{kind:?}: the floated page remains active");
-            assert_eq!(main_canvas_document(&app), Some(1), "{kind:?}: the main canvas picks a docked page instead");
-            let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(680.0, 480.0)).build_ui_state(
-            assert_eq!(app.session.active_index(), Some(0), "{kind:?}: the floated page remains active");
-            assert_eq!(main_canvas_document(&app), Some(1), "{kind:?}: the main canvas picks a docked page instead");
-            let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(680.0, 480.0)).build_ui_state(
-                |ui, (app, ready): &mut (PhotocraftApp, bool)| {
             assert_eq!(main_canvas_document(&app), Some(1), "{kind:?}: the main canvas picks a docked page instead");
             let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(680.0, 480.0)).build_ui_state(
                 |ui, (app, ready): &mut (PhotocraftApp, bool)| {
                     if *ready {
+            assert_eq!(tabs, Some(vec![1]), "{kind:?}: only the docked document stays on the main tab strip");
+        }
+    }
 ```
 
 `tab_reorder_keeps_floating_documents_in_place` setup/action excerpt:
 
 ```rust
-        let visible = [0, 2];
+let visible = [0, 2];
         assert_eq!(move_target_after_filter(&visible, 0, 1, 3), 2);
         assert_eq!(move_target_after_filter(&visible, 2, 0, 3), 0);
     }
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert_eq!(move_target_after_filter(&visible, 0, 1, 3), 2);
-        assert_eq!(move_target_after_filter(&visible, 2, 0, 3), 0);
-    }
+assert_eq!(move_target_after_filter(&visible, 0, 1, 3), 2);
         assert_eq!(move_target_after_filter(&visible, 2, 0, 3), 0);
     }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -6049,12 +5897,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: video frames to layers takes every tiff page; video frames to layers refuses a tiff with an incomplete page list. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `video_frames_to_layers_takes_every_tiff_page` setup/action excerpt:
 
 ```rust
-    let dir = tmpdir("tiff-pages");
+let dir = tmpdir("tiff-pages");
     let path = format!("{dir}/pages.tif");
     write_tiff(&path, &[(2, 2, 9, 1), (6, 4, 51, 0), (3, 5, 204, 0)]);
     let mut s = session();
@@ -6068,10 +5916,10 @@ The companion JSON retains setup and assertions for every listed regression. The
         assert_eq!((b.width(), b.height()), (w, h), "{name}");
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-    assert_eq!(r["layers"], 2, "two pages, the thumbnail left out");
+assert_eq!(r["layers"], 2, "two pages, the thumbnail left out");
     let doc = &s.active().unwrap().doc;
     for (name, (w, h), level) in [("Frame 1", (6, 4), 51.0), ("Frame 2", (3, 5), 204.0)] {
         let l = doc.layers.iter().find(|l| l.name == name).unwrap_or_else(|| panic!("{name}"));
@@ -6079,16 +5927,16 @@ Expected assertions from that fixture:
         let px = surf.read_region(photocraft_geom::Rect::new(b.x0, b.y0, b.x0 + 1, b.y0 + 1));
         assert!((px[0] * 255.0 - level).abs() < 0.6 && px[3] == 1.0, "{name}: {px:?}");
     }
-        assert!((px[0] * 255.0 - level).abs() < 0.6 && px[3] == 1.0, "{name}: {px:?}");
-    }
     let single = format!("{dir}/single.tif");
     write_tiff(&single, &[(4, 4, 120, 0)]);
+    assert_eq!(s.execute("file.import.videoFramesToLayers", json!({"path": single})).unwrap()["layers"], 1);
+}
 ```
 
 `video_frames_to_layers_refuses_a_tiff_with_an_incomplete_page_list` setup/action excerpt:
 
 ```rust
-    let dir = tmpdir("tiff-loop");
+let dir = tmpdir("tiff-loop");
     let path = format!("{dir}/loop.tif");
     write_tiff(&path, &[(2, 2, 51, 0), (2, 2, 204, 0)]);
     // The last directory's next-IFD offset points back to the first directory.
@@ -6102,17 +5950,13 @@ Expected assertions from that fixture:
     let err = s.execute("file.import.videoFramesToLayers", json!({"path": path})).unwrap_err().to_string();
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-    assert!(err.contains("only the first 2 pages"), "{err}");
-    assert_eq!(s.active().unwrap().doc.layers.len(), before, "nothing imported");
-}
+assert!(err.contains("only the first 2 pages"), "{err}");
     assert_eq!(s.active().unwrap().doc.layers.len(), before, "nothing imported");
 }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -6132,12 +5976,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: cmd is not the move tool for selection hand zoom pen shape or type tools; cmd and alt with the hand tool zoom in and out while held; cmd mid pan or during free transform is not the hand tools zoom. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `cmd_is_not_the_move_tool_for_selection_hand_zoom_pen_shape_or_type_tools` setup/action excerpt:
 
 ```rust
-    for tool in [
+for tool in [
         Tool::Hand,
         Tool::RotateView,
         Tool::Zoom,
@@ -6151,17 +5995,16 @@ The companion JSON retains setup and assertions for every listed regression. The
         Tool::Move,
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert!(!cmd_moves(tool), "{tool:?}");
+assert!(!cmd_moves(tool), "{tool:?}");
         let mut h = harness(tool);
         h.event(Event::ModifiersChanged(platform(Modifiers::COMMAND)));
         h.run_steps(1);
         assert_eq!(held_tool(h.state(), &h.ctx), (tool == Tool::Hand).then_some(Temporary::ZoomIn), "{tool:?}");
     }
     for tool in [Tool::Brush, Tool::Eraser, Tool::Gradient, Tool::CloneStamp, Tool::Eyedropper, Tool::MagneticLasso, Tool::QuickSelection] {
-        assert!(cmd_moves(tool), "{tool:?}");
         assert!(cmd_moves(tool), "{tool:?}");
     }
 }
@@ -6170,7 +6013,7 @@ Expected assertions from that fixture:
 `cmd_and_alt_with_the_hand_tool_zoom_in_and_out_while_held` setup/action excerpt:
 
 ```rust
-    let mut h = harness(Tool::Hand);
+let mut h = harness(Tool::Hand);
     let z0 = h.state().ui.views[0].zoom;
     hold_mods(&mut h, Modifiers::COMMAND);
     assert_eq!(held_tool(h.state(), &h.ctx), Some(Temporary::ZoomIn));
@@ -6184,24 +6027,30 @@ Expected assertions from that fixture:
     assert!(z2 < z1, "{z1} -> {z2}");
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-    assert_eq!(held_tool(h.state(), &h.ctx), Some(Temporary::ZoomIn));
+assert_eq!(held_tool(h.state(), &h.ctx), Some(Temporary::ZoomIn));
     click(&mut h, 200.0, 150.0, Modifiers::COMMAND);
     let z1 = h.state().ui.views[0].zoom;
-    assert!(z1 > z0, "{z0} -> {z1}");
     assert!(z1 > z0, "{z0} -> {z1}");
     hold_mods(&mut h, Modifiers::ALT);
     assert_eq!(held_tool(h.state(), &h.ctx), Some(Temporary::ZoomOut));
     click(&mut h, 200.0, 150.0, Modifiers::ALT);
-    assert_eq!(held_tool(h.state(), &h.ctx), Some(Temporary::ZoomOut));
-    click(&mut h, 200.0, 150.0, Modifiers::ALT);
     let z2 = h.state().ui.views[0].zoom;
     assert!(z2 < z1, "{z1} -> {z2}");
+    hold_mods(&mut h, Modifiers::COMMAND | Modifiers::ALT);
+    assert_eq!(held_tool(h.state(), &h.ctx), Some(Temporary::ZoomOut), "⌥ turns ⌘'s Zoom In around");
+    hold_mods(&mut h, Modifiers::NONE);
+    assert_eq!(held_tool(h.state(), &h.ctx), None);
+    // Released: a drag pans again.
+    let (center, zoom) = (h.state().ui.views[0].center, h.state().ui.views[0].zoom);
+    drag_with(&mut h, Modifiers::NONE, 200.0, 150.0, 260.0, 190.0);
+    assert_ne!(h.state().ui.views[0].center, center, "the Hand pans");
+    assert_eq!(h.state().ui.views[0].zoom, zoom);
+    assert_eq!(h.state().ui.tool, Tool::Hand);
+}
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -6219,12 +6068,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: trim and duplicate merged on too large document fail gracefully without panic. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `trim_and_duplicate_merged_on_too_large_document_fail_gracefully_without_panic` setup/action excerpt:
 
 ```rust
-        let mut s = Session::new();
+let mut s = Session::new();
         s.execute("file.new", json!({"width": 40000, "height": 30000, "background": "transparent"})).unwrap();
         let initial_layers = doc(&s).layers.len();
         let initial_bounds = doc(&s).bounds();
@@ -6238,24 +6087,26 @@ The companion JSON retains setup and assertions for every listed regression. The
         assert_eq!(doc(&s).layers.len(), initial_layers, "layer count unchanged after failed trim");
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert!(trim_res.is_err(), "trim on too-large document must return error");
+assert!(trim_res.is_err(), "trim on too-large document must return error");
         let err = trim_res.unwrap_err().to_string();
         assert!(err.contains("too large to trim"), "error should explain document is too large: {err}");
         assert_eq!(doc(&s).layers.len(), initial_layers, "layer count unchanged after failed trim");
-        assert!(err.contains("too large to trim"), "error should explain document is too large: {err}");
-        assert_eq!(doc(&s).layers.len(), initial_layers, "layer count unchanged after failed trim");
-        assert_eq!(doc(&s).bounds(), initial_bounds, "canvas size unchanged after failed trim");
-        assert_eq!(s.active().unwrap().revision, initial_rev, "revision unchanged after failed trim");
-        assert_eq!(doc(&s).layers.len(), initial_layers, "layer count unchanged after failed trim");
         assert_eq!(doc(&s).bounds(), initial_bounds, "canvas size unchanged after failed trim");
         assert_eq!(s.active().unwrap().revision, initial_rev, "revision unchanged after failed trim");
 
+        let dup_res = s.execute("image.duplicate", json!({"mergedOnly": true}));
+        assert!(dup_res.is_err(), "duplicate merged on too-large document must return error");
+        let dup_err = dup_res.unwrap_err().to_string();
+        assert!(dup_err.contains("too large to duplicate merged"), "error should explain document is too large: {dup_err}");
+        assert_eq!(s.documents().len(), initial_docs, "document count unchanged after failed duplicate");
+        assert_eq!(doc(&s).layers.len(), initial_layers, "layer count unchanged after failed duplicate");
+        assert_eq!(doc(&s).bounds(), initial_bounds, "canvas size unchanged after failed duplicate");
+        assert_eq!(s.active().unwrap().revision, initial_rev, "revision unchanged after failed duplicate");
+    }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -6275,12 +6126,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: the description is the cpus blur; an impulse spreads no further than the reach; output depends only on the input region. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `the_description_is_the_cpus_blur` setup/action excerpt:
 
 ```rust
-        for radius in RADII {
+for radius in RADII {
             let params = FilterParams::GaussianBlur { radius };
             let blur = Separable::of(&params).unwrap();
             match &blur {
@@ -6294,27 +6145,32 @@ The companion JSON retains setup and assertions for every listed regression. The
                     assert!(radius > 4.0, "radius {radius}");
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-                    assert!(radius <= 4.0, "radius {radius}");
+assert!(radius <= 4.0, "radius {radius}");
                     assert_eq!(k, &blur::gaussian_kernel(radius));
-                    assert_eq!(k.len() % 2, 1);
-                    assert!((k.iter().sum::<f32>() - 1.0).abs() < 1e-5);
-                    assert_eq!(k, &blur::gaussian_kernel(radius));
-                    assert_eq!(k.len() % 2, 1);
-                    assert!((k.iter().sum::<f32>() - 1.0).abs() < 1e-5);
-                }
                     assert_eq!(k.len() % 2, 1);
                     assert!((k.iter().sum::<f32>() - 1.0).abs() < 1e-5);
                 }
                 Separable::Boxes(b) => {
+                    assert!(radius > 4.0, "radius {radius}");
+                    assert_eq!(Some(b.clone()), blur::box_widths(&params));
+                    assert!(b.iter().all(|w| w % 2 == 1));
+                }
+            }
+            let Halo::Radius(halo) = params.halo() else { panic!("a Gaussian has a radius halo") };
+            assert!(blur.reach() <= halo, "radius {radius}: reach {} past the halo {halo}", blur.reach());
+        }
+        assert_eq!(Separable::of(&FilterParams::BoxBlur { radius: 9.0 }), None, "not a Gaussian (yet)");
+        assert_eq!(Separable::Boxes(vec![usize::MAX, 3]).reach(), i32::MAX, "saturates");
+    }
 ```
 
 `an_impulse_spreads_no_further_than_the_reach` setup/action excerpt:
 
 ```rust
-        for radius in RADII {
+for radius in RADII {
             let params = FilterParams::GaussianBlur { radius };
             let reach = Separable::of(&params).unwrap().reach();
             let fmt = PixelFormat::new(ColorMode::Rgb, SampleType::F32, true);
@@ -6328,20 +6184,16 @@ Expected assertions from that fixture:
             out.read_region_into(canvas, &mut px);
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-            assert!(dot.inflate(reach).contains_rect(&touched), "radius {radius}: {touched:?} past the reach {reach}");
+assert!(dot.inflate(reach).contains_rect(&touched), "radius {radius}: {touched:?} past the reach {reach}");
             if matches!(Separable::of(&params), Some(Separable::Kernel(_))) {
-                assert_eq!(touched, dot.inflate(reach), "radius {radius}");
-            }
                 assert_eq!(touched, dot.inflate(reach), "radius {radius}");
             }
         }
     }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -6353,9 +6205,9 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 ## PR-9004: fix(ui): enlarge Move tool alignment icons for legibility
 
-- Fixture/setup: Open a synthetic layered document with Move tool; use the supported themes and display scales.
-- Action: Inspect Move alignment icons and compare screenshots to the reviewed icon geometry in this PR.
-- Expected: Icons use the enlarged reviewed geometry, remain legible and do not clip or shift adjacent controls.
+- Fixture/setup: Studio Dark and Studio Light at UI scales 100% and 200%, 1280x800 and 900x600 logical-point windows; synthetic document with two selected layers and Move tool. Capture disabled state with fewer selected layers too.
+- Action: Capture the six Move Align controls and Align and distribute ellipsis at each theme/scale/window combination. Measure icon artwork/hit rectangles from the captured scale and invoke Left Edges then Undo.
+- Expected: Artwork is 20 logical points within 28-point hit targets (40/56 physical pixels at 2x), without clipping or overlap. Enabled-state and command dispatch are unchanged; Left Edges aligns the selected layers and Undo restores their positions.
 - Status: NOT RUN
 - Actual:
 - Evidence:
@@ -6369,12 +6221,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: rejects numeric prerelease identifiers with leading zeroes. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `rejects_numeric_prerelease_identifiers_with_leading_zeroes` setup/action excerpt:
 
 ```rust
-        for version in ["1.0.0-01", "1.0.0-rc.01", "1.0.0-00.1"] {
+for version in ["1.0.0-01", "1.0.0-rc.01", "1.0.0-00.1"] {
             assert!(validate(version).is_err(), "validator accepted invalid version {version}");
             assert!(replace(MANIFEST, version).is_err(), "accepted invalid version {version}");
         }
@@ -6385,13 +6237,10 @@ The companion JSON retains setup and assertions for every listed regression. The
     }
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-            assert!(validate(version).is_err(), "validator accepted invalid version {version}");
-            assert!(replace(MANIFEST, version).is_err(), "accepted invalid version {version}");
-        }
-        for version in ["1.0.0-0", "1.0.0-rc.0", "1.0.0-01a", "1.0.0-01-2"] {
+assert!(validate(version).is_err(), "validator accepted invalid version {version}");
             assert!(replace(MANIFEST, version).is_err(), "accepted invalid version {version}");
         }
         for version in ["1.0.0-0", "1.0.0-rc.0", "1.0.0-01a", "1.0.0-01-2"] {
@@ -6400,8 +6249,6 @@ Expected assertions from that fixture:
         }
     }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -6419,12 +6266,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: new gradient fill layer defaults to foreground to transparent. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `new_gradient_fill_layer_defaults_to_foreground_to_transparent` setup/action excerpt:
 
 ```rust
-    // #8708: Photoshop's Layer › New Fill Layer › Gradient… starts from Foreground to
+// #8708: Photoshop's Layer › New Fill Layer › Gradient… starts from Foreground to
     // Transparent: the foreground at both ends, its opacity 100% to 0%. A `to` colour keeps a
     // two-colour gradient.
     let mut s = session(8, "transparent");
@@ -6438,23 +6285,17 @@ The companion JSON retains setup and assertions for every listed regression. The
     s.execute("layer.newFillLayer.gradient", json!({"to": "#ff0000"})).unwrap();
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-    assert_eq!(stops, vec![(0.0, fg), (1.0, fg)]);
+assert_eq!(stops, vec![(0.0, fg), (1.0, fg)]);
     assert_eq!(opacity_stops, vec![(0.0, 1.0), (1.0, 0.0)]);
     s.execute("layer.newFillLayer.gradient", json!({"to": "#ff0000"})).unwrap();
     let Fill::Gradient { stops, opacity_stops, .. } = active_fill(&s) else { panic!("not a gradient") };
-    assert_eq!(opacity_stops, vec![(0.0, 1.0), (1.0, 0.0)]);
-    s.execute("layer.newFillLayer.gradient", json!({"to": "#ff0000"})).unwrap();
-    let Fill::Gradient { stops, opacity_stops, .. } = active_fill(&s) else { panic!("not a gradient") };
-    assert_eq!(stops[1].1, Color::rgba(1.0, 0.0, 0.0, 1.0));
     assert_eq!(stops[1].1, Color::rgba(1.0, 0.0, 0.0, 1.0));
     assert!(opacity_stops.is_empty());
 }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -6476,12 +6317,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: adjustment preset menus load presets and read custom after an edit; properties preset menus load every setting in one step; preset menus say they are photocrafts own; presets apply and are recognised; presets give their looks. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `adjustment_preset_menus_load_presets_and_read_custom_after_an_edit` setup/action excerpt:
 
 ```rust
-        use egui_kittest::kittest::{NodeT, Queryable};
+use egui_kittest::kittest::{NodeT, Queryable};
         for (kind, label, key) in [
             ("levels", "Increase Contrast 2", "inBlack"),
             ("exposure", "Plus 1.0", "exposure"),
@@ -6495,10 +6336,10 @@ The companion JSON retains setup and assertions for every listed regression. The
             let preset = |h: &Harness<'_, PhotocraftApp>| {
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-            assert_eq!(preset(&h).as_deref(), Some("Default"), "{kind} opens on Default");
+assert_eq!(preset(&h).as_deref(), Some("Default"), "{kind} opens on Default");
             h.query_all_by_role(egui::accesskit::Role::ComboBox).next().unwrap().click();
             h.run_steps(2);
             h.get_by_label(label).click();
@@ -6510,12 +6351,18 @@ Expected assertions from that fixture:
             }
             assert_eq!(fields[key], want[key]);
             let edit = match kind {
+                "levels" => ("gamma", json!(1.37)),
+                "exposure" => ("offset", json!(0.05)),
+            assert_eq!(preset(&h).as_deref(), Some("Custom"), "{kind}: an edit is Custom");
+            crate::dialogs::confirm(h.state_mut(), id).unwrap();
+        }
+    }
 ```
 
 `properties_preset_menus_load_every_setting_in_one_step` setup/action excerpt:
 
 ```rust
-    use egui_kittest::kittest::NodeT;
+use egui_kittest::kittest::NodeT;
     for (kind, label) in
         [("levels", "Increase Contrast 2"), ("exposure", "Plus 1.0"), ("blackWhite", "Red Filter"), ("channelMixer", "Black & White with Red Filter (RGB)")]
     {
@@ -6529,19 +6376,15 @@ Expected assertions from that fixture:
         h.run_steps(2);
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-            assert_eq!(got[k], *v, "{kind}: the layer's `{k}`");
+assert_eq!(got[k], *v, "{kind}: the layer's `{k}`");
         }
-        assert_eq!(h.state().session.active().unwrap().history.past_len(), steps + 1, "{kind}: one step");
-    }
         assert_eq!(h.state().session.active().unwrap().history.past_len(), steps + 1, "{kind}: one step");
     }
 }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -6561,12 +6404,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: screen mode button is inert without a document; long press screen mode opens the modes without cycling; full screen modes need a document. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `screen_mode_button_is_inert_without_a_document` setup/action excerpt:
 
 ```rust
-        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
         app.run("file.new", serde_json::json!({"width": 64, "height": 48})).unwrap();
         let ctx = egui::Context::default();
         PhotocraftApp::setup_context(&ctx, crate::theme::ThemeKind::ALL[0]);
@@ -6580,16 +6423,14 @@ The companion JSON retains setup and assertions for every listed regression. The
                     .widgets
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert_eq!(crate::view_cmds::is_enabled(&app, "view.screenMode.cycle"), Some(false));
+assert_eq!(crate::view_cmds::is_enabled(&app, "view.screenMode.cycle"), Some(false));
         let pointer = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
         let mut sent = Vec::new();
         for (t, events) in [(2.0, vec![egui::Event::PointerMoved(at), pointer(true)]), (2.1, vec![pointer(false)]), (2.15, vec![])] {
         assert!(!sent.iter().any(|c| matches!(c, egui::ViewportCommand::Fullscreen(_))), "no screen mode change was sent: {sent:?}");
-        assert_eq!(app.ui.view.screen_mode, "standard");
-    }
         assert_eq!(app.ui.view.screen_mode, "standard");
     }
 ```
@@ -6597,7 +6438,7 @@ Expected assertions from that fixture:
 `long_press_screen_mode_opens_the_modes_without_cycling` setup/action excerpt:
 
 ```rust
-        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
         // A document open: Full Screen Mode needs one (#9349), so without it a click can't cycle.
         app.run("file.new", serde_json::json!({"width": 64, "height": 48})).unwrap();
         let ctx = egui::Context::default();
@@ -6611,10 +6452,10 @@ Expected assertions from that fixture:
                 v.prev_pass
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert!(standard(&app));
+assert!(standard(&app));
         // Hold, then release: the list opens and stays open, and the mode is unchanged.
         frame(&mut app, &ctx, 1.0, vec![egui::Event::PointerMoved(at), pointer(at, true)]);
         frame(&mut app, &ctx, 1.2, vec![]);
@@ -6622,13 +6463,24 @@ Expected assertions from that fixture:
         frame(&mut app, &ctx, 1.4, vec![]);
         assert!(menu_open(&ctx), "open while still held");
         frame(&mut app, &ctx, 1.5, vec![pointer(at, false)]);
-        assert!(menu_open(&ctx), "open while still held");
-        frame(&mut app, &ctx, 1.5, vec![pointer(at, false)]);
         frame(&mut app, &ctx, 1.55, vec![]);
         assert!(menu_open(&ctx), "the release keeps it open");
+        assert!(standard(&app), "the release doesn't cycle the mode");
+        // Escape closes it; a plain click cycles the mode and opens nothing.
+        frame(
+            &mut app,
+        assert!(!menu_open(&ctx));
+        frame(&mut app, &ctx, 3.0, vec![egui::Event::PointerMoved(at), pointer(at, true)]);
+        frame(&mut app, &ctx, 3.1, vec![pointer(at, false)]);
+        frame(&mut app, &ctx, 3.15, vec![]);
+        assert!(!standard(&app), "a click cycles");
+        assert!(!menu_open(&ctx));
+        // Right-click opens it too.
+        let secondary = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Secondary, pressed, modifiers: Default::default() };
+        frame(&mut app, &ctx, 4.0, vec![secondary(true)]);
+        assert!(menu_open(&ctx));
+    }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -6652,12 +6504,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: three dl without a header reads low nodes as 12 bit; three dl mesh three point shaper is not a node; three dl mesh declares the output depth; three dl mesh header mismatch is rejected; three dl malformed mesh header falls back to inference; three dl mesh uses declared range for small integer codes; color lookup mesh 3dl honours the header. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `three_dl_without_a_header_reads_low_nodes_as_12_bit` setup/action excerpt:
 
 ```rust
-        let table = |peak: u32| -> String {
+let table = |peak: u32| -> String {
             let mut text = String::from("0 1023\n");
             for i in 0..8 {
                 let on = |bit: u32| if i & bit != 0 { peak } else { 0 };
@@ -6671,10 +6523,10 @@ The companion JSON retains setup and assertions for every listed regression. The
         }
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-            assert_eq!(white, [peak as f32 / 4095.0; 3], "peak {peak}");
+assert_eq!(white, [peak as f32 / 4095.0; 3], "peak {peak}");
         }
         // A header keeps the inferred 10-bit depth. The bare `3DMESH` magic is a header without a
         // cube declaration; `Mesh 1 10` would declare a 3³ cube and refuse this 2³ table (#9078).
@@ -6685,7 +6537,7 @@ Expected assertions from that fixture:
 `three_dl_mesh_three_point_shaper_is_not_a_node` setup/action excerpt:
 
 ```rust
-        // #9078: Photoshop loads a 3³ cube whose shaper line has three values; counting it as a
+// #9078: Photoshop loads a 3³ cube whose shaper line has three values; counting it as a
         // 28th node rejected the whole file.
         let l = parse_3dl(&mesh_3dl(1, 12, 3, 4095.0, true)).unwrap();
         assert_eq!(l.size, 3);
@@ -6699,24 +6551,19 @@ Expected assertions from that fixture:
     }
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert_eq!(l.size, 3);
+assert_eq!(l.size, 3);
         assert_eq!(l.data.len(), 3 * 3 * 3 * 3);
         // The inverse identity: node (0,0,0) is full, node (2,2,2) black.
-        assert!((l.data[0] - 1.0).abs() < 1e-6 && (l.data[1] - 1.0).abs() < 1e-6 && (l.data[2] - 1.0).abs() < 1e-6);
-        assert_eq!(l.data.len(), 3 * 3 * 3 * 3);
-        // The inverse identity: node (0,0,0) is full, node (2,2,2) black.
-        assert!((l.data[0] - 1.0).abs() < 1e-6 && (l.data[1] - 1.0).abs() < 1e-6 && (l.data[2] - 1.0).abs() < 1e-6);
-        let last = &l.data[l.data.len() - 3..];
         assert!((l.data[0] - 1.0).abs() < 1e-6 && (l.data[1] - 1.0).abs() < 1e-6 && (l.data[2] - 1.0).abs() < 1e-6);
         let last = &l.data[l.data.len() - 3..];
         assert_eq!(last, [0.0, 0.0, 0.0]);
         // The same 27 nodes without the shaper row still load (the node-only control).
+        assert_eq!(parse_3dl(&mesh_3dl(1, 12, 3, 4095.0, false)).unwrap().data, l.data);
+    }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -6734,12 +6581,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: new effects start from the made default. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `new_effects_start_from_the_made_default` setup/action excerpt:
 
 ```rust
-        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
         app.run("file.new", json!({"width": 32, "height": 32})).unwrap();
         app.run("layer.new.layer", json!({})).unwrap();
         app.run("layer.layerStyle.makeDefault", json!({"kind": "stroke", "params": {"size": 7, "position": "outside"}})).unwrap();
@@ -6753,24 +6600,18 @@ The companion JSON retains setup and assertions for every listed regression. The
         assert_eq!(strokes.len(), 2);
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert_eq!(strokes.len(), 2);
+assert_eq!(strokes.len(), 2);
         for e in strokes {
             assert_eq!((&e["params"]["size"], &e["params"]["position"]), (&json!(7), &json!("outside")));
-            assert_eq!(e["params"]["opacity"], defaults("stroke")["opacity"], "unsaved keys keep the factory value");
-            assert_eq!((&e["params"]["size"], &e["params"]["position"]), (&json!(7), &json!("outside")));
-            assert_eq!(e["params"]["opacity"], defaults("stroke")["opacity"], "unsaved keys keep the factory value");
-        }
-        let shadow = fx.iter().find(|e| e["kind"] == json!("dropShadow")).unwrap();
             assert_eq!(e["params"]["opacity"], defaults("stroke")["opacity"], "unsaved keys keep the factory value");
         }
         let shadow = fx.iter().find(|e| e["kind"] == json!("dropShadow")).unwrap();
         assert_eq!(shadow["params"]["size"], defaults("dropShadow")["size"]);
+    }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -6788,12 +6629,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: cmd z is recorded while capturing and undoes otherwise. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `cmd_z_is_recorded_while_capturing_and_undoes_otherwise` setup/action excerpt:
 
 ```rust
-    let (mut h, id) = dialog(1.0, "edit.search", "search…");
+let (mut h, id) = dialog(1.0, "edit.search", "search…");
     capture(&mut h, &crate::shortcuts::pretty("Cmd+F"), Key::ControlLeft, Modifiers::COMMAND, Key::Z);
     assert_eq!(field(&h, id, "overrides")["edit.search"], json!("Cmd+Z"));
     assert_eq!(field(&h, id, "capture"), json!(false));
@@ -6807,24 +6648,22 @@ The companion JSON retains setup and assertions for every listed regression. The
     h.run_steps(2);
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-    assert_eq!(field(&h, id, "overrides")["edit.search"], json!("Cmd+Z"));
+assert_eq!(field(&h, id, "overrides")["edit.search"], json!("Cmd+Z"));
     assert_eq!(field(&h, id, "capture"), json!(false));
     key(&mut h, Key::Z, true, Modifiers::COMMAND);
     h.run_steps(2);
-    assert_eq!(field(&h, id, "capture"), json!(false));
-    key(&mut h, Key::Z, true, Modifiers::COMMAND);
-    h.run_steps(2);
-    assert_ne!(field(&h, id, "overrides")["edit.search"], json!("Cmd+Z"), "⌘Z outside a capture undoes the change");
     assert_ne!(field(&h, id, "overrides")["edit.search"], json!("Cmd+Z"), "⌘Z outside a capture undoes the change");
     assert_eq!(field(&h, id, "capture"), json!(false), "and doesn't wait for keys again");
     // CodeRabbit on #9504: clearing the restored capture isn't a new edit, so Redo still works.
     h.run_steps(2);
+    key(&mut h, Key::Z, true, Modifiers::COMMAND | Modifiers::SHIFT);
+    assert_eq!(field(&h, id, "overrides")["edit.search"], json!("Cmd+Z"), "⇧⌘Z redoes the recorded shortcut");
+    assert_eq!(field(&h, id, "capture"), json!(false));
+}
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -6842,12 +6681,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: layer style buttons stay on a short window. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `layer_style_buttons_stay_on_a_short_window` setup/action excerpt:
 
 ```rust
-        use egui_kittest::{Harness, kittest::Queryable};
+use egui_kittest::{Harness, kittest::Queryable};
 
         let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
         app.run("file.new", serde_json::json!({"width": 64, "height": 64})).unwrap();
@@ -6861,15 +6700,13 @@ The companion JSON retains setup and assertions for every listed regression. The
             assert!(r.bottom() <= 858.0, "{label} is off the window: {r:?}");
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-            assert!(r.bottom() <= 858.0, "{label} is off the window: {r:?}");
+assert!(r.bottom() <= 858.0, "{label} is off the window: {r:?}");
         }
     }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -6887,12 +6724,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: layer rows do not move when no layer is selected. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `layer_rows_do_not_move_when_no_layer_is_selected` setup/action excerpt:
 
 ```rust
-    for theme in [crate::theme::ThemeKind::Studio, crate::theme::ThemeKind::Classic, crate::theme::ThemeKind::ProMedium] {
+for theme in [crate::theme::ThemeKind::Studio, crate::theme::ThemeKind::Classic, crate::theme::ThemeKind::ProMedium] {
         let mut h = harness();
         PhotocraftApp::setup_context(&h.ctx, theme);
         h.run_steps(4);
@@ -6906,19 +6743,14 @@ The companion JSON retains setup and assertions for every listed regression. The
     }
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert!(selected.is_some(), "{theme:?}: the layer row");
-        assert_eq!(none, selected, "{theme:?}: the row moved with no layer selected");
-    }
-}
+assert!(selected.is_some(), "{theme:?}: the layer row");
         assert_eq!(none, selected, "{theme:?}: the row moved with no layer selected");
     }
 }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
@@ -6937,12 +6769,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: twirl counterclockwise has its own mirrored icon; alt reversed twirl survives replay undo and redo. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `twirl_counterclockwise_has_its_own_mirrored_icon` setup/action excerpt:
 
 ```rust
-        assert_eq!(tool_icon(LiquifyTool::TwirlCcw), "rotate-ccw");
+assert_eq!(tool_icon(LiquifyTool::TwirlCcw), "rotate-ccw");
         let svg = |name: &str| crate::icon_data::ICONS.iter().find(|(n, _)| *n == name).map(|(_, b)| String::from_utf8_lossy(b).into_owned());
         let (cw, ccw) = (svg("rotate-cw").unwrap(), svg("rotate-ccw").expect("the rotate-ccw icon"));
         assert!(ccw.contains("M3 12a9 9 0 1 0 9-9") && cw.contains("M21 12a9 9 0 1 1-9-9"), "mirror images");
@@ -6952,17 +6784,14 @@ The companion JSON retains setup and assertions for every listed regression. The
     }
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert_eq!(tool_icon(LiquifyTool::TwirlCcw), "rotate-ccw");
+assert_eq!(tool_icon(LiquifyTool::TwirlCcw), "rotate-ccw");
         let svg = |name: &str| crate::icon_data::ICONS.iter().find(|(n, _)| *n == name).map(|(_, b)| String::from_utf8_lossy(b).into_owned());
         let (cw, ccw) = (svg("rotate-cw").unwrap(), svg("rotate-ccw").expect("the rotate-ccw icon"));
         assert!(ccw.contains("M3 12a9 9 0 1 0 9-9") && cw.contains("M21 12a9 9 0 1 1-9-9"), "mirror images");
-        assert!(ccw.contains("M3 12a9 9 0 1 0 9-9") && cw.contains("M21 12a9 9 0 1 1-9-9"), "mirror images");
         for t in [LiquifyTool::ForwardWarp, LiquifyTool::TwirlCw, LiquifyTool::TwirlCcw, LiquifyTool::Pucker, LiquifyTool::Bloat] {
-            assert!(svg(tool_icon(t)).is_some(), "{t:?}: {}", tool_icon(t));
-        }
             assert!(svg(tool_icon(t)).is_some(), "{t:?}: {}", tool_icon(t));
         }
     }
@@ -6971,7 +6800,7 @@ Expected assertions from that fixture:
 `alt_reversed_twirl_survives_replay_undo_and_redo` setup/action excerpt:
 
 ```rust
-        let ctx = egui::Context::default();
+let ctx = egui::Context::default();
         let mut app = app_with_layer();
         open(&mut app, &ctx).unwrap();
         control(&mut app, &json!({"tool": "twirlCw", "size": 36, "rate": 80})).unwrap();
@@ -6985,24 +6814,36 @@ Expected assertions from that fixture:
         assert_eq!(d.strokes.len(), 1);
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-        assert_eq!(d.opts.tool, LiquifyTool::TwirlCw, "Alt must not change the selected tool");
+assert_eq!(d.opts.tool, LiquifyTool::TwirlCw, "Alt must not change the selected tool");
         assert_eq!(d.strokes.len(), 1);
-        assert_eq!(d.strokes[0].tool, LiquifyTool::TwirlCcw);
-        assert_eq!(LiquifyField::from_strokes(d.canvas, d.cell, &d.strokes), d.field);
-        assert_eq!(d.strokes.len(), 1);
-        assert_eq!(d.strokes[0].tool, LiquifyTool::TwirlCcw);
-        assert_eq!(LiquifyField::from_strokes(d.canvas, d.cell, &d.strokes), d.field);
-
         assert_eq!(d.strokes[0].tool, LiquifyTool::TwirlCcw);
         assert_eq!(LiquifyField::from_strokes(d.canvas, d.cell, &d.strokes), d.field);
 
         // A following stroke without Alt records the original tool.
-```
+        pointer(&mut app, ToolEvent::Down { x: 70.0, y: 40.0, pressure: 1.0 }, egui::Modifiers::NONE);
+        assert_eq!(d.strokes.len(), 2);
+        assert_eq!(d.strokes[1].tool, LiquifyTool::TwirlCw);
+        assert_eq!(LiquifyField::from_strokes(d.canvas, d.cell, &d.strokes), d.field);
 
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
+        control(&mut app, &json!({"undo": true})).unwrap();
+        let d = app.distort.liquify.as_ref().unwrap();
+        assert_eq!(d.strokes.len(), 1);
+        assert_eq!(d.strokes[0].tool, LiquifyTool::TwirlCcw);
+        assert_eq!(d.redo[0].tool, LiquifyTool::TwirlCw);
+        assert_eq!(LiquifyField::from_strokes(d.canvas, d.cell, &d.strokes), d.field);
+
+        control(&mut app, &json!({"redo": true})).unwrap();
+        let d = app.distort.liquify.as_ref().unwrap();
+        assert_eq!(d.strokes.len(), 2);
+        assert!(d.redo.is_empty());
+        assert_eq!(d.strokes[0].tool, LiquifyTool::TwirlCcw);
+        assert_eq!(d.strokes[1].tool, LiquifyTool::TwirlCw);
+        assert_eq!(LiquifyField::from_strokes(d.canvas, d.cell, &d.strokes), d.field);
+    }
+```
 
 </details>
 
@@ -7022,12 +6863,12 @@ The companion JSON retains setup and assertions for every listed regression. The
 
 - Expected behavior: color panel options survive a restart; an outside preference change reaches the live panel; dragging the splitter resizes and survives a ui state round trip. Each listed test must actually execute its assertions; these are distinct behavior-specific oracles, not a single interchangeable guard.
 
-<details><summary>Concrete setup and expected assertion examples</summary>
+<details><summary>Historical source context (deduplicated excerpts; not additional cases or execution evidence)</summary>
 
 `color_panel_options_survive_a_restart` setup/action excerpt:
 
 ```rust
-    let mut first = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+let mut first = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
     first.ui.color_panel.mode = ColorPanelMode::HsbSliders;
     first.ui.color_panel.ramp = ColorRamp::GrayscaleRamp;
     crate::color_panel_ui::persist(&mut first);
@@ -7041,10 +6882,10 @@ The companion JSON retains setup and assertions for every listed regression. The
     let mut fresh = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-    assert_eq!((next.ui.color_panel.mode, next.ui.color_panel.ramp), (ColorPanelMode::HsbSliders, ColorRamp::GrayscaleRamp));
+assert_eq!((next.ui.color_panel.mode, next.ui.color_panel.ramp), (ColorPanelMode::HsbSliders, ColorRamp::GrayscaleRamp));
 
     let mut fresh = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
     crate::color_panel_ui::restore(&mut fresh);
@@ -7055,7 +6896,7 @@ Expected assertions from that fixture:
 `an_outside_preference_change_reaches_the_live_panel` setup/action excerpt:
 
 ```rust
-    let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
     app.ui.color_panel.mode = ColorPanelMode::HsbSliders;
     crate::color_panel_ui::persist(&mut app);
     // As prefs.set or a reset to defaults would: the stored options change under the panel.
@@ -7069,13 +6910,11 @@ Expected assertions from that fixture:
     // A reset to defaults clears the stored options: the panel goes back to its defaults too.
 ```
 
-Expected assertions from that fixture:
+Expected assertion context (overlapping windows merged):
 
 ```rust
-    assert_eq!(app.ui.color_panel.mode, ColorPanelMode::GrayscaleSlider, "the live panel follows the preference");
+assert_eq!(app.ui.color_panel.mode, ColorPanelMode::GrayscaleSlider, "the live panel follows the preference");
     let stored: crate::state::ColorPanelState = serde_json::from_value(app.session.prefs().color_panel.clone()).unwrap();
-    assert_eq!(stored.mode, ColorPanelMode::GrayscaleSlider, "and the preference isn't overwritten");
-    // A reset to defaults clears the stored options: the panel goes back to its defaults too.
     assert_eq!(stored.mode, ColorPanelMode::GrayscaleSlider, "and the preference isn't overwritten");
     // A reset to defaults clears the stored options: the panel goes back to its defaults too.
     app.session.prefs.edit(|p| p.color_panel = serde_json::Value::Null);
@@ -7085,8 +6924,6 @@ Expected assertions from that fixture:
     assert_eq!(app.ui.color_panel.mode, ColorPanelMode::HueCube, "and it stays reset");
 }
 ```
-
-The companion JSON retains setup and assertions for every listed regression. These source excerpts are instructions, not execution evidence.
 
 </details>
 
