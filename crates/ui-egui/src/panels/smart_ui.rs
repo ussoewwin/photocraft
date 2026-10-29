@@ -205,6 +205,9 @@ pub fn filter_rows(app: &mut PhotocraftApp, ui: &mut egui::Ui, doc: &Document, l
         {
             open_editor(app, ui.ctx(), l.id.0, sm, i);
         }
+        if let Some(i) = index {
+            context_menu::show(app, &resp, l.id, i, actions);
+        }
         if let (Some(i), Some(r)) = (index, blend) {
             let blend_resp = ui.interact(r, ui.scope_id().with(("sf-blend", l.id.0, i)), Sense::click());
             icons::paint(ui, r, "sliders-horizontal", 13.0, if blend_resp.hovered() { t.text } else { t.icon });
@@ -849,3 +852,9 @@ mod tests {
         }
     }
 }
+
+pub(crate) mod context_menu;
+#[cfg(test)]
+mod context_tests;
+#[cfg(test)]
+mod menu_guard_tests;

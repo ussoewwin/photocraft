@@ -261,6 +261,20 @@ Filtering narrows the same array without changing its elements: `serve`'s `engin
 desktop control channel's `engine.commands` takes no filter and always returns every command.
 The shape is pinned by a test in `crates/automation/src/rpc.rs` (#3684).
 
+### Smart Filter row actions (#1265)
+
+Smart Filter rows offer Move Up, Move Down and Delete Smart Filter from their context menu.
+They use the existing `layer.smartFilter.move {layer,index,to}` and
+`layer.smartFilter.delete {layer,index}` commands. The displayed stack is reversed: moving
+visually up uses `to:index+1`, down uses `to:index-1`. Explicit `layer` targets the clicked
+Smart Object while preserving the active layer and selection.
+
+Popup actions close when the captured document snapshot or revision changes, and cannot
+edit while a modal dialog or a job locks the document. CLI/MCP commands retain their existing
+validation and Undo/Redo behavior. These context actions provide PhotoCraft convenience
+controls. Existing Smart Filter selection, transfer between Smart Objects and drag-to-Trash
+behavior is retained, including current drag-to-reorder.
+
 ### Background jobs (#210)
 
 Long commands (every `filter.*`, `edit.contentAwareFill`, `edit.contentAwareScale`, `file.automate.photomerge`, `brush.presets.importAbr`), file opens and interactive saves (File › Save, Save As and the TIFF Options continuation, #2017) run as background jobs in the desktop app: the window keeps drawing, the status bar shows progress with a Cancel button, and jobs that lock the active document show a modal progress dialog (Esc cancels). `engine.execute`, `ui.menu.invoke`, `ui.dialog.confirm` and `app.save` still wait for the result by default; pass `"wait": false` to get `{job, pending: true}` at once, then poll `jobs.list` (`state`: running, done, failed, cancelled; `progress` 0–1; the result or error) and stop it with `jobs.cancel {job}`. A cancelled or failed job leaves the document unchanged. While a job runs, commands that would edit its document fail with "… is still running on this document". `ui.inspect` reports `jobs` (running jobs, opening files, saving files). Set `PHOTOCRAFT_INLINE_JOBS=1` to run everything inline.
