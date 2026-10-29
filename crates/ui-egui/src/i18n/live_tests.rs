@@ -230,9 +230,19 @@ fn harness_with_services(services: Services) -> egui_kittest::Harness<'static, P
 
 #[test]
 fn first_launch_renders_the_system_language_without_overwriting_auto() {
-    for (tag, code) in
-        [("en-US", "en"), ("zh-CN", "zh-hans"), ("ja-JP", "ja"), ("ko-KR", "ko"), ("ru-RU", "ru"), ("uk-UA", "uk"), ("fr-CA", "fr"), ("sv-SE", "sv")]
-    {
+    for (tag, code) in [
+        ("en-US", "en"),
+        ("zh-CN", "zh-hans"),
+        ("ja-JP", "ja"),
+        ("ko-KR", "ko"),
+        ("ru-RU", "ru"),
+        ("uk-UA", "uk"),
+        ("fr-CA", "fr"),
+        ("sv-SE", "sv"),
+        ("fi-FI", "fi"),
+        ("da-DK", "da"),
+        ("nb-NO", "nb"),
+    ] {
         system::with_system_tags(&[tag], || {
             with_language(Lang::EN, || {
                 let h = harness();
@@ -246,7 +256,7 @@ fn first_launch_renders_the_system_language_without_overwriting_auto() {
 
 #[test]
 fn missing_or_unsupported_system_languages_render_english() {
-    for tags in [vec![], vec!["sw-KE", "fi-FI"]] {
+    for tags in [vec![], vec!["sw-KE", "is-IS"]] {
         system::with_system_tags(&tags, || {
             with_language(Lang::EN, || {
                 let h = harness();
