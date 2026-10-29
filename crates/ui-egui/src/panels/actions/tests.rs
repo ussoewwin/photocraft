@@ -123,6 +123,31 @@ fn a_function_key_with_shift_and_command_plays_its_action() {
 }
 
 #[test]
+fn actions_shortcut_undo_and_redo_edit_script_without_undoing_pixels() {
+    use egui_kittest::{Harness, kittest::Queryable};
+    let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({"width": 8, "height": 8})).unwrap();
+    app.run("layer.new.layer", json!({})).unwrap();
+    app.session.actions.list.push(Action { name: "A".into(), steps: vec![("select.all".into(), json!({}))], disabled: Default::default() });
+    let doc = app.session.active().unwrap().doc.clone();
+    let mut h = Harness::builder().with_size(vec2(320.0, 260.0)).build_ui_state(|ui, app| panel(app, ui), app);
+    h.run_steps(3);
+    h.get_by_label("A").click();
+    h.run_steps(3);
+    assert!(h.state().ui.actions.focused);
+    h.state_mut().run("actions.delete", json!({"action": "A", "step": 0})).unwrap();
+    let ctx = egui::Context::default();
+    crate::shortcut_dispatch::dispatch(h.state_mut(), &ctx, "edit.undo");
+    assert_eq!(h.state().session.actions.list[0].steps.len(), 1);
+    assert_eq!(h.state().session.active().unwrap().doc, doc);
+    crate::shortcut_dispatch::dispatch(h.state_mut(), &ctx, "edit.redo");
+    assert!(h.state().session.actions.list[0].steps.is_empty());
+    h.state_mut().ui.actions.focused = false;
+    crate::shortcut_dispatch::dispatch(h.state_mut(), &ctx, "edit.undo");
+    assert_eq!(h.state().session.active().unwrap().doc.layers.len(), 1);
+}
+
+#[test]
 fn double_clicking_an_action_name_renames_it_in_place() {
     use egui_kittest::{Harness, kittest::Queryable};
     let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());

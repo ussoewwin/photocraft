@@ -284,6 +284,9 @@ fn invoke_file_commands(app: &mut PhotocraftApp, ctx: &egui::Context, id: &str, 
 }
 
 pub(crate) fn invoke_unguarded(app: &mut PhotocraftApp, ctx: &egui::Context, id: &str, params: Value) -> Result<Value, String> {
+    if let Some(command) = crate::actions::undo_command(app, id) {
+        return app.run(command, params);
+    }
     if let Some(result) = invoke_early_commands(app, ctx, id, &params) {
         return result;
     }

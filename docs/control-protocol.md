@@ -159,6 +159,11 @@ store expose and persist the same setting; scripts keep using canonical command 
 
 The Actions list fills the resizable dock group.
 
+`actions.undo` and `actions.redo` undo/redo edits to action definitions (reordering,
+deleting, renaming, creating and recording), independently of document History. Ctrl/Cmd+Z and
+Ctrl/Cmd+Shift+Z target this history while the Actions panel has focus. Playing an
+action returns Undo to document edits.
+
 The Actions panel shows replayable steps immediately while recording. Click an individual
 step to select it, then use the trash button to remove that step; selecting the action
 heading instead targets the whole action. Step deletion also works during recording

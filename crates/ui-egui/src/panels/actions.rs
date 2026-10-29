@@ -28,6 +28,8 @@ pub struct ActionsUi {
     #[serde(default)]
     pub button_mode: bool,
     #[serde(skip)]
+    pub(crate) focused: bool,
+    #[serde(skip)]
     reveal_recording: Option<(usize, usize)>,
     /// The action whose name is being edited in place (double-click on its name).
     #[serde(skip)]
@@ -96,6 +98,7 @@ pub(crate) fn assign_shortcut(app: &mut PhotocraftApp, name: &str, shortcut: &st
 /// Replay edits synchronously, with view steps handled by the shell in the same order.
 /// Engine steps keep the headless action semantics (no dialogs or background jobs).
 pub(crate) fn play(app: &mut PhotocraftApp, params: &Value) -> Result<Value, String> {
+    app.ui.actions.focused = false;
     play_owned(app, params, None)
 }
 
@@ -928,8 +931,22 @@ fn action_context_menu(app: &mut PhotocraftApp, response: &egui::Response, index
     });
 }
 
+pub(crate) fn undo_command(app: &PhotocraftApp, id: &str) -> Option<&'static str> {
+    if !app.ui.actions.focused {
+        return None;
+    }
+    match id {
+        "edit.undo" => Some("actions.undo"),
+        "edit.redo" => Some("actions.redo"),
+        _ => None,
+    }
+}
+
 pub fn panel(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     let t = Tokens::get(ui.ctx());
+    if ui.input(|i| i.pointer.any_pressed()) {
+        app.ui.actions.focused = ui.input(|i| i.pointer.interact_pos()).is_some_and(|p| ui.max_rect().contains(p));
+    }
     let recording = app.session.actions.recording;
     let rows: Vec<Row> = app
         .session

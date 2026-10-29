@@ -70,6 +70,92 @@ fn unchecked_steps_are_skipped_and_follow_move_and_delete() {
 }
 
 #[test]
+fn recording_and_appending_steps_can_be_undone_without_restarting_recording() {
+    let mut s = Session::new();
+    s.execute("file.new", json!({"width": 8, "height": 8})).unwrap();
+    s.execute("actions.record", json!({"name": "A"})).unwrap();
+    s.execute("layer.new.layer", json!({})).unwrap();
+    s.execute("actions.stop", json!({})).unwrap();
+    s.execute("actions.record", json!({"action": "A"})).unwrap();
+    s.execute("select.all", json!({})).unwrap();
+    s.execute("actions.stop", json!({})).unwrap();
+    let doc = s.active().unwrap().doc.clone();
+    assert_eq!(s.actions.list[0].steps.len(), 2);
+    s.execute("actions.undo", json!({})).unwrap();
+    assert_eq!(s.actions.list[0].steps.len(), 1);
+    assert!(s.actions.recording.is_none());
+    s.execute("actions.redo", json!({})).unwrap();
+    assert_eq!(s.actions.list[0].steps.len(), 2);
+    assert!(s.actions.recording.is_none());
+    assert_eq!(s.active().unwrap().doc, doc);
+}
+
+#[test]
+fn definition_edits_undo_redo_without_touching_document_or_journal() {
+    let mut s = Session::new();
+    s.execute("file.new", json!({"width": 8, "height": 8})).unwrap();
+    s.actions.list.push(Action {
+        name: "A".into(),
+        steps: vec![("layer.new.layer".into(), json!({})), ("select.all".into(), json!({}))],
+        disabled: Default::default(),
+    });
+    s.actions.list.push(Action { name: "Caller".into(), steps: vec![("actions.play".into(), json!({"action": "A"}))], disabled: Default::default() });
+    s.edit_prefs(|p| {
+        p.shortcuts.insert("actions.play:A".into(), "F6".into());
+    });
+    let before = s.actions.list.clone();
+    let doc = s.active().unwrap().doc.clone();
+    let journal = s.journal.clone();
+    s.execute("actions.move", json!({"action": "A", "step": 0, "to": 1})).unwrap();
+    s.execute("actions.delete", json!({"action": "A", "step": 0})).unwrap();
+    s.execute("actions.rename", json!({"action": "A", "name": "B"})).unwrap();
+    let after = s.actions.list.clone();
+    for _ in 0..3 {
+        s.execute("actions.undo", json!({})).unwrap();
+    }
+    assert_eq!(s.actions.list, before);
+    assert_eq!(s.prefs().shortcuts.get("actions.play:A").map(String::as_str), Some("F6"));
+    assert!(!s.prefs().shortcuts.contains_key("actions.play:B"));
+    for _ in 0..3 {
+        s.execute("actions.redo", json!({})).unwrap();
+    }
+    assert_eq!(s.actions.list, after);
+    assert_eq!(s.active().unwrap().doc, doc);
+    assert_eq!(s.journal, journal);
+    s.execute("actions.undo", json!({})).unwrap();
+    s.execute("actions.delete", json!({"action": "Caller"})).unwrap();
+    assert!(!can_redo(&s));
+}
+
+#[test]
+fn enabled_step_edits_undo_and_invalidate_redo() {
+    let mut s = Session::new();
+    s.actions.list.push(Action::new("A", vec![("select.all".into(), json!({}))]));
+    s.execute("actions.toggle", json!({"action": "A", "step": 0})).unwrap();
+    assert!(s.actions.list[0].disabled.contains(&0));
+    s.execute("actions.undo", json!({})).unwrap();
+    assert!(s.actions.list[0].disabled.is_empty());
+    s.execute("actions.redo", json!({})).unwrap();
+    assert!(s.actions.list[0].disabled.contains(&0));
+    s.execute("actions.undo", json!({})).unwrap();
+    s.execute("actions.toggle", json!({"action": "A"})).unwrap();
+    assert!(!can_redo(&s));
+}
+
+#[test]
+fn undo_pending_step_deletion_does_not_duplicate_recording() {
+    let mut s = Session::new();
+    s.execute("file.new", json!({"width": 8, "height": 8})).unwrap();
+    s.execute("actions.record", json!({"name": "A"})).unwrap();
+    s.execute("layer.new.layer", json!({})).unwrap();
+    s.execute("actions.delete", json!({"action": "A", "step": 0})).unwrap();
+    s.execute("actions.undo", json!({})).unwrap();
+    s.execute("actions.stop", json!({})).unwrap();
+    assert_eq!(s.actions.list[0].steps.len(), 1);
+    assert_eq!(s.active().unwrap().doc.layers.len(), 2);
+}
+
+#[test]
 fn rename_keeps_calls_and_function_key_and_rejects_bad_names() {
     let mut s = Session::new();
     s.actions.list.push(Action {
