@@ -72,16 +72,25 @@ fn shift_bytes(s: &photocraft_raster::Surface) -> u64 {
     tiles.saturating_mul(t * t).saturating_mul(s.format().bytes_per_pixel() as u64)
 }
 
-/// Whether the pixel memory a live drag frame writes for the layers `ids` of `doc` exceeds `limit`:
-/// what `moved_target` shifts, that is a layer's content and linked mask, or only its mask when
-/// `mask_target` drags an unlinked mask alone.
+/// Whether the pixel memory a live drag frame writes for the move targets `ids` of `doc` exceeds
+/// `limit`, counting what `moved_target` shifts: a target whose unlinked mask is dragged alone
+/// (`mask_target`) copies that mask only and its descendants stay put; any other target shifts its
+/// content and linked mask, and every layer inside it likewise (a group's contents move whole).
 fn exceeds(doc: &Document, ids: &[LayerId], limit: u64, mask_target: bool) -> bool {
     let mut total = 0u64;
-    for l in ids.iter().filter_map(|id| doc.layer(*id)) {
-        let mask_alone = mask_target && photocraft_engine::layer_multi_cmds::moves_mask_alone(l);
-        let content = if mask_alone { 0 } else { l.surface().map_or(0, shift_bytes) };
-        let mask = l.mask.as_ref().filter(|m| mask_alone || m.linked).map_or(0, |m| shift_bytes(&m.surface));
-        total = total.saturating_add(content).saturating_add(mask);
+    for id in ids {
+        let Some(root) = doc.layer(*id) else { continue };
+        let moving = if mask_target && photocraft_engine::layer_multi_cmds::moves_mask_alone(root) {
+            total = total.saturating_add(root.mask.as_ref().map_or(0, |m| shift_bytes(&m.surface)));
+            Vec::new()
+        } else {
+            with_descendants(doc, &[*id])
+        };
+        for l in moving.iter().filter_map(|d| doc.layer(*d)) {
+            let content = l.surface().map_or(0, shift_bytes);
+            let mask = l.mask.as_ref().filter(|m| m.linked).map_or(0, |m| shift_bytes(&m.surface));
+            total = total.saturating_add(content).saturating_add(mask);
+        }
         if total > limit {
             return true;
         }
@@ -180,7 +189,7 @@ pub(crate) fn display_doc(app: &mut PhotocraftApp, idx: usize) -> Option<(Arc<Do
         let bounds = ids.iter().try_fold(Rect::EMPTY, |acc, id| Some(acc.union(&photocraft_compose::change_bounds(doc.layer(*id)?, all)?)));
         let canvas = doc.bounds();
         let moving = with_descendants(&doc, &ids);
-        let too_big = exceeds(&doc, &moving, LIVE_LIMIT, mask_target);
+        let too_big = exceeds(&doc, &ids, LIVE_LIMIT, mask_target);
         let bounds = bounds.map(|b| moving.iter().filter_map(|id| shape_reach(doc.layer(*id)?, canvas)).fold(b, |acc, r| acc.union(&r)));
         app.move_preview = Some(MovePreview { doc: doc_id, revision, ids, moving, bounds, canvas, offsets: Vec::new(), shown: None, floating: false, too_big });
     }

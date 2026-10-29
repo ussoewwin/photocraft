@@ -251,13 +251,40 @@ fn the_estimate_counts_reachable_target_tiles_and_what_moved_target_copies() {
         })
         .unwrap();
     let st = app.session.active().unwrap();
-    assert!(super::exceeds(&st.doc, &[id], super::LIVE_LIMIT / 4, false), "isolated tiles each write up to four");
+    assert!(super::exceeds(&st.doc, &[id], super::LIVE_LIMIT, false), "isolated tiles each write up to four");
     // Only the mask is copied when an unlinked mask is dragged alone: the huge content isn't charged.
     app.session.execute("layer.layerMask.revealAll", json!({})).unwrap();
     app.session.execute("layer.layerMask.linked", json!({"linked": false})).unwrap();
     let st = app.session.active().unwrap();
     assert!(super::exceeds(&st.doc, &[id], 1, false), "dragging the layer copies its content");
     assert!(!super::exceeds(&st.doc, &[id], super::LIVE_LIMIT / 4, true), "dragging the unlinked mask alone copies the mask only");
+}
+
+/// A group moves its contents whole; a group's unlinked mask dragged alone leaves them where they are.
+#[test]
+fn the_estimate_follows_a_group_into_its_contents() {
+    let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+    app.session.execute("file.new", json!({"width": 64, "height": 64, "background": "transparent"})).unwrap();
+    app.session.execute("layer.new.layer", json!({})).unwrap();
+    let inner = app.session.active().unwrap().active_layer.unwrap();
+    app.session
+        .edit("paint", |doc, a| {
+            let surface = doc.layer_mut(a.unwrap()).unwrap().surface_mut().unwrap();
+            let tile = surface.solid_tile(&[1.0, 0.0, 0.0, 1.0]);
+            surface.put_tiles((0..600).map(|i| (photocraft_geom::TileCoord::new(i * 10, i * 10), tile.clone())));
+            Ok(())
+        })
+        .unwrap();
+    let group = app.session.execute("layer.new.group", json!({})).unwrap()["layer"].as_u64().unwrap();
+    app.session.execute("layer.moveTo", json!({"layer": inner.0, "target": group, "position": "into"})).unwrap();
+    let group = photocraft_doc::LayerId(group);
+    let st = app.session.active().unwrap();
+    assert!(super::exceeds(&st.doc, &[group], super::LIVE_LIMIT, false), "the group's contents are shifted with it");
+    app.session.execute("layer.layerMask.revealAll", json!({"layer": group.0})).unwrap();
+    app.session.execute("layer.layerMask.linked", json!({"layer": group.0, "linked": false})).unwrap();
+    let st = app.session.active().unwrap();
+    assert!(st.doc.layer(group).is_some_and(|l| l.mask.as_ref().is_some_and(|m| !m.linked)), "the group has an unlinked mask");
+    assert!(!super::exceeds(&st.doc, &[group], super::LIVE_LIMIT, true), "an unlinked group mask dragged alone leaves the contents");
 }
 
 #[test]
