@@ -238,7 +238,7 @@ pub fn import_tiff_page(name: &str, bytes: &[u8], page: Option<usize>) -> Result
         drop(bands);
         return import_tiff_whole(name, bytes, page);
     }
-    tiff_to_document(name, bands.upright())
+    tiff_to_document(name, bands.upright(), crate::memory::available, BAND_BYTES)
 }
 
 /// A layered TIFF, or a flat one with extra samples, decoded whole: the layers are built from the
@@ -262,22 +262,26 @@ fn import_tiff_whole(name: &str, bytes: &[u8], page: Option<usize>) -> Result<Im
 }
 
 /// A flat TIFF page as a single-layer document, decoded a group of rows at a time into the
-/// layer's tiles: only one group exists beside the document.
-fn tiff_to_document(name: &str, mut bands: codecs::TiffBands<'_>) -> Result<ImportResult, IoError> {
+/// layer's tiles: only one group exists beside the document. `available`: the memory this
+/// process can still use (see [`crate::memory::available`]); `budget`: the source bytes per core
+/// converted at a time ([`BAND_BYTES`]).
+fn tiff_to_document(name: &str, mut bands: codecs::TiffBands<'_>, available: impl FnOnce() -> Option<u64>, budget: usize) -> Result<ImportResult, IoError> {
     let (w, h) = bands.dimensions();
     let (layout, sample) = (bands.layout(), bands.sample_type());
     let f = document_format(layout, sample);
     let fmt = PixelFormat::new(f.mode, f.depth, true);
-    // The layer's tiles, plus a group as decoded, turned upright, converted and read into a
-    // worker's scratch buffer. Linux overcommits, so the tiles below are allocated even when they
-    // can't be backed, and writing them would have the process killed: refuse first.
     let bpp = fmt.bytes_per_pixel() as u64;
-    let tiles = |n: u32| u64::from(n).div_ceil(TILE_SIZE as u64).saturating_mul(TILE_SIZE as u64);
-    let layer = tiles(w).saturating_mul(tiles(h)).saturating_mul(bpp);
-    let group = bands.group_bytes()? as u64;
-    let group_px = group / (layout.channels() as u64 * sample.bytes() as u64).max(1);
-    let needed = layer.saturating_add(group.saturating_mul(3)).saturating_add(group_px.saturating_mul(bpp));
-    crate::memory::check_fits(w, h, needed, crate::memory::available())?;
+    if needs_memory_check(w, h, layout, sample) {
+        // The layer's tiles, plus a group as decoded, turned upright, converted and read into a
+        // worker's scratch buffer. Linux overcommits, so the tiles below are allocated even when
+        // they can't be backed, and writing them would have the process killed: refuse first.
+        let tiles = |n: u32| u64::from(n).div_ceil(TILE_SIZE as u64).saturating_mul(TILE_SIZE as u64);
+        let layer = tiles(w).saturating_mul(tiles(h)).saturating_mul(bpp);
+        let group = bands.group_bytes()? as u64;
+        let group_px = group / (layout.channels() as u64 * sample.bytes() as u64).max(1);
+        let needed = layer.saturating_add(group.saturating_mul(3)).saturating_add(group_px.saturating_mul(bpp));
+        crate::memory::check_fits(w, h, needed, available())?;
+    }
     let mut s = Surface::new(fmt);
     let out_of_memory = |e: photocraft_raster::AllocationError| {
         let gb = (u64::from(w) * u64::from(h)).saturating_mul(bpp) as f64 / 1e9;
@@ -290,15 +294,19 @@ fn tiff_to_document(name: &str, mut bands: codecs::TiffBands<'_>) -> Result<Impo
         if layout == f.layout && sample == f.sample {
             return s.try_write_interleaved(rect(&(0..gh as usize)), group.data()).map_err(out_of_memory);
         }
-        // Converted in pieces of rows on all cores, then each piece written (on all cores too).
+        // Converted in pieces of rows on all cores, then each piece written (on all cores too), a
+        // round of at most `BAND_BYTES` of source rows per core at a time: a single-strip file is
+        // one group, the whole image, and converting it at once would hold it converted beside it.
         let row = group.data().len() / (gh.max(1) as usize);
-        let pieces = crate::pixels::par_map(crate::pixels::bands(gh as usize), |rows| {
-            let part = group.data().get(rows.start * row..rows.end * row).unwrap_or_default().to_vec();
-            Image::from_raw(gw, rows.len() as u32, layout, sample, part).map(|p| (rows, p.convert(f.layout, f.sample)))
-        });
-        for piece in pieces {
-            let (rows, part) = piece?;
-            s.try_write_interleaved(rect(&rows), part.data()).map_err(out_of_memory)?;
+        for round in conversion_rounds(gh as usize, row, budget) {
+            let pieces = crate::pixels::par_map(round, |rows| {
+                let part = group.data().get(rows.start * row..rows.end * row).unwrap_or_default().to_vec();
+                Image::from_raw(gw, rows.len() as u32, layout, sample, part).map(|p| (rows, p.convert(f.layout, f.sample)))
+            });
+            for piece in pieces {
+                let (rows, part) = piece?;
+                s.try_write_interleaved(rect(&rows), part.data()).map_err(out_of_memory)?;
+            }
         }
         Ok(())
     })?;
@@ -307,6 +315,26 @@ fn tiff_to_document(name: &str, mut bands: codecs::TiffBands<'_>) -> Result<Impo
     warnings.extend(f.warning.clone());
     let meta = std::mem::take(&mut bands.meta);
     Ok(single_layer_document(name, (w, h), f, layout.has_alpha(), s, bands.icc.take(), meta, warnings))
+}
+
+/// Whether a `w` × `h` flat TIFF is checked against free memory before it opens: only the sizes
+/// the whole-image decode refused, which only the banded decode opens. Every image that opened
+/// before opens as it did, also on a small machine or in a container whose page cache fills.
+fn needs_memory_check(w: u32, h: u32, layout: ChannelLayout, sample: CSample) -> bool {
+    codecs::Limits::default().check(w, h, layout, sample).is_err()
+}
+
+/// `0..rows` of `row` bytes each, split into rounds of about one piece per core, each piece at
+/// most about `budget` bytes, in order.
+fn conversion_rounds(rows: usize, row: usize, budget: usize) -> Vec<Vec<std::ops::Range<usize>>> {
+    let round = (budget / row.max(1)).max(1).saturating_mul(crate::pixels::bands(rows).len()).max(1);
+    (0..rows)
+        .step_by(round)
+        .map(|start| {
+            let end = start.saturating_add(round).min(rows);
+            crate::pixels::bands(end - start).into_iter().map(|r| start + r.start..start + r.end).collect()
+        })
+        .collect()
 }
 
 /// How a decoded image's pixels are kept in a document.
@@ -1157,5 +1185,66 @@ mod cmyk_band_tests {
         let first = out.data().get(..4).unwrap().to_vec();
         assert!(out.data().chunks(4).all(|p| p == first.as_slice()), "{:?}", out.data());
         assert_eq!(first[3], 255);
+    }
+}
+
+#[cfg(test)]
+mod tiff_banded_tests {
+    use super::*;
+
+    #[test]
+    fn a_tiff_main_opened_opens_without_a_memory_check() {
+        // With no free memory reported, an ordinary small TIFF was refused ("not enough memory"):
+        // on a small machine or in a container whose page cache filled up.
+        let img = Image::from_raw(64, 64, ChannelLayout::Rgb, CSample::U8, vec![77; 64 * 64 * 3]).unwrap();
+        let bytes = codecs::encode(&img, Format::Tiff, &codecs::EncodeOptions::default()).unwrap();
+        let bands = codecs::TiffBands::open(&bytes, None, &codecs::Limits::banded()).unwrap();
+        let r = tiff_to_document("small.tif", bands.upright(), || Some(0), BAND_BYTES).unwrap();
+        assert_eq!((r.document.size.width, r.document.size.height), (64, 64));
+    }
+
+    #[test]
+    fn a_group_converted_in_many_rounds_is_the_whole_image_converted() {
+        // A budget of a few rows splits each group into many rounds: every row lands where the
+        // one-shot conversion put it, at every depth the convert branch takes.
+        for (layout, sample) in [(ChannelLayout::Rgb, CSample::U8), (ChannelLayout::Rgb, CSample::U16), (ChannelLayout::Gray, CSample::F32)] {
+            let (w, h) = (37u32, 101u32);
+            let n = (w * h) as usize * layout.channels();
+            let px: Vec<f32> = (0..n).map(|i| ((i * 37 + i / 7) % 251) as f32 / 250.0).collect();
+            let img = Image::from_normalized(w, h, layout, sample, &px).unwrap();
+            let bytes = codecs::encode(&img, Format::Tiff, &codecs::EncodeOptions::default()).unwrap();
+            let bands = codecs::TiffBands::open(&bytes, None, &codecs::Limits::banded()).unwrap();
+            let row = w as usize * layout.channels() * sample.bytes();
+            let r = tiff_to_document("rounds.tif", bands, || None, 3 * row).unwrap();
+            let f = document_format(layout, sample);
+            let want = codecs::decode(&bytes).unwrap().convert(f.layout, f.sample);
+            let LayerContent::Raster(s) = &r.document.layers[0].content else { panic!("not a raster layer") };
+            assert!(s.to_interleaved(r.document.bounds()) == want.data(), "{layout:?} {sample:?}");
+        }
+    }
+
+    #[test]
+    fn only_sizes_the_whole_image_decode_refused_are_checked() {
+        use {CSample as S, ChannelLayout as L};
+        assert!(!needs_memory_check(6000, 4000, L::Rgb, S::U8));
+        assert!(!needs_memory_check(20_000, 20_000, L::Rgba, S::U16));
+        assert!(needs_memory_check(40_000, 30_000, L::Rgb, S::U8), "over 2^30 px");
+        assert!(needs_memory_check(300_000, 300_000, L::Rgb, S::U8));
+    }
+
+    #[test]
+    fn conversion_rounds_cover_every_row_in_order_within_the_budget() {
+        let workers = crate::pixels::bands(usize::MAX >> 8).len();
+        for (rows, row, budget) in [(0, 30, 100), (1, 30, 100), (1000, 30, 100), (997, 7, 50), (10, 1000, 1), (5000, 3, 1 << 20)] {
+            let rounds = conversion_rounds(rows, row, budget);
+            let pieces: Vec<_> = rounds.iter().flatten().cloned().collect();
+            assert_eq!(pieces.iter().map(|r| r.len()).sum::<usize>(), rows, "{rows} rows");
+            assert!(pieces.windows(2).all(|p| p[0].end == p[1].start), "contiguous and in order: {pieces:?}");
+            assert!(pieces.first().is_none_or(|p| p.start == 0));
+            let most = (budget / row).max(1);
+            assert!(pieces.iter().all(|p| p.len() <= most), "{rows} x {row} B, budget {budget}: {pieces:?}");
+            assert!(rounds.iter().all(|r| r.len() <= workers));
+        }
+        assert_eq!(conversion_rounds(5000, 3, 1 << 20).len(), 1, "a group under the budget is one round");
     }
 }

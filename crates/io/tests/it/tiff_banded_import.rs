@@ -61,6 +61,26 @@ fn every_layout_opens_as_the_whole_image_decode_does() {
     }
 }
 
+/// A file stored as one strip is one group, the whole image, converted to the layer in rounds of
+/// rows: the document is the one the whole-image decode gives (#8536 review).
+#[test]
+fn a_single_strip_tiff_opens_as_the_whole_image_decode_does() {
+    use flate2::{Compression, write::ZlibEncoder};
+    use std::io::Write;
+    let (w, h) = (1531, 2049);
+    let img = pattern(w, h, ChannelLayout::Rgb, SampleType::U8);
+    let mut z = ZlibEncoder::new(Vec::new(), Compression::fast());
+    z.write_all(img.data()).unwrap();
+    let strip = z.finish().unwrap();
+    let mut f = b"II*\0\0\0\0\0".to_vec();
+    f.extend_from_slice(&strip);
+    let bytes = rgb_tiff_directory(f, w, h, h, &[8], &[strip.len() as u32]);
+    let r = photocraft_io::import("one-strip.tif", &bytes).unwrap();
+    let decoded = codecs::decode(&bytes).unwrap();
+    assert_eq!(decoded.data(), img.data());
+    assert!(layer_bytes(&r) == decoded.convert(ChannelLayout::Rgba, SampleType::U8).data(), "pixels");
+}
+
 /// Peak resident memory of this process so far (Linux), in bytes.
 fn peak_rss() -> Option<u64> {
     let status = std::fs::read_to_string("/proc/self/status").ok()?;
@@ -133,10 +153,11 @@ fn rgb_tiff_directory(mut f: Vec<u8>, w: u32, h: u32, rows: u32, offsets: &[u32]
         (258, 3, 3, bits_at),
         (259, 3, 1, 8),
         (262, 3, 1, 2),
-        (273, 4, n, arrays_at),
+        // A single strip's offset and count fit in the entry itself.
+        (273, 4, n, if let [o] = offsets { *o } else { arrays_at }),
         (277, 3, 1, 3),
         (278, 4, 1, rows),
-        (279, 4, n, arrays_at + 4 * n),
+        (279, 4, n, if let [c] = counts { *c } else { arrays_at + 4 * n }),
         (284, 3, 1, 1),
     ];
     f.extend_from_slice(&(entries.len() as u16).to_le_bytes());

@@ -90,7 +90,10 @@ impl<'a> TiffBands<'a> {
         let mut icc = None;
         let meta = metadata(&file, &dir, &mut icc);
         let stored = ifd::orientation_of(&file, &dir);
-        Ok(TiffBands { b: bytes, p, stored, turn: 1, cap: limits.max_alloc, icc, meta, warnings: more.into_iter().collect() })
+        // Extra samples are dropped here only on 32-bit targets, where the whole image counts.
+        let mut warnings = prepared_warnings(&p);
+        warnings.extend(more);
+        Ok(TiffBands { b: bytes, p, stored, turn: 1, cap: limits.max_alloc, icc, meta, warnings })
     }
 
     /// The bands turned upright for the page's Orientation tag, as [`Image::oriented`] turns a
@@ -203,8 +206,10 @@ impl<'a> TiffBands<'a> {
             return Err(err("the image data is missing (cut off or past the end of the file)").into());
         }
         if tally.missing > 0 {
-            // Before `MorePages`, as the whole-image decode orders them.
-            self.warnings.insert(0, DecodeWarning::Truncated { format: F });
+            // After the extra-sample warnings and before `MorePages`, as the whole-image decode
+            // orders them.
+            let at = self.warnings.iter().position(|w| matches!(w, DecodeWarning::MorePages { .. })).unwrap_or(self.warnings.len());
+            self.warnings.insert(at, DecodeWarning::Truncated { format: F });
         }
         Ok(())
     }
@@ -575,17 +580,25 @@ fn decode_ifd(f: &File<'_>, dir: &Ifd, limits: &Limits) -> Result<Image, CodecEr
         };
         img.meta.extra_samples = split_extra_samples(&extra_data, p.w as usize, p.h as usize, &p.lay.extra_at, p.lay.out, kind_of)?;
     }
-    if p.extras_over_limit > 0 {
-        let count = u32::try_from(p.extras_over_limit).unwrap_or(u32::MAX);
-        img.warnings.push(DecodeWarning::ExtraSamplesOverLimit { format: F, count });
-    }
-    if p.extras_dropped > 0 {
-        img.warnings.push(DecodeWarning::ExtraSamplesDropped { format: F, count: p.extras_dropped });
-    }
+    img.warnings.extend(prepared_warnings(&p));
     if tally.missing > 0 {
         img.warnings.push(DecodeWarning::Truncated { format: F });
     }
     Ok(img)
+}
+
+/// What [`prepare`] left out of the image: extra samples past the supported count, then extra
+/// samples over the allocation budget. Both decoders report them, in this order.
+fn prepared_warnings(p: &Prepared) -> Vec<DecodeWarning> {
+    let mut warnings = Vec::new();
+    if p.extras_over_limit > 0 {
+        let count = u32::try_from(p.extras_over_limit).unwrap_or(u32::MAX);
+        warnings.push(DecodeWarning::ExtraSamplesOverLimit { format: F, count });
+    }
+    if p.extras_dropped > 0 {
+        warnings.push(DecodeWarning::ExtraSamplesDropped { format: F, count: p.extras_dropped });
+    }
+    warnings
 }
 
 /// Checks one directory and lays it out for decoding. `whole`: the image is decoded into one
@@ -806,4 +819,30 @@ fn prepare(f: &File<'_>, dir: &Ifd, limits: &Limits, whole: bool) -> Result<Prep
         extras_over_limit,
         extras_dropped,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{EncodeOptions, ExtraSample, Format};
+
+    /// `TiffBands::open` drops extra samples over the budget only on 32-bit targets (wasm32),
+    /// so it reports them through the same function as the whole-image decode.
+    #[test]
+    fn extra_samples_over_the_budget_are_reported_by_both_decoders() {
+        // Several strips (about 1 MB each), so one strip of all four samples fits the image's budget.
+        let (w, h) = (1024u32, 1024u32);
+        let n = (w * h) as usize;
+        let mut img = Image::from_raw(w, h, ChannelLayout::Rgb, SampleType::U8, vec![90; 3 * n]).unwrap();
+        img.meta.extra_samples = vec![ExtraSample { kind: 0, data: vec![7; n] }];
+        let bytes = crate::encode(&img, Format::Tiff, &EncodeOptions::default()).unwrap();
+        let (file, dir, _) = open_page(&bytes, None).unwrap();
+        let tight = Limits { max_alloc: 3 * n as u64, ..Limits::default() };
+        let p = prepare(&file, &dir, &tight, true).unwrap();
+        assert_eq!(prepared_warnings(&p), vec![DecodeWarning::ExtraSamplesDropped { format: F, count: 1 }]);
+        assert!(prepared_warnings(&prepare(&file, &dir, &tight, false).unwrap()).is_empty(), "banded: only the band counts");
+        assert!(prepared_warnings(&prepare(&file, &dir, &Limits::default(), true).unwrap()).is_empty());
+        let whole = decode(&bytes, &tight).unwrap();
+        assert_eq!(whole.warnings, prepared_warnings(&p));
+    }
 }

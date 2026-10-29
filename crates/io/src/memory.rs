@@ -10,7 +10,7 @@ pub const RESERVE: u64 = 512 << 20;
 
 /// Bytes this process can still use without running out, or `None` where that isn't known. On
 /// Linux: the free RAM the kernel can hand out (`MemAvailable`, capped by the process's cgroup
-/// v2 `memory.max` and those above it) plus free swap (capped by the cgroup's `memory.swap.max`).
+/// v2 `memory.max` and those above it) plus free swap (capped by the cgroup's `memory.swap.max` and those above it).
 /// Elsewhere `None`: Windows refuses an allocation past its commit limit, which the importers
 /// already report as an error, and macOS pages to disk as it needs.
 pub fn available() -> Option<u64> {
@@ -66,16 +66,24 @@ mod linux {
     }
 
     /// Memory and swap left under the limits of `dir` and every cgroup above it (`None`: no
-    /// limit). Both limits apply hierarchically.
+    /// limit). Both limits apply hierarchically. `memory.current` includes page cache, which the
+    /// kernel reclaims before a cgroup hits `memory.max`, so its inactive part counts as free.
     pub(super) fn cgroup_room(dir: &Path) -> (Option<u64>, Option<u64>) {
-        let room = |d: &Path, max: &str, current: &str| -> Option<u64> {
-            let max = std::fs::read_to_string(d.join(max)).ok()?.trim().parse::<u64>().ok()?;
-            let current = std::fs::read_to_string(d.join(current)).ok().and_then(|c| c.trim().parse::<u64>().ok()).unwrap_or(0);
-            Some(max.saturating_sub(current))
+        let read = |d: &Path, f: &str| std::fs::read_to_string(d.join(f)).ok();
+        let room = |d: &Path, max: &str, current: &str, reclaimable: u64| -> Option<u64> {
+            let max = read(d, max)?.trim().parse::<u64>().ok()?;
+            let current = read(d, current).and_then(|c| c.trim().parse::<u64>().ok()).unwrap_or(0);
+            Some(max.saturating_sub(current.saturating_sub(reclaimable)))
         };
-        let swap = dir.ancestors().take(64).filter_map(|d| room(d, "memory.swap.max", "memory.swap.current")).min();
-        let ram = dir.ancestors().take(64).filter_map(|d| room(d, "memory.max", "memory.current")).min();
+        let inactive_file = |d: &Path| read(d, "memory.stat").and_then(|s| stat(&s, "inactive_file")).unwrap_or(0);
+        let swap = dir.ancestors().take(64).filter_map(|d| room(d, "memory.swap.max", "memory.swap.current", 0)).min();
+        let ram = dir.ancestors().take(64).filter_map(|d| room(d, "memory.max", "memory.current", inactive_file(d))).min();
         (ram, swap)
+    }
+
+    /// A `memory.stat` field (`<name> <bytes>` per line).
+    fn stat(stat: &str, field: &str) -> Option<u64> {
+        stat.lines().find_map(|l| l.strip_prefix(field)?.strip_prefix(' '))?.trim().parse().ok()
     }
 }
 
@@ -126,6 +134,12 @@ mod tests {
         assert_eq!(linux::cgroup_room(&leaf).1, Some(128 << 20), "the tighter leaf swap limit wins");
         write(&leaf, "memory.max", "1610612736\n");
         assert_eq!(linux::cgroup_room(&leaf).0, Some(512 << 20), "the tighter limit wins");
+        write(&leaf, "memory.max", "2147483648\n");
+        write(&leaf, "memory.current", "2147483648\n");
+        write(&leaf, "memory.stat", "anon 268435456\nfile 1879048192\ninactive_file_x 1\ninactive_file 1610612736\n");
+        assert_eq!(linux::cgroup_room(&leaf).0, Some(1610612736), "inactive page cache is reclaimed before the limit");
+        write(&leaf, "memory.stat", "anon 268435456\n");
+        assert_eq!(linux::cgroup_room(&leaf).0, Some(0), "no inactive_file: memory.current is all in use");
         std::fs::remove_dir_all(&root).unwrap();
         assert!(available().is_some());
     }
