@@ -272,6 +272,8 @@ struct ToolSet {
     cam_transform_on_drop: Option<bool>,
     tile_grid: Option<bool>,
     layer_filter: Option<crate::layer_filter_ui::Filter>,
+    pen_mode: Option<String>,
+    pen_path_op: Option<String>,
 }
 
 impl ToolSet {
@@ -291,6 +293,8 @@ impl ToolSet {
             // Developer overlay of the active layer's storage tiles (tile_overlay.rs).
             tile_grid: bool_field(p, "tileGrid")?,
             layer_filter: p.get("layerFilter").map(|v| crate::layer_filter_ui::patched(&app.ui, v)).transpose()?,
+            pen_mode: pen_mode_param(p)?,
+            pen_path_op: pen_path_op_param(p)?,
         })
     }
 
@@ -328,6 +332,12 @@ impl ToolSet {
         if let Some(f) = self.layer_filter {
             crate::layer_filter_ui::apply(&mut app.ui, f);
         }
+        if let Some(m) = self.pen_mode {
+            app.ui.tool_options.vector_mode = m;
+        }
+        if let Some(o) = self.pen_path_op {
+            app.ui.tool_options.pen_path_op = o;
+        }
     }
 
     fn apply_gradient_and_trace(&self, app: &mut PhotocraftApp) {
@@ -345,6 +355,21 @@ impl ToolSet {
             crate::gradient_ui::options_changed(app, &gradient_before);
         }
     }
+}
+
+/// The Pen tools' options bar (#1397): Path or Shape mode.
+fn pen_mode_param(p: &Value) -> std::result::Result<Option<String>, String> {
+    let Some(v) = p.get("penMode") else { return Ok(None) };
+    v.as_str().filter(|m| matches!(*m, "path" | "shape")).map(|m| Some(m.to_string())).ok_or_else(|| "penMode must be \"path\" or \"shape\"".to_string())
+}
+
+/// The Pen tools' Path Operation.
+fn pen_path_op_param(p: &Value) -> std::result::Result<Option<String>, String> {
+    let Some(v) = p.get("penPathOp") else { return Ok(None) };
+    v.as_str()
+        .filter(|o| crate::vector_ui::PATH_OPS.iter().any(|(id, ..)| id == o))
+        .map(|o| Some(o.to_string()))
+        .ok_or_else(|| "penPathOp must be one of newLayer, combine, subtract, intersect, exclude".to_string())
 }
 
 fn gradient_blend_param(p: &Value) -> std::result::Result<Option<photocraft_color::BlendMode>, String> {

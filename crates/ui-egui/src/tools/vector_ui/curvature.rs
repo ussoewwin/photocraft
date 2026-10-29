@@ -32,8 +32,9 @@ pub fn curvature_down(app: &mut PhotocraftApp, x: f64, y: f64) {
     if !cancel_stale(app) {
         return;
     }
-    if app.ui.pen.as_ref().is_some_and(|p| !p.curvature) {
-        pen_commit(app, false);
+    // A Pen draft whose commit is refused stays as it is: no Curvature anchor is added to it.
+    if app.ui.pen.as_ref().is_some_and(|p| !p.curvature) && !pen_commit(app, false) {
+        return;
     }
     let hit = curvature_hit(app, x, y);
     if hit == Some(0) && app.ui.pen.as_ref().is_some_and(|p| p.knots.len() >= 3) {

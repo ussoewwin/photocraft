@@ -749,7 +749,9 @@ fn failed_stale_pen_commit_preserves_the_draft_until_retry() {
             "pen" => pen_down(&mut app, 150.0, 150.0, false),
             "curvature" => curvature_down(&mut app, 150.0, 150.0),
             "undo" => assert!(!pen_undo_last_point(&mut app)),
-            "commit" => pen_commit(&mut app, true),
+            "commit" => {
+                pen_commit(&mut app, true);
+            }
             _ => {
                 assert!(app.run("file.close", json!({})).is_err());
             }
@@ -853,7 +855,9 @@ fn stale_pen_commits_to_its_owner_across_document_changes() {
                 "pen" => pen_down(&mut app, 150.0, 150.0, false),
                 "curvature" => curvature_down(&mut app, 150.0, 150.0),
                 "undo" => assert!(!pen_undo_last_point(&mut app)),
-                "commit" => pen_commit(&mut app, true),
+                "commit" => {
+                    pen_commit(&mut app, true);
+                }
                 _ => app.sync_views(),
             }
             let source = app.session.documents().iter().find(|d| d.doc.id == owner).unwrap();

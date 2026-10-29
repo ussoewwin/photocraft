@@ -60,7 +60,9 @@ pub fn path_to_selection(app: &mut PhotocraftApp, params: Value) -> Result<Value
     if app.ui.pen.as_ref().is_some_and(|p| p.knots.len() >= 2) {
         // The finished path becomes the work path, or a shape layer's path or a vector mask.
         let on_layer = app.ui.tool_options.vector_mode == "shape" || targeted_vector_mask(app).is_some();
-        pen_commit(app, false);
+        if !pen_commit(app, false) {
+            return Err(app.ui.status.clone());
+        }
         app.ui.selected_path = Some(if on_layer { "layer" } else { "work" }.into());
     }
     let name = active_path_name(app)
@@ -281,6 +283,14 @@ pub fn path_selection_finish(app: &mut PhotocraftApp, start: [f64; 2], end: [f64
         if let Some(id) = pick_shape_at(&st.doc, start, tol) {
             let _ = app.run("layer.select", json!({"layer": id.0}));
         }
+    }
+    // Selected components move on their own (`path_components`); with none, the whole path.
+    if let Some(r) = crate::path_components::move_selected(app, [dx.round(), dy.round()]) {
+        if let Err(e) = r {
+            app.ui.status = e;
+            app.ui.status_error = true;
+        }
+        return;
     }
     let Some((target, path)) = target_path(app) else { return };
     let _ = match target {

@@ -155,6 +155,11 @@ pub fn pointer(app: &mut PhotocraftApp, ev: ToolEvent, mods: Modifiers) -> bool 
     if !p.iter().all(|n| n.is_finite()) {
         return true;
     }
+    if tool == Tool::FreeformPen && matches!(ev, ToolEvent::Down { .. }) && !active(app) && crate::vector_ui::freeform_locked_shape(app) {
+        app.ui.status = tl!("Locked").into();
+        app.ui.status_error = true;
+        return true;
+    }
     modifiers(app, mods);
     match ev {
         ToolEvent::Down { .. } => {

@@ -51,8 +51,12 @@ pub use paths_panel::{PathEntry, PathRow, path_rows, paths_footer, paths_panel};
 pub(crate) use pen::over_first_anchor;
 #[cfg(test)]
 use pen::pen_to_json;
-pub use pen::{cancel_stale, closes_path_at, freeform_finish, pen_break_handle, pen_commit, pen_down, pen_grab_handle, pen_move, pen_undo_last_point, pen_up};
-pub(crate) use pen::{pen_path, pen_replace};
+pub(crate) use pen::{PATH_OPS, pen_path, pen_replace};
+pub use pen::{
+    cancel_stale, closes_path_at, freeform_finish, pen_break_handle, pen_commit, pen_down, pen_end, pen_grab_handle, pen_move, pen_undo_last_point, pen_up,
+};
+#[cfg(test)]
+use pen::{closing, pen_path_op};
 pub use shapes::{create_shape, draw_shape_preview, finish_shape, is_shape_tool, shape_bounds};
 #[cfg(test)]
 use shapes::{shape_geometry, shape_preview};
@@ -91,7 +95,11 @@ pub struct PenPath {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Resumed {
     pub doc: u64,
+    /// A document path's name ("work" or a saved path's), or "layer" for `layer`'s.
     pub path: String,
+    /// The shape layer (Shape mode) or targeted vector mask whose path it is.
+    #[serde(default)]
+    pub layer: Option<u64>,
     pub index: usize,
     pub was: photocraft_doc::vector::Subpath,
 }
@@ -113,4 +121,9 @@ mod path_selection_tests;
 mod pen_draw_tests;
 
 #[cfg(test)]
+mod pen_path_ops_tests;
+
+#[cfg(test)]
 mod paint_tests;
+
+pub(crate) use pen::freeform_locked_shape;

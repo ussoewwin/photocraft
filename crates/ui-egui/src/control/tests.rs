@@ -913,6 +913,20 @@ fn ui_set_drives_the_crop_fill() {
     assert!(!app.ui.tool_options.crop_content_aware);
 }
 
+/// #1397: the Pen's mode and Path Operation over the control channel, reported by `ui.inspect`.
+#[test]
+fn ui_set_drives_the_pen_path_operation() {
+    let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+    let ctx = egui::Context::default();
+    assert_eq!(call(&mut app, &ctx, "ui.set", json!({"tool": "pen", "penMode": "shape", "penPathOp": "subtract"}))["ok"], true);
+    let o = &call(&mut app, &ctx, "ui.inspect", json!({}))["result"]["toolOptions"];
+    assert_eq!((o["vector_mode"].clone(), o["pen_path_op"].clone()), (json!("shape"), json!("subtract")));
+    for bad in [json!({"penPathOp": "melt"}), json!({"penPathOp": 1}), json!({"penMode": "pixels"}), json!({"penMode": "path", "penPathOp": "xor"})] {
+        assert_eq!(call(&mut app, &ctx, "ui.set", bad.clone())["ok"], false, "{bad}");
+        assert_eq!((app.ui.tool_options.vector_mode.as_str(), app.ui.tool_options.pen_path_op.as_str()), ("shape", "subtract"), "{bad}: unchanged");
+    }
+}
+
 /// #1919: the Crop tool's overlay menu over the control channel, reported by `ui.inspect`.
 #[test]
 fn ui_set_drives_the_crop_overlay_options() {

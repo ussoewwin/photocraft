@@ -458,6 +458,7 @@
 	Intersect Shape Areas	Schnittmenge der Formen
 	Exclude Overlapping Shapes	Überlappende Formen ausschließen
 	Merge Shape Components	Formkomponenten zusammenfügen
+	Path operations	Pfadvorgänge
 	Align	Ausrichten
 	Top Edges	Obere Kanten
 	Vertical Centers	Vertikale Mitten
@@ -3485,6 +3486,10 @@ curves	Smooth	Glätten
 	Grayscale Ramp	Graustufenbalken
 	Current Colors	Aktuelle Farben
 	Make Ramp Web Safe	Farbbalken auf Webfarben beschränken
+
+# Pen draft after a refused commit (#7648)
+	The path was kept as the Work Path	Der Pfad wurde als Arbeitspfad beibehalten
+	The path was discarded	Der Pfad wurde verworfen
 # Art History Brush (#213).
 	Art History Brush	Künstlerischer Protokollpinsel
 	Art History Brush Tool	Künstlerischer-Protokollpinsel-Werkzeug

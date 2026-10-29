@@ -177,6 +177,15 @@ pub fn draw_overlay(app: &PhotocraftApp, painter: &egui::Painter, xf: &ViewXform
         if let Some((_, p)) = active_type_path(app) {
             draw_path(&p, anchors);
         }
+        // Path Selection's selected components show solid anchors, as in Photoshop.
+        if tool == Tool::PathSelection
+            && st.is_some_and(|s| s.doc.id == doc.id)
+            && let Some((_, path, _)) = crate::path_components::selected(app)
+        {
+            for k in app.ui.direct_selection.anchors.iter().filter_map(|[s, k]| path.subpaths.get(*s).and_then(|sp| sp.knots.get(*k))) {
+                draw_anchor(painter, to_scr([k.anchor.x, k.anchor.y]), true, accent);
+            }
+        }
         crate::corner_radius::draw(app, painter, &to_scr, accent);
     }
     // Pen path in progress, with handles of the last knot and a rubber band to the pointer. While
