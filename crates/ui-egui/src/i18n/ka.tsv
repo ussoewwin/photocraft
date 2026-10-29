@@ -4520,3 +4520,34 @@ layerLabel	Magenta	მეწამული
 	Tight Curl	მჭიდრო ხვია
 	Loose Curl	თავისუფალი ხვია
 	Stylized dabs from a history state	სტილიზებული ლაქები ისტორიის მდგომარეობიდან
+	New Group from Layers…	ახალი ჯგუფი შრეებიდან…
+	Show Favorite Fonts	რჩეული შრიფტების ჩვენება
+	No favorite fonts yet: click the star beside a font to add it.	რჩეული შრიფტები ჯერ არ არის: დასამატებლად დაწკაპეთ ვარსკვლავზე შრიფტის გვერდით.
+	Favorite fonts	რჩეული შრიფტები
+	Add to Favorites	რჩეულებში დამატება
+	Remove from Favorites	რჩეულებიდან ამოშლა
+	Show All Fonts	ყველა შრიფტის ჩვენება
+	All Classes	ყველა კლასი
+	Blackletter	გოთიკური
+	Decorative	დეკორატიული
+	Font preview:	შრიფტის ნიმუში:
+	Handwritten	ხელნაწერი
+	Hide Font Classes	შრიფტის კლასების დამალვა
+	Hide Styles	სტილების დამალვა
+	Monospace	მონოსიგანიანი
+	No fonts match these filters.	ამ ფილტრებს არცერთი შრიფტი არ შეესაბამება.
+	No similar fonts: the current font doesn't say what it looks like.	მსგავსი შრიფტები არ არის: მიმდინარე შრიფტი არ აღწერს, როგორ გამოიყურება.
+	OpenType font	OpenType შრიფტი
+	Sans Serif	უსერიფო
+	Script	კალიგრაფიული
+	Serif	სერიფიანი
+	Show Font Classes	შრიფტის კლასების ჩვენება
+	Show Similar Fonts	მსგავსი შრიფტების ჩვენება
+	Show Styles	სტილების ჩვენება
+	Show Variable Fonts	ცვლადი შრიფტების ჩვენება
+	Slab Serif	სლაბ-სერიფი
+	TrueType font	TrueType შრიფტი
+	Variable font	ცვლადი შრიფტი
+	Font size presets	შრიფტის ზომის პრესეტები
+	Leading presets	სტრიქონთა დაშორების პრესეტები
+	Tracking presets	ტრეკინგის პრესეტები
