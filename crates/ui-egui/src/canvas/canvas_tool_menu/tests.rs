@@ -1218,3 +1218,130 @@ fn crop_menu_rows_act_like_the_options_bar() {
     choose(&mut app, &ctx, CROP_CANCEL);
     assert!(!crate::crop_ui::pending(&app));
 }
+
+/// The Crop tool with a real pending frame on the 32 x 32 document.
+fn integration_crop_app() -> PhotocraftApp {
+    let mut app = app();
+    app.ui.tool = Tool::Crop;
+    app.ui.crop_rect = Some([10.0, 5.0, 30.0, 25.0]);
+    app.crop.default_frame = false;
+    app.crop.editing = true;
+    assert!(crate::crop_ui::pending(&app));
+    app
+}
+
+fn crop_open(app: &mut PhotocraftApp) {
+    assert!(open_crop(app, &Context::default(), Tool::Crop, [10.0, 10.0]));
+}
+
+fn frame_ratio(app: &PhotocraftApp) -> f64 {
+    let r = app.ui.crop_rect.unwrap();
+    (r[2] - r[0]) / (r[3] - r[1])
+}
+
+#[test]
+fn crop_menu_ratio_rows_fit_the_frame_like_the_options_bar() {
+    let mut app = integration_crop_app();
+    crop_open(&mut app);
+    let menu = app.ui.canvas_tool_menu.clone().unwrap();
+    assert!(menu.crop.is_some() && available(&app, &menu, "crop.ratio.16:9"));
+    choose(&mut app, &Context::default(), "crop.ratio.16:9");
+    assert_eq!(app.ui.tool_options.crop_ratio, "16:9");
+    assert!((frame_ratio(&app) - 16.0 / 9.0).abs() < 1e-9, "the frame is fitted to the ratio");
+    // The current ratio shows checked; the others do not.
+    crop_open(&mut app);
+    let menu = app.ui.canvas_tool_menu.clone().unwrap();
+    assert!(mode_checked(&app, &menu, "crop.ratio.16:9") && !mode_checked(&app, &menu, "crop.ratio.1:1"));
+    choose(&mut app, &Context::default(), "crop.ratio.1:1");
+    assert!((frame_ratio(&app) - 1.0).abs() < 1e-9);
+}
+
+#[test]
+fn crop_menu_gear_rows_toggle_the_shield_options() {
+    let mut app = integration_crop_app();
+    crop_open(&mut app);
+    choose(&mut app, &Context::default(), CROP_SHOW_CROPPED);
+    assert!(!app.ui.tool_options.crop_shield.show_cropped_area);
+    crop_open(&mut app);
+    assert!(!mode_checked(&app, app.ui.canvas_tool_menu.as_ref().unwrap(), CROP_SHOW_CROPPED), "the row shows the option's state");
+    choose(&mut app, &Context::default(), CROP_CLASSIC);
+    assert!(app.ui.tool_options.crop_shield.classic_mode);
+    // As in the gear menu, Classic Mode greys out the other two options.
+    crop_open(&mut app);
+    let menu = app.ui.canvas_tool_menu.clone().unwrap();
+    assert!(!entry_enabled(&app, &menu, CROP_SHOW_CROPPED) && !entry_enabled(&app, &menu, CROP_AUTO_CENTER));
+    assert!(entry_enabled(&app, &menu, CROP_CLASSIC));
+    choose(&mut app, &Context::default(), CROP_CLASSIC);
+    assert!(!app.ui.tool_options.crop_shield.classic_mode);
+}
+
+#[test]
+fn crop_menu_reset_cancel_and_commit_act_on_the_frame() {
+    // Reset: the whole canvas, still a pending frame.
+    let mut app = integration_crop_app();
+    crop_open(&mut app);
+    choose(&mut app, &Context::default(), CROP_RESET);
+    assert_eq!(app.ui.crop_rect, Some([0.0, 0.0, 32.0, 32.0]));
+    assert!(crate::crop_ui::pending(&app), "Reset keeps the crop active, as in Photoshop");
+    // Cancel: the frame is dropped (the tool's next frame is the default one).
+    crop_open(&mut app);
+    choose(&mut app, &Context::default(), CROP_CANCEL);
+    assert!(app.ui.crop_rect.is_none() && !crate::crop_ui::pending(&app));
+    // Commit: the document is cropped to the frame.
+    let mut app = integration_crop_app();
+    crop_open(&mut app);
+    choose(&mut app, &Context::default(), CROP_COMMIT);
+    assert_eq!(app.session.active().unwrap().doc.size, photocraft_doc::Size::new(20, 20));
+    assert!(app.ui.crop_rect.is_none());
+}
+
+#[test]
+fn crop_menu_lists_saved_presets_and_applies_one() {
+    let mut app = integration_crop_app();
+    app.run("tool.presets.new", json!({"name": "Wide", "tool": "crop", "options": {"toolOptions": {"crop_ratio": "16:9"}}})).unwrap();
+    crop_open(&mut app);
+    let menu = app.ui.canvas_tool_menu.clone().unwrap();
+    assert_eq!(menu.crop.clone().unwrap_or_default(), ["Wide"]);
+    assert!(available(&app, &menu, "crop.preset.0"));
+    assert!(crop_rows(&menu).iter().flatten().any(|(label, _)| label == "Wide"), "the preset is a row: {:?}", crop_rows(&menu));
+    choose(&mut app, &Context::default(), "crop.preset.0");
+    // As in the options bar's dropdown: the preset fills the fields (the frame follows on the
+    // next resize or ratio apply).
+    assert_eq!(app.ui.tool_options.crop_ratio, "16:9");
+}
+
+#[test]
+fn crop_menu_closes_when_the_crop_is_no_longer_pending() {
+    let mut app = integration_crop_app();
+    crop_open(&mut app);
+    assert!(app.ui.canvas_tool_menu.is_some());
+    crate::crop_ui::cancel(&mut app);
+    show(&mut app, &Context::default());
+    assert!(app.ui.canvas_tool_menu.is_none(), "the menu does not outlive the pending frame");
+}
+
+#[test]
+fn right_click_on_a_pending_crop_opens_the_crop_menu() {
+    let app = integration_crop_app();
+    let mut h = harness(app);
+    let center = h.state().last_canvas_rect.center();
+    right_click(&mut h, center, Modifiers::NONE);
+    let menu = h.state().ui.canvas_tool_menu.clone().expect("right-click on a pending crop opens a menu");
+    assert!(menu.crop.is_some() && !menu.pasteboard && !menu.transform);
+    let ctx = h.ctx.clone();
+    choose(h.state_mut(), &ctx, "crop.ratio.16:9");
+    let r = h.state().ui.crop_rect.unwrap();
+    assert!(((r[2] - r[0]) / (r[3] - r[1]) - 16.0 / 9.0).abs() < 1e-9, "choosing 16:9 refits the frame");
+}
+
+#[test]
+fn right_click_without_a_pending_crop_opens_no_menu() {
+    let mut app = app();
+    app.ui.tool = Tool::Crop;
+    crate::crop_ui::ensure_frame(&mut app);
+    assert!(app.ui.crop_rect.is_some() && !crate::crop_ui::pending(&app), "the untouched default frame is not pending");
+    let mut h = harness(app);
+    let center = h.state().last_canvas_rect.center();
+    right_click(&mut h, center, Modifiers::NONE);
+    assert!(h.state().ui.canvas_tool_menu.is_none(), "no menu on the untouched default frame");
+}

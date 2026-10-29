@@ -1,4 +1,4 @@
-use super::begin::{interpolation_preference, enter_warp, leave_warp, warps_type};
+use super::begin::{enter_warp, interpolation_preference, leave_warp, warps_type};
 use super::commit::{cancel, commit};
 use super::pointer::point_on_quad;
 use super::warp::edit_session_warp;

@@ -37,6 +37,10 @@ The “PhotoCraft at branch point” column records behavior before this PR. Pic
 
 The layer-list menu on an empty pixel or all-hidden hit should be empty/closed; it must not select a transparent or hidden layer. The right-erase preference is an alternate PhotoCraft behavior, and its selected state takes precedence over the Brush picker only for Brush/Eraser.
 
+### Crop canvas menu (#6561, 2026-10-25)
+
+With the Crop tool and a pending frame, a canvas right-click opens the crop menu: the options-bar ratios (Original Ratio, 1 : 1, 4 : 5, 5 : 7, 2 : 3, 16 : 9; the current one checked), the saved crop presets, the gear options Use Classic Mode / Show Cropped Area / Auto Center Preview (checked; the last two greyed in Classic Mode), and Reset / Cancel / Commit. The rows route through the same functions as the options bar, so the menu and the bar cannot disagree. No menu on the untouched default frame or outside the image (the pasteboard menu wins), and the menu closes when the crop stops being pending.
+
 ## Pen canvas reference capture (2026-10-07)
 
 The user supplied a Photoshop screenshot of a closed path in Path mode. The table preserves every row in its order; separator boundaries appear between the groups. Gray rows in that capture remain visible but disabled for a plain work path. Enablement changes with the active shape layer, saved path, copied style, and symmetry state. Ellipsis rows open a parameter dialog before changing the document.
@@ -103,6 +107,7 @@ Each slice needs pure model tests (including every item dispatching a known comm
 | 2026-10-21 | minor | Crop tool menu on a pending crop (#6561) |
 | 2026-10-20 | trivial | Zoom tool menu order (#6005) |
 | 2026-10-18 | minor | Type tool menu over committed type (#7324) |
+| 2026-10-16 | minor | Crop canvas menu on a pending frame (#6561) |
 | 2026-10-15 | trivial | Pasteboard row: the colour menu exists since #2462 |
 | 2026-10-13 | minor | Layer-mask thumbnail menu (#4575) |
 | 2026-10-10 | trivial | Status line, revision history |

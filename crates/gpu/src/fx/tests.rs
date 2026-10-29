@@ -338,5 +338,3 @@ fn shape_tiles_and_group_pins_hold_addresses_not_pixels() {
     drop(group);
     assert!(pins.iter().all(|w| w.strong_count() == 0), "a group's pins keep none of its pixels");
 }
-
-

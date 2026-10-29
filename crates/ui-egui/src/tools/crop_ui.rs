@@ -49,6 +49,9 @@ pub struct CropState {
     /// `UiState::crop_rect` is the untouched default frame ([`ensure_frame`]): a drag inside it
     /// draws a new frame (as in Photoshop) instead of moving it, and committing it does nothing.
     pub default_frame: bool,
+    /// The frame is what the crop menu's Reset made it ([`reset`]): the whole canvas, still a
+    /// pending frame, but committing it crops nothing as long as it still matches the bounds.
+    pub reset_frame: bool,
     /// The document (index and size) the default frame was made for.
     frame_for: Option<(usize, u32, u32)>,
     /// The frame is being edited (pressed since it was made): the canvas shows what lies past it.
@@ -71,6 +74,7 @@ struct CropStep {
     rect: Option<[f64; 4]>,
     angle: f64,
     default_frame: bool,
+    reset_frame: bool,
 }
 
 /// A crop gesture in progress. Rects are `[x0, y0, x1, y1]` in document coordinates.
@@ -386,6 +390,7 @@ fn frame(app: &mut PhotocraftApp) {
     }
     app.ui.crop_rect = Some([f64::from(r.x0), f64::from(r.y0), f64::from(r.x1), f64::from(r.y1)]);
     app.crop.default_frame = true;
+    app.crop.reset_frame = false;
     app.crop.frame_for = key;
     app.crop.editing = false;
     app.crop.undo.clear();
@@ -427,10 +432,23 @@ pub fn cancel(app: &mut PhotocraftApp) {
     app.ui.crop_angle = 0.0;
     app.crop.drag = None;
     app.crop.default_frame = false;
+    app.crop.reset_frame = false;
     app.crop.frame_for = None;
     app.crop.editing = false;
     clear_history(app);
     crate::crop_straighten::reset(app);
+}
+
+/// Reset the pending frame to the whole canvas, upright (the crop menu's Reset, #6561). The frame
+/// stays a real pending one, so ↵ on it crops nothing and the tool keeps behaving as during a crop.
+pub fn reset(app: &mut PhotocraftApp) {
+    let Some(st) = app.session.active() else { return };
+    let b = st.doc.bounds();
+    app.ui.crop_angle = 0.0;
+    keyed(app, [f64::from(b.x0), f64::from(b.y0), f64::from(b.x1), f64::from(b.y1)]);
+    app.crop.reset_frame = true;
+    crate::crop_mode::sync(app, None);
+    crate::crop_mode::sync_frame(app);
 }
 
 /// Drop the box's own Undo/Redo (leaving the tool, cancelling or committing a crop).
@@ -442,7 +460,7 @@ pub fn clear_history(app: &mut PhotocraftApp) {
 
 /// The frame's current state, as an undo step.
 fn step_of(app: &PhotocraftApp) -> CropStep {
-    CropStep { rect: app.ui.crop_rect, angle: app.ui.crop_angle, default_frame: app.crop.default_frame }
+    CropStep { rect: app.ui.crop_rect, angle: app.ui.crop_angle, default_frame: app.crop.default_frame, reset_frame: app.crop.reset_frame }
 }
 
 /// Put a frame state back.
@@ -450,6 +468,7 @@ fn apply_step(app: &mut PhotocraftApp, s: CropStep) {
     app.ui.crop_rect = s.rect;
     app.ui.crop_angle = s.angle;
     app.crop.default_frame = s.default_frame;
+    app.crop.reset_frame = s.reset_frame;
 }
 
 /// The pending frame, its box Undo/Redo and the view's turn, kept while `image.crop` runs so a
@@ -676,6 +695,7 @@ fn keyed(app: &mut PhotocraftApp, r: [f64; 4]) {
     if r.iter().all(|v| v.is_finite()) {
         app.ui.crop_rect = Some(r);
         app.crop.default_frame = false;
+        app.crop.reset_frame = false;
         app.crop.editing = true;
     }
 }
@@ -866,6 +886,9 @@ fn release(app: &mut PhotocraftApp, drag: CropDrag) {
         && !matches!(drag, CropDrag::MoveImage { rect, .. } if app.ui.crop_rect == Some(rect));
     if ok && changed {
         app.crop.default_frame = false;
+        if !matches!(drag,CropDrag::Move{rect,..}|CropDrag::Resize{rect,..} if app.ui.crop_rect==Some(rect)) {
+            app.crop.reset_frame = false;
+        }
     }
     if ok {
         finish_frame(app, drag);

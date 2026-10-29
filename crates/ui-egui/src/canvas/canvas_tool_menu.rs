@@ -210,6 +210,10 @@ const CROP_SHOW: &str = "crop.overlayShow.";
 pub const CROP_CLEAR: &str = "crop.clear";
 pub const CROP_NEW: &str = "crop.newPreset";
 pub const CROP_DELETE: &str = "crop.deletePreset";
+pub const CROP_CLASSIC: &str = "crop.overlay.classicMode";
+pub const CROP_SHOW_CROPPED: &str = "crop.overlay.showCroppedArea";
+pub const CROP_AUTO_CENTER: &str = "crop.overlay.autoCenterPreview";
+pub const CROP_RESET: &str = "crop.reset";
 pub const CROP_CANCEL: &str = "crop.cancel";
 pub const CROP_COMMIT: &str = "crop.commit";
 
@@ -233,6 +237,13 @@ pub fn crop_rows(menu: &CanvasToolMenu) -> Vec<Row<String>> {
     rows.push(None);
     rows.extend(OverlayShow::ALL.iter().map(|k| Some((k.label().to_string(), format!("{CROP_SHOW}{}", k.id())))));
     rows.push(None);
+    rows.extend([
+        Some(("Use Classic Mode".into(), CROP_CLASSIC.into())),
+        Some(("Show Cropped Area".into(), CROP_SHOW_CROPPED.into())),
+        Some(("Auto Center Preview".into(), CROP_AUTO_CENTER.into())),
+        None,
+        Some(("Reset".into(), CROP_RESET.into())),
+    ]);
     rows.push(Some(("Cancel".into(), CROP_CANCEL.into())));
     rows.push(Some(("Crop".into(), CROP_COMMIT.into())));
     rows
@@ -259,6 +270,12 @@ fn crop_preset<'a>(menu: &'a CanvasToolMenu, command: &str) -> Option<&'a String
 /// the overlay and when it shows.
 fn crop_checked(app: &PhotocraftApp, menu: &CanvasToolMenu, command: &str) -> bool {
     let o = &app.ui.tool_options;
+    match command {
+        CROP_CLASSIC => return o.crop_shield.classic_mode,
+        CROP_SHOW_CROPPED => return o.crop_shield.shows_cropped_area(),
+        CROP_AUTO_CENTER => return o.crop_shield.auto_center_preview,
+        _ => {}
+    }
     let user = crate::crop_presets::current_user(app);
     if let Some(k) = command.strip_prefix(CROP_RATIO) {
         return user.is_none() && k == o.crop_ratio;
@@ -274,6 +291,9 @@ fn crop_checked(app: &PhotocraftApp, menu: &CanvasToolMenu, command: &str) -> bo
 
 fn crop_enabled(app: &PhotocraftApp, menu: &CanvasToolMenu, command: &str) -> bool {
     match command {
+        CROP_CLASSIC => true,
+        CROP_SHOW_CROPPED | CROP_AUTO_CENTER => !app.ui.tool_options.crop_shield.classic_mode,
+        CROP_RESET | CROP_CANCEL | CROP_COMMIT => crate::crop_ui::pending(app),
         CROP_NEW => crate::crop_presets::savable(&app.ui.tool_options).is_some(),
         CROP_DELETE => menu.crop.as_ref().is_some_and(|u| !u.is_empty()),
         c => is_crop(menu, c),
@@ -313,6 +333,21 @@ fn choose_crop(app: &mut PhotocraftApp, menu: &CanvasToolMenu, command: &str) ->
     use crate::crop_overlay::{CropOverlay, OverlayShow};
     use crate::crop_presets::{Choice, apply_choice};
     match command {
+        CROP_RESET => crate::crop_ui::reset(app),
+        CROP_CLASSIC => {
+            app.ui.tool_options.crop_shield.classic_mode = !app.ui.tool_options.crop_shield.classic_mode;
+            crate::crop_mode::sync(app, None);
+        }
+        CROP_SHOW_CROPPED => {
+            if !app.ui.tool_options.crop_shield.classic_mode {
+                app.ui.tool_options.crop_shield.show_cropped_area = !app.ui.tool_options.crop_shield.show_cropped_area;
+            }
+        }
+        CROP_AUTO_CENTER => {
+            if !app.ui.tool_options.crop_shield.classic_mode {
+                app.ui.tool_options.crop_shield.auto_center_preview = !app.ui.tool_options.crop_shield.auto_center_preview;
+            }
+        }
         CROP_CANCEL => crate::crop_ui::cancel(app),
         CROP_COMMIT => crate::canvas::commit_crop(app),
         CROP_NEW => apply_choice(app, Choice::New),
