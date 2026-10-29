@@ -163,7 +163,7 @@ fn pen_custom_undo_binding_and_menu_retract_pending_points() {
     assert!(app.ui.pen.is_none());
 }
 
-/// A document with a work path, and a `press` helper that feeds one key press to `handle`.
+/// A 200×200 document for the ⌘⇧↩ / ⌘⌥↩ tests.
 fn selection_app() -> PhotocraftApp {
     let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), Default::default());
     app.run("file.new", serde_json::json!({"width": 200, "height": 200})).unwrap();
@@ -175,8 +175,10 @@ fn set_work_rect(app: &mut PhotocraftApp, x: i32, y: i32, w: i32, h: i32) {
     app.run("path.set", serde_json::json!({"path": {"subpaths": [{"closed": true, "op": "combine", "knots": knots}]}})).unwrap();
 }
 
-fn selected(app: &PhotocraftApp) -> bool {
-    app.session.active().unwrap().doc.selection.is_some()
+/// The selection's bounds (x0, y0, x1, y1), if any.
+fn selection_bounds(app: &PhotocraftApp) -> Option<[i32; 4]> {
+    let r = app.session.active().unwrap().doc.selection.as_ref()?.content_bounds();
+    Some([r.x0, r.y0, r.x1, r.y1])
 }
 
 fn press_key(app: &mut PhotocraftApp, ctx: &egui::Context, key: Key, modifiers: Modifiers) {
@@ -192,18 +194,14 @@ fn press_key(app: &mut PhotocraftApp, ctx: &egui::Context, key: Key, modifiers: 
 fn ctrl_shift_enter_adds_the_path_to_the_selection() {
     let mut app = selection_app();
     let ctx = egui::Context::default();
-    set_work_rect(&mut app, 10, 10, 40, 40);
-    app.run("path.toSelection", serde_json::json!({})).unwrap();
+    app.run("select.rect", serde_json::json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap();
     let history = app.session.active().unwrap().history.past_len();
 
     set_work_rect(&mut app, 100, 100, 40, 40);
     press_key(&mut app, &ctx, Key::Enter, Modifiers::COMMAND | Modifiers::SHIFT);
-    assert_eq!(app.session.active().unwrap().history.past_len(), history + 2, "path.set + selection");
-    assert!(selected(&app));
-
-    // Removing the second rectangle leaves the first one: the key added, it did not replace.
-    press_key(&mut app, &ctx, Key::Enter, Modifiers::COMMAND | Modifiers::ALT);
-    assert!(selected(&app));
+    assert_eq!(app.session.active().unwrap().history.past_len(), history + 2, "path.set + selection: {}", app.ui.status);
+    // Both rectangles are selected: the key added the path, it did not replace the selection.
+    assert_eq!(selection_bounds(&app), Some([10, 10, 140, 140]));
 }
 
 #[test]
@@ -212,10 +210,10 @@ fn ctrl_alt_enter_subtracts_the_path_from_the_selection() {
     let ctx = egui::Context::default();
     set_work_rect(&mut app, 10, 10, 40, 40);
     app.run("path.toSelection", serde_json::json!({})).unwrap();
-    assert!(selected(&app));
+    assert!(selection_bounds(&app).is_some());
 
     press_key(&mut app, &ctx, Key::Enter, Modifiers::COMMAND | Modifiers::ALT);
-    assert!(!selected(&app), "the only selected area was subtracted");
+    assert_eq!(selection_bounds(&app), None, "the only selected area was subtracted: {}", app.ui.status);
 }
 
 #[test]
@@ -247,7 +245,7 @@ fn add_and_subtract_path_keys_are_ignored_while_a_text_field_has_focus() {
         .clear();
     }
     assert_eq!(app.session.active().unwrap().history.past_len(), history);
-    assert!(selected(&app));
+    assert!(selection_bounds(&app).is_some());
 }
 
 #[test]
