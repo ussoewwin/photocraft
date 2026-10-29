@@ -3529,3 +3529,37 @@ cameraRaw	Masking	Maskaus
 	Uncached Refresh	Päivitä ilman välimuistia
 	Units	Yksiköt
 	Update and Restart	Päivitä ja käynnistä uudelleen
+	Add to Favorites	Lisää suosikkeihin
+	All Classes	Kaikki luokat
+	Allow Non-Linear History	Salli epälineaarinen historia
+	Blackletter	Fraktuura
+	CPU Rendering	Prosessoripiirto
+	Decorative	Koristefontti
+	Drawn on the CPU: {reason}. Click for System Info.	Piirretään prosessorilla: {reason}. Napsauta avataksesi järjestelmän tiedot.
+	Font preview:	Fontin esikatselu:
+	Handwritten	Käsinkirjoitettu
+	Hide Font Classes	Piilota fonttiluokat
+	Hide Styles	Piilota tyylit
+	Make Layer Visibility Changes Undoable	Tee tasojen näkyvyysmuutoksista kumottavia
+	Monospace	Tasalevyinen
+	New Group from Layers…	Uusi ryhmä tasoista…
+	No favorite fonts yet: click the star beside a font to add it.	Ei vielä suosikkifontteja: lisää fontti napsauttamalla sen vieressä olevaa tähteä.
+	No fonts match these filters.	Mikään fontti ei vastaa näitä suodattimia.
+	No similar fonts: the current font doesn't say what it looks like.	Ei samankaltaisia fontteja: nykyinen fontti ei kerro, miltä se näyttää.
+	OpenType font	OpenType-fontti
+	Remember Settings	Muista asetukset
+	Remove from Favorites	Poista suosikeista
+	Sans Serif	Groteski
+	Script	Kaunokirjoitus
+	Serif	Antiikva
+	Show All Fonts	Näytä kaikki fontit
+	Show Favorite Fonts	Näytä suosikkifontit
+	Show Font Classes	Näytä fonttiluokat
+	Show Similar Fonts	Näytä samankaltaiset fontit
+	Show Styles	Näytä tyylit
+	Show Variable Fonts	Näytä muuttuvat fontit
+	Slab Serif	Egyptienne
+	TrueType font	TrueType-fontti
+	Variable font	Muuttuva fontti
+	X	X
+	Y	Y
