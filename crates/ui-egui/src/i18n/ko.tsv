@@ -3736,3 +3736,9 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
 	Select and Mask was closed: another layer was selected	선택 및 마스크가 닫혔습니다: 다른 레이어가 선택되었습니다
 	Select Layer Under Cursor	커서 아래 레이어 선택
 	Drag to move the selected path	드래그하여 선택한 패스 이동
+
+# Shape Fill/Stroke popover and colour swatches opening the Color Picker
+	Color Picker	색상 선택기
+	Recently Used Colors	최근 사용한 색상
+	Stop Color	정지점 색상
+	Shapes can't use patterns yet	모양에는 아직 패턴을 사용할 수 없습니다

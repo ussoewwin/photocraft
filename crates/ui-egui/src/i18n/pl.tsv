@@ -4135,3 +4135,9 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
 	Select and Mask was closed: its document is no longer the active one	Zamknięto Zaznacz i maskuj: jego dokument nie jest już aktywny
 	Select and Mask was closed: another layer was selected	Zamknięto Zaznacz i maskuj: wybrano inną warstwę
 	Select Layer Under Cursor	Zaznacz warstwę pod kursorem
+
+# Shape Fill/Stroke popover and colour swatches opening the Color Picker
+	Color Picker	Próbnik kolorów
+	Recently Used Colors	Ostatnio używane kolory
+	Stop Color	Kolor punktu
+	Shapes can't use patterns yet	Kształty nie mogą jeszcze używać wzorków

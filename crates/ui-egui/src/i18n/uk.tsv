@@ -4227,3 +4227,9 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
 	Refine Hair needs hair detection, which isn't available yet	Для уточнення волосся потрібне розпізнавання волосся, яке ще недоступне
 	Select and Mask was closed: its document is no longer the active one	Вікно «Виділити та маскувати» закрито: його документ більше не активний
 	Select and Mask was closed: another layer was selected	Вікно «Виділити та маскувати» закрито: вибрано інший шар
+
+# Shape Fill/Stroke popover and colour swatches opening the Color Picker
+	Color Picker	Вибір кольору
+	Recently Used Colors	Нещодавно використані кольори
+	Stop Color	Колір контрольної точки
+	Shapes can't use patterns yet	Фігури поки не можуть використовувати візерунки
