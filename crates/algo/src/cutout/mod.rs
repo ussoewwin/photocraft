@@ -125,6 +125,16 @@ pub(crate) fn trace(c: &[Px], r: Rect, s: &Settings) -> Traced {
     if w == 0 || h == 0 || c.len() != w * h {
         return empty;
     }
+    // A non-finite sample (32-bit documents can hold them) would make its region's mean colour,
+    // and so its edges and fill, non-finite: count it as 0 from here on.
+    let clean = |v: f32| if v.is_finite() { v } else { 0.0 };
+    let owned: Vec<Px>;
+    let c: &[Px] = if c.iter().flatten().all(|v| v.is_finite()) {
+        c
+    } else {
+        owned = c.iter().map(|p| p.map(clean)).collect();
+        &owned
+    };
     let levels = s.levels.clamp(2, 8);
     let mut labels = vec![0u8; w * h];
     par::chunks_mut(&mut labels, w, true, |y, row| {
@@ -317,6 +327,26 @@ mod tests {
                     assert!(dist2(a, b) < 1e-8, "({x}, {y}): {a:?} vs {b:?}");
                 }
             }
+        }
+    }
+
+    /// A NaN or infinite sample must not reach a region's colour, its edges or the fill.
+    #[test]
+    fn non_finite_samples_give_finite_covered_output() {
+        let (w, h) = (24usize, 16usize);
+        let mut c: Vec<Px> = (0..w * h).map(|i| if i % w < 12 { [0.1, 0.1, 0.1] } else { [0.9, 0.8, 0.7] }).collect();
+        c[3 * w + 4] = [f32::NAN, 0.5, 0.5];
+        c[8 * w + 15] = [f32::INFINITY, f32::NEG_INFINITY, 0.2];
+        c[12 * w + 12] = [f32::NAN; 3];
+        let r = Rect::new(0, 0, w as i32, h as i32);
+        for simplicity in [0.0, 4.0] {
+            let t = trace(&c, r, &settings(4, simplicity, 2.0));
+            assert!(t.regions.iter().all(|g| g.colour.iter().all(|v| v.is_finite())), "region colours finite");
+            assert!(t.chains.iter().flatten().flatten().all(|v| v.is_finite()), "outlines finite");
+            let out = t.render(r);
+            assert!(out.iter().flatten().all(|v| v.is_finite()), "pixels finite");
+            let worst = coverage(&t, r).iter().map(|v| (v - 1.0).abs()).fold(0.0, f32::max);
+            assert!(worst < 1e-3, "coverage off by {worst}");
         }
     }
 
