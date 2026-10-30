@@ -206,7 +206,8 @@ fn output(tone: f32, adjusted: f32, weight: f32, component: &Component, fmt: Pix
     let value = if component.lab_invert {
         tone + (256.0 / 255.0 - tone.clamp(0.0, 1.0) - tone) * weight
     } else {
-        photocraft_color::convert::rgb_to_gray([tone + (adjusted - tone) * weight; 3])
+        // As `pixels::mix_through_selection`: `o·(1−k) + a·k`, exact at full coverage (#9483).
+        photocraft_color::convert::rgb_to_gray([tone * (1.0 - weight) + adjusted * weight; 3])
     };
     let mut encoded = [0; 4];
     write_sample(&mut encoded, fmt.sample, 0, value);

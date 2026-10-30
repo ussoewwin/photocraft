@@ -110,8 +110,7 @@ impl WideAngleDialog {
     fn command_params(&self) -> Value {
         let mut v = serde_json::to_value(&self.params).unwrap_or(json!({}));
         v["layer"] = json!(self.layer.0);
-        v["target"] = self.target.clone();
-        v
+        crate::distort_ui::with_filter_target(v, &self.target)
     }
 }
 
@@ -149,7 +148,7 @@ pub fn open(app: &mut PhotocraftApp, ctx: &egui::Context) -> Result<(), String> 
         frame,
         scale: 1.0 / k as f64,
         proxy: px,
-        target: crate::canvas::paint_target(app),
+        target: crate::distort_ui::colour_set_target(app),
         pw,
         ph,
         src_tex: None,

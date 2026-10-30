@@ -897,3 +897,83 @@ fn liquify_that_cannot_be_applied_reports_the_error() {
     assert_eq!(app.session.active().unwrap().history.past_len(), steps);
     assert_eq!(r, Err(app.ui.status.clone()));
 }
+
+/// Liquify, Adaptive Wide Angle and the Filter Gallery open on the layer when no colour set is
+/// targeted, as before colour sets: with its mask, an alpha channel or the Quick Mask targeted.
+/// OK sends the command no `target`, so it routes the targeted surface exactly as it did then.
+#[test]
+fn workspaces_open_on_the_layer_with_a_mask_channel_or_quick_mask_targeted() {
+    let setup = |case: &str| {
+        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 64, "height": 48})).unwrap();
+        app.run("layer.new.layer", json!({})).unwrap();
+        app.run("edit.fill", json!({"contents": "color", "color": "#ff0000"})).unwrap();
+        app.run("select.rect", json!({"x": 20, "y": 16, "width": 16, "height": 16})).unwrap();
+        app.run("edit.fill", json!({"contents": "color", "color": "#0000ff"})).unwrap();
+        app.run("select.deselect", json!({})).unwrap();
+        match case {
+            "mask" => drop(app.run("layer.layerMask.revealAll", json!({})).unwrap()),
+            "alpha" => {
+                app.run("channel.new", json!({"fill": "black"})).unwrap();
+                app.run("channel.target", json!({"channel": 0})).unwrap();
+            }
+            _ => drop(app.run("select.editInQuickMaskMode", json!({"on": true})).unwrap()),
+        }
+        app.sync_views();
+        app
+    };
+    let surfaces = |app: &PhotocraftApp| {
+        let st = app.session.active().unwrap();
+        let l = st.doc.layer(st.active_layer.unwrap()).unwrap();
+        (
+            l.surface().cloned(),
+            l.mask.as_ref().map(|m| m.surface.clone()),
+            st.doc.channels.iter().map(|c| c.surface.clone()).collect::<Vec<_>>(),
+            st.doc.quick_mask.as_ref().map(|c| c.surface.clone()),
+        )
+    };
+    let ctx = egui::Context::default();
+    for case in ["mask", "alpha", "quickMask"] {
+        let mut app = setup(case);
+        assert!(crate::canvas::paint_target(&app).get("colors").is_none(), "{case}");
+        crate::wide_angle_ui::open(&mut app, &ctx).unwrap_or_else(|e| panic!("{case}: Adaptive Wide Angle: {e}"));
+        crate::gallery_ui::open(&mut app).unwrap_or_else(|e| panic!("{case}: Filter Gallery: {e}"));
+        open(&mut app, &ctx).unwrap_or_else(|e| panic!("{case}: Liquify: {e}"));
+        let d = app.distort.liquify.as_mut().unwrap();
+        let stroke = LiquifyStroke { points: vec![vec![20.0, 24.0, 1.0], vec![36.0, 24.0, 1.0]], ..LiquifyStroke::new(LiquifyTool::ForwardWarp, 30.0) };
+        d.strokes.push(stroke.clone());
+        let cell = d.cell;
+        commit(&mut app).unwrap();
+        let mut before = setup(case);
+        let layer = before.session.active().unwrap().active_layer.unwrap();
+        before.run("filter.liquify", json!({"strokes": [stroke], "meshSize": cell, "layer": layer.0})).unwrap();
+        assert!(surfaces(&app) == surfaces(&before), "{case}: OK edits what the command without a target edits");
+        assert!(surfaces(&app) != surfaces(&setup(case)), "{case}: the stroke changed something");
+    }
+}
+
+/// A smart object's targeted filter mask: the workspaces open on the smart object, and Liquify's
+/// OK adds a smart filter, as the filter mask doesn't take it.
+#[test]
+fn workspaces_open_on_a_smart_object_with_its_filter_mask_targeted() {
+    let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 64, "height": 48})).unwrap();
+    app.run("layer.new.layer", json!({})).unwrap();
+    app.run("edit.fill", json!({"contents": "color", "color": "#ff0000"})).unwrap();
+    app.run("layer.smartObjects.convertToSmartObject", json!({})).unwrap();
+    app.run("filter.blur.gaussianBlur", json!({"radius": 2})).unwrap();
+    let layer = app.session.active().unwrap().active_layer.unwrap();
+    app.ui.filter_mask_target = Some(layer.0);
+    app.sync_views();
+    assert!(app.filter_mask_targeted());
+    let ctx = egui::Context::default();
+    crate::wide_angle_ui::open(&mut app, &ctx).unwrap();
+    crate::gallery_ui::open(&mut app).unwrap();
+    open(&mut app, &ctx).unwrap();
+    let d = app.distort.liquify.as_mut().unwrap();
+    d.strokes.push(LiquifyStroke { points: vec![vec![20.0, 24.0, 1.0], vec![36.0, 24.0, 1.0]], ..LiquifyStroke::new(LiquifyTool::ForwardWarp, 30.0) });
+    commit(&mut app).unwrap();
+    let st = app.session.active().unwrap();
+    let Some(photocraft_doc::LayerContent::Smart(sm)) = st.doc.layer(layer).map(|l| &l.content) else { panic!("not a smart object") };
+    assert_eq!(sm.smart_filters.iter().map(|f| f.command.as_str()).collect::<Vec<_>>(), ["filter.blur.gaussianBlur", photocraft_engine::distort_cmds::LIQUIFY]);
+}

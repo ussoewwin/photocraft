@@ -71,15 +71,43 @@ pub(crate) fn active_pixels(app: &PhotocraftApp) -> Result<(LayerId, Surface, bo
     }
 }
 
+/// The colour set full-window filters capture, or Null when none is targeted: the command then
+/// routes a targeted mask, filter mask, alpha channel or Quick Mask itself, as without colour sets.
+pub(crate) fn colour_set_target(app: &PhotocraftApp) -> Value {
+    let target = crate::canvas::paint_target(app);
+    if target.get("colors").is_some() { target } else { Value::Null }
+}
+
+/// `params` with the captured `target`, if any (see [`colour_set_target`]).
+pub(crate) fn with_filter_target(mut params: Value, target: &Value) -> Value {
+    if !target.is_null()
+        && let Some(o) = params.as_object_mut()
+    {
+        o.insert("target".into(), target.clone());
+    }
+    params
+}
+
 /// Full-window filters capture their layer target; scalar planes use ordinary filter dialogs.
+/// Without a colour set they open on the layer's pixels or smart object, as before colour sets.
 pub(crate) fn active_filter_target(app: &PhotocraftApp) -> Result<(LayerId, Surface, Value), String> {
+    let target = colour_set_target(app);
+    if target.is_null() {
+        // Colour rows left selected on a smart object: the engine refuses the command, so refuse
+        // before any work is done in the workspace.
+        if let Some(st) = app.session.active()
+            && matches!(st.channel_view.target, photocraft_engine::channel_cmds::ChannelTarget::Color(_))
+            && photocraft_engine::mask_view_cmds::current(st).is_none()
+            && st.active_layer.and_then(|id| st.doc.layer(id)).is_some_and(|l| matches!(l.content, LayerContent::Smart(_)))
+        {
+            return Err("Rasterize the layer before editing its colour channels".into());
+        }
+        let (layer, surface, _) = active_pixels(app)?;
+        return Ok((layer, surface, Value::Null));
+    }
     let st = app.session.active().ok_or("no document")?;
     let layer = st.active_layer.ok_or("no active layer")?;
-    let target = crate::canvas::paint_target(app);
     let params = serde_json::json!({"target":target});
-    if target.as_str() != Some("pixels") && target.get("colors").is_none() {
-        return Err("This filter workspace requires layer pixels or native colour channels".into());
-    }
     if photocraft_engine::color_channels::explicit(&params, photocraft_engine::channel_cmds::color_count(&st.doc)).map_err(|e| e.to_string())?.is_some()
         && !matches!(st.doc.layer(layer).map(|l| &l.content), Some(LayerContent::Raster(_)))
     {

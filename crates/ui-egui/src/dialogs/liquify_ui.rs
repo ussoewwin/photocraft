@@ -606,7 +606,7 @@ fn open_on(
     let canvas = st.doc.bounds();
     let name = st.doc.layer(layer).map(|l| l.name.clone()).unwrap_or_default();
     let proxy = ProxyImage::new(&surf, canvas, PROXY_SIDE);
-    let target = if smart_filter.is_some() { json!("pixels") } else { crate::canvas::paint_target(app) };
+    let target = if smart_filter.is_some() { json!("pixels") } else { crate::distort_ui::colour_set_target(app) };
     let colors = photocraft_engine::color_channels::explicit(&json!({"target":target}), surf.format().mode.color_channels()).map_err(|e| e.to_string())?;
     let native_proxy = colors.map(|_| crate::gallery_ui::reduce(&surf, canvas, proxy.scale as u32));
     let out = vec![[0u8; 4]; proxy.w * proxy.h];
@@ -689,7 +689,7 @@ pub fn commit(app: &mut PhotocraftApp) -> Result<(), String> {
     if d.strokes.is_empty() {
         return Ok(());
     }
-    let p = json!({"strokes": d.strokes, "meshSize": d.cell, "layer": d.layer.0,"target":d.target});
+    let p = crate::distort_ui::with_filter_target(json!({"strokes": d.strokes, "meshSize": d.cell, "layer": d.layer.0}), &d.target);
     app.run("filter.liquify", p).map(|_| ())
 }
 

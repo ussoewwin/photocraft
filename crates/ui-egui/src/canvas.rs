@@ -2688,6 +2688,99 @@ mod multi_channel_ui_tests {
             }
         }
     }
+    /// The colour rows stay selected when another layer becomes active. An adjustment layer has no
+    /// pixels, so the Brush paints its mask, as it does without colour rows selected.
+    #[test]
+    fn colour_rows_left_selected_still_paint_an_adjustment_layers_mask() {
+        for colors in [vec![0], vec![0, 2]] {
+            let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+            app.run("file.new", json!({"width":64,"height":64})).unwrap();
+            app.run("channel.target", json!({"colors":colors})).unwrap();
+            app.run("layer.newAdjustmentLayer.levels", json!({})).unwrap();
+            app.sync_views();
+            assert_eq!(paint_target(&app), json!("mask"), "{colors:?}");
+            app.run("tools.setColors", json!({"foreground":[0.0,0.0,0.0,1.0]})).unwrap();
+            app.run("tools.setBrush", json!({"brush":{"size":12,"hardness":1.0,"smoothing":{"amount":0.0}}})).unwrap();
+            app.ui.tool = Tool::Brush;
+            let st = app.session.active().unwrap();
+            let layer = st.active_layer.unwrap();
+            let steps = st.history.past_len();
+            tool_event(&mut app, ToolEvent::Down { x: 12.0, y: 32.0, pressure: 1.0 }, egui::Modifiers::NONE);
+            tool_event(&mut app, ToolEvent::Move { x: 32.0, y: 32.0, pressure: 1.0 }, egui::Modifiers::NONE);
+            tool_event(&mut app, ToolEvent::Up { x: 32.0, y: 32.0 }, egui::Modifiers::NONE);
+            let st = app.session.active().unwrap();
+            assert_eq!(st.history.past_len(), steps + 1, "{colors:?}: one stroke");
+            assert!(st.doc.layer(layer).unwrap().mask.as_ref().unwrap().surface.sample_channel(28, 32, 0) < 0.1, "{colors:?}: the mask was painted");
+        }
+    }
+
+    /// Targeting a layer mask with colour rows selected (its thumbnail, or adding the mask) moves
+    /// the Channels panel onto the mask, as in Photoshop: tools, dialogs and menu commands then
+    /// all edit the mask. Several rows still stop the Move tool on a layer that needs
+    /// rasterizing, which paints only after the prompt.
+    #[test]
+    fn targeting_a_mask_over_colour_rows_edits_the_mask_everywhere() {
+        let ctx = egui::Context::default();
+        let set = |app: &mut PhotocraftApp, p: serde_json::Value| {
+            let (req, _) = crate::control::ControlRequest::new("ui.set", p);
+            assert!(matches!(crate::control::handle(app, &ctx, &req), crate::control::Outcome::Done(v) if v["ok"] != false));
+        };
+        for colors in [vec![0], vec![0, 2]] {
+            for add in [false, true] {
+                let mut app = self::app();
+                if !add {
+                    app.run("layer.layerMask.revealAll", json!({})).unwrap();
+                    set(&mut app, json!({"maskTarget": false}));
+                }
+                app.run("channel.target", json!({"colors":colors})).unwrap();
+                app.sync_views();
+                assert!(paint_target(&app).get("colors").is_some(), "{colors:?}: the rows are the target first");
+                let journal = app.session.journal.len();
+                if add {
+                    app.run("layer.layerMask.revealAll", json!({})).unwrap();
+                } else {
+                    set(&mut app, json!({"maskTarget": true}));
+                }
+                app.sync_views();
+                assert_eq!(app.session.journal.len(), journal + usize::from(add), "{colors:?} add={add}: no extra recorded step");
+                assert_eq!(paint_target(&app), json!("mask"), "{colors:?} add={add}");
+                assert!(app.layer_mask_targeted(), "{colors:?} add={add}");
+                assert_eq!(app.with_mask_target("filter.blur.gaussianBlur", json!({}))["target"], "mask");
+                assert!(crate::distort_ui::colour_set_target(&app).is_null());
+                assert!(!multiple_color_target(&app));
+                // Clicking a colour row again takes the rows back.
+                app.run("channel.target", json!({"colors":colors})).unwrap();
+                app.sync_views();
+                assert!(paint_target(&app).get("colors").is_some(), "{colors:?} add={add}: the rows again");
+            }
+        }
+        // A mask added to another layer, or a fill layer's mask, leaves the rows targeted.
+        let mut app = self::app();
+        let active = app.session.active().unwrap().active_layer.unwrap();
+        app.run("layer.new.layer", json!({})).unwrap();
+        let other = app.session.active().unwrap().active_layer.unwrap();
+        app.run("layer.select", json!({"layer": active.0})).unwrap();
+        app.run("layer.layerMask.revealAll", json!({})).unwrap();
+        app.run("channel.target", json!({"colors":[0,2]})).unwrap();
+        app.run("layer.layerMask.revealAll", json!({"layer": other.0})).unwrap();
+        app.sync_views();
+        assert_eq!(paint_target(&app), json!({"colors":[0,2]}), "a mask on another layer");
+        app.run("layer.newFillLayer.solidColor", json!({})).unwrap();
+        app.run("channel.target", json!({"colors":[0,2]})).unwrap();
+        set(&mut app, json!({"maskTarget": true}));
+        app.sync_views();
+        assert!(matches!(app.session.active().unwrap().channel_view.target, photocraft_engine::channel_cmds::ChannelTarget::Color(_)), "a fill layer");
+        let mut app = self::app();
+        app.run("layer.smartObjects.convertToSmartObject", json!({})).unwrap();
+        app.run("channel.target", json!({"colors":[0,2]})).unwrap();
+        app.sync_views();
+        assert_eq!(paint_target(&app), json!("pixels"));
+        assert!(crate::rasterize_prompt::needed(&app).is_some());
+        assert!(multiple_color_target(&app));
+        let refused = crate::liquify_ui::open(&mut app, &ctx).unwrap_err();
+        assert!(refused.contains("Rasterize"), "{refused}");
+    }
+
     #[test]
     fn subset_does_not_block_guides_or_vector_path_transforms() {
         let mut app = app();

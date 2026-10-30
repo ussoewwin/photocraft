@@ -118,7 +118,9 @@ impl GalleryDialog {
 
     /// The command params for the current stack.
     pub fn params(&self) -> Value {
-        json!({"effects": self.effects.iter().map(EffectLayer::to_json).collect::<Vec<_>>(), "foreground": self.foreground, "background": self.background, "target":self.target})
+        let p =
+            json!({"effects": self.effects.iter().map(EffectLayer::to_json).collect::<Vec<_>>(), "foreground": self.foreground, "background": self.background});
+        crate::distort_ui::with_filter_target(p, &self.target)
     }
 
     /// The progress (`0.0..=1.0`) of a preview still rendering.
@@ -365,7 +367,7 @@ fn open_on(
     let sel = effects.len() - 1;
     let open_cats = std::array::from_fn(|i| effects[sel].filter.category() == GALLERY_CATEGORIES[i]);
     let history = EditHistory::new(&effects);
-    let target = if smart_filter.is_some() { json!("pixels") } else { crate::canvas::paint_target(app) };
+    let target = if smart_filter.is_some() { json!("pixels") } else { crate::distort_ui::colour_set_target(app) };
     app.distort.gallery = Some(GalleryDialog {
         document: st.doc.id,
         layer,
@@ -635,7 +637,8 @@ fn update_thumbs(d: &mut GalleryDialog, ctx: &egui::Context, budget: usize) {
             ctx.request_repaint();
             return;
         }
-        let p = json!({"effects": [{"filter": f.key()}], "foreground": d.foreground, "background": d.background,"target":d.target});
+        let p =
+            crate::distort_ui::with_filter_target(json!({"effects": [{"filter": f.key()}], "foreground": d.foreground, "background": d.background}), &d.target);
         let out = render(&d.thumb_src, &p);
         let b = d.thumb_src.content_bounds();
         let img = image(&out, b.x1.max(1) as usize, b.y1.max(1) as usize);

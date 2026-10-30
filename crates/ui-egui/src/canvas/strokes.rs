@@ -705,7 +705,11 @@ pub fn paint_target(app: &PhotocraftApp) -> serde_json::Value {
             if let Some(view) = photocraft_engine::mask_view_cmds::current(st) {
                 return json!(if view.filter { "filterMask" } else { "mask" });
             }
-            if let Some(colors) = photocraft_engine::color_channels::selected(&app.session) {
+            // A colour set edits a raster layer's own pixels. The rows stay selected across layer
+            // switches, so an adjustment layer's mask and a layer that needs rasterizing first
+            // keep the layer's own target below.
+            let raster = st.active_layer.and_then(|id| st.doc.layer(id)).is_some_and(|l| matches!(l.content, photocraft_doc::LayerContent::Raster(_)));
+            if raster && let Some(colors) = photocraft_engine::color_channels::selected(&app.session) {
                 return colors.params();
             }
         }
@@ -723,6 +727,10 @@ pub fn paint_target(app: &PhotocraftApp) -> serde_json::Value {
 }
 
 /// Colour rows can remain selected behind a viewed mask; restrictions follow what is edited.
+/// Several rows stop Move and transforms on any layer, which the engine refuses there too.
 pub(crate) fn multiple_color_target(app: &PhotocraftApp) -> bool {
-    paint_target(app).get("colors").and_then(serde_json::Value::as_array).is_some_and(|colors| colors.len() > 1)
+    let Some(st) = app.session.active() else { return false };
+    matches!(st.channel_view.target, photocraft_engine::channel_cmds::ChannelTarget::Color(_))
+        && photocraft_engine::mask_view_cmds::current(st).is_none()
+        && photocraft_engine::color_channels::selected(&app.session).is_some_and(|colors| colors.len() > 1)
 }
