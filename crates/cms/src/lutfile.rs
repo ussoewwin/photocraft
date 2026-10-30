@@ -646,18 +646,18 @@ mod tests {
         assert!(parse_3dl(&format!("0 114 455 1023\n{body}")).is_ok());
     }
 
-    /// #9170 review (bommerts): the standard `3DMESH` / `Mesh 4 12` preamble still reads; only
+    /// #9170 review (bommerts): the standard `3DMESH` / `Title lut 12` preamble still reads; only
     /// the rows after it are parsed strictly.
     #[test]
     fn three_dl_mesh_preamble_is_accepted() {
         let grey = |l: &LutFile| (sample(l, [128.0 / 255.0; 3])[0] * 255.0).round();
         let plain = identity_3dl(&[0, 114, 455, 1023], 4);
-        let headed = parse_3dl(&format!("3DMESH\nMesh 4 12\n{plain}")).unwrap();
+        let headed = parse_3dl(&format!("3DMESH\nTitle lut 12\n{plain}")).unwrap();
         assert_eq!(headed, parse_3dl(&plain).unwrap(), "the preamble changes nothing");
         assert_eq!(grey(&headed), 71.0, "the bent shaper still applies");
         let even = identity_3dl(&[0, 341, 682, 1023], 4);
-        assert_eq!(grey(&parse_3dl(&format!("3dmesh\nMesh 4 12\n{even}")).unwrap()), 128.0);
-        assert!(parse_3dl(&format!("3DMESH\nMesh 4 12\n0 341 junk 682 1023\n{}", even.split_once('\n').unwrap().1)).is_err(), "still strict after it");
+        assert_eq!(grey(&parse_3dl(&format!("3dmesh\nTitle lut 12\n{even}")).unwrap()), 128.0);
+        assert!(parse_3dl(&format!("3DMESH\nTitle lut 12\n0 341 junk 682 1023\n{}", even.split_once('\n').unwrap().1)).is_err(), "still strict after it");
     }
 
     /// #9170 review: a shaper that isn't finite is refused, not dropped, so a Color Lookup never
@@ -693,7 +693,7 @@ mod tests {
         }
         let (first, rest) = body.split_once('\n').unwrap();
         assert!(parse_3dl(&format!("0 114 455 1023\n{first}\n1x 0 0\n{rest}")).is_err(), "a table row too");
-        assert!(parse_3dl(&format!("3DMESH\nMesh 4 12\n0 114 455 1023\n{body}")).is_ok(), "headers still skip");
+        assert!(parse_3dl(&format!("3DMESH\nTitle lut 12\n0 114 455 1023\n{body}")).is_ok(), "headers still skip");
     }
 
     /// #9170 review: a bent shaper whose knots can't all be kept within MAX_SIZE is refused rather
