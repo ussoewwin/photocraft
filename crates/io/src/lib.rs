@@ -573,6 +573,8 @@ pub(crate) fn with_span<R>(ctl: &photocraft_raster::Interrupt, lo: f32, hi: f32,
 const PCRAFT_THUMBNAIL_DONE: f32 = 0.15;
 const PCRAFT_PREVIEWS_DONE: f32 = 0.4;
 const PCRAFT_FULL_COMPOSITE_DONE: f32 = 0.6;
+/// Bounds the optional full-size RGBA8 composite to 256 MiB before PNG and ZIP encoding.
+const PCRAFT_FULL_COMPOSITE_PIXELS: u64 = 1 << 26;
 /// The share of a PSD/PSB export spent converting the document (layers, then the composite)
 /// before its bytes are assembled: about 2.7 s of 3.0 s for a 24 MP, 5-layer RGB/8 document.
 const PSD_MODEL_DONE: f32 = 0.9;
@@ -660,8 +662,7 @@ fn export_stages(doc: &Document, name_or_ext: &str, opts: &ExportOptions, ctl: &
 
 /// The flattened document at its canvas size, in 8-bit RGBA like a `.pcraft` file's two previews,
 /// for the bundle's `composite/full.png`. `None` for a canvas past
-/// [`photocraft_compose::MAX_RENDER_PIXELS`], or when its pixels cannot be allocated (a 32-bit
-/// target holds less than 2 GiB in one buffer).
+/// 2^26 pixels, or when its pixels cannot be allocated.
 pub fn pcraft_full_composite(doc: &Document) -> Option<photocraft_raster::Rgba8Image> {
     pcraft_full_composite_with(doc, &photocraft_raster::Interrupt::NONE).ok().flatten()
 }
@@ -683,7 +684,7 @@ pub fn pcraft_full_composite_icc(doc: &Document) -> Vec<u8> {
 /// cancelled render fails with [`IoError::Cancelled`].
 fn pcraft_full_composite_with(doc: &Document, ctl: &photocraft_raster::Interrupt) -> Result<Option<photocraft_raster::Rgba8Image>, IoError> {
     let canvas = doc.bounds();
-    if canvas.is_empty() || u64::from(canvas.width()) * u64::from(canvas.height()) > photocraft_compose::MAX_RENDER_PIXELS {
+    if canvas.is_empty() || u64::from(canvas.width()) * u64::from(canvas.height()) > PCRAFT_FULL_COMPOSITE_PIXELS {
         return Ok(None);
     }
     let Ok(len) = usize::try_from(u64::from(canvas.width()) * u64::from(canvas.height()) * 4) else { return Ok(None) };

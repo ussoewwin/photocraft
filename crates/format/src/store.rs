@@ -69,7 +69,7 @@ fn png(img: &Rgba8Image) -> Result<Vec<u8>> {
 /// [`png`] with `icc` embedded.
 fn png_tagged(img: &Rgba8Image, icc: Option<&[u8]>) -> Result<Vec<u8>> {
     let mut pixels = Vec::new();
-    pixels.try_reserve_exact(img.pixels.len()).map_err(|_| FormatError::LimitExceeded("not enough memory for preview".into()))?;
+    pixels.try_reserve_exact(img.pixels.len()).map_err(|_| FormatError::LimitExceeded("not enough memory for PNG pixels".into()))?;
     pixels.extend_from_slice(&img.pixels);
     let image = photocraft_codecs::Image::from_u8(img.width, img.height, photocraft_codecs::ChannelLayout::Rgba, pixels)
         .map_err(|e| FormatError::Unsupported(format!("preview: {e}")))?
@@ -1033,11 +1033,11 @@ impl PcraftWriter {
             + previews.iter().map(|(name, data)| stored(name, data.len())).sum::<u64>()
             + entries.iter().map(|(path, _, data)| stored(path, data.len())).sum::<u64>();
         let mut manifest = p.manifest;
+        let mut model = p.model;
         if (total > limit.0 || 1 + previews.len() + entries.len() > limit.1)
             && let Some(at) = previews.iter().position(|(name, _)| *name == FULL_COMPOSITE)
         {
             previews.remove(at);
-            let mut model = p.model;
             model.full_composite = None;
             manifest = manifest_json(&model)?;
             stats.manifest_bytes = manifest.len();
@@ -1047,7 +1047,20 @@ impl PcraftWriter {
         let sizes = std::iter::once((MANIFEST, manifest.len()))
             .chain(previews.iter().map(|(name, data)| (*name, data.len())))
             .chain(entries.iter().map(|(path, _, data)| (path.as_str(), data.len())));
-        let mut z = ZipWriter::with_entries(sizes)?;
+        let mut z = match ZipWriter::with_entries(sizes) {
+            Ok(z) => z,
+            Err(FormatError::LimitExceeded(_)) if previews.iter().any(|(name, _)| *name == FULL_COMPOSITE) => {
+                previews.retain(|(name, _)| *name != FULL_COMPOSITE);
+                model.full_composite = None;
+                manifest = manifest_json(&model)?;
+                stats.manifest_bytes = manifest.len();
+                let sizes = std::iter::once((MANIFEST, manifest.len()))
+                    .chain(previews.iter().map(|(name, data)| (*name, data.len())))
+                    .chain(entries.iter().map(|(path, _, data)| (path.as_str(), data.len())));
+                ZipWriter::with_entries(sizes)?
+            }
+            Err(e) => return Err(e),
+        };
         z.add(MANIFEST, &manifest)?;
         for (name, data) in &previews {
             z.add(name, data)?;

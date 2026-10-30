@@ -129,3 +129,14 @@ fn a_canvas_past_the_render_limit_is_saved_without_it() {
     assert_eq!(photocraft_format::read_manifest(&bytes).expect("manifest").full_composite, None);
     assert!(ZipReader::new(&bytes).expect("zip").find("composite/full.png").is_none());
 }
+
+#[test]
+fn a_sparse_canvas_past_the_composite_memory_budget_is_saved_without_it() {
+    // The layer data stays tiny; an 8193 x 8192 RGBA8 composite exceeds 256 MiB.
+    let mut d = doc(64, 64, SampleType::U8);
+    d.size = Size::new(8193, 8192);
+    assert!(photocraft_io::pcraft_full_composite(&d).is_none());
+    let bytes = export(&d, "a.pcraft", &on()).expect("export").bytes;
+    assert_eq!(photocraft_format::read_manifest(&bytes).expect("manifest").full_composite, None);
+    assert!(ZipReader::new(&bytes).expect("zip").find("composite/full.png").is_none());
+}
