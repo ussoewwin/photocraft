@@ -86,8 +86,9 @@ pub fn puppet_params(cmd: &str, p: &Value) -> Result<PuppetWarp> {
     Ok(PuppetWarp { pins, mode, density, expansion })
 }
 
-/// The most vertices a stored Puppet Warp mesh may have (Photoshop's meshes have hundreds).
-const MAX_STORED_VERTS: usize = 1 << 20;
+/// The most vertices a stored Puppet Warp mesh may have (Photoshop's meshes have hundreds); the
+/// PSD importer reads no more.
+const MAX_STORED_VERTS: usize = 1 << 16;
 
 /// A Puppet Warp's stored mesh, as a Photoshop file keeps it (`mesh`: `{"pins", "verts",
 /// "deformed", "tris"}`, document pixels): the mesh solved for `pins`, drawn as it is instead of

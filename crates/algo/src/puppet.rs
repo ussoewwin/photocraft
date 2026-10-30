@@ -1117,10 +1117,16 @@ pub fn puppet_warp(src: &Surface, bounds: Rect, w: &PuppetWarp, interp: Interp) 
     puppet_warp_with_mask(src, bounds, w, interp, None).map(|(out, _)| out)
 }
 
+/// How many times over a stored mesh's triangles may cover its deformed box, counting each
+/// triangle's bounding box: a real mesh tiles the box about twice (a fold adds a layer), a
+/// crafted one stacks large triangles to multiply the drawing work.
+const MAX_MESH_COVERAGE: f64 = 16.0;
+
 /// Draws `src` (content inside `bounds`) through a mesh solved elsewhere, as a Photoshop file
 /// stores its Puppet Warp: `mesh.verts` move to `deformed`, the triangles drawn in their stored
 /// order. `None` for a malformed mesh (sizes that don't match, an index out of range, a vertex
-/// that isn't finite) or one whose deformed box spans more than [`MAX_WARP_PIXELS`].
+/// that isn't finite), one whose deformed box spans more than [`MAX_WARP_PIXELS`] or whose
+/// triangles cover that box more than [`MAX_MESH_COVERAGE`] times.
 pub fn warp_with_mesh(src: &Surface, bounds: Rect, mesh: &PuppetMesh, deformed: &[[f64; 2]], interp: Interp) -> Option<Surface> {
     let n = mesh.verts.len();
     if mesh.tris.is_empty() || deformed.len() != n || mesh.tris.iter().flatten().any(|&i| i >= n) {
@@ -1135,7 +1141,20 @@ pub fn warp_with_mesh(src: &Surface, bounds: Rect, mesh: &PuppetMesh, deformed: 
     for p in deformed {
         (x0, y0, x1, y1) = (x0.min(p[0]), y0.min(p[1]), x1.max(p[0]), y1.max(p[1]));
     }
-    if (x1 - x0 + 1.0) * (y1 - y0 + 1.0) > MAX_WARP_PIXELS {
+    let area = (x1 - x0 + 1.0) * (y1 - y0 + 1.0);
+    if area > MAX_WARP_PIXELS {
+        return None;
+    }
+    let covered: f64 = mesh
+        .tris
+        .iter()
+        .map(|t| {
+            let (xs, ys) = (t.map(|i| deformed[i][0]), t.map(|i| deformed[i][1]));
+            let span = |v: [f64; 3]| v.iter().fold(f64::MIN, |m, &a| m.max(a)) - v.iter().fold(f64::MAX, |m, &a| m.min(a)) + 1.0;
+            span(xs) * span(ys)
+        })
+        .sum();
+    if covered > MAX_MESH_COVERAGE * area {
         return None;
     }
     let order: Vec<usize> = (0..mesh.tris.len()).collect();
@@ -1329,6 +1348,9 @@ mod tests {
         assert!(warp_with_mesh(&s, b, &mesh, &far, Interp::Bilinear).is_none());
         far[2] = [1.0e6, 1.0e6];
         assert!(warp_with_mesh(&s, b, &mesh, &far, Interp::Bilinear).is_none());
+        // The same two triangles stacked 40 times: far more drawing than the box needs.
+        let stacked = PuppetMesh { tris: mesh.tris.repeat(40), ..mesh.clone() };
+        assert!(warp_with_mesh(&s, b, &stacked, &deformed, Interp::Bilinear).is_none());
         let none = PuppetMesh { tris: Vec::new(), ..mesh };
         assert!(warp_with_mesh(&s, b, &none, &deformed, Interp::Bilinear).is_none());
     }
