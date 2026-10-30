@@ -1,6 +1,6 @@
 use super::filters::smart;
 use super::source::{
-    SourceImage, cache_get, cache_key, cache_put, convert_svg_source, source_bytes, source_image, source_surface, svg_source_image_in, vector_scale,
+    SourceImage, cache_get, cache_key, cache_put, convert_svg_source, source_bytes, source_image, source_surface_from_buffer, svg_source_image_in, vector_scale,
 };
 use super::{
     Affine, Arc, BlendMode, Document, EngineError, Homography, JobCtx, Layer, LayerContent, LayerId, PixelFormat, Rect, Result, SmartFilter, SmartObject,
@@ -59,7 +59,7 @@ pub fn stack_image(file_name: &str, bytes: &[u8], fmt: PixelFormat, mode: photoc
         photocraft_doc::StackMode::Variance => Stat::Variance,
     };
     let buf = photocraft_compose::Buffer { rect: bounds, px: photocraft_algo::stack::combine(&frames, stat) };
-    let img = SourceImage { surface: Arc::new(source_surface(&doc, &buf, fmt)?), bounds };
+    let img = SourceImage { surface: Arc::new(source_surface_from_buffer(&doc, &buf, fmt)?), bounds };
     cache_put(key, img.clone());
     Ok(img)
 }

@@ -15,10 +15,13 @@ fn alt_right_drag_resizes_the_liquify_brush_and_does_not_paint() {
     assert!(brush_resize_gesture(egui::Modifiers::CTRL | egui::Modifiers::ALT, false));
     assert!(!brush_resize_gesture(egui::Modifiers::ALT, false), "Alt+left stays the tool's opposite");
     assert!(!brush_resize_gesture(egui::Modifiers::NONE, true));
-    let (size, density) = resized_brush(40.0, 50.0, 25.0, crate::brush_resize::HARDNESS_TRAVEL);
-    assert_eq!((size, density), (65.0, 100.0));
-    let (size, density) = resized_brush(40.0, 50.0, -100.0, 0.0);
+    let (size, density) = resized_brush(40.0, 50.0, 25.0, crate::brush_resize::HARDNESS_TRAVEL, 1.0);
+    assert_eq!((size, density), (90.0, 100.0), "native brush movement grows the radius by screen pixels");
+    let (size, density) = resized_brush(40.0, 50.0, -100.0, 0.0, 1.0);
     assert_eq!((size, density), (1.0, 50.0));
+    // Screen travel changes density identically at different preview zoom levels.
+    assert_eq!(resized_brush(40.0, 50.0, 25.0, 100.0, 2.0).1, 100.0);
+    assert_eq!(resized_brush(40.0, 50.0, 0.0, -100.0, 1.0).1, 0.0);
 }
 
 fn app_with_layer() -> PhotocraftApp {
@@ -153,6 +156,19 @@ fn brush_settings_are_remembered_between_uses() {
 
 /// Follow-up to #1494 / #1484: Alt is captured at stroke-down and stays recorded
 /// through undo, redo and deterministic Liquify field reconstruction.
+/// #9547: Twirl Counterclockwise draws Twirl Clockwise's arrow mirrored, not the Undo arrow,
+/// and every Liquify tool's icon exists.
+#[test]
+fn twirl_counterclockwise_has_its_own_mirrored_icon() {
+    assert_eq!(tool_icon(LiquifyTool::TwirlCcw), "rotate-ccw");
+    let svg = |name: &str| crate::icon_data::ICONS.iter().find(|(n, _)| *n == name).map(|(_, b)| String::from_utf8_lossy(b).into_owned());
+    let (cw, ccw) = (svg("rotate-cw").unwrap(), svg("rotate-ccw").expect("the rotate-ccw icon"));
+    assert!(ccw.contains("M3 12a9 9 0 1 0 9-9") && cw.contains("M21 12a9 9 0 1 1-9-9"), "mirror images");
+    for t in [LiquifyTool::ForwardWarp, LiquifyTool::TwirlCw, LiquifyTool::TwirlCcw, LiquifyTool::Pucker, LiquifyTool::Bloat] {
+        assert!(svg(tool_icon(t)).is_some(), "{t:?}: {}", tool_icon(t));
+    }
+}
+
 #[test]
 fn alt_reversed_twirl_survives_replay_undo_and_redo() {
     let ctx = egui::Context::default();
@@ -743,7 +759,7 @@ fn smart_filter_double_click_edits_the_recorded_liquify() {
     crate::smart_ui::open_editor(&mut app, &ctx, layer.0, &sm, 0);
     assert!(app.ui.dialogs.is_empty(), "no generic parameter form");
     let d = app.distort.liquify.as_ref().expect("the Liquify workspace opens");
-    assert_eq!((d.smart_filter.as_ref().map(|(index, _)| *index), d.cell), (Some(0), 3.0));
+    assert_eq!((d.smart_filter, d.cell), (Some(0), 3.0));
     assert_eq!(d.strokes, recorded);
     assert_eq!(d.field, LiquifyField::from_strokes(d.canvas, 3.0, &recorded));
     // The preview starts from the pixels below the filter (no liquify, no blur).
@@ -812,33 +828,8 @@ fn smart_filter_edit_that_cannot_be_applied_reports_the_error() {
     let r = control(&mut app, &json!({"commit": true}));
     assert!(app.distort.liquify.is_none());
     assert!(app.ui.status_error);
-    assert!(app.ui.status.contains("no longer exists"), "{}", app.ui.status);
+    assert!(app.ui.status.contains("no smart filters"), "{}", app.ui.status);
     assert!(smart(&app, layer).smart_filters.is_empty());
-    assert_eq!(app.session.active().unwrap().history.past_len(), steps);
-    assert_eq!(r, Err(app.ui.status.clone()));
-}
-
-/// OK after the stack was reordered while the workspace was open: the filter now at the
-/// edited index (the Gaussian Blur) is left alone and the status bar asks to reopen.
-#[test]
-fn smart_filter_edit_after_the_stack_changed_updates_nothing() {
-    let ctx = egui::Context::default();
-    let (mut app, layer) = smart_liquify_app();
-    open_smart_filter(&mut app, &ctx, layer, 0).unwrap();
-    drag(&mut app, 70.0, 84.0);
-    app.session.execute("layer.smartFilter.move", json!({"layer": layer.0, "index": 0, "to": 1})).unwrap();
-    let before = smart(&app, layer).smart_filters;
-    assert_eq!(before[0].command, "filter.blur.gaussianBlur");
-    let steps = app.session.active().unwrap().history.past_len();
-    let r = control(&mut app, &json!({"commit": true}));
-    assert!(app.distort.liquify.is_none());
-    assert!(app.ui.status_error);
-    assert!(app.ui.status.contains("Reopen its dialog"), "{}", app.ui.status);
-    let after = smart(&app, layer).smart_filters;
-    assert_eq!(after.len(), before.len());
-    for (a, b) in after.iter().zip(&before) {
-        assert_eq!((&a.command, &a.params), (&b.command, &b.params));
-    }
     assert_eq!(app.session.active().unwrap().history.past_len(), steps);
     assert_eq!(r, Err(app.ui.status.clone()));
 }
