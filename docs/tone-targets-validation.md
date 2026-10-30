@@ -108,6 +108,20 @@ Validation on Linux with `PHOTOCRAFT_FULL_SWEEP=1` and CI's pinned craft-fonts i
 
 Current evidence is retained in `plan/merge-main-20261029/` (gitignored).
 
+## Main integration and review (2026-10-30)
+
+Current main integrated: `b1cfff9d3` (PhotoCraft 0.17.0; 879 incoming commits). Production code merged automatically. The sole conflict was adjacent control-protocol documentation: both the named grayscale Levels/Curves behavior and upstream's Brush Mode menu description are retained. Reviewed Action playback's new recorded-parameter resolution and Smart Object save path alongside our explicit-target dialog normalization; target precedence and private-field sanitization remain intact. No CI workflow differs from main, respecting the new shared-workflow policy.
+
+Validation on Linux with `PHOTOCRAFT_FULL_SWEEP=1` and CI's pinned craft-fonts input:
+
+- Both full engine/UI `cargo test` runs: **7,403 passed, 1 failed, 43 normally ignored**, including doctest builds. The sole failure is `options_font_family_preserves_peer_faces_and_batches_layer_flags`, unchanged from main: its UI harness allows 8 settling frames, but caret repainting needed 12 and 15 frames. All channel-target regressions passed in both runs.
+- The exact font test passed in isolation. The entire same UI unit-test binary then passed with `--test-threads=1`: **4,460 passed, 0 failed, 21 normally ignored**. All 7,404 non-ignored engine/UI tests therefore passed across these runs, but the parallel full-suite result is not clean. No source or test was changed or skipped to obtain these results. Both failure logs and the serial control are retained.
+- The ignored full-registry adversarial command test passed separately. Strict engine/UI all-target Clippy (`-D warnings`), formatting, layering and wasm passed. The changed-corpus check correctly skipped because no corpus-critical paths differ from integrated main.
+- Existing regressions remain registered. Fresh offscreen Levels/Curves captures were inspected for named alpha and Smart Filter mask controls, previews and layout. The final scoped integration review found no further actionable issues in the merged changes; the parallel font-test harness failure remains documented.
+- Historical benchmarks and broader workspace results above remain dated. No new benchmark, broader-workspace or Windows/macOS result is claimed for this documentation-conflict merge.
+
+Current evidence is retained in `plan/merge-main-20261030/` (gitignored).
+
 ## 24 MP release comparison
 
 Dense synthetic 6000 × 4000 RGB8 raster layer, raster mask, saved alpha channel and Quick Mask, each filled with 25% gray. The central selection is a 3000 × 2000 rectangle at 0.5 coverage. Proxy factor 4 (1500 × 1000). AMD Ryzen 7 9700X, 16 logical CPUs, Ubuntu 26.04.1, Rust 1.99.0, default optimized release profile (thin LTO).
