@@ -1,6 +1,9 @@
 use super::params::{color, f64p, layer_id, op_from, parse_path, path_json};
 use super::shape::{map_path, map_shape, transform_shape, with_shape};
-use super::*;
+use super::{
+    Affine, BlendMode, ClippingPath, Color, Document, EngineError, LayerContent, LayerId, NamedPath, Path, Rect, Result, SelectionMode, Session, Value, bad,
+    blend_from_str, json, sel, vector,
+};
 
 // ---------------------------------------------------------------------------
 // Document paths
@@ -76,26 +79,32 @@ pub(super) fn path_set(s: &mut Session, p: &Value) -> Result<Value> {
     let name = p.get("name").and_then(Value::as_str).map(str::to_string);
     let append = p.get("op").and_then(Value::as_str).map(|o| op_from(o).ok_or_else(|| bad(CMD, format!("unknown op `{o}`")))).transpose()?;
     s.edit(if is_work(name.as_deref()) { "Work Path" } else { "Save Path" }, |doc, _| {
-        let merge = |old: Option<&Path>, new: Path| match (old, append) {
-            (Some(o), Some(op)) => {
-                let mut o = o.clone();
-                o.subpaths.extend(new.subpaths.into_iter().map(|mut sp| {
-                    sp.op = op;
-                    sp
-                }));
-                o
-            }
-            _ => new,
+        let merge = |old: Option<&Path>, new: Path| -> Result<Path> {
+            let merged = match (old, append) {
+                (Some(o), Some(op)) => {
+                    let mut o = o.clone();
+                    o.subpaths.extend(new.subpaths.into_iter().map(|mut sp| {
+                        sp.op = op;
+                        sp
+                    }));
+                    o
+                }
+                _ => new,
+            };
+            // Appending small Pen components must not bypass the complete path's bounds and
+            // tessellation budget. Validate before changing the document or its history.
+            vector::flatten::validate_path(&merged).map_err(|e| bad(CMD, e))?;
+            Ok(merged)
         };
         if is_work(name.as_deref()) {
-            doc.work_path = Some(merge(doc.work_path.as_ref(), path));
+            doc.work_path = Some(merge(doc.work_path.as_ref(), path)?);
         } else {
             let n = name.clone().unwrap_or_default();
             match doc.paths.iter_mut().find(|q| q.name == n) {
                 Some(q) => {
-                    q.path = merge(Some(&q.path), path);
+                    q.path = merge(Some(&q.path), path)?;
                 }
-                None => doc.paths.push(NamedPath { name: n, path, psd_raw: None }),
+                None => doc.paths.push(NamedPath { name: n, path: merge(None, path)?, psd_raw: None }),
             }
         }
         Ok(())
