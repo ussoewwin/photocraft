@@ -155,6 +155,26 @@ fn tool_only_picker_sets_the_next_shapes_colour() {
     assert_eq!(app.session.active().unwrap().history.past_len(), history);
 }
 
+/// With no document open, the options bar's Color Picker still sets the next shape's colour.
+#[test]
+fn tool_only_picker_works_without_a_document() {
+    let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+    assert!(app.session.active().is_none());
+    for which in [Paint::Fill, Paint::Stroke] {
+        let dialog = open_paint(&mut app, which, None, true, [0.1, 0.2, 0.3, 1.0]).unwrap();
+        app.ui.dialog_mut(dialog).unwrap().fields.insert("color".into(), json!("#ff8800"));
+        crate::dialogs::confirm(&mut app, dialog).unwrap();
+    }
+    assert!(app.ui.tool_options.shape_fill);
+    assert_eq!(color_picker_ui::hex([app.session.tools.foreground[0], app.session.tools.foreground[1], app.session.tools.foreground[2]]), "#ff8800");
+    assert_eq!(color_picker_ui::hex([app.session.tools.background[0], app.session.tools.background[1], app.session.tools.background[2]]), "#ff8800");
+    // A picker for a shape layer still needs its document.
+    let mut f = Map::new();
+    f.insert("__params".into(), json!({"layer": 3, "document": 1, "which": "fill"}));
+    f.insert("color".into(), json!("#ff8800"));
+    assert_eq!(confirm(&mut app, &f).unwrap_err(), "no document open");
+}
+
 /// A locked selected shape refuses the options bar's Color Picker before anything changes: the
 /// next shape's colour stays as it was, as does the document.
 #[test]

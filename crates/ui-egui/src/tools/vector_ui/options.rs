@@ -176,6 +176,8 @@ pub fn shape_properties(app: &mut PhotocraftApp, ui: &mut egui::Ui, id: photocra
     };
     let t = Tokens::get(ui.ctx());
     let mut edit: Option<Value> = None;
+    // A swatch picked in a Fill/Stroke popover joins the Recently Used Colors once the edit took it.
+    let mut recent: Option<[f32; 3]> = None;
     let doc_id = app.session.active().map(|st| st.doc.id);
     let key = |k: &str| format!("shape-{doc_id:?}-{}-{k}", id.0);
     let gesture_key = ui.scope_id().with(key("paint-gesture"));
@@ -252,7 +254,7 @@ pub fn shape_properties(app: &mut PhotocraftApp, ui: &mut egui::Ui, id: photocra
                     let which = if is_stroke { crate::shape_fill_ui::Paint::Stroke } else { crate::shape_fill_ui::Paint::Fill };
                     crate::shape_fill_ui::open_paint(app, which, Some(id), false, fg);
                 }
-                PaintChange::Color(c) => crate::paint_picker::remember(app, [c[0], c[1], c[2]]),
+                PaintChange::Color(c) => recent = Some([c[0], c[1], c[2]]),
                 PaintChange::None | PaintChange::Gradient(_) => {}
             }
         }
@@ -335,9 +337,16 @@ pub fn shape_properties(app: &mut PhotocraftApp, ui: &mut egui::Ui, id: photocra
     }
     if let Some(mut p) = edit {
         p["layer"] = json!(id.0);
-        if let Err(e) = app.run("shape.edit", p) {
-            app.ui.status = e;
-            app.ui.status_error = true;
+        match app.run("shape.edit", p) {
+            Ok(_) => {
+                if let Some(rgb) = recent {
+                    crate::paint_picker::remember(app, rgb);
+                }
+            }
+            Err(e) => {
+                app.ui.status = e;
+                app.ui.status_error = true;
+            }
         }
         if !ui.input(|i| i.pointer.any_down()) {
             ui.data_mut(|d| {

@@ -942,3 +942,54 @@ fn arrow_down_at_zero_width_keeps_a_strokeless_shape_strokeless() {
         assert_eq!(shape(h.state()).stroke.as_ref().map(|s| s.width), Some(1.0), "Properties={properties}");
     }
 }
+
+/// A swatch the selected shape refuses (a job holds its document) doesn't join the Recently Used
+/// Colors, in the Properties panel or the options bar; once the shape takes it, it does.
+#[test]
+fn a_refused_popover_swatch_is_not_a_recently_used_colour() {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    for (properties, popover) in [(true, "Set shape fill type"), (false, "Fill color")] {
+        let mut app = app("rgb", 8);
+        app.run("shape.create", json!({"rect": [20,20,80,60], "fill": "#336699"})).unwrap();
+        let original = shape(&app).clone();
+        let gate = Arc::new(AtomicBool::new(false));
+        let open = gate.clone();
+        let started = app
+            .session
+            .start_job(
+                "test.hold",
+                json!({}),
+                "Hold",
+                true,
+                move |ctx| {
+                    while !open.load(Ordering::Relaxed) {
+                        ctx.check()?;
+                        std::thread::sleep(std::time::Duration::from_millis(1));
+                    }
+                    Ok(())
+                },
+                |_, ()| Ok(json!({})),
+            )
+            .unwrap();
+        let photocraft_engine::jobs::Started::Job(job) = started else { panic!("the job ran inline") };
+        let mut h = harness(app, properties);
+        h.get_by_label(popover).click();
+        h.run_steps(3);
+        click_swatch(&mut h, "RGB", "RGB Green");
+        assert_eq!(shape(h.state()).fill, original.fill, "properties={properties}: the shape refused it");
+        assert!(crate::paint_picker::recent_colors(&h.state().session).is_empty(), "properties={properties}: a refused colour isn't recent");
+        h.key_press(Key::Escape);
+        h.run_steps(2);
+        gate.store(true, Ordering::Relaxed);
+        h.state_mut().session.cancel_job(job);
+        h.state_mut().session.join_cancelled_jobs();
+        h.run_steps(2);
+        h.get_by_label(popover).click();
+        h.run_steps(3);
+        click_swatch(&mut h, "RGB", "RGB Green");
+        assert_eq!(shape(h.state()).fill, Some(solid_paint([0.0, 1.0, 0.0, 1.0])), "properties={properties}");
+        let recent: Vec<String> = crate::paint_picker::recent_colors(&h.state().session).into_iter().map(crate::color_picker_ui::hex).collect();
+        assert_eq!(recent, ["#00ff00"], "properties={properties}");
+    }
+}

@@ -127,13 +127,14 @@ fn picked(f: &Map<String, Value>) -> Option<Color> {
 }
 
 /// The target layer, unless the dialog has none or is stale (another document is active, or the
-/// layer is gone or no longer a shape). `Ok(None)`: only the next shape's colours.
-fn target(app: &PhotocraftApp, f: &Map<String, Value>, idx: usize) -> Result<Option<LayerId>, String> {
+/// layer is gone or no longer a shape). `Ok(None)`: only the next shape's colours, which need no
+/// document (`idx` is the active one's).
+fn target(app: &PhotocraftApp, f: &Map<String, Value>, idx: Option<usize>) -> Result<Option<LayerId>, String> {
     let params = f.get("__params").ok_or("missing shape fill target")?;
     let Some(layer) = params.get("layer").and_then(Value::as_u64).map(LayerId) else {
         return if params.get("tool").and_then(Value::as_bool) == Some(true) { Ok(None) } else { Err("missing shape layer".into()) };
     };
-    let st = app.session.documents().get(idx).ok_or("no document open")?;
+    let st = idx.and_then(|i| app.session.documents().get(i)).ok_or("no document open")?;
     if params.get("document").and_then(Value::as_u64) != Some(st.doc.id.0) {
         return Err("the target document is no longer active".into());
     }
@@ -148,8 +149,7 @@ fn target(app: &PhotocraftApp, f: &Map<String, Value>, idx: usize) -> Result<Opt
 /// OK: one `shape.edit` with the new paint, then the next shape's colour when the picker came from
 /// the options bar. A refused edit (a locked layer, a job running on the document) changes neither.
 pub(crate) fn confirm(app: &mut PhotocraftApp, f: &Map<String, Value>) -> Result<Value, String> {
-    let idx = app.session.active_index().ok_or("no document open")?;
-    let layer = target(app, f, idx)?;
+    let layer = target(app, f, app.session.active_index())?;
     let color = picked(f).ok_or("not a colour")?;
     let rgba = [color.c[0], color.c[1], color.c[2], color.alpha];
     let which = which(f);
@@ -214,7 +214,7 @@ pub(crate) fn display_doc(app: &mut PhotocraftApp, idx: usize) -> Option<(Arc<Do
     if solid && d.fields.get("color") == d.fields.get("__orig") {
         return None;
     }
-    let layer = target(app, &d.fields, idx).ok()??;
+    let layer = target(app, &d.fields, Some(idx)).ok()??;
     let color = picked(&d.fields)?;
     let which = which(&d.fields);
     let st = app.session.documents().get(idx)?;

@@ -793,6 +793,24 @@ fn widget_results() -> egui::Id {
     egui::Id::unique("color-picker-widget-results")
 }
 
+fn widget_events() -> egui::Id {
+    egui::Id::unique("color-picker-widget-events")
+}
+
+fn widget_open() -> egui::Id {
+    egui::Id::unique("color-picker-widget-open")
+}
+
+/// What a swatch's open Color Picker did since the last frame ([`take_widget_event`]).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum WidgetEvent {
+    /// The picker shows this colour now: preview it on the swatch.
+    Preview([f32; 3]),
+    /// The picker closed without a new colour (Cancel, Esc, the close box, OK unchanged): go back
+    /// to the colour the swatch had when it opened the picker.
+    Restore,
+}
+
 /// A colour swatch (`widgets::color_edit_button*`) was clicked: open the Color Picker titled
 /// `title` on `rgb` next frame ([`widget_tick`], which has the app). OK hands the colour back to the
 /// swatch through [`take_widget_color`]; Cancel leaves it alone.
@@ -813,12 +831,70 @@ pub fn take_widget_color(ctx: &egui::Context, widget: egui::Id) -> Option<[f32; 
     })
 }
 
-/// Each frame, before the panels: hand colours confirmed last frame to their swatches, and open
-/// the Color Picker a swatch asked for.
+/// What the Color Picker of swatch `widget` did since the last frame, once: the colour it shows
+/// now while it is open, or that it closed without a new colour.
+pub fn take_widget_event(ctx: &egui::Context, widget: egui::Id) -> Option<WidgetEvent> {
+    ctx.data_mut(|d| {
+        let events = d.get_temp_mut_or_default::<Vec<(u64, WidgetEvent)>>(widget_events());
+        let i = events.iter().position(|(w, _)| *w == widget.value())?;
+        Some(events.remove(i).1)
+    })
+}
+
+/// Whether swatch `widget`'s Color Picker is open (as of this frame's [`widget_tick`]): its
+/// colour changes are previews, and only the colour OK hands back is final.
+pub fn widget_picker_open(ctx: &egui::Context, widget: egui::Id) -> bool {
+    ctx.data(|d| d.get_temp::<Vec<u64>>(widget_open()).is_some_and(|open| open.contains(&widget.value())))
+}
+
+/// Each frame, before the panels: hand colours confirmed last frame to their swatches, preview
+/// the colour an open picker shows on its swatch (as Photoshop's dialogs do while you pick), tell
+/// a swatch whose picker closed without a new colour to restore its own, and open the Color
+/// Picker a swatch asked for.
 pub fn widget_tick(app: &mut PhotocraftApp, ctx: &egui::Context) {
-    if !app.widget_colors.is_empty() {
-        let done = std::mem::take(&mut app.widget_colors);
+    let done = std::mem::take(&mut app.widget_colors);
+    let mut events: Vec<(u64, WidgetEvent)> = Vec::new();
+    let mut open_now: Vec<u64> = Vec::new();
+    for d in app.ui.dialogs.iter_mut() {
+        if d.fields.get("__colorPicker").and_then(Value::as_str) != Some("widget") {
+            continue;
+        }
+        let Some(widget) = d.fields.get("__widget").and_then(Value::as_u64) else { continue };
+        open_now.push(widget);
+        let shown = d.fields.get("__widgetShown").or_else(|| d.fields.get("__orig")).cloned();
+        let Some(color) = d.fields.get("color").cloned() else { continue };
+        if Some(&color) != shown.as_ref()
+            && let Some(rgb) = color.as_str().and_then(parse_hex)
+        {
+            events.push((widget, WidgetEvent::Preview(rgb)));
+            d.fields.insert("__widgetShown".into(), color);
+        }
+    }
+    let was_open = ctx.data(|d| d.get_temp::<Vec<u64>>(widget_open())).unwrap_or_default();
+    for w in was_open {
+        if !open_now.contains(&w) && !done.iter().any(|(x, _)| *x == w) {
+            events.push((w, WidgetEvent::Restore));
+        }
+    }
+    let changed = !events.is_empty();
+    ctx.data_mut(|d| {
+        d.insert_temp(widget_open(), open_now);
+        if changed {
+            let all = d.get_temp_mut_or_default::<Vec<(u64, WidgetEvent)>>(widget_events());
+            // Only the newest event per swatch counts; a swatch that is gone never takes its own.
+            all.retain(|(w, _)| !events.iter().any(|(x, _)| x == w));
+            all.extend(events);
+            let excess = all.len().saturating_sub(16);
+            all.drain(..excess);
+        }
+    });
+    if changed {
+        ctx.request_repaint();
+    }
+    if !done.is_empty() {
         ctx.data_mut(|d| {
+            // A preview not yet taken is replaced by the final colour.
+            d.get_temp_mut_or_default::<Vec<(u64, WidgetEvent)>>(widget_events()).retain(|(w, _)| !done.iter().any(|(x, _)| x == w));
             let results = d.get_temp_mut_or_default::<Vec<(u64, [f32; 3])>>(widget_results());
             // A swatch that is gone never takes its colour: keep only the newest one per swatch.
             results.retain(|(w, _)| !done.iter().any(|(x, _)| x == w));

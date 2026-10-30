@@ -206,14 +206,16 @@ fn color32(c: [f32; 3]) -> Color32 {
 }
 
 /// A colour swatch that opens the Color Picker titled after `name` ("Color Picker (Filter
-/// Color)"); returns the edit, made when the picker's OK hands the colour back.
+/// Color)"); the colour previews while the picker is open and commits once when it closes (OK, or
+/// Cancel back to the opening colour after a preview). Cancel without a preview is no edit.
 fn color_button(ui: &mut egui::Ui, c: &mut [f32; 3], name: &str) -> Edit {
     let mut srgb = [c[0], c[1], c[2]].map(|x| (x.clamp(0.0, 1.0) * 255.0).round() as u8);
     let r = crate::widgets::color_edit_button_srgb(ui, &mut srgb, &crate::color_picker_ui::title_for(name));
     if r.changed() {
         *c = srgb.map(|x| f32::from(x) / 255.0);
     }
-    Edit::discrete(r.changed())
+    let previewing = crate::color_picker_ui::widget_picker_open(ui.ctx(), r.id);
+    Edit { changed: r.changed(), commit: r.changed() && !previewing, ..Default::default() }
 }
 
 fn label(ui: &mut egui::Ui, text: &str) {

@@ -2,6 +2,8 @@
 use super::*;
 use egui_kittest::{Harness, kittest::Queryable};
 
+/// The app, the swatch's value, and whether the swatch committed this frame (changed with its
+/// picker closed: a host commits then).
 type State<T> = (crate::PhotocraftApp, T, bool);
 
 /// Draw `swatch` with the dialogs, the frame loop's [`crate::color_picker_ui::widget_tick`] first.
@@ -10,7 +12,8 @@ fn harness<T: 'static>(value: T, swatch: fn(&mut Ui, &mut T) -> Response) -> Har
     let mut h = Harness::builder().with_size(vec2(900.0, 600.0)).build_ui_state(
         move |ui, state: &mut State<T>| {
             crate::color_picker_ui::widget_tick(&mut state.0, ui.ctx());
-            state.2 = swatch(ui, &mut state.1).changed();
+            let r = swatch(ui, &mut state.1);
+            state.2 = r.changed() && !crate::color_picker_ui::widget_picker_open(ui.ctx(), r.id);
             crate::dialogs::show(&mut state.0, ui.ctx());
         },
         (app, value, false),
@@ -20,7 +23,8 @@ fn harness<T: 'static>(value: T, swatch: fn(&mut Ui, &mut T) -> Response) -> Har
     h
 }
 
-fn pick<T>(h: &mut Harness<'static, State<T>>, hex: &str, ok: bool) {
+/// Open the swatch's picker and show `hex` in it.
+fn show<T>(h: &mut Harness<'static, State<T>>, hex: &str) {
     h.get_by_label("Color Picker (Glow Color)").click();
     h.run_steps(3);
     let d = h.state().0.ui.dialogs.last().expect("the swatch opens the Color Picker dialog");
@@ -28,6 +32,10 @@ fn pick<T>(h: &mut Harness<'static, State<T>>, hex: &str, ok: bool) {
     let id = d.id;
     h.state_mut().0.ui.dialog_mut(id).unwrap().fields.insert("color".into(), serde_json::json!(hex));
     h.run_steps(1);
+}
+
+fn pick<T>(h: &mut Harness<'static, State<T>>, hex: &str, ok: bool) {
+    show(h, hex);
     h.get_by_label(if ok { "OK" } else { "Cancel" }).click();
     h.run_steps(1);
 }
@@ -49,7 +57,7 @@ fn swatch_opens_the_full_picker_and_ok_sets_the_colour_once_keeping_alpha() {
             h.step();
             changed += usize::from(h.state().2);
         }
-        assert_eq!(changed, 1, "the pick commits once");
+        assert_eq!(changed, 1, "the pick commits once, when the picker closes");
         assert_eq!(h.state().1, expected);
         assert_eq!(crate::paint_picker::recent_colors(&h.state().0.session).first().copied().map(crate::color_picker_ui::hex).as_deref(), Some("#ff0080"));
     }
@@ -77,4 +85,38 @@ fn eight_bit_swatch_is_opaque() {
     pick(&mut h, "#abcdef", true);
     h.run_steps(3);
     assert_eq!(h.state().1, [0xab, 0xcd, 0xef]);
+}
+
+#[test]
+fn swatch_follows_the_open_picker_and_cancel_restores_the_exact_value() {
+    let original = [0.123456, 0.234567, 0.345678];
+    let mut h = harness(original, |ui, c| color_edit_button_rgb(ui, c, "Color Picker (Glow Color)"));
+    show(&mut h, "#8040ff");
+    h.run_steps(2);
+    assert_eq!(h.state().0.ui.dialogs.len(), 1, "the picker is still open");
+    for (actual, expected) in h.state().1.iter().zip([0.21586053, 0.051269468, 1.0]) {
+        assert!((actual - expected).abs() < 0.00001, "the swatch previews the picker's colour: {actual} vs {expected}");
+    }
+    h.get_by_label("Cancel").click();
+    let mut committed = 0;
+    for _ in 0..4 {
+        h.step();
+        committed += usize::from(h.state().2);
+    }
+    assert_eq!(h.state().1, original, "Cancel restores the float exactly");
+    assert_eq!(committed, 1, "closing the picker is one commit frame");
+    // OK on the opening colour after a preview also goes back to the exact value.
+    show(&mut h, "#8040ff");
+    h.state_mut()
+        .0
+        .ui
+        .dialogs
+        .last_mut()
+        .unwrap()
+        .fields
+        .insert("color".into(), serde_json::json!(crate::color_picker_ui::hex(original.map(egui::ecolor::gamma_from_linear))));
+    h.run_steps(1);
+    h.get_by_label("OK").click();
+    h.run_steps(4);
+    assert_eq!(h.state().1, original, "OK unchanged keeps the float exactly");
 }

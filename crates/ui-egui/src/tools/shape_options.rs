@@ -140,6 +140,8 @@ pub(crate) fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui, tool: Tool
         }
         _ => {}
     }
+    // A swatch picked in a Fill/Stroke popover joins the Recently Used Colors once it was applied.
+    let mut recent: Option<[f32; 3]> = None;
     for (is_stroke, change) in [(false, fill_color), (true, stroke_color)] {
         let Some(change) = change else { continue };
         match change {
@@ -148,12 +150,18 @@ pub(crate) fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui, tool: Tool
                 crate::shape_fill_ui::open_paint(app, which, target.as_ref().map(|s| s.layer), true, fallback);
                 continue;
             }
-            PaintChange::Color(c) => crate::paint_picker::remember(app, [c[0], c[1], c[2]]),
-            PaintChange::Gradient(_) | PaintChange::None => {}
+            PaintChange::Color(_) | PaintChange::Gradient(_) | PaintChange::None => {}
         }
-        if let Err(e) = set_tool_paint(app, is_stroke, change.clone()) {
-            app.ui.status = e;
-            app.ui.status_error = true;
+        match set_tool_paint(app, is_stroke, change.clone()) {
+            Ok(_) => {
+                if let PaintChange::Color(c) = &change {
+                    recent = Some([c[0], c[1], c[2]]);
+                }
+            }
+            Err(e) => {
+                app.ui.status = e;
+                app.ui.status_error = true;
+            }
         }
         edit = Some(match (is_stroke, change) {
             (false, PaintChange::None) => json!({"fill": null}),
@@ -170,6 +178,7 @@ pub(crate) fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui, tool: Tool
         if let Err(e) = app.run("shape.edit", p) {
             app.ui.status = e;
             app.ui.status_error = true;
+            recent = None;
         }
         if !ui.input(|i| i.pointer.any_down()) {
             ui.data_mut(|d| {
@@ -177,6 +186,9 @@ pub(crate) fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui, tool: Tool
                 gesture.0 = gesture.0.wrapping_add(1);
             });
         }
+    }
+    if let Some(rgb) = recent {
+        crate::paint_picker::remember(app, rgb);
     }
 }
 
