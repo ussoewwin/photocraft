@@ -1,6 +1,6 @@
 # Localization parity
 
-> **Last reviewed:** 2026-10-12 · **Last updated:** 2026-10-28 · **Change:** minor (Georgian interface catalog; previously minor: Arabic UI catalog) · **Target:** Adobe Photoshop 2026
+> **Last reviewed:** 2026-10-12 · **Last updated:** 2026-10-29 · **Change:** minor (Swedish, Finnish, Danish and Norwegian Bokmål UI catalogs; previously minor: Georgian interface catalog; previously minor: Arabic UI catalog) · **Target:** Adobe Photoshop 2026
 
 Per-language status of PhotoCraft's UI. How catalogs work and how to add one:
 [`localization.md`](localization.md). Language notes: [Korean](localization-ko.md), [Spanish](localization-es.md),
@@ -55,7 +55,13 @@ other catalogs translate; reviewed by a native speaker, [notes](localization-it.
 Georgian UI fallback font: Noto Sans Georgian, Segoe UI, Sylfaen, SF Georgian, DejaVu Sans; on the web the first served font for `Geor`). Turkish `tr`
 (3,731 rows) also covers every measured key. Serbian `sr` (4,022 rows, Latin script, Ekavian, added 2026-10-12) covers every
 measured key and the union of the other catalogs' dynamic labels; its one/few/many plurals reuse
-the Russian rule.
+the Russian rule. Swedish `sv` (4,552 rows, added 2026-10-28) covers every measured key and the
+other catalogs' dynamic labels; combined from the community catalogs in #5985 and #9536 with one
+term per concept; the contested terms follow a native speaker's questionnaire answers. Finnish
+`fi` (4,552 rows, combined from #5666 and #6961), Danish `da` (4,552 rows, based on #7267 and
+completed for the current UI) and Norwegian Bokmål `nb` (4,552 rows, combined from #8072 and #9025;
+`no` and `nn` locales resolve to it), all added 2026-10-29, cover the same keys with one term per
+concept; none has had a native-speaker review yet.
 
 Czech UI follow-up (2026-10-11): status and notice wrappers, hardware labels, brush and
 transform accessibility names, rasterization prompts, profile mismatch messages and preset
@@ -95,3 +101,5 @@ engine localization or native review is complete.
 | 2026-10-22 | minor | Arabic row: paragraph direction has Auto / Left-to-right / Right-to-left buttons in the Paragraph panel and Type options bar (#6793); the visual RTL caret is still missing (TYPE-218-2 partial) |
 | 2026-10-22 | minor | Georgian (`ka`) catalog |
 | 2026-10-28 | minor | Arabic (`ar`) UI catalog: every measured key, six plural forms; layer names and the title bar no longer reversed on egui 0.37 |
+| 2026-10-29 | minor | Swedish (`sv`) UI catalog: every measured key plus the dynamic labels, combined from #5985 and #9536 |
+| 2026-10-29 | minor | Finnish (`fi`), Danish (`da`) and Norwegian Bokmål (`nb`) UI catalogs: every measured key plus the dynamic labels, combined from #5666, #6961, #7267, #8072 and #9025 |
