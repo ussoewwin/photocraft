@@ -33,3 +33,7 @@ failure-output = "immediate-final"
 platform = 'cfg(target_os = "windows")'
 filter = 'package(photocraft-gpu) & test(/documents_larger_than_the_texture_limit|layer_effects_update_incrementally|pages_are_evicted_under_the_budget|the_focused_view_stays_resident_after_a_full_refresh/)'
 success-output = "immediate"
+# These multi-page effect regressions saturate the Windows software GPU. Reserve two
+# scheduling slots so four independent devices do not compete for the same CPU renderer.
+# All cases and the 60-second warning remain unchanged.
+threads-required = 2
