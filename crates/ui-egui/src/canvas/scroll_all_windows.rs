@@ -28,6 +28,26 @@ pub fn active(app: &PhotocraftApp, shift: bool) -> bool {
     app.ui.tool_options.hand_scroll_all || shift
 }
 
+/// Canvas geometry used to clamp a Hand drag when Overscroll is off.
+pub struct ClampGeometry {
+    pub size: egui::Vec2,
+    pub ppp: f32,
+    pub aspect: f32,
+}
+
+/// Update the other shown views after a Hand drag. With Overscroll off, use the center that the
+/// next frame clamps the dragged view to.
+pub fn follow_drag(app: &mut PhotocraftApp, enabled: bool, source: Source, doc: usize, view: &View, geometry: ClampGeometry) {
+    if !enabled {
+        return;
+    }
+    let mut target = view.clone();
+    if !app.session.prefs().tools.overscroll {
+        crate::scrollbars::clamp_view_with_aspect(&mut target, geometry.size, geometry.ppp, geometry.aspect);
+    }
+    follow(app, source, doc, target.center);
+}
+
 /// Put every shown view except `source` at the relative location of `center`, a point in document
 /// `doc`: each view's center becomes the same fraction of its own document's width and height.
 pub fn follow(app: &mut PhotocraftApp, source: Source, doc: usize, center: [f32; 2]) {
@@ -105,7 +125,15 @@ mod tests {
     #[test]
     fn a_drag_puts_the_other_shown_views_at_the_same_relative_location() {
         let mut app = app_with_tiles();
-        app.ui.windows.push(DocWindow { id: 7, document: 2, view: view(0.5, [100.0, 50.0], 90.0), open: true, position: None });
+        app.ui.windows.push(DocWindow {
+            id: 7,
+            document: 2,
+            view: view(0.5, [100.0, 50.0], 90.0),
+            open: true,
+            floating: false,
+            focused: false,
+            position: None,
+        });
         // The dragged 400 × 300 view's center moved to a quarter of the width and a fifth of the height.
         follow(&mut app, Source::Main(0), 0, [100.0, 60.0]);
         assert_eq!(app.ui.views[0].center, [200.0, 150.0], "the dragged view's canvas stores its own view");
@@ -124,8 +152,24 @@ mod tests {
     fn a_drag_in_a_document_window_scrolls_the_main_window_and_skips_itself() {
         let mut app = app_with_tiles();
         app.ui.view.arrange = String::new();
-        app.ui.windows.push(DocWindow { id: 3, document: 1, view: view(1.0, [400.0, 300.0], 0.0), open: true, position: None });
-        app.ui.windows.push(DocWindow { id: 4, document: 2, view: view(1.0, [100.0, 50.0], 0.0), open: false, position: None });
+        app.ui.windows.push(DocWindow {
+            id: 3,
+            document: 1,
+            view: view(1.0, [400.0, 300.0], 0.0),
+            open: true,
+            floating: false,
+            focused: false,
+            position: None,
+        });
+        app.ui.windows.push(DocWindow {
+            id: 4,
+            document: 2,
+            view: view(1.0, [100.0, 50.0], 0.0),
+            open: false,
+            floating: false,
+            focused: false,
+            position: None,
+        });
         // The window's 800 × 600 view moved its center to three quarters of the width and a quarter of the height.
         follow(&mut app, Source::Window(3), 1, [600.0, 150.0]);
         assert_eq!(app.ui.windows[0].view.center, [400.0, 300.0], "the dragged window's canvas stores its own view");
@@ -169,7 +213,15 @@ mod tests {
             app.ui.open_dialog(crate::state::DialogKind::About, Default::default());
         }
         app.ui.views[0] = view(1.0, [1000.0, 750.0], 0.0);
-        app.ui.windows.push(DocWindow { id: 5, document: 1, view: view(1.0, [500.0, 375.0], 0.0), open: true, position: None });
+        app.ui.windows.push(DocWindow {
+            id: 5,
+            document: 1,
+            view: view(1.0, [500.0, 375.0], 0.0),
+            open: true,
+            floating: false,
+            focused: false,
+            position: None,
+        });
         let mut v = if in_window { view(1.0, [500.0, 375.0], 0.0) } else { view(1.0, [1000.0, 750.0], 0.0) };
         let rect = Rect::from_min_size(Pos2::ZERO, vec2(400.0, 300.0));
         let modifiers = if shift { egui::Modifiers::SHIFT } else { egui::Modifiers::NONE };
@@ -258,7 +310,15 @@ mod tests {
         app.session.set_active(0);
         app.ui.tool = Tool::Hand;
         app.ui.tool_options.hand_scroll_all = true;
-        app.ui.windows.push(DocWindow { id: 5, document: 1, view: view(4.0, [500.0, 375.0], 0.0), open: true, position: None });
+        app.ui.windows.push(DocWindow {
+            id: 5,
+            document: 1,
+            view: view(4.0, [500.0, 375.0], 0.0),
+            open: true,
+            floating: false,
+            focused: false,
+            position: None,
+        });
         // A 400 × 300 canvas at 100 % keeps the center 200 px or more inside the left edge.
         let mut v = view(1.0, [220.0, 750.0], 0.0);
         let rect = Rect::from_min_size(Pos2::ZERO, vec2(400.0, 300.0));
@@ -296,7 +356,15 @@ mod tests {
         app.sync_views();
         app.session.set_active(0);
         app.ui.tool = Tool::Hand;
-        app.ui.windows.push(DocWindow { id: 5, document: 1, view: view(1.0, [500.0, 375.0], 0.0), open: true, position: None });
+        app.ui.windows.push(DocWindow {
+            id: 5,
+            document: 1,
+            view: view(1.0, [500.0, 375.0], 0.0),
+            open: true,
+            floating: false,
+            focused: false,
+            position: None,
+        });
         let mut v = view(1.0, [1000.0, 750.0], 0.0);
         let rect = Rect::from_min_size(Pos2::ZERO, vec2(400.0, 300.0));
         let mut frame = |app: &mut PhotocraftApp, events: Vec<egui::Event>| -> [f32; 2] {
