@@ -306,10 +306,7 @@ pub(crate) fn layers_param(doc: &Document, p: &Value) -> Result<Option<Vec<Layer
 
 /// Non-empty top-level targets, retaining explicit Background targets and filtering duplicates.
 pub fn multi_targets(doc: &Document, ids: &[LayerId]) -> Vec<LayerId> {
-    crate::layer_multi_cmds::top_level(doc, ids)
-        .into_iter()
-        .filter(|id| doc.layer(*id).is_some_and(|layer| !transform_bounds(doc, layer).is_empty()))
-        .collect()
+    crate::layer_multi_cmds::top_level(doc, ids).into_iter().filter(|id| doc.layer(*id).is_some_and(|layer| !transform_bounds(doc, layer).is_empty())).collect()
 }
 
 /// Content bounds of the explicitly selected transform targets.
