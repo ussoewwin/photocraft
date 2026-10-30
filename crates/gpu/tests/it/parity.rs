@@ -220,10 +220,8 @@ fn diff_rect(g: &mut Gpu, doc: &Document, rect: Rect, what: &str) -> Result<phot
     let cpu = timed("CPU reference", || photocraft_compose::render(doc, rect));
     let mut first = None;
     for (label, comp) in [("", &mut g.comp), (" (paged)", &mut g.paged)] {
-        let (out, stats) = timed(&format!("{what}{label} GPU render/readback"), || {
-            photocraft_gpu::render_to_vec_stats(comp, &g.device, &g.queue, doc, rect)
-        })
-        .map_err(|e| format!("{what}{label}: {e}"))?;
+        let (out, stats) = timed(&format!("{what}{label} GPU render/readback"), || photocraft_gpu::render_to_vec_stats(comp, &g.device, &g.queue, doc, rect))
+            .map_err(|e| format!("{what}{label}: {e}"))?;
         let worst = worst_diff(&cpu.px, &out);
         let w = rect.width() as usize;
         let (x, y) = (rect.x0 + (worst.1 % w) as i32, rect.y0 + (worst.1 / w) as i32);
