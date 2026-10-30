@@ -5,6 +5,8 @@
 //! data). The [`control`] module exposes both to automation, so agents can drive and inspect every
 //! part of the interface.
 #![forbid(unsafe_code)]
+// `control::inspect` builds the whole UI snapshot in one `json!`, past the default limit of 128.
+#![recursion_limit = "256"]
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 /// PhotoCraft as craft-update knows it, with its 128 px icon and accent colour: the update
