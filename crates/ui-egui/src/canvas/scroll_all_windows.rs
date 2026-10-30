@@ -72,10 +72,10 @@ pub fn follow(app: &mut PhotocraftApp, source: Source, doc: usize, center: [f32;
             v.center = c;
         }
     };
-    // The main window shows the arranged tiles, or else the active document alone.
+    // The main window shows the arranged tiles, or else a docked document alone.
     let shown: Vec<usize> = match crate::canvas::arranged_cells(app, app.last_canvas_rect) {
         Some(cells) => cells.into_iter().map(|(d, _)| d).collect(),
-        None => app.session.active_index().into_iter().collect(),
+        None => super::tabs::main_canvas_document(app).into_iter().collect(),
     };
     for d in shown {
         if source != Source::Main(d)
@@ -177,6 +177,27 @@ mod tests {
         assert!(near(app.ui.views[0].center, [300.0, 75.0]), "{:?}", app.ui.views[0].center);
         assert_eq!(app.ui.views[1].center, [400.0, 300.0], "a hidden tab stays");
         assert_eq!(app.ui.windows[1].view.center, [100.0, 50.0], "a closed window stays");
+    }
+
+    #[test]
+    fn a_drag_in_a_floated_document_scrolls_the_visible_docked_document() {
+        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        app.run("file.new", json!({"width": 800, "height": 600})).unwrap();
+        app.sync_views();
+        app.session.set_active(0);
+        app.ui.views[0] = view(1.0, [200.0, 150.0], 0.0);
+        app.ui.views[1] = view(1.0, [400.0, 300.0], 0.0);
+        crate::menus::invoke(&mut app, &egui::Context::default(), "window.arrange.floatInWindow", json!({"document": 0})).unwrap();
+        assert!(app.ui.windows[0].floating);
+        assert_eq!(app.session.active_index(), Some(0));
+        assert_eq!(super::super::main_canvas_document(&app), Some(1));
+        let window_id = app.ui.windows[0].id;
+
+        // The floated 400 × 300 view moved to a quarter of its width and a fifth of its height.
+        follow(&mut app, Source::Window(window_id), 0, [100.0, 60.0]);
+        assert!(near(app.ui.views[1].center, [200.0, 120.0]), "{:?}", app.ui.views[1].center);
+        assert_eq!(app.ui.views[0].center, [200.0, 150.0], "the floated document's hidden main view stays");
     }
 
     #[test]
