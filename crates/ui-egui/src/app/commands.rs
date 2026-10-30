@@ -241,6 +241,7 @@ impl PhotocraftApp {
             // Adding a mask selects its thumbnail: the next brush or footer Delete targets it.
             self.ui.mask_target = true;
             self.ui.vector_mask_target = false;
+            self.target_mask_over_colour_rows();
         }
         if result.is_ok() && creates_active_vector_mask {
             // Likewise a new vector mask (#4728): Properties shows its Density and Feather, and a

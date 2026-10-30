@@ -518,6 +518,9 @@ pub(super) fn layers(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
             app.ui.mask_target = p.as_bool().unwrap_or(false);
             app.ui.vector_mask_target = false;
             app.ui.filter_mask_target = None;
+            if app.ui.mask_target {
+                app.target_mask_over_colour_rows();
+            }
             app.sync_mask_targets();
             continue;
         }
