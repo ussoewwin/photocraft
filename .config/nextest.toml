@@ -29,11 +29,11 @@ failure-output = "immediate-final"
 
 # Keep phase timings for the remaining expensive Windows GPU regressions visible. This does
 # not relax their timeout, isolate failures differently or remove any test cases.
-# Page eviction redraws a complete multi-effect document several times. On the Windows
+# Page eviction and budget borrowing redraw multi-effect documents. On the Windows
 # CPU-backed adapter it uses all GPU slots, avoiding oversubscription without skipping work.
 [[profile.ci.overrides]]
 platform = 'cfg(target_os = "windows")'
-filter = 'package(photocraft-gpu) & test(pages_are_evicted_under_the_budget)'
+filter = 'package(photocraft-gpu) & test(/pages_are_evicted_under_the_budget|layer_pages_that_just_miss_borrow_the_effect_map_share/)'
 threads-required = 4
 success-output = "immediate"
 
