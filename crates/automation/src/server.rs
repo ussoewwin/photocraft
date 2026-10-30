@@ -191,8 +191,8 @@ pub struct SaveParams {
     /// DDS: also write the full mip chain, each level a box filter of the one above.
     #[serde(default, rename = "ddsMipmaps")]
     pub dds_mipmaps: bool,
-    /// .pcraft: also write the flattened document at its canvas size as `composite/full.png`.
-    /// Off by default.
+    /// .pcraft: request the flattened document at its canvas size as `composite/full.png`.
+    /// The save may omit it; check the manifest's `full_composite` member. Off by default.
     #[serde(default, rename = "pcraftFullComposite")]
     pub pcraft_full_composite: Option<bool>,
     #[serde(default)]
@@ -796,7 +796,7 @@ impl PhotocraftMcp {
     }
 
     #[tool(description = "Save the document. `.pcraft` is the lossless native format (incremental); other extensions \
-        (psd, png, jpg, tif, webp, exr, …) export. Without `path` only a PSD, PSB or .pcraft document is written back to its own         file. Returns warnings about anything the format cannot hold.")]
+        (psd, png, jpg, tif, webp, exr, …) export. Without `path` only a PSD, PSB or .pcraft document is written back to its own         file. `pcraftFullComposite` requests `composite/full.png`, which may be omitted; check the manifest's `full_composite` member. Returns warnings about anything the format cannot hold.")]
     async fn doc_save(&self, Parameters(p): Parameters<SaveParams>) -> Result<CallToolResult, McpError> {
         self.save_impl(p).await
     }

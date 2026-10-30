@@ -240,8 +240,9 @@ pub struct ExportOptions {
     /// PSD/PSB and layered TIFF: read and embed the files linked smart objects name (see
     /// [`PsdExportOptions::read_linked_files`]). On by default; automation turns it off.
     pub read_linked_files: bool,
-    /// `.pcraft`: also write the flattened document at its canvas size as `composite/full.png`
-    /// (Preferences › File Handling › Save Full-Size Composite in .pcraft Files). Off by default.
+    /// `.pcraft`: request the flattened document at its canvas size as `composite/full.png`
+    /// (Preferences › File Handling › Save Full-Size Composite in .pcraft Files). The save may
+    /// omit it; check the manifest's `full_composite` member. Off by default.
     pub pcraft_full_composite: bool,
 }
 

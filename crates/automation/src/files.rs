@@ -57,7 +57,7 @@ pub fn previews(doc: &Document) -> SaveOptions {
     SaveOptions { thumbnail: Some(photocraft_compose::thumbnail(doc, 256)), composite: Some(photocraft_compose::thumbnail(doc, 1024)), ..Default::default() }
 }
 
-/// [`previews`], plus the full-size composite when `opts` asks for it
+/// [`previews`], plus the full-size composite when `opts` asks for it and it can be rendered
 /// ([`ExportOptions::pcraft_full_composite`]).
 fn native_options(doc: &Document, opts: &ExportOptions) -> SaveOptions {
     let mut out = previews(doc);

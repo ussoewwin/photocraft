@@ -34,8 +34,9 @@ pub(crate) struct SaveOpts {
     /// PSD/PSB: write the real merged image (Preferences › File Handling › Maximize PSD and PSB
     /// File Compatibility).
     pub psd_maximize_compatibility: bool,
-    /// `.pcraft`: also write the full-size composite (`"pcraftFullComposite"`; unset, Preferences ›
-    /// File Handling › Save Full-Size Composite in .pcraft Files, off by default).
+    /// `.pcraft`: request the full-size composite (`"pcraftFullComposite"`; unset, Preferences ›
+    /// File Handling › Save Full-Size Composite in .pcraft Files, off by default). The save may
+    /// omit it; check the manifest's `full_composite` member.
     pub pcraft_full_composite: bool,
 }
 
