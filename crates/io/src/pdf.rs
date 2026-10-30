@@ -306,21 +306,30 @@ fn xml_text(s: &str) -> String {
     o
 }
 
-/// Where the RDF element of an XMP packet ends: the start of its last `</rdf:RDF>` end tag,
-/// whatever prefix the packet binds to RDF and with any whitespace before the `>`.
-fn rdf_end(xmp: &str) -> Option<usize> {
-    let mut before = xmp.len();
-    while let Some(at) = xmp[..before].rfind("</") {
-        let rest = &xmp[at + 2..];
-        let name_len = rest.find(|c: char| c.is_whitespace() || c == '>').unwrap_or(rest.len());
-        let name = &rest[..name_len];
-        let local = name.rsplit(':').next().unwrap_or(name);
-        if local == "RDF" && rest[name_len..].trim_start().starts_with('>') {
-            return Some(at);
-        }
-        before = at;
+/// The RDF namespace every XMP packet's `rdf:RDF` element is in.
+const RDF_NS: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
+
+/// Where a description joins an XMP packet's RDF element, found as XML rather than by its
+/// spelling, so the prefix the packet binds to RDF, whitespace in its end tag and markup in
+/// comments make no difference: the byte offset of the element's end tag (`closed` false), or of
+/// the `/>` of a self-closing element (`closed` true) together with its qualified name, so the
+/// caller can expand it. None when the packet does not parse or has no RDF element.
+fn rdf_insertion(xmp: &str) -> Option<(usize, Option<&str>)> {
+    // roxmltree does not take a byte order mark ahead of the prolog; offsets below are into `xmp`.
+    let bom = xmp.strip_prefix('\u{feff}').map_or(0, |_| '\u{feff}'.len_utf8());
+    let body = &xmp[bom..];
+    let doc = crate::xml::parse(body, roxmltree::ParsingOptions::default()).ok()?;
+    let rdf = doc.descendants().find(|n| n.is_element() && n.tag_name().namespace() == Some(RDF_NS) && n.tag_name().name() == "RDF")?;
+    let range = rdf.range();
+    let text = body.get(range.clone())?;
+    if let Some(open) = text.strip_suffix("/>") {
+        // `<r:RDF …/>`: the qualified name follows the `<`, up to whitespace or the `/`.
+        let name = open.get(1..)?;
+        let end = name.find(|c: char| c.is_whitespace() || c == '/').unwrap_or(name.len());
+        return Some((bom + range.end - 2, Some(&name[..end])));
     }
-    None
+    // The end tag is the last thing in the element's own range.
+    Some((bom + range.start + text.rfind("</")?, None))
 }
 
 /// The XMP namespace of the spot-plate description.
@@ -332,7 +341,8 @@ pub const SPOT_PLATES_NS: &str = "http://ns.getartcraft.com/photocraft/spot-plat
 /// colour space's CMYK alternate cannot carry:
 ///
 /// ```xml
-/// <rdf:Description rdf:about="" xmlns:pcsp="http://ns.getartcraft.com/photocraft/spot-plates/1.0/">
+/// <rdf:Description rdf:about="" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+///                  xmlns:pcsp="http://ns.getartcraft.com/photocraft/spot-plates/1.0/">
 ///  <pcsp:plates>
 ///   <rdf:Seq>
 ///    <rdf:li rdf:parseType="Resource">
@@ -351,7 +361,8 @@ pub const SPOT_PLATES_NS: &str = "http://ns.getartcraft.com/photocraft/spot-plat
 ///
 /// An alpha-type channel of a Multichannel document lists as black with solidity 0.
 fn plates_xmp(doc_xmp: Option<&str>, plates: &[SpotPlate]) -> String {
-    let mut d = format!("  <rdf:Description rdf:about=\"\" xmlns:pcsp=\"{SPOT_PLATES_NS}\">\n   <pcsp:plates>\n    <rdf:Seq>\n");
+    // The description binds `rdf` itself: the packet it joins may bind another prefix to RDF.
+    let mut d = format!("  <rdf:Description rdf:about=\"\" xmlns:rdf=\"{RDF_NS}\" xmlns:pcsp=\"{SPOT_PLATES_NS}\">\n   <pcsp:plates>\n    <rdf:Seq>\n");
     // Two decimals, never "-0.00".
     let two = |v: f32| {
         let v = (v * 100.0).round() / 100.0;
@@ -369,21 +380,34 @@ fn plates_xmp(doc_xmp: Option<&str>, plates: &[SpotPlate]) -> String {
         ));
     }
     d.push_str("    </rdf:Seq>\n   </pcsp:plates>\n  </rdf:Description>\n");
-    // Into the document's packet when it has one, before the end tag of its RDF element; else a
-    // packet of its own. A packet with no RDF element has nowhere for the description to go and is
-    // kept as it is rather than replaced.
+    // Into the document's packet when it has one, inside its RDF element; else a packet of its
+    // own. A packet that does not parse or has no RDF element has nowhere for the description to
+    // go and is kept as it is rather than replaced.
     if let Some(xmp) = doc_xmp {
-        let Some(at) = rdf_end(xmp) else {
+        let Some((at, self_closing)) = rdf_insertion(xmp) else {
             return xmp.to_owned();
         };
-        let mut out = String::with_capacity(xmp.len() + d.len());
+        let mut out = String::with_capacity(xmp.len() + d.len() + 16);
         out.push_str(&xmp[..at]);
-        out.push_str(&d);
-        out.push_str(&xmp[at..]);
+        match self_closing {
+            // `<r:RDF …/>` becomes `<r:RDF …>` + the description + `</r:RDF>`.
+            Some(name) => {
+                out.push_str(">\n");
+                out.push_str(&d);
+                out.push_str(" </");
+                out.push_str(name);
+                out.push('>');
+                out.push_str(&xmp[at + 2..]);
+            }
+            None => {
+                out.push_str(&d);
+                out.push_str(&xmp[at..]);
+            }
+        }
         return out;
     }
     format!(
-        "<?xpacket begin=\"\u{feff}\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n<x:xmpmeta xmlns:x=\"adobe:ns:meta/\">\n <rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\n{d} </rdf:RDF>\n</x:xmpmeta>\n<?xpacket end=\"w\"?>"
+        "<?xpacket begin=\"\u{feff}\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n<x:xmpmeta xmlns:x=\"adobe:ns:meta/\">\n <rdf:RDF xmlns:rdf=\"{RDF_NS}\">\n{d} </rdf:RDF>\n</x:xmpmeta>\n<?xpacket end=\"w\"?>"
     )
 }
 

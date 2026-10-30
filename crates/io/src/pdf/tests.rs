@@ -332,21 +332,46 @@ fn the_plate_description_joins_the_documents_own_packet() {
 }
 
 #[test]
-fn the_plate_description_finds_the_rdf_end_tag_however_it_is_spelled() {
+fn the_plate_description_joins_the_rdf_element_however_the_packet_spells_it() {
+    const RDF: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
     let mut d = doc(ColorMode::Rgb);
     d.channels.push(spot("Varnish", photocraft_color::Color::rgb(0.9, 0.9, 0.6), &[1.0; 8]));
-    // Another prefix bound to RDF, and whitespace before the `>` of the end tag.
-    d.metadata.xmp = Some(std::sync::Arc::from(
-        "<?xpacket begin=\"\u{feff}\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n<x:xmpmeta xmlns:x=\"adobe:ns:meta/\">\n <r:RDF xmlns:r=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\n  <r:Description r:about=\"\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\"><dc:title>Job 2</dc:title></r:Description>\n </r:RDF >\n</x:xmpmeta>\n<?xpacket end=\"w\"?>",
-    ));
-    let out = crate::export(&d, "out.pdf", &crate::ExportOptions::default()).unwrap();
-    let xmp = xmp_of(&out.bytes);
-    assert_eq!(xmp.matches("<?xpacket begin").count(), 1, "one packet, not two");
-    assert!(xmp.contains("<dc:title>Job 2</dc:title>") && xmp.contains("<pcsp:name>Varnish</pcsp:name>"), "{xmp}");
-    assert!(xmp.find("<pcsp:plates>").unwrap() < xmp.rfind("</r:RDF >").unwrap(), "the plates are inside the RDF element: {xmp}");
-    // A packet with no RDF element is kept as it is; the plates go undescribed rather than the packet lost.
-    let no_rdf = "<?xpacket begin=\"\u{feff}\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"><x:note>kept</x:note></x:xmpmeta>\n<?xpacket end=\"w\"?>";
-    d.metadata.xmp = Some(std::sync::Arc::from(no_rdf));
-    let out = crate::export(&d, "out.pdf", &crate::ExportOptions::default()).unwrap();
-    assert_eq!(xmp_of(&out.bytes), no_rdf);
+    // The packet must parse as namespaced XML with the plates a description inside its RDF element.
+    let plates_in_rdf = |xmp: &str| {
+        let tree = crate::xml::parse(xmp.trim_start_matches('\u{feff}'), roxmltree::ParsingOptions::default()).unwrap_or_else(|e| panic!("{e}: {xmp}"));
+        let plates = tree
+            .descendants()
+            .find(|n| n.tag_name().namespace() == Some(crate::pdf::SPOT_PLATES_NS) && n.tag_name().name() == "plates")
+            .unwrap_or_else(|| panic!("no pcsp:plates: {xmp}"));
+        let description = plates.parent_element().unwrap();
+        assert_eq!((description.tag_name().namespace(), description.tag_name().name()), (Some(RDF), "Description"), "{xmp}");
+        let rdf = description.parent_element().unwrap();
+        assert_eq!((rdf.tag_name().namespace(), rdf.tag_name().name()), (Some(RDF), "RDF"), "{xmp}");
+        assert_eq!(xmp.matches("<?xpacket begin").count(), 1, "one packet, not two: {xmp}");
+    };
+    let head = "<?xpacket begin=\"\u{feff}\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n<x:xmpmeta xmlns:x=\"adobe:ns:meta/\">\n";
+    let tail = "\n</x:xmpmeta>\n<?xpacket end=\"w\"?>";
+    let title = "<r:Description r:about=\"\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\"><dc:title>Job 2</dc:title></r:Description>";
+    for (packet, what) in [
+        // Another prefix bound to RDF, whitespace before the `>` of the end tag, a leading byte order mark.
+        (format!("\u{feff}{head} <r:RDF xmlns:r=\"{RDF}\">\n  {title}\n </r:RDF >{tail}"), "prefix, whitespace and BOM"),
+        // An end tag spelled out inside a comment is not the element's end.
+        (format!("{head} <rdf:RDF xmlns:rdf=\"{RDF}\">\n  <!-- </rdf:RDF> -->\n  {}\n </rdf:RDF>{tail}", title.replace("r:", "rdf:")), "comment"),
+        // A self-closing RDF element is expanded around the description.
+        (format!("{head} <r:RDF xmlns:r=\"{RDF}\"/>{tail}"), "self-closing"),
+    ] {
+        d.metadata.xmp = Some(std::sync::Arc::from(packet.as_str()));
+        let out = crate::export(&d, "out.pdf", &crate::ExportOptions::default()).unwrap();
+        let xmp = xmp_of(&out.bytes);
+        plates_in_rdf(&xmp);
+        assert_eq!(xmp.contains("<dc:title>Job 2</dc:title>"), what != "self-closing", "{what}: {xmp}");
+        assert!(xmp.contains("<pcsp:name>Varnish</pcsp:name>"), "{what}: {xmp}");
+    }
+    // A packet with no RDF element, or that is not XML, is kept as it is: the plates go undescribed
+    // rather than the document's metadata lost.
+    for kept in [format!("{head}<x:note>kept</x:note>{tail}"), format!("{head}<rdf:RDF xmlns:rdf=\"{RDF}\"><unclosed>{tail}")] {
+        d.metadata.xmp = Some(std::sync::Arc::from(kept.as_str()));
+        let out = crate::export(&d, "out.pdf", &crate::ExportOptions::default()).unwrap();
+        assert_eq!(xmp_of(&out.bytes), kept);
+    }
 }
