@@ -3,9 +3,9 @@
 //! current colour sits under the pointer (as the reference application does).
 //! While the right button stays down, moving the pointer over the HUD picks the foreground colour
 //! live (`tools.setColors` calls sharing one `coalesce` key, so the gesture is one history step,
-//! Rule 1); releasing the button keeps the colour and closes the HUD, Escape restores the colour
-//! the gesture started from. A left press closes it too, which is how the control channel ends a
-//! gesture it opened with `ui.pointer`.
+//! Rule 1); releasing the button or pressing Escape closes the HUD and keeps the colour picked so
+//! far, as in the reference application (Undo takes it back). A left press closes it too, which is
+//! how the control channel ends a gesture it opened with `ui.pointer`.
 //!
 //! The HUD is drawn as plain meshes and hit-tested from the raw pointer position rather than with
 //! interactive widgets: the selection follows the pointer while the *right* button is held, which
@@ -52,7 +52,7 @@ pub struct Hud {
     pub anchor: [f32; 2],
     /// The colour being picked: hue 0..360, saturation and value 0..1.
     pub hsv: [f32; 3],
-    /// The foreground colour when the gesture began; Escape restores it.
+    /// The foreground colour when the gesture began: where the HUD opens, and the alpha it keeps.
     pub start: [f32; 4],
     /// The `coalesce` key of this gesture's `tools.setColors` calls.
     pub key: u64,
@@ -176,16 +176,7 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
             i.pointer.hover_pos(),
         )
     });
-    if esc {
-        let start = hud.start;
-        let changed = app.session.tools.foreground != start;
-        close(&mut app.ui);
-        if changed {
-            set_foreground(app, start, hud.key);
-        }
-        return;
-    }
-    if (hud.hold && released) || pressed_left {
+    if esc || (hud.hold && released) || pressed_left {
         close(&mut app.ui);
         return;
     }
@@ -427,8 +418,10 @@ mod tests {
         assert_eq!(foreground(&h), kept);
     }
 
+    /// The reference application's Escape ends the pick where it is: the HUD closes, the colour
+    /// picked so far stays, and moving afterwards changes nothing.
     #[test]
-    fn escape_restores_the_starting_colour() {
+    fn escape_closes_the_hud_and_keeps_the_picked_colour() {
         let mut h = harness();
         let c = h.state().last_canvas_rect.center();
         h.event(egui::Event::PointerMoved(c));
@@ -437,11 +430,19 @@ mod tests {
         let (_strip, square) = rects(&h);
         h.event(egui::Event::PointerMoved(square.center()));
         h.run_steps(2);
-        assert_ne!(foreground(&h), [0.0, 0.0, 1.0, 1.0], "the pick is live");
+        let picked = foreground(&h);
+        assert_ne!(picked, [0.0, 0.0, 1.0, 1.0], "the pick is live");
         h.key_press(egui::Key::Escape);
         h.run_steps(2);
         assert_eq!(h.state().ui.color_hud, None);
-        assert_eq!(foreground(&h), [0.0, 0.0, 1.0, 1.0], "Escape restores the colour");
+        assert_eq!(foreground(&h), picked, "Escape keeps the picked colour");
+        h.event(egui::Event::PointerMoved(square.min + vec2(2.0, 2.0)));
+        h.run_steps(2);
+        assert_eq!(foreground(&h), picked, "moving after Escape picks nothing");
+        button(&mut h, square.min + vec2(2.0, 2.0), false, SHIFT_ALT);
+        assert_eq!(h.state().ui.color_hud, None);
+        assert_eq!(h.state().ui.brush_picker, None, "releasing the button afterwards opens nothing");
+        assert_eq!(foreground(&h), picked);
     }
 
     #[test]
