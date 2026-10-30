@@ -374,7 +374,8 @@ fn plates_xmp(doc_xmp: Option<&str>, plates: &[SpotPlate]) -> String {
 /// it as (1 − value, as `photocraft_compose::multichannel` prints it). Any other document keeps
 /// its alpha channels as masks and exports only its spot channels. The alternate colour is the
 /// ink colour separated through the CMYK profile in use (`Color::in_mode`); it only previews the
-/// plate, as Photoshop's does. Solidity is a preview attribute too and is not written.
+/// plate, as Photoshop's does. Solidity is a preview attribute too: it is not part of the plate
+/// image or its tint transform, and only the XMP description ([`plates_xmp`]) carries it.
 fn plates_of(doc: &Document, w: usize, h: usize) -> Vec<SpotPlate> {
     let multichannel = doc.mode == ColorMode::Multichannel;
     let canvas = photocraft_geom::Rect::new(0, 0, w as i32, h as i32);
