@@ -28,6 +28,24 @@ fn gray(app: &PhotocraftApp, x: i32, y: i32) -> f32 {
 }
 
 #[test]
+fn command_dialog_with_a_selection_opens_equalize_choices() {
+    let (mut app, _) = setup(true);
+    let id = crate::dialogs::open_command_dialog(&mut app, COMMAND, "Equalize");
+    let fields = &app.ui.dialog_mut(id).unwrap().fields;
+    assert!(owns(fields));
+    assert_eq!(fields[KEY], json!(true));
+
+    let (mut app, _) = setup(false);
+    let id = crate::dialogs::open_command_dialog(&mut app, COMMAND, "Equalize");
+    assert!(!owns(&app.ui.dialog_mut(id).unwrap().fields));
+}
+
+#[test]
+fn equalize_marker_is_a_route_marker() {
+    assert!(crate::dialogs::is_route_marker(MARK));
+}
+
+#[test]
 fn equalize_with_a_selection_asks_and_defaults_to_the_selected_area_only() {
     let (mut app, ctx) = setup(true);
     let d = menu(&mut app, &ctx, COMMAND, json!({})).unwrap()["dialog"].as_u64().unwrap();
