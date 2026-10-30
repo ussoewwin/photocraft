@@ -330,3 +330,23 @@ fn the_plate_description_joins_the_documents_own_packet() {
     assert!(!has(&bare.bytes, "/Metadata") && !has(&bare.bytes, "<?xpacket"), "no metadata stream");
     check_structure(&bare.bytes);
 }
+
+#[test]
+fn the_plate_description_finds_the_rdf_end_tag_however_it_is_spelled() {
+    let mut d = doc(ColorMode::Rgb);
+    d.channels.push(spot("Varnish", photocraft_color::Color::rgb(0.9, 0.9, 0.6), &[1.0; 8]));
+    // Another prefix bound to RDF, and whitespace before the `>` of the end tag.
+    d.metadata.xmp = Some(std::sync::Arc::from(
+        "<?xpacket begin=\"\u{feff}\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n<x:xmpmeta xmlns:x=\"adobe:ns:meta/\">\n <r:RDF xmlns:r=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\n  <r:Description r:about=\"\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\"><dc:title>Job 2</dc:title></r:Description>\n </r:RDF >\n</x:xmpmeta>\n<?xpacket end=\"w\"?>",
+    ));
+    let out = crate::export(&d, "out.pdf", &crate::ExportOptions::default()).unwrap();
+    let xmp = xmp_of(&out.bytes);
+    assert_eq!(xmp.matches("<?xpacket begin").count(), 1, "one packet, not two");
+    assert!(xmp.contains("<dc:title>Job 2</dc:title>") && xmp.contains("<pcsp:name>Varnish</pcsp:name>"), "{xmp}");
+    assert!(xmp.find("<pcsp:plates>").unwrap() < xmp.rfind("</r:RDF >").unwrap(), "the plates are inside the RDF element: {xmp}");
+    // A packet with no RDF element is kept as it is; the plates go undescribed rather than the packet lost.
+    let no_rdf = "<?xpacket begin=\"\u{feff}\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"><x:note>kept</x:note></x:xmpmeta>\n<?xpacket end=\"w\"?>";
+    d.metadata.xmp = Some(std::sync::Arc::from(no_rdf));
+    let out = crate::export(&d, "out.pdf", &crate::ExportOptions::default()).unwrap();
+    assert_eq!(xmp_of(&out.bytes), no_rdf);
+}

@@ -306,6 +306,23 @@ fn xml_text(s: &str) -> String {
     o
 }
 
+/// Where the RDF element of an XMP packet ends: the start of its last `</rdf:RDF>` end tag,
+/// whatever prefix the packet binds to RDF and with any whitespace before the `>`.
+fn rdf_end(xmp: &str) -> Option<usize> {
+    let mut before = xmp.len();
+    while let Some(at) = xmp[..before].rfind("</") {
+        let rest = &xmp[at + 2..];
+        let name_len = rest.find(|c: char| c.is_whitespace() || c == '>').unwrap_or(rest.len());
+        let name = &rest[..name_len];
+        let local = name.rsplit(':').next().unwrap_or(name);
+        if local == "RDF" && rest[name_len..].trim_start().starts_with('>') {
+            return Some(at);
+        }
+        before = at;
+    }
+    None
+}
+
 /// The XMP namespace of the spot-plate description.
 pub const SPOT_PLATES_NS: &str = "http://ns.getartcraft.com/photocraft/spot-plates/1.0/";
 
@@ -352,10 +369,13 @@ fn plates_xmp(doc_xmp: Option<&str>, plates: &[SpotPlate]) -> String {
         ));
     }
     d.push_str("    </rdf:Seq>\n   </pcsp:plates>\n  </rdf:Description>\n");
-    // Into the document's packet when it has one, before its `</rdf:RDF>`; else a packet of its own.
-    if let Some(xmp) = doc_xmp
-        && let Some(at) = xmp.rfind("</rdf:RDF>")
-    {
+    // Into the document's packet when it has one, before the end tag of its RDF element; else a
+    // packet of its own. A packet with no RDF element has nowhere for the description to go and is
+    // kept as it is rather than replaced.
+    if let Some(xmp) = doc_xmp {
+        let Some(at) = rdf_end(xmp) else {
+            return xmp.to_owned();
+        };
         let mut out = String::with_capacity(xmp.len() + d.len());
         out.push_str(&xmp[..at]);
         out.push_str(&d);
