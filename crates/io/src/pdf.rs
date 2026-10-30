@@ -40,6 +40,11 @@ pub struct SpotPlate {
     /// The alternate colour (`/DeviceCMYK`, 1 = full ink) of the tint transform: how a viewer
     /// previews the ink. A RIP prints the plate, not this.
     pub cmyk: [f32; 4],
+    /// The ink colour as CIE L*a*b* (D50) and as encoded sRGB, and the solidity (0..1), for the
+    /// XMP description a converter reads to rebuild the spot channel (see [`plates_xmp`]).
+    pub lab: [f32; 3],
+    pub srgb: [f32; 3],
+    pub solidity: f32,
     pub width: u32,
     pub height: u32,
     pub data: Vec<u8>,
@@ -66,6 +71,8 @@ pub struct PrintPage {
     pub description: Option<String>,
     pub label: Option<String>,
     pub plates: Vec<SpotPlate>,
+    /// The XMP packet for the catalog's `/Metadata` stream, if any.
+    pub xmp: Option<String>,
 }
 
 fn pdf_string(s: &str) -> String {
@@ -164,7 +171,8 @@ fn image_object(width: u32, height: u32, colour_space: &str, data: &[u8]) -> Vec
 /// A one-page PDF.
 ///
 /// Objects: 1 catalog, 2 pages, 3 page, 4 contents, 5 font, then the image, its ICC profile,
-/// the overprint ExtGState and one image XObject per plate, each only when present.
+/// the overprint ExtGState, one image XObject per plate and the XMP metadata stream, each only
+/// when present.
 pub fn print_pdf(page: &PrintPage) -> Vec<u8> {
     let mut out: Vec<u8> = b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n".to_vec();
     let mut offsets: Vec<usize> = Vec::new();
@@ -186,10 +194,11 @@ pub fn print_pdf(page: &PrintPage) -> Vec<u8> {
     let image_obj = take(page.image.is_some());
     let icc_obj = take(page.image.as_ref().is_some_and(|i| i.icc.is_some()));
     let gs_obj = take(!page.plates.is_empty());
-    let first_plate = next;
-    let plate_objs: Vec<usize> = (0..page.plates.len()).map(|i| first_plate + i).collect();
+    let plate_objs: Vec<usize> = page.plates.iter().filter_map(|_| take(true)).collect();
+    let xmp_obj = take(page.xmp.is_some());
 
-    obj(&mut out, b"<< /Type /Catalog /Pages 2 0 R >>");
+    let metadata = xmp_obj.map(|n| format!(" /Metadata {n} 0 R")).unwrap_or_default();
+    obj(&mut out, format!("<< /Type /Catalog /Pages 2 0 R{metadata} >>").as_bytes());
     obj(&mut out, b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>");
     let mut xobjects = String::new();
     if let Some(n) = image_obj {
@@ -265,6 +274,14 @@ pub fn print_pdf(page: &PrintPage) -> Vec<u8> {
         // colour-key-masked Separation image.)
         obj(&mut out, &image_object(p.width, p.height, &cs, &p.data));
     }
+    if let Some(xmp) = &page.xmp {
+        // Unfiltered, as the XMP specification asks of a packet in a PDF, so a reader can find it
+        // by scanning for the packet header.
+        let mut body = format!("<< /Type /Metadata /Subtype /XML /Length {} >>\nstream\n", xmp.len()).into_bytes();
+        body.extend_from_slice(xmp.as_bytes());
+        body.extend_from_slice(b"\nendstream");
+        obj(&mut out, &body);
+    }
     let xref = out.len();
     out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", offsets.len() + 1).as_bytes());
     for o in &offsets {
@@ -272,6 +289,82 @@ pub fn print_pdf(page: &PrintPage) -> Vec<u8> {
     }
     out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", offsets.len() + 1).as_bytes());
     out
+}
+
+/// `s` as XML character data.
+fn xml_text(s: &str) -> String {
+    let mut o = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '&' => o.push_str("&amp;"),
+            '<' => o.push_str("&lt;"),
+            '>' => o.push_str("&gt;"),
+            '"' => o.push_str("&quot;"),
+            c => o.push(c),
+        }
+    }
+    o
+}
+
+/// The XMP namespace of the spot-plate description.
+pub const SPOT_PLATES_NS: &str = "http://ns.getartcraft.com/photocraft/spot-plates/1.0/";
+
+/// The XMP packet of a spot-plate PDF: the document's own packet (`doc_xmp`, if any) with one
+/// `rdf:Description` added under [`SPOT_PLATES_NS`] that lists the plates in page order, so a
+/// converter can rebuild each spot channel with its real ink colour, which the Separation
+/// colour space's CMYK alternate cannot carry:
+///
+/// ```xml
+/// <rdf:Description rdf:about="" xmlns:pcsp="http://ns.getartcraft.com/photocraft/spot-plates/1.0/">
+///  <pcsp:plates>
+///   <rdf:Seq>
+///    <rdf:li rdf:parseType="Resource">
+///     <pcsp:index>0</pcsp:index>                 <!-- 0-based, the order the plates are painted -->
+///     <pcsp:name>Underbase White</pcsp:name>     <!-- the Separation colorant name, as the channel is named -->
+///     <pcsp:labL>100.00</pcsp:labL>              <!-- ink colour, CIE L*a*b*, D50 -->
+///     <pcsp:labA>0.00</pcsp:labA>
+///     <pcsp:labB>0.00</pcsp:labB>
+///     <pcsp:srgb>#FFFFFF</pcsp:srgb>             <!-- the same colour as encoded sRGB, for convenience -->
+///     <pcsp:solidity>100</pcsp:solidity>         <!-- 0–100, Photoshop's Spot Channel Options › Solidity -->
+///    </rdf:li>
+///   </rdf:Seq>
+///  </pcsp:plates>
+/// </rdf:Description>
+/// ```
+///
+/// An alpha-type channel of a Multichannel document lists as black with solidity 0.
+fn plates_xmp(doc_xmp: Option<&str>, plates: &[SpotPlate]) -> String {
+    let mut d = format!("  <rdf:Description rdf:about=\"\" xmlns:pcsp=\"{SPOT_PLATES_NS}\">\n   <pcsp:plates>\n    <rdf:Seq>\n");
+    // Two decimals, never "-0.00".
+    let two = |v: f32| {
+        let v = (v * 100.0).round() / 100.0;
+        if v == 0.0 { 0.0 } else { v }
+    };
+    for (i, p) in plates.iter().enumerate() {
+        let hex = p.srgb.map(|v| format!("{:02X}", (v.clamp(0.0, 1.0) * 255.0).round() as u8)).concat();
+        d.push_str(&format!(
+            "     <rdf:li rdf:parseType=\"Resource\">\n      <pcsp:index>{i}</pcsp:index>\n      <pcsp:name>{}</pcsp:name>\n      <pcsp:labL>{:.2}</pcsp:labL>\n      <pcsp:labA>{:.2}</pcsp:labA>\n      <pcsp:labB>{:.2}</pcsp:labB>\n      <pcsp:srgb>#{hex}</pcsp:srgb>\n      <pcsp:solidity>{}</pcsp:solidity>\n     </rdf:li>\n",
+            xml_text(&p.name),
+            two(p.lab[0]),
+            two(p.lab[1]),
+            two(p.lab[2]),
+            (p.solidity * 100.0).round() as u32
+        ));
+    }
+    d.push_str("    </rdf:Seq>\n   </pcsp:plates>\n  </rdf:Description>\n");
+    // Into the document's packet when it has one, before its `</rdf:RDF>`; else a packet of its own.
+    if let Some(xmp) = doc_xmp
+        && let Some(at) = xmp.rfind("</rdf:RDF>")
+    {
+        let mut out = String::with_capacity(xmp.len() + d.len());
+        out.push_str(&xmp[..at]);
+        out.push_str(&d);
+        out.push_str(&xmp[at..]);
+        return out;
+    }
+    format!(
+        "<?xpacket begin=\"\u{feff}\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n<x:xmpmeta xmlns:x=\"adobe:ns:meta/\">\n <rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\n{d} </rdf:RDF>\n</x:xmpmeta>\n<?xpacket end=\"w\"?>"
+    )
 }
 
 /// The spot plates of `doc`, in channel order (the first channel prints first, underneath).
@@ -297,7 +390,17 @@ fn plates_of(doc: &Document, w: usize, h: usize) -> Vec<SpotPlate> {
             let n = ch.surface.channels().max(1);
             let values = ch.surface.read_region(canvas);
             let data: Vec<u8> = values.chunks(n).map(|px| px.first().copied().unwrap_or(0.0)).map(|v| to8(if alpha_type { 1.0 - v } else { v })).collect();
-            SpotPlate { name: ch.name.clone(), cmyk: ink.in_mode(ColorMode::Cmyk).c, width: w as u32, height: h as u32, data }
+            let srgb = ink.to_rgb();
+            SpotPlate {
+                name: ch.name.clone(),
+                cmyk: ink.in_mode(ColorMode::Cmyk).c,
+                lab: photocraft_color::convert::srgb_to_lab(srgb),
+                srgb,
+                solidity: ch.spot.map_or(0.0, |(_, s)| s.clamp(0.0, 1.0)),
+                width: w as u32,
+                height: h as u32,
+                data,
+            }
         })
         .collect()
 }
@@ -311,6 +414,13 @@ fn plates_of(doc: &Document, w: usize, h: usize) -> Vec<SpotPlate> {
 /// channels, is written as plates alone. Without it a Multichannel document has nothing to
 /// write and is refused.
 pub fn export(doc: &Document, spot_plates: bool) -> std::result::Result<ExportResult, IoError> {
+    export_with(doc, spot_plates, doc.metadata.xmp.as_deref())
+}
+
+/// [`export`] with the XMP packet to embed (`doc_xmp`: the document's, or `None` when the save
+/// embeds no metadata). With spot plates the packet gains their description ([`plates_xmp`]);
+/// without plates it is written as it is, and nothing when there is none.
+pub fn export_with(doc: &Document, spot_plates: bool, doc_xmp: Option<&str>) -> std::result::Result<ExportResult, IoError> {
     let (w, h) = (usize::try_from(doc.size.width).unwrap_or(0), usize::try_from(doc.size.height).unwrap_or(0));
     if w == 0 || h == 0 {
         return Err(IoError::Unsupported("PDF needs a document with non-zero width and height; nothing was written".into()));
@@ -366,7 +476,8 @@ pub fn export(doc: &Document, spot_plates: bool) -> std::result::Result<ExportRe
     } else if doc.channels.iter().any(|ch| ch.spot.is_some()) {
         warnings.push("spot channels were not written: spot plates were left out".into());
     }
-    let page = PrintPage { paper: (pw, ph), image, rect: (0.0, 0.0, pw, ph), marks: Marks::default(), description: None, label: None, plates };
+    let xmp = if plates.is_empty() { doc_xmp.map(str::to_owned) } else { Some(plates_xmp(doc_xmp, &plates)) };
+    let page = PrintPage { paper: (pw, ph), image, rect: (0.0, 0.0, pw, ph), marks: Marks::default(), description: None, label: None, plates, xmp };
     if !doc.metadata.text.is_empty() {
         warnings.push("free-form text metadata is not supported by PDF; it will be dropped".into());
     }

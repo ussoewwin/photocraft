@@ -266,3 +266,67 @@ fn a_16_bit_plate_is_written_at_8_bits() {
     assert!(has(&out.bytes, "/BitsPerComponent 8"));
     assert_eq!(stream_after(&out.bytes, "/Separation /K"), vec![0, 64, 128, 255, 0, 0, 0, 0]);
 }
+
+// ---- Spot-plate XMP description ----
+
+/// The XMP packet (the catalog's /Metadata stream), as text.
+fn xmp_of(pdf: &[u8]) -> String {
+    let start = pdf.windows(9).position(|w| w == b"<?xpacket").expect("a packet");
+    let tail = b"<?xpacket end=\"w\"?>";
+    let end = pdf[start..].windows(tail.len()).position(|w| w == tail).expect("packet end") + start + tail.len();
+    String::from_utf8(pdf[start..end].to_vec()).unwrap()
+}
+
+#[test]
+fn the_plates_are_described_in_xmp_with_their_ink_colour_and_solidity() {
+    let mut d = Document::new("m.pdf", Size { width: 4, height: 2 }, ColorMode::Multichannel, SampleType::F32);
+    let ink = photocraft_color::Color::rgb(0.2, 0.3, 0.4);
+    d.channels.push(AlphaChannel { spot: Some((ink, 0.35)), ..AlphaChannel::new("Black (Ink) #1/ü & <x>", channel(&[1.0; 8])) });
+    d.channels.push(spot("Underbase White", photocraft_color::Color::WHITE, &[0.0; 8]));
+    let out = export(&d, true).unwrap();
+    let pdf = &out.bytes;
+    check_structure(pdf);
+    assert!(has(pdf, "/Type /Catalog /Pages 2 0 R /Metadata "), "the catalog points at the metadata stream");
+    assert!(has(pdf, "/Type /Metadata /Subtype /XML /Length "), "an unfiltered XMP stream");
+    let xmp = xmp_of(pdf);
+    assert!(xmp.contains("xmlns:pcsp=\"http://ns.getartcraft.com/photocraft/spot-plates/1.0/\""), "{xmp}");
+    let lab = photocraft_color::convert::srgb_to_lab([0.2, 0.3, 0.4]);
+    let want = format!(
+        "<rdf:li rdf:parseType=\"Resource\">\n      <pcsp:index>0</pcsp:index>\n      <pcsp:name>Black (Ink) #1/ü &amp; &lt;x&gt;</pcsp:name>\n      <pcsp:labL>{:.2}</pcsp:labL>\n      <pcsp:labA>{:.2}</pcsp:labA>\n      <pcsp:labB>{:.2}</pcsp:labB>\n      <pcsp:srgb>#334D66</pcsp:srgb>\n      <pcsp:solidity>35</pcsp:solidity>\n     </rdf:li>",
+        lab[0], lab[1], lab[2]
+    );
+    assert!(xmp.contains(&want), "first plate:\n{xmp}");
+    assert!(xmp.contains("<pcsp:index>1</pcsp:index>\n      <pcsp:name>Underbase White</pcsp:name>\n      <pcsp:labL>100.00</pcsp:labL>\n      <pcsp:labA>0.00</pcsp:labA>\n      <pcsp:labB>0.00</pcsp:labB>\n      <pcsp:srgb>#FFFFFF</pcsp:srgb>\n      <pcsp:solidity>0</pcsp:solidity>"), "second plate:\n{xmp}");
+    // The order is the plates' paint order, which is the Separation names' order in the page.
+    let pos = |needle: &str| pdf.windows(needle.len()).position(|w| w == needle.as_bytes()).expect(needle);
+    assert!(pos("/Separation /Black#20#28Ink") < pos("/Separation /Underbase#20White"));
+    // One packet, well-formed enough for an XML parser.
+    assert_eq!(xmp.matches("<?xpacket begin").count(), 1);
+    assert!(crate::xml::parse(&xmp[xmp.find("<x:xmpmeta").unwrap()..xmp.rfind("</x:xmpmeta>").unwrap() + 12], Default::default()).is_ok(), "{xmp}");
+}
+
+#[test]
+fn the_plate_description_joins_the_documents_own_packet() {
+    let mut d = doc(ColorMode::Rgb);
+    d.channels.push(spot("Varnish", photocraft_color::Color::rgb(0.9, 0.9, 0.6), &[1.0; 8]));
+    d.metadata.xmp = Some(std::sync::Arc::from(
+        "<?xpacket begin=\"\u{feff}\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n<x:xmpmeta xmlns:x=\"adobe:ns:meta/\">\n <rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\n  <rdf:Description rdf:about=\"\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\"><dc:title>Job 1</dc:title></rdf:Description>\n </rdf:RDF>\n</x:xmpmeta>\n<?xpacket end=\"w\"?>",
+    ));
+    let out = crate::export(&d, "out.pdf", &crate::ExportOptions::default()).unwrap();
+    let xmp = xmp_of(&out.bytes);
+    assert_eq!(xmp.matches("<?xpacket begin").count(), 1, "one packet, not two");
+    assert!(xmp.contains("<dc:title>Job 1</dc:title>") && xmp.contains("<pcsp:name>Varnish</pcsp:name>"), "{xmp}");
+    assert!(xmp.find("<dc:title>").unwrap() < xmp.find("<pcsp:plates>").unwrap() && xmp.find("<pcsp:plates>").unwrap() < xmp.rfind("</rdf:RDF>").unwrap());
+    // A save that embeds no metadata drops the document's packet but still describes the plates.
+    let none = crate::export(&d, "out.pdf", &crate::ExportOptions { xmp: crate::XmpEmbed::None, ..Default::default() }).unwrap();
+    let xmp = xmp_of(&none.bytes);
+    assert!(!xmp.contains("dc:title") && xmp.contains("<pcsp:name>Varnish</pcsp:name>"), "{xmp}");
+    // Without plates the document's packet travels as it is, and a document without one has no stream.
+    d.channels.clear();
+    let plain = crate::export(&d, "out.pdf", &crate::ExportOptions::default()).unwrap();
+    assert!(has(&plain.bytes, "<dc:title>Job 1</dc:title>") && !has(&plain.bytes, "pcsp:"), "the document packet alone");
+    d.metadata.xmp = None;
+    let bare = export(&d, true).unwrap();
+    assert!(!has(&bare.bytes, "/Metadata") && !has(&bare.bytes, "<?xpacket"), "no metadata stream");
+    check_structure(&bare.bytes);
+}

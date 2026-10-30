@@ -596,7 +596,8 @@ fn export_stages(doc: &Document, name_or_ext: &str, opts: &ExportOptions, ctl: &
         return ora::export(doc);
     }
     if ext == "pdf" {
-        return pdf::export(doc, opts.pdf_spot_plates);
+        let xmp = if opts.xmp == XmpEmbed::All { doc.metadata.xmp.as_deref() } else { None };
+        return pdf::export_with(doc, opts.pdf_spot_plates, xmp);
     }
     if ext == photocraft_format::EXTENSION {
         let doc = named_for_file(doc, name_or_ext);
