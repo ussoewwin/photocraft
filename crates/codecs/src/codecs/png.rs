@@ -78,7 +78,7 @@ pub(crate) fn decode(bytes: &[u8], limits: &Limits) -> Result<Image, CodecError>
     }
     let info = reader.info();
     let mut img = Image::from_raw(out.width, out.height, layout, sample, buf)?;
-    img.icc = read_iccp(bytes);
+    img.icc = read_iccp(bytes, limits.max_alloc);
     let mut meta = Metadata { exif: info.exif_metadata.as_ref().map(|c| c.to_vec()), ..Default::default() };
     if let Some(d) = info.pixel_dims
         && d.unit == png::Unit::Meter
@@ -187,9 +187,11 @@ fn latin1_len(bytes: &[u8]) -> Option<usize> {
 const MAX_ICC_BYTES: u64 = 255 * 65_519;
 
 /// The ICC profile of the first CRC-valid `iCCP` chunk before the image data, inflated to at
-/// most [`MAX_ICC_BYTES`]. `None` when there is none, or it is malformed or larger: the image
+/// most [`MAX_ICC_BYTES`] or `max_alloc`, whichever is smaller (png kept profiles within the
+/// allocation limit too). `None` when there is none, or it is malformed or larger: the image
 /// then opens untagged, as png left a broken profile out.
-fn read_iccp(bytes: &[u8]) -> Option<Vec<u8>> {
+fn read_iccp(bytes: &[u8], max_alloc: u64) -> Option<Vec<u8>> {
+    let cap = MAX_ICC_BYTES.min(max_alloc);
     use std::io::Read;
     let mut rest = bytes.get(8..)?;
     while let Some((length, tail)) = rest.split_first_chunk::<4>() {
@@ -217,8 +219,8 @@ fn read_iccp(bytes: &[u8]) -> Option<Vec<u8>> {
             return None;
         }
         let mut profile = Vec::new();
-        flate2::read::ZlibDecoder::new(deflated).take(MAX_ICC_BYTES + 1).read_to_end(&mut profile).ok()?;
-        return (profile.len() as u64 <= MAX_ICC_BYTES).then_some(profile);
+        flate2::read::ZlibDecoder::new(deflated).take(cap.saturating_add(1)).read_to_end(&mut profile).ok()?;
+        return (profile.len() as u64 <= cap).then_some(profile);
     }
     None
 }
@@ -1339,5 +1341,9 @@ mod streamed_tests {
         assert_eq!((decoded.icc.is_none(), decoded.data()), (true, &[9u8; 12][..]));
         let png = crate::encode(&img(vec![7; cap]), Format::Png, &EncodeOptions::default()).unwrap();
         assert_eq!(decode(&png, &Limits::default()).unwrap().icc.map(|p| p.len()), Some(cap));
+        // A smaller allocation limit bounds the profile too, as it did inside png.
+        let png = crate::encode(&img(vec![7; 2000]), Format::Png, &EncodeOptions::default()).unwrap();
+        assert_eq!(read_iccp(&png, 1999), None);
+        assert_eq!(read_iccp(&png, 2000).map(|p| p.len()), Some(2000));
     }
 }
