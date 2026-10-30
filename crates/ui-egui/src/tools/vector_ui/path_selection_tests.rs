@@ -508,8 +508,11 @@ fn cmd_shift_enter_while_drawing_finishes_the_path_and_adds_it() {
     h.state_mut().run("path.set", json!({"name": "work", "path": rect_path(0.0, 0.0, 10.0, 10.0)})).unwrap();
     h.state_mut().run("select.rect", json!({"x": 150, "y": 60, "width": 20, "height": 20})).unwrap();
     h.state_mut().ui.tool = Tool::Pen;
+    // The work path isn't selected in the Paths panel, so the Pen starts a new work path.
+    h.state_mut().ui.selected_path = None;
     let p = |x: f64, y: f64| [[x, y], [x, y], [x, y]];
-    h.state_mut().ui.pen = Some(PenPath { knots: vec![p(20.0, 20.0), p(120.0, 20.0), p(120.0, 80.0)], ..Default::default() });
+    let owner = crate::vector_ui::capture_pen_owner(h.state());
+    h.state_mut().ui.pen = Some(PenPath { knots: vec![p(20.0, 20.0), p(120.0, 20.0), p(120.0, 80.0)], owner, ..Default::default() });
     h.run_steps(2);
     press(&mut h, Key::Enter, Modifiers { shift: true, ..command() });
     assert!(h.state().ui.pen.is_none(), "the pen path was finished: {}", h.state().ui.status);
