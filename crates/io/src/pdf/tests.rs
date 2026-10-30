@@ -173,18 +173,10 @@ fn spot_channels_follow_the_image_as_overprinting_separation_plates() {
     // 1 = solid ink, as the channel stores it: the plate is the channel, 8-bit, not inverted.
     assert_eq!(stream_after(pdf, "/Separation /Underbase#20White"), vec![255, 255, 255, 255, 0, 0, 0, 0]);
     assert_eq!(stream_after(pdf, "/Separation /PANTONE#20185#20C"), vec![0, 128, 255, 0, 0, 0, 0, 0]);
-    // Overprint is on for the plates, so each paints only its own colorant; zero-ink samples are
-    // stencil-masked (unpainted) by a 1-bit mask written just before each plate, never a soft mask.
+    // Overprint is on for the plates, so each paints only its own colorant; the plates carry no
+    // mask of any kind (plain viewers show the last plate opaque; a RIP separates them).
     assert!(has(pdf, "/Type /ExtGState /OP true /op true /OPM 1"), "overprint state");
-    assert!(
-        has(
-            pdf,
-            "/DeviceCMYK << /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [0.0000 0.0000 0.0000 0.0000] /N 1 >>] /BitsPerComponent 8 /Mask 8 0 R /Filter"
-        ),
-        "the first plate (object 9) refers to its mask (object 8)"
-    );
-    assert!(has(pdf, "/Separation /PANTONE#20185#20C /DeviceCMYK") && has(pdf, "/Mask 10 0 R"), "the second plate's mask");
-    assert_eq!(stream_after(pdf, "/ImageMask true"), vec![0x00, 0xF0], "row 0 all ink: no bits; row 1 no ink: 4 bits set, padded");
+    assert!(!has(pdf, "/Mask") && !has(pdf, "/ImageMask"), "no stencil or colour-key mask");
     assert!(!has(pdf, "/SMask"), "no transparency");
     assert!(!has(pdf, "/Width 4 /Height 2 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Mask"), "the composite is not masked");
     let c = content(pdf);
@@ -255,10 +247,7 @@ fn spot_plates_can_be_left_out_of_a_scripted_save() {
     let with = crate::export(&d, "out.pdf", &crate::ExportOptions::default()).unwrap();
     assert!(has(&with.bytes, "/Separation /Varnish"), "plates by default");
     let without = crate::export(&d, "out.pdf", &crate::ExportOptions { pdf_spot_plates: false, ..Default::default() }).unwrap();
-    assert!(
-        !has(&without.bytes, "/Separation") && !has(&without.bytes, "/ExtGState") && !has(&without.bytes, "/ImageMask"),
-        "no plate, no overprint state, no mask"
-    );
+    assert!(!has(&without.bytes, "/Separation") && !has(&without.bytes, "/ExtGState"), "no plate, no overprint state, no mask");
     assert!(has(&without.bytes, "/ColorSpace /DeviceCMYK"), "the composite still saves");
     assert!(without.warnings.iter().any(|w| w.contains("not written")), "{:?}", without.warnings);
     check_structure(&without.bytes);

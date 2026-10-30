@@ -8,9 +8,11 @@
 //!
 //! Spot channels leave as plates (FILE-215-17): one 8-bit image XObject per channel in a
 //! `/Separation` colour space named after the channel, painted over the composite with overprint
-//! on and its zero-ink samples stencil-masked, so a RIP or a separating rasteriser (Ghostscript
-//! `tiffsep`, `psdcmyk`) keeps each one as its own named plate instead of mixing it into CMYK, and
-//! a plain viewer still shows every plate's ink. Multi-page PDF, layer-preserving PDF and PDF
+//! on, so a RIP or a separating rasteriser (Ghostscript `tiffsep`, `psdcmyk`) keeps each one as
+//! its own named plate instead of mixing it into CMYK. The plates carry no mask: a viewer that
+//! ignores overprint shows the last plate opaque, Acrobat's Overprint Preview and any separating
+//! RIP show the real result, and an explicit image mask makes Illustrator report "An unknown
+//! imaging construct was encountered". Multi-page PDF, layer-preserving PDF and PDF
 //! import stay open (FILE-215-10).
 
 use std::io::Write as _;
@@ -146,12 +148,11 @@ fn marks_ops(m: Marks, (x, y, w, h): (f64, f64, f64, f64)) -> String {
     s
 }
 
-/// An image XObject dictionary and its Flate-compressed samples, as one object body. `extra`
-/// is spliced into the dictionary (e.g. a stencil mask reference).
-fn image_object(width: u32, height: u32, colour_space: &str, extra: &str, data: &[u8]) -> Vec<u8> {
+/// An image XObject dictionary and its Flate-compressed samples, as one object body.
+fn image_object(width: u32, height: u32, colour_space: &str, data: &[u8]) -> Vec<u8> {
     let z = deflate(data);
     let mut body = format!(
-        "<< /Type /XObject /Subtype /Image /Width {width} /Height {height} /ColorSpace {colour_space} /BitsPerComponent 8 {extra}/Filter /FlateDecode /Length {} >>\nstream\n",
+        "<< /Type /XObject /Subtype /Image /Width {width} /Height {height} /ColorSpace {colour_space} /BitsPerComponent 8 /Filter /FlateDecode /Length {} >>\nstream\n",
         z.len()
     )
     .into_bytes();
@@ -160,29 +161,10 @@ fn image_object(width: u32, height: u32, colour_space: &str, extra: &str, data: 
     body
 }
 
-/// The stencil mask of a plate: one bit per sample, rows padded to a byte, set (masked out, not
-/// painted) where the plate has no ink.
-fn stencil_mask(width: u32, height: u32, data: &[u8]) -> Vec<u8> {
-    let (w, h) = (width as usize, height as usize);
-    let stride = w.div_ceil(8);
-    let mut out = vec![0u8; stride.saturating_mul(h)];
-    for (y, row) in data.chunks(w.max(1)).take(h).enumerate() {
-        for (x, &v) in row.iter().enumerate() {
-            if v == 0
-                && let Some(b) = out.get_mut(y * stride + x / 8)
-            {
-                *b |= 0x80 >> (x % 8);
-            }
-        }
-    }
-    out
-}
-
 /// A one-page PDF.
 ///
 /// Objects: 1 catalog, 2 pages, 3 page, 4 contents, 5 font, then the image, its ICC profile,
-/// the overprint ExtGState and, per plate, its stencil mask then its image XObject, each only
-/// when present.
+/// the overprint ExtGState and one image XObject per plate, each only when present.
 pub fn print_pdf(page: &PrintPage) -> Vec<u8> {
     let mut out: Vec<u8> = b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n".to_vec();
     let mut offsets: Vec<usize> = Vec::new();
@@ -204,9 +186,8 @@ pub fn print_pdf(page: &PrintPage) -> Vec<u8> {
     let image_obj = take(page.image.is_some());
     let icc_obj = take(page.image.as_ref().is_some_and(|i| i.icc.is_some()));
     let gs_obj = take(!page.plates.is_empty());
-    // Per plate: the stencil mask at `first_plate + 2i`, the plate image right after it.
     let first_plate = next;
-    let plate_objs: Vec<usize> = (0..page.plates.len()).map(|i| first_plate + 2 * i + 1).collect();
+    let plate_objs: Vec<usize> = (0..page.plates.len()).map(|i| first_plate + i).collect();
 
     obj(&mut out, b"<< /Type /Catalog /Pages 2 0 R >>");
     obj(&mut out, b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>");
@@ -260,7 +241,7 @@ pub fn print_pdf(page: &PrintPage) -> Vec<u8> {
             Some(n) => format!("[/ICCBased {n} 0 R]"),
             None => device.to_string(),
         };
-        obj(&mut out, &image_object(img.width, img.height, &cs, "", &img.data));
+        obj(&mut out, &image_object(img.width, img.height, &cs, &img.data));
         if let Some(icc) = &img.icc {
             let z = deflate(icc);
             let mut body = format!("<< /N {} /Alternate {device} /Filter /FlateDecode /Length {} >>\nstream\n", img.channels, z.len()).into_bytes();
@@ -272,31 +253,17 @@ pub fn print_pdf(page: &PrintPage) -> Vec<u8> {
     if gs_obj.is_some() {
         obj(&mut out, b"<< /Type /ExtGState /OP true /op true /OPM 1 >>");
     }
-    for (i, p) in page.plates.iter().enumerate() {
+    for p in &page.plates {
         // A tint transform from the colorant's density to its alternate: 0 → paper, 1 → `cmyk`
         // (an exponential interpolation function with N = 1 is linear).
         let cmyk = p.cmyk.map(|v| format!("{:.4}", v.clamp(0.0, 1.0))).join(" ");
         let cs = format!("[/Separation {} /DeviceCMYK << /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [{cmyk}] /N 1 >>]", pdf_name(&p.name));
-        // Stencil masking (PDF 1.3, no transparency): where the plate has no ink, nothing is
-        // painted at all. A separating RIP sees the same plate either way (unpainted = no ink),
-        // but a viewer without overprint preview would otherwise paint every zero-ink pixel as
-        // opaque paper and show only the last plate. An explicit 1-bit mask stream, not a
-        // colour-key `/Mask [0 0]` range: Quartz (Preview, Quick Look, Safari) draws nothing for
-        // a colour-key-masked Separation image.
-        let mask = stencil_mask(p.width, p.height, &p.data);
-        let z = deflate(&mask);
-        let mut body = format!(
-            "<< /Type /XObject /Subtype /Image /Width {} /Height {} /ImageMask true /BitsPerComponent 1 /Filter /FlateDecode /Length {} >>\nstream\n",
-            p.width,
-            p.height,
-            z.len()
-        )
-        .into_bytes();
-        body.extend_from_slice(&z);
-        body.extend_from_slice(b"\nendstream");
-        obj(&mut out, &body);
-        let mask_ref = format!("/Mask {} 0 R ", first_plate + 2 * i);
-        obj(&mut out, &image_object(p.width, p.height, &cs, &mask_ref, &p.data));
+        // No mask on the plate: where it has no ink it paints "0" of its own colorant, which a
+        // separating RIP reads as no ink and overprint keeps the other plates under. (A stencil
+        // or colour-key mask would let plain viewers show every plate, but Illustrator reports
+        // an explicit image mask as an unknown imaging construct, and Quartz draws nothing for a
+        // colour-key-masked Separation image.)
+        obj(&mut out, &image_object(p.width, p.height, &cs, &p.data));
     }
     let xref = out.len();
     out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", offsets.len() + 1).as_bytes());
