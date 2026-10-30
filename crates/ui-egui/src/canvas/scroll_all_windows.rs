@@ -48,6 +48,14 @@ pub fn follow_drag(app: &mut PhotocraftApp, enabled: bool, source: Source, doc: 
     follow(app, source, doc, target.center);
 }
 
+/// Whether the main window shows the Home screen or an open-file card instead of a document
+/// canvas, as `tabs::documents` draws it.
+fn main_canvas_hidden(app: &mut PhotocraftApp) -> bool {
+    let n = app.session.documents().len();
+    let opening = !app.jobs.opens.is_empty();
+    (!opening && app.ui.chrome.shows_home(n, app.session.prefs().general.auto_show_home_screen)) || app.jobs.focus.is_some()
+}
+
 /// Put every shown view except `source` at the relative location of `center`, a point in document
 /// `doc`: each view's center becomes the same fraction of its own document's width and height.
 pub fn follow(app: &mut PhotocraftApp, source: Source, doc: usize, center: [f32; 2]) {
@@ -72,16 +80,18 @@ pub fn follow(app: &mut PhotocraftApp, source: Source, doc: usize, center: [f32;
             v.center = c;
         }
     };
-    // The main window shows the arranged tiles, or else a docked document alone.
-    let shown: Vec<usize> = match crate::canvas::arranged_cells(app, app.last_canvas_rect) {
-        Some(cells) => cells.into_iter().map(|(d, _)| d).collect(),
-        None => super::tabs::main_canvas_document(app).into_iter().collect(),
-    };
-    for d in shown {
-        if source != Source::Main(d)
-            && let Some(v) = app.ui.views.get_mut(d)
-        {
-            place(v, d);
+    if !main_canvas_hidden(app) {
+        // The main window shows the arranged tiles, or else a docked document alone.
+        let shown: Vec<usize> = match crate::canvas::arranged_cells(app, app.last_canvas_rect) {
+            Some(cells) => cells.into_iter().map(|(d, _)| d).collect(),
+            None => super::tabs::main_canvas_document(app).into_iter().collect(),
+        };
+        for d in shown {
+            if source != Source::Main(d)
+                && let Some(v) = app.ui.views.get_mut(d)
+            {
+                place(v, d);
+            }
         }
     }
     for w in app.ui.windows.iter_mut().filter(|w| w.open && source != Source::Window(w.id)) {
@@ -198,6 +208,43 @@ mod tests {
         follow(&mut app, Source::Window(window_id), 0, [100.0, 60.0]);
         assert!(near(app.ui.views[1].center, [200.0, 120.0]), "{:?}", app.ui.views[1].center);
         assert_eq!(app.ui.views[0].center, [200.0, 150.0], "the floated document's hidden main view stays");
+    }
+
+    #[test]
+    fn a_drag_in_a_document_window_skips_the_main_view_behind_home_or_an_open_card() {
+        for home in [true, false] {
+            let mut app = app_with_tiles();
+            app.ui.view.arrange.clear();
+            app.ui.windows.push(DocWindow {
+                id: 3,
+                document: 1,
+                view: view(1.0, [400.0, 300.0], 0.0),
+                open: true,
+                floating: false,
+                focused: false,
+                position: None,
+            });
+            app.ui.windows.push(DocWindow {
+                id: 4,
+                document: 2,
+                view: view(1.0, [100.0, 50.0], 0.0),
+                open: true,
+                floating: false,
+                focused: false,
+                position: None,
+            });
+            if home {
+                app.ui.chrome.home = Some(app.session.documents().len());
+            } else {
+                let job = photocraft_engine::jobs::JobId(9);
+                app.jobs.opens.push(crate::jobs_ui::OpenTab { job, name: "opening.psd".into(), path: None, slot: None, order: None });
+                app.jobs.focus = Some(job);
+            }
+
+            follow(&mut app, Source::Window(3), 1, [200.0, 120.0]);
+            assert_eq!(app.ui.views[0].center, [200.0, 150.0], "the main canvas is hidden when home={home}");
+            assert!(near(app.ui.windows[1].view.center, [50.0, 20.0]), "another document window follows when home={home}");
+        }
     }
 
     #[test]
