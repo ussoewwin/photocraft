@@ -206,7 +206,8 @@ fn output(tone: f32, adjusted: f32, weight: f32, component: &Component, fmt: Pix
     let value = if component.lab_invert {
         tone + (256.0 / 255.0 - tone.clamp(0.0, 1.0) - tone) * weight
     } else {
-        photocraft_color::convert::rgb_to_gray([tone + (adjusted - tone) * weight; 3])
+        // Match the scalar compositor: full coverage keeps the edit even over huge HDR values.
+        photocraft_color::convert::rgb_to_gray([tone * (1.0 - weight) + adjusted * weight; 3])
     };
     let mut encoded = [0; 4];
     write_sample(&mut encoded, fmt.sample, 0, value);
@@ -218,6 +219,26 @@ fn output(tone: f32, adjusted: f32, weight: f32, component: &Component, fmt: Pix
 mod tests {
     use super::*;
     use photocraft_doc::adjust::{CurvePoint, LevelsChannel, ToneSpace};
+
+    #[test]
+    fn full_coverage_keeps_threshold_over_extreme_float_channels() {
+        let fmt = PixelFormat::new(ColorMode::Rgb, SampleType::F32, true);
+        let bounds = Rect::from_xywh(0, 0, 2, 1);
+        let mut source = Surface::new(fmt);
+        source.fill_rect(bounds, &[1e30, -2e30, 1e30, 0.625]);
+        let mut mask = Surface::new(PixelFormat::new(ColorMode::Grayscale, SampleType::F32, false));
+        mask.fill_rect(Rect::from_xywh(0, 0, 1, 1), &[1.0]);
+        let colors = ColorChannels::from_indices([0, 2], 3).unwrap();
+        for selection in [None, Some(&mask)] {
+            let mut actual = source.clone();
+            adjust(&mut actual, colors, &Adjustment::Threshold { level: 0.5 }, selection, bounds).unwrap();
+            let pixel = actual.pixel(0, 0);
+            assert_eq!(pixel, vec![1.0, -2e30, 1.0, 0.625]);
+            if selection.is_some() {
+                assert_eq!(actual.pixel(1, 0), source.pixel(1, 0));
+            }
+        }
+    }
 
     #[test]
     fn fused_tiles_match_scalar_oracle_at_all_depths_and_modes() {
@@ -265,7 +286,7 @@ mod tests {
                         let mut actual = source.clone();
                         super::super::adjust_reference(&mut expected, colors, adjustment, selection, bounds).unwrap();
                         adjust(&mut actual, colors, adjustment, selection, bounds).unwrap();
-                        assert_eq!(expected, actual, "{mode:?} {sample:?} {adjustment:?} selection={}", selection.is_some());
+                        assert!(expected == actual, "{mode:?} {sample:?} {adjustment:?} selection={}", selection.is_some());
                     }
                 }
             }
