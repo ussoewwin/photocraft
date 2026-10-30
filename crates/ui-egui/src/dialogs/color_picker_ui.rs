@@ -776,9 +776,15 @@ pub fn confirm(app: &mut PhotocraftApp, f: &Map<String, Value>) -> Result<Value,
     let target = f.get("__colorPicker").and_then(Value::as_str).unwrap_or("foreground");
     let color = f.get("color").and_then(Value::as_str).unwrap_or("#000000");
     if let Some(cmd) = f.get("__command").and_then(Value::as_str) {
+        let shown = crate::color_picker_preview::shown_for(app, f);
         let mut p = f.get("__params").cloned().filter(Value::is_object).unwrap_or_else(|| json!({}));
         p["color"] = json!(color);
-        return app.run(cmd, p);
+        let r = app.run(cmd, p)?;
+        // The canvas already shows this edit (the live preview): refresh only what it changed.
+        if let Some((doc, key)) = shown {
+            crate::canvas::shown_as_document(app, doc, |k| k == key);
+        }
+        return Ok(r);
     }
     if target == "field" {
         let (Some(dialog), Some(field)) = (f.get("__dialog").and_then(Value::as_u64), f.get("__field").and_then(Value::as_str)) else {

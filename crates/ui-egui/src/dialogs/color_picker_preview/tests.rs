@@ -2,6 +2,11 @@ use super::*;
 use photocraft_doc::{LayerContent, TextLayer};
 use serde_json::json;
 
+thread_local! {
+    /// How often this thread built a preview copy (`display_doc` runs the command).
+    pub(super) static BUILDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 fn app_at(depth: u32) -> PhotocraftApp {
     let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
     app.run("file.new", json!({"width": 400, "height": 200, "depth": depth})).unwrap();
@@ -60,8 +65,8 @@ fn the_canvas_shows_the_picked_colour_before_ok_without_touching_the_session() {
         let (doc, revision, dirty, history) = committed(&app);
         pick(&mut app, "#e51c33");
 
-        let (shown, key) = display_doc(&mut app, 0).expect("a live preview");
-        assert_ne!(key & TAG, 0, "preview keys never equal the document's");
+        let (shown, key) = crate::canvas::display_doc(&mut app, 0);
+        assert_ne!(key & TAG, 0, "{depth}-bit: the canvas draws the live preview, keyed apart from the document");
         assert_eq!(rgb_at(&shown, id, 0), [229, 28, 51, 255], "{depth}-bit: the canvas shows the picked colour");
         assert_eq!(rgb_at(&shown, id, 4), [229, 28, 51, 255]);
         let after = committed(&app);
@@ -200,6 +205,101 @@ fn damage_between_previews_is_the_text_layer_only() {
     assert!(damage(&app, doc_id, revision, red, red).is_none());
     assert!(damage(&app, doc_id, revision + 1, red, blue).is_none(), "another revision isn't ours");
     assert!(damage(&app, doc_id, revision, red, 12_345 | TAG).is_none(), "an unknown key isn't ours");
+
+    // The canvas asks through `damage_since`, with the display's key folded into what it cached.
+    let doc = app.session.active().unwrap().doc.clone();
+    let dk = crate::canvas::canvas_display(&app, &doc, None).1;
+    let since = |seen: u64, now: u64| crate::canvas::damage_since(&app, 0, (revision, seen ^ dk), (revision, now), dk, None);
+    assert_eq!(since(red, blue), Some(bounds), "the canvas refreshes only the text layer between colours");
+    assert_eq!(since(blue, 0), Some(bounds), "and on Cancel");
+}
+
+#[test]
+fn free_transform_keeps_its_preview_while_the_text_colour_picker_is_open() {
+    let mut app = app_at(8);
+    new_type_layer(&mut app, "Hello");
+    crate::transform_tool::begin(&mut app, &egui::Context::default()).expect("Free Transform opens on the type layer");
+    pick(&mut app, "#ff0000");
+
+    // The transform's own preview shows the layer where the box puts it; a copy with the old
+    // placement under it would show the text twice.
+    let (_, key) = crate::canvas::display_doc(&mut app, 0);
+    let session = app.transform_preview.as_ref().expect("the transform preview").session;
+    assert_eq!(key, (1 << 40) + session, "the canvas keeps drawing the Free Transform preview");
+    assert!(display_doc(&mut app, 0).is_none());
+}
+
+#[test]
+fn ok_counts_the_previewed_canvas_as_the_document_so_only_the_layer_is_redrawn() {
+    for gradient in [false, true] {
+        let mut app = app_at(8);
+        let ctx = egui::Context::default();
+        let dialog = if gradient {
+            let id = new_gradient_fill(&mut app);
+            crate::gradient_ui::edit_stop_color(&mut app, id, 0);
+            set_color(&mut app, "#ff0000");
+            app.ui.dialogs.last().unwrap().id
+        } else {
+            new_type_layer(&mut app, "Hello");
+            pick(&mut app, "#ff0000")
+        };
+        // The canvas draws the preview, then OK commits it.
+        crate::canvas::ensure_texture(&mut app, &ctx, 0, None).unwrap();
+        let doc_id = app.session.active().unwrap().doc.id;
+        let cached = |app: &PhotocraftApp| {
+            let c = &app.canvases[&crate::canvas::cache_key(doc_id, None)];
+            (c.tex_revision, c.tex_preview_key)
+        };
+        let doc = app.session.active().unwrap().doc.clone();
+        let dk = crate::canvas::canvas_display(&app, &doc, None).1;
+        assert_ne!(cached(&app).1, dk, "gradient={gradient}: the canvas holds the preview");
+
+        crate::dialogs::confirm(&mut app, dialog).unwrap();
+        let revision = app.session.active().unwrap().revision;
+        let seen = cached(&app);
+        assert_eq!(seen.1, dk, "gradient={gradient}: OK's edit is what the canvas already shows");
+        // So the commit's own damage is all the canvas refreshes, not the whole document.
+        let edit = photocraft_geom::Rect::new(1, 2, 3, 4);
+        let damage = crate::canvas::damage_since(&app, 0, seen, (revision, 0), dk, Some(edit));
+        assert_eq!(damage, Some(edit), "gradient={gradient}");
+    }
+}
+
+#[test]
+fn ok_after_a_colour_the_canvas_never_drew_redraws_as_before() {
+    let mut app = app_at(8);
+    let ctx = egui::Context::default();
+    new_type_layer(&mut app, "Hello");
+    let dialog = pick(&mut app, "#ff0000");
+    crate::canvas::ensure_texture(&mut app, &ctx, 0, None).unwrap();
+    let doc = app.session.active().unwrap().doc.clone();
+    let dk = crate::canvas::canvas_display(&app, &doc, None).1;
+    // The colour changes and OK lands before the canvas drew it: the shown copy is not the edit.
+    set_color(&mut app, "#0000ff");
+    crate::dialogs::confirm(&mut app, dialog).unwrap();
+    let c = &app.canvases[&crate::canvas::cache_key(doc.id, None)];
+    assert_ne!(c.tex_preview_key, dk, "a stale red preview is never counted as the blue document");
+}
+
+#[test]
+fn a_refused_preview_is_not_rebuilt_every_frame() {
+    let mut app = app_at(8);
+    new_type_layer(&mut app, "Hello");
+    pick(&mut app, "#ff0000");
+    let fields = &mut app.ui.dialogs.last_mut().unwrap().fields;
+    fields["__params"]["layer"] = json!(999_999);
+
+    BUILDS.with(|b| b.set(0));
+    assert!(display_doc(&mut app, 0).is_none(), "the command refuses a missing layer");
+    assert!(display_doc(&mut app, 0).is_none());
+    assert_eq!(crate::canvas::display_doc(&mut app, 0).1, 0, "the canvas draws the document");
+    assert_eq!(BUILDS.with(|b| b.get()), 1, "the refusal is remembered for this colour");
+
+    // Another colour is another preview: it is tried once.
+    set_color(&mut app, "#00ff00");
+    assert!(display_doc(&mut app, 0).is_none());
+    assert!(display_doc(&mut app, 0).is_none());
+    assert_eq!(BUILDS.with(|b| b.get()), 2);
 }
 
 #[test]
@@ -262,7 +362,8 @@ fn a_gradient_stop_colour_is_previewed_before_ok_and_cancel_changes_nothing() {
         assert!(owns(&app.ui.dialogs.last().unwrap().fields), "{depth}-bit: the stop picker is previewed");
         set_color(&mut app, "#ff0000");
 
-        let (shown, _) = display_doc(&mut app, 0).expect("a live preview");
+        let (shown, key) = crate::canvas::display_doc(&mut app, 0);
+        assert_ne!(key & TAG, 0, "{depth}-bit: the canvas draws the live preview");
         assert_eq!(stop_rgb(&shown, id, 0), [255, 0, 0], "{depth}-bit: the canvas shows the picked stop colour");
         assert_eq!(stop_rgb(&shown, id, 1), [255, 255, 255], "{depth}-bit: the other stop is unchanged");
         let after = committed(&app);
@@ -271,6 +372,7 @@ fn a_gradient_stop_colour_is_previewed_before_ok_and_cancel_changes_nothing() {
 
         app.ui.close_dialog(dialog).unwrap();
         assert!(display_doc(&mut app, 0).is_none(), "{depth}-bit: Cancel shows the document again");
+        assert_eq!(crate::canvas::display_doc(&mut app, 0).1, 0, "{depth}-bit: the canvas draws the document");
         assert_eq!(stop_rgb(&app.session.active().unwrap().doc, id, 0), [0, 0, 0]);
     }
 }
@@ -311,5 +413,23 @@ fn the_preview_never_shows_on_a_document_switched_to_while_the_picker_is_open() 
     // Back on the document it was opened on, the preview returns.
     assert!(app.session.set_active(0));
     let (shown, _) = display_doc(&mut app, 0).expect("preview on its own document");
+    assert_eq!(rgb_at(&shown, id, 0), [255, 0, 0, 255]);
+}
+
+#[test]
+fn no_preview_when_the_params_name_no_layer() {
+    let mut app = app_at(8);
+    let id = new_type_layer(&mut app, "Hello");
+    new_type_layer(&mut app, "Top");
+    pick(&mut app, "#ff0000");
+    // An agent's `ui.dialog.set`: OK would recolour the selected layers of the real session.
+    for params in [json!({}), json!({"range": [0, 3]}), json!({"layers": []}), json!({"layer": "1"})] {
+        app.ui.dialogs.last_mut().unwrap().fields.insert("__params".into(), params.clone());
+        assert!(display_doc(&mut app, 0).is_none(), "{params}: no preview of a guessed layer");
+        assert_eq!(crate::canvas::display_doc(&mut app, 0).1, 0, "{params}");
+    }
+    // A named layer is previewed as before.
+    app.ui.dialogs.last_mut().unwrap().fields.insert("__params".into(), json!({"layer": id.0}));
+    let (shown, _) = display_doc(&mut app, 0).expect("a named layer is previewed");
     assert_eq!(rgb_at(&shown, id, 0), [255, 0, 0, 255]);
 }

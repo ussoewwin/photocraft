@@ -34,6 +34,10 @@ pub(crate) struct Preview {
     revision: u64,
     key: u64,
     shown: Option<Arc<Document>>,
+    /// The command params `shown` was built with (OK commits the same edit for the same params).
+    params: String,
+    /// The key of a preview the command refused at this revision, so it isn't tried every frame.
+    refused: Option<u64>,
     original_area: Rect,
     areas: VecDeque<(u64, Rect)>,
 }
@@ -53,7 +57,8 @@ pub(crate) fn owns(fields: &Map<String, Value>) -> bool {
 }
 
 /// The command and params OK would run for these picker fields, or `None` when the picker
-/// still shows its opening colour (nothing to preview) or its colour is not valid.
+/// still shows its opening colour (nothing to preview), its colour is not valid or its params
+/// name no target layer.
 fn preview_params(fields: &Map<String, Value>) -> Option<(&'static str, Value)> {
     let command = command_of(fields)?;
     let color = fields.get("color").and_then(Value::as_str).and_then(parse_hex).map(hex)?;
@@ -62,6 +67,11 @@ fn preview_params(fields: &Map<String, Value>) -> Option<(&'static str, Value)> 
         return None;
     }
     let mut params = fields.get("__params")?.as_object()?.clone();
+    // Without named layers the command falls back to the session's selected layers, which the
+    // throwaway preview session doesn't share: it would show another layer than OK recolours.
+    if target_layers(&Value::Object(params.clone())).is_empty() {
+        return None;
+    }
     // The preview is a throwaway session: it has no typing session to merge into.
     params.remove("coalesce");
     params.insert("color".into(), Value::String(color));
@@ -95,7 +105,9 @@ fn layer_area(doc: &Document, layers: &[LayerId]) -> Rect {
 /// colour applied. `None` (draw the document itself) without such a picker, while it shows its
 /// opening colour, for another document, or when the command refuses the preview.
 pub(crate) fn display_doc(app: &mut PhotocraftApp, idx: usize) -> Option<(Arc<Document>, u64)> {
-    let Some(d) = app.ui.dialogs.last().filter(|d| owns(&d.fields)) else {
+    // Under Free Transform the canvas shows the transform's preview, with the layer drawn where
+    // the box puts it: a copy of the document would show it at its old place as well.
+    let Some(d) = app.ui.dialogs.last().filter(|d| owns(&d.fields) && app.ui.transform.is_none()) else {
         forget_shown(app);
         return None;
     };
@@ -117,27 +129,37 @@ pub(crate) fn display_doc(app: &mut PhotocraftApp, idx: usize) -> Option<(Arc<Do
     }
     let (document, revision) = (st.doc.id, st.revision);
     let layers = target_layers(&params);
-    let key = (egui::Id::unique((document.0, revision, dialog, params.to_string())).value() & (TAG - 1)) | TAG;
+    let params_text = params.to_string();
+    let key = (egui::Id::unique((document.0, revision, dialog, &params_text)).value() & (TAG - 1)) | TAG;
 
     // A new document revision starts a new set of areas; the same one keeps them.
     let same = app.color_picker_preview.as_ref().is_some_and(|p| p.document == document && p.revision == revision);
     if !same {
         let original_area = layer_area(&st.doc, &layers);
-        app.color_picker_preview = Some(Preview { document, revision, key: 0, shown: None, original_area, areas: VecDeque::new() });
+        app.color_picker_preview =
+            Some(Preview { document, revision, key: 0, shown: None, params: String::new(), refused: None, original_area, areas: VecDeque::new() });
     }
-    if let Some(p) = app.color_picker_preview.as_ref()
-        && p.key == key
-        && let Some(shown) = &p.shown
-    {
-        return Some((shown.clone(), key));
+    if let Some(p) = app.color_picker_preview.as_ref() {
+        if let Some(shown) = p.shown.as_ref().filter(|_| p.key == key) {
+            return Some((shown.clone(), key));
+        }
+        if p.refused == Some(key) {
+            forget_shown(app);
+            return None;
+        }
     }
 
     let doc = st.doc.clone();
+    #[cfg(test)]
+    tests::BUILDS.with(|b| b.set(b.get() + 1));
     let shown = match preview_document(&doc, command, params) {
         Ok(shown) => Arc::new(shown),
         Err(_) => {
             // OK reports the refusal; the preview quietly shows the document as it is.
             forget_shown(app);
+            if let Some(p) = app.color_picker_preview.as_mut() {
+                p.refused = Some(key);
+            }
             return None;
         }
     };
@@ -151,7 +173,19 @@ pub(crate) fn display_doc(app: &mut PhotocraftApp, idx: usize) -> Option<(Arc<Do
     p.areas.push_back((key, area));
     p.key = key;
     p.shown = Some(shown.clone());
+    p.params = params_text;
     Some((shown, key))
+}
+
+/// The active document and the preview key on screen when that preview is exactly what OK
+/// commits for these picker `fields`. OK then counts the canvas as showing the document, so the
+/// commit refreshes only the target layers instead of the whole canvas.
+pub(crate) fn shown_for(app: &PhotocraftApp, fields: &Map<String, Value>) -> Option<(DocId, u64)> {
+    let (_, params) = preview_params(fields)?;
+    let st = app.session.active()?;
+    let (p, params) = (app.color_picker_preview.as_ref()?, params.to_string());
+    let same = p.document == st.doc.id && p.revision == st.revision && p.shown.is_some() && p.params == params;
+    same.then_some((p.document, p.key))
 }
 
 /// Drop the previewed copy (the picker closed or went back to its opening colour). The areas
