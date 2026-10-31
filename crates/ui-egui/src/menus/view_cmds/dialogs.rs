@@ -416,8 +416,16 @@ pub(super) fn front(app: &mut PhotocraftApp, ctx: &egui::Context, id: &str, para
             dialog(app, json!({"path": format!("{dir}/{stem}.pdf"), "quality": 10}), json!({}))
         }
         "file.export.dataSetsAsFiles" => {
-            let (_, _, _) = doc?;
-            dialog(app, json!({"dir": dir, "naming": "{name}", "format": "png"}), json!({"format": ["png", "jpg", "psd", "tiff", "webp", "bmp"]}))
+            #[cfg(target_arch = "wasm32")]
+            {
+                let _ = (app, dir, doc);
+                Some(Err(tl!("Data Sets as Files is unavailable on the web").to_string()))
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let (_, _, _) = doc?;
+                dialog(app, json!({"dir": dir, "naming": "{name}", "format": "png"}), json!({"format": ["png", "jpg", "psd", "tiff", "webp", "bmp"]}))
+            }
         }
         "layer.new.artboard" => {
             let (w, h, _) = doc?;
