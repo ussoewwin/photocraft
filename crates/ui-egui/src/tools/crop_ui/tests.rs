@@ -1163,3 +1163,19 @@ fn info_panel_shows_the_pending_frame_size() {
     app.ui.tool = Tool::Move;
     assert_eq!(info_size(&app), None, "another tool shows the selection instead");
 }
+
+/// #3145: the Info panel's crop ratio, reduced when small, else a decimal against 1.
+#[test]
+fn ratio_label_reduces_or_shows_a_decimal() {
+    assert_eq!(ratio_label([400.0, 300.0]).as_deref(), Some("4:3"));
+    assert_eq!(ratio_label([1920.0, 1080.0]).as_deref(), Some("16:9"));
+    assert_eq!(ratio_label([500.0, 500.0]).as_deref(), Some("1:1"));
+    assert_eq!(ratio_label([800.0, 1000.0]).as_deref(), Some("4:5"));
+    assert_eq!(ratio_label([1413.0, 1000.0]).as_deref(), Some("1.413:1"));
+    assert_eq!(ratio_label([200.0, 301.0]).as_deref(), Some("1:1.505"));
+    assert_eq!(ratio_label([1000.0, 1.0]).as_deref(), Some("1000:1"));
+    // Broken or absurd sizes never panic.
+    assert_eq!(ratio_label([f64::NAN, 1.0]), None);
+    assert_eq!(ratio_label([0.0, 1.0]), None);
+    assert!(ratio_label([f64::MAX, 1.0]).is_some());
+}
