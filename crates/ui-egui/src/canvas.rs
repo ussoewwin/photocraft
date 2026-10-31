@@ -640,6 +640,10 @@ struct DialogCanvasInput<'a> {
     img_rect: Rect,
 }
 
+/// Pointer input on the image while a dialog or panel owns it, before the tools see it: an armed
+/// eyedropper (a colour picker's, Curves, Replace Color, Color Range), Select and Mask's Refine
+/// Edge Brush, Field Blur's pins, a Layer Style shadow drag, a ⌘/Ctrl-click adding a Curves point,
+/// and the zoom and pan that stay available throughout. It also sets the cursor these show.
 fn handle_dialog_canvas_input(app: &mut PhotocraftApp, input: DialogCanvasInput<'_>) {
     let sticky_alt = app.ui.shell.sticky_alt;
     let zoom_out = |alt: bool| match input.temporary {
@@ -1326,6 +1330,11 @@ fn eyedropper_owns_image(app: &PhotocraftApp) -> bool {
         || crate::layer_picker::armed(app).is_some()
 }
 
+/// Set the cursor for the tool over the image, and paint the ones PhotoCraft draws itself (the
+/// brush tip outline, the crosshair, a tool's own icon). The first case that applies wins: a pan
+/// keeps the fist it set, an eyedropper that owns the image keeps the cursor it set, a stale
+/// pointer position over another window paints nothing, then a guide under the pointer, then the
+/// tool's own cursor.
 fn draw_canvas_tool_cursor(app: &mut PhotocraftApp, ui: &mut egui::Ui, input: &CanvasOverlayInput<'_>, resizing: bool) {
     let ctx = input.ctx;
     let xf = input.xf;
