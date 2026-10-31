@@ -1802,6 +1802,10 @@ fn canvas_input(
     // the press on, so its first frame never starts a stroke. Alt+left-drag still subtracts.
     let (secondary, now) = ui.input(|i| (i.pointer.button_down(egui::PointerButton::Secondary), i.modifiers));
     let gesture = if secondary { crate::brush_resize::is_right_gesture(now) } else { crate::brush_resize::is_gesture(now) };
+    // Space or the middle button may pan mid-resize; letting go of the button still ends it.
+    if pan && !ui.input(|i| i.pointer.any_down()) {
+        w.resize = None;
+    }
     if !pan && w.tool.brushes() && !w.pressed && (w.resize.is_some() || (resp.is_pointer_button_down_on() && gesture)) {
         if w.resize.is_none()
             && let Some(p) = ui.input(|i| i.pointer.press_origin()).or_else(|| resp.interact_pointer_pos())
