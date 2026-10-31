@@ -188,6 +188,8 @@ const PAINT_IDS: &[&str] = &[
     "paint.artHistoryBrush",
     "paint.redEye",
     "paint.remove",
+    "paint.patch",
+    "paint.contentAwareMove",
 ];
 
 /// Pasting into a targeted mask or channel (#1035).
@@ -195,11 +197,9 @@ const PASTE_IDS: &[&str] = &["edit.paste", "edit.pasteSpecial.pasteInPlace", "ed
 
 /// Commands whose target follows the Channels panel.
 pub(crate) fn routed(id: &str) -> bool {
-    if matches!(id, "paint.setSymmetry" | "paint.symmetryFromPath" | "paint.symmetryDisable") {
-        return false;
-    }
+    // An allow-list, not a `paint.` prefix: Symmetry and the Mixer Brush's ⌥-click load
+    // (`paint.mixerLoad`) don't edit pixels, so they never follow or refuse a channel target.
     id.starts_with("filter.")
-        || id.starts_with("paint.")
         || id == "edit.stroke"
         || id == "plugin.run"
         || matches!(id, "paint.magicEraser" | "paint.backgroundEraser" | "paint.colorReplacement" | "shape.paint" | "path.fill" | "path.stroke" | "edit.clear" | "edit.cut")

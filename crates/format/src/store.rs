@@ -292,7 +292,9 @@ impl Fetch for LoadFetch<'_> {
             return Err(FormatError::corrupt(format!("invalid blob hash `{hash}`")));
         }
         let path = blob_path(hash);
-        let z = self.src.get(&path, limit)?;
+        // The stored zstd frame of incompressible data is a little larger than the data, so a
+        // blob right at `limit` must still be read; `decompress_bounded` enforces `limit`.
+        let z = self.src.get(&path, limit.saturating_add(limit / 8).saturating_add(4096))?;
         // Blob length is not in the manifest; the frame header bounds it and
         // we cap at max_blob_bytes.
         let data = decompress_bounded(&z, limit, None, &path)?;
@@ -1418,3 +1420,33 @@ pub(crate) fn write_atomic(path: &Path, data: &[u8]) -> Result<()> {
 
 #[cfg(all(test, windows))]
 mod durability_tests;
+
+#[cfg(test)]
+#[test]
+fn an_incompressible_blob_at_its_limit_still_loads() {
+    struct One(String, Vec<u8>);
+    impl ByteSource for One {
+        fn get(&self, path: &str, max: usize) -> Result<Vec<u8>> {
+            if path != self.0 || self.1.len() > max {
+                return Err(FormatError::LimitExceeded(format!("{path} over {max}")));
+            }
+            Ok(self.1.clone())
+        }
+    }
+    let mut x = 0x9e37_79b9_u32;
+    let data: Vec<u8> = (0..64 * 1024)
+        .map(|_| {
+            x ^= x << 13;
+            x ^= x >> 17;
+            x ^= x << 5;
+            x as u8
+        })
+        .collect();
+    let z = compress(&data);
+    assert!(z.len() > data.len(), "the fixture must not compress");
+    let hash = hash_bytes(&data);
+    let src = One(blob_path(&hash), z);
+    let mut fetch = LoadFetch { src: &src, opts: crate::LoadOptions::default(), total: 0, blobs: HashMap::new() };
+    assert_eq!(fetch.blob_bounded(&hash, data.len()).unwrap().as_slice(), data.as_slice());
+    assert!(LoadFetch { src: &src, opts: crate::LoadOptions::default(), total: 0, blobs: HashMap::new() }.blob_bounded(&hash, data.len() - 1).is_err());
+}

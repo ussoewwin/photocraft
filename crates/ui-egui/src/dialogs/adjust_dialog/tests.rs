@@ -865,6 +865,32 @@ fn lab_subset_recall_preserves_combined_record_beside_native_lightness() {
     }
 }
 #[test]
+fn levels_recall_on_a_viewed_mask_keeps_its_settings_beside_a_lab_colour_set() {
+    let mut app = app_with_image();
+    app.run("file.new", json!({"width":32,"height":24,"mode":"lab","depth":16})).unwrap();
+    app.run("layer.layerMask.revealAll", json!({})).unwrap();
+    app.run("channel.target", json!({"colors":[0,2]})).unwrap();
+    app.run("view.layerMask", json!({"mode":"gray"})).unwrap();
+    let command = "image.adjustments.levels";
+    let id = open(&mut app, command).unwrap();
+    let dialog = app.ui.dialog_mut(id).unwrap();
+    assert_eq!(dialog.fields["target"], json!("mask"));
+    // Lab Levels alias the master to the Lightness record; the editor keeps both in step.
+    let lightness = json!({"gamma":1.5,"inBlack":20.0,"inWhite":255.0,"outBlack":0.0,"outWhite":255.0});
+    dialog.fields.insert("lightness".into(), lightness.clone());
+    dialog.fields.insert("gamma".into(), json!(1.5));
+    dialog.fields.insert("inBlack".into(), json!(20.0));
+    let fields = dialog.fields.clone();
+    remember(&mut app, &fields);
+    app.ui.dialogs.clear();
+    let id = open_last(&mut app, command).unwrap();
+    let fields = &app.ui.dialog_mut(id).unwrap().fields;
+    assert_eq!(fields["target"], json!("mask"));
+    assert_eq!(fields["gamma"], json!(1.5));
+    assert_eq!(fields["inBlack"], json!(20.0));
+    assert_eq!(fields["lightness"], lightness);
+}
+#[test]
 fn curves_reset_keeps_the_captured_mask_or_native_space_after_retargeting() {
     for mask in [false, true] {
         let mut app = app_with_image();

@@ -1531,3 +1531,20 @@ fn named_red_eye_target_does_not_bypass_channel_protection_on_the_active_layer()
     assert!(error.to_string().contains("no red-eye pixels"));
     assert!(surface(&s) == before);
 }
+
+#[test]
+fn only_pixel_editing_paint_commands_follow_a_colour_set() {
+    for id in ["paint.patch", "paint.contentAwareMove", "paint.stroke", "paint.magicEraser"] {
+        assert!(photocraft_engine::channel_cmds::follows_target(id), "{id}");
+    }
+    for id in ["paint.mixerLoad", "paint.setSymmetry", "paint.symmetryFromPath", "paint.symmetryDisable"] {
+        assert!(!photocraft_engine::channel_cmds::follows_target(id), "{id}");
+    }
+    // ⌥-click with the Mixer Brush samples a fill layer with a colour set targeted: it edits
+    // nothing, so it is not refused with "Rasterize the layer".
+    let mut s = setup("rgb", 8);
+    s.execute("layer.newFillLayer.solidColor", json!({"color": "#4080c0"})).unwrap();
+    subset(&mut s);
+    let loaded = s.execute("paint.mixerLoad", json!({"x": 4.0, "y": 4.0})).unwrap();
+    assert_eq!(loaded["loaded"], json!(true));
+}

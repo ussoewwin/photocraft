@@ -321,9 +321,11 @@ fn update_contents_with_frame_budget(s: &mut Session, p: &Value, native: bool, f
         return Err(bad(UPDATE, "SVG contents must contain a valid SVG document within 16 MiB"));
     }
     // Save-back can intentionally remove the last drawable object. The bounded importer
-    // accepts an empty drawing so deleting the final object preserves transparency.
-    let (imported, _) = photocraft_io::svg::import_svg_bounded_with_work(&name, svg.as_bytes(), 4 * MAX_PIXELS)
-        .map_err(|error| bad(UPDATE, format!("can't import edited SVG contents: {error}")))?;
+    // accepts an empty drawing so deleting the final object preserves transparency. A native
+    // save's SVG becomes the stored display preview, so it is checked as strictly as stored
+    // previews are on load and PSD export: an embedded image it can't read refuses it.
+    let import = if native { photocraft_io::svg::import_svg_preview_with_work } else { photocraft_io::svg::import_svg_bounded_with_work };
+    let (imported, _) = import(&name, svg.as_bytes(), 4 * MAX_PIXELS).map_err(|error| bad(UPDATE, format!("can't import edited SVG contents: {error}")))?;
     let size = imported.document.size;
     if native {
         // Shared instances normally borrow one immutable source and preview allocation. The

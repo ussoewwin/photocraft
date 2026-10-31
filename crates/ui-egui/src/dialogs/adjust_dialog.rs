@@ -307,6 +307,12 @@ pub fn open(app: &mut PhotocraftApp, command: &str) -> Option<u64> {
     Some(app.ui.open_dialog(crate::state::DialogKind::Command, fields))
 }
 
+/// Whether the dialog's captured target is a set of several Lab components, whose Levels and
+/// Curves settings are kept as a separate combined record.
+fn combined_lab_target(fields: &Map<String, Value>) -> bool {
+    photocraft_engine::color_channels::explicit(&crate::filter_dialog::params_of(fields), 3).ok().flatten().is_some_and(|c| c.len() > 1)
+}
+
 /// Opens the dialog for `command` at the settings last confirmed in it (Photoshop's ⌥ plus the
 /// adjustment's shortcut, ⌥⌘L / ⌥⌘M, #8900), or at the neutral ones when there are none or they
 /// don't fit the current colour mode.
@@ -317,10 +323,10 @@ pub fn open_last(app: &mut PhotocraftApp, command: &str) -> Option<u64> {
     let Some(last) = app.session.prefs().dialogs.get(command).cloned() else { return Some(id) };
     let Ok(adjustment) = photocraft_engine::adjust_params::from_params(kind, &last, None, mode) else { return Some(id) };
     let mut restored = photocraft_engine::adjust_params::to_params(&adjustment);
-    if mode == photocraft_doc::ColorMode::Lab
-        && matches!(kind, "levels" | "curves")
-        && photocraft_engine::color_channels::selected(&app.session).is_some_and(|c| c.len() > 1)
-    {
+    // The target `open` captured, as `remember` reads it: a viewed layer mask wins over the
+    // Channels panel's colour set, so its settings are restored as saved.
+    let captured_set = app.ui.dialog_mut(id).is_some_and(|d| combined_lab_target(&d.fields));
+    if mode == photocraft_doc::ColorMode::Lab && matches!(kind, "levels" | "curves") && captured_set {
         // The parser validates all records, but ordinary Lab serialization aliases the master
         // to Lightness. A partial set keeps the separately saved combined record.
         let neutral = photocraft_engine::adjust_params::default_for(kind, photocraft_doc::ColorMode::Grayscale)
@@ -353,7 +359,7 @@ pub(crate) fn remember(app: &mut PhotocraftApp, fields: &Map<String, Value>) {
         o.remove("target");
     }
     if app.session.active().is_some_and(|st| st.doc.mode == photocraft_doc::ColorMode::Lab)
-        && photocraft_engine::color_channels::explicit(&crate::filter_dialog::params_of(fields), 3).ok().flatten().is_some_and(|c| c.len() > 1)
+        && combined_lab_target(fields)
         && matches!(command.strip_prefix(PREFIX), Some("levels" | "curves"))
     {
         values["__combinedLab"] = json!(true);

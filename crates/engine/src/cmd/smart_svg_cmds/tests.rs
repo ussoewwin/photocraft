@@ -448,6 +448,13 @@ fn native_saves_reject_wrong_formats_bad_previews_and_locks_without_editing() {
         ("sourceBase64", json!(base64::engine::general_purpose::STANDARD.encode(RED))),
         ("previewSvg", json!("not an SVG")),
         ("previewSvg", json!(r#"<svg xmlns="http://www.w3.org/2000/svg" width="1000000" height="1000000"/>"#)),
+        // The stored preview must draw completely, as PSD export and reopening require.
+        (
+            "previewSvg",
+            json!(
+                r#"<svg xmlns="http://www.w3.org/2000/svg" width="8" height="6"><image width="4" height="6" href="data:image/bmp,BM"/><rect x="4" width="4" height="6" fill="blue"/></svg>"#
+            ),
+        ),
         ("document", json!(0)),
     ] {
         let mut params = valid.clone();
