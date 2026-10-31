@@ -4551,3 +4551,53 @@ layerLabel	Magenta	მეწამული
 	Font size presets	შრიფტის ზომის პრესეტები
 	Leading presets	სტრიქონთა დაშორების პრესეტები
 	Tracking presets	ტრეკინგის პრესეტები
+# Added with origin/main (2026-10-31): Select and Mask, histogram, pen, window menu
+	CPU Rendering	CPU-რენდერინგი
+	Calculating…	გამოითვლება…
+	Click to refresh histogram with uncached data	დააწკაპუნეთ ჰისტოგრამის ქეშის გარეშე მონაცემებით განსაახლებლად
+	Color Aware	ფერის გათვალისწინებით
+	Convert to Shape…	ფიგურად გარდაქმნა…
+	Count:	რაოდენობა:
+	Current Layer:	მიმდინარე შრე:
+	Decontaminate Colors	ფერების გაწმენდა
+	Delete Hidden Layers	დამალული შრეების წაშლა
+	Delete effect	ეფექტის წაშლა
+	Drag on the image to add a constraint; Shift for horizontal/vertical; right-click to delete.	გადაათრიეთ გამოსახულებაზე შეზღუდვის დასამატებლად; Shift — ჰორიზონტალური/ვერტიკალური; წასაშლელად დააწკაპუნეთ მარჯვენა ღილაკით.
+	Drag to move the selected path	გადაათრიეთ მონიშნული ტრაექტორიის გადასაადგილებლად
+	Drawn on the CPU: {reason}. Click for System Info.	დახატულია CPU-ზე: {reason}. დააწკაპუნეთ სისტემის ინფორმაციის სანახავად.
+	Edge Detection	კიდის აღმოჩენა
+	Fit Layer on Screen	შრის ეკრანში ჩატევა
+	Flow:	ნაკადი:
+	Global Refinements	გლობალური დაზუსტებები
+	High Quality Preview	მაღალი ხარისხის წინასწარი ნახვა
+	Level:	დონე:
+	Move effect down	ეფექტის ჩამოწევა
+	Move effect up	ეფექტის აწევა
+	Object Aware	ობიექტის გათვალისწინებით
+	Object Aware needs a segmentation model, which isn't available yet	„ობიექტის გათვალისწინებით“ რეჟიმს სჭირდება სეგმენტაციის მოდელი, რომელიც ჯერ მიუწვდომელია
+	Path operations	ტრაექტორიის ოპერაციები
+	Percentile:	პროცენტილი:
+	Real-Time Refinement	დაზუსტება რეალურ დროში
+	Refine Edge Brush Tool	კიდის დაზუსტების ფუნჯის ხელსაწყო
+	Refine Edge…	კიდის დაზუსტება…
+	Refine Hair	თმის დაზუსტება
+	Refine Hair needs hair detection, which isn't available yet	„თმის დაზუსტებას“ სჭირდება თმის აღმოჩენა, რომელიც ჯერ მიუწვდომელია
+	Refine Mode	დაზუსტების რეჟიმი
+	Release Notes	გამოშვების შენიშვნები
+	Remember Settings	პარამეტრების დამახსოვრება
+	Reset Essentials	ძირითადის საწყისზე დაბრუნება
+	Rounded Rectangle Tool	მომრგვალებული მართკუთხედის ხელსაწყო
+	Select and Mask was closed: another layer was selected	„მონიშვნა და ნიღაბი“ დაიხურა: მონიშნულია სხვა შრე
+	Select and Mask was closed: its document is no longer the active one	„მონიშვნა და ნიღაბი“ დაიხურა: მისი დოკუმენტი აღარ არის აქტიური
+	Show Channels in Color	არხების ფერად ჩვენება
+	Show Statistics	სტატისტიკის ჩვენება
+	Source:	წყარო:
+	Status Bar	სტატუსის ზოლი
+	The path was discarded	ტრაექტორია გაუქმდა
+	The path was kept as the Work Path	ტრაექტორია შენარჩუნდა სამუშაო ტრაექტორიად
+	Tile Horizontally	ჰორიზონტალურად განლაგება
+	Tile Vertically	ვერტიკალურად განლაგება
+	Uncached Refresh	განახლება ქეშის გარეშე
+	Update and Restart	განახლება და გადატვირთვა
+	View Mode	ხედის რეჟიმი
+	Select Layer Under Cursor	კურსორის ქვეშ არსებული შრის მონიშვნა
