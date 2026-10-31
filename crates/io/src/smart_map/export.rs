@@ -7,7 +7,7 @@ use super::import::{
 use super::placed::enumv;
 use super::{
     Class, Descriptor, FilterStack, Id, J, ReferenceItem, SmartFilter, UNSUPPORTED_FILTER, UnicodeString, Value, camera_raw, displace, hue_sat,
-    perspective_warp,
+    perspective_warp, puppet,
 };
 
 // ---------- writing ----------

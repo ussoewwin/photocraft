@@ -2,7 +2,7 @@ use super::export::{CELL_SIZE, blend_options, is_meta, pi, rgbc, whole};
 use super::placed::enumv;
 use super::{
     BlendMode, Descriptor, Id, J, Map, ReferenceItem, SmartFilter, UNSUPPORTED_FILTER, UnicodeString, Value, bool_or, camera_raw, displace, enum_of, get_desc,
-    hue_sat, json, num, perspective_warp, text_of,
+    hue_sat, json, num, perspective_warp, puppet, text_of,
 };
 
 // ---------- the filters we model ----------
