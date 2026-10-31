@@ -95,6 +95,11 @@ fn main() {
             let out = apply(&s, &p, area, r, None);
             let ms = t.elapsed().as_secs_f64() * 1e3;
             samples.push(ms);
+            // FNV-1a over the output samples: "same pixels" as a comparison, not a promise.
+            let mut buf = Vec::new();
+            out.read_region_into(r, &mut buf);
+            let hash = buf.iter().fold(0xcbf29ce484222325u64, |h, v| (h ^ v.to_bits() as u64).wrapping_mul(0x100000001b3));
+            eprintln!("HASH {} {hash:016x}", p.label());
             drop(out);
         }
         let mut sorted = samples.clone();
