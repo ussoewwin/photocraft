@@ -808,3 +808,66 @@ fn sparse_large_preview_counts_coverage_without_a_dense_canvas_mask() {
     assert_eq!(selected_pixels(Some(&inverted), smaller), 999_999);
     assert_eq!(selected_pixels(None, area), 0);
 }
+
+/// Alt+right-drag (and Control+Alt-drag) on the image resizes the current brush tool instead of
+/// selecting, as on the main canvas (#10497): only that tool's size changes, the Brush's hardness
+/// follows vertical motion, nothing is painted, and the next Alt-drag still subtracts.
+#[test]
+fn alt_right_drag_resizes_the_workspace_brush() {
+    use egui::{PointerButton, Pos2};
+    let mut app = app_with_selection();
+    open(&mut app).unwrap();
+    ui(&mut app, json!({"tool": "brush"}));
+    let mut h = egui_kittest::Harness::builder().with_size(vec2(1400.0, 900.0)).build_ui_state(
+        |ui, app: &mut PhotocraftApp| {
+            let ctx = ui.ctx().clone();
+            if !ctx.fonts(|f| f.families().contains(&egui::FontFamily::Name("medium".into()))) {
+                return;
+            }
+            crate::distort_ui::keys(app, &ctx);
+            keys(app, &ctx);
+            show(app, &ctx);
+        },
+        app,
+    );
+    PhotocraftApp::setup_context(&h.ctx, crate::theme::ThemeKind::ALL[0]);
+    h.run_steps(4);
+    let over = Pos2::new(LEFT_W + 300.0, BAR_H + TAB_H + 300.0);
+    let drag = |h: &mut egui_kittest::Harness<'_, PhotocraftApp>, button: PointerButton, modifiers: Modifiers, by: egui::Vec2| {
+        h.event(egui::Event::ModifiersChanged(modifiers));
+        h.event(egui::Event::PointerMoved(over));
+        h.run_steps(1);
+        h.event(egui::Event::PointerButton { pos: over, button, pressed: true, modifiers });
+        h.run_steps(1);
+        for k in 1..=4 {
+            h.event(egui::Event::PointerMoved(over + by * (k as f32 / 4.0)));
+            h.run_steps(1);
+        }
+        h.event(egui::Event::PointerButton { pos: over + by, button, pressed: false, modifiers });
+        h.event(egui::Event::ModifiersChanged(Modifiers::NONE));
+        h.run_steps(2);
+    };
+    let zoom = h.state().distort.select_mask.as_ref().unwrap().zoom;
+    drag(&mut h, PointerButton::Secondary, Modifiers::ALT, vec2(40.0, -60.0));
+    let w = h.state().distort.select_mask.as_ref().unwrap();
+    let want = (30.0 + 2.0 * f64::from(40.0 / zoom)).round();
+    assert_eq!(w.brush_size, want, "horizontal motion sets the diameter (zoom {zoom})");
+    assert_eq!(w.hardness, 70.0, "upward motion softens the brush, 200 points for 100 %");
+    assert_eq!((w.quick_size, w.refine_size), (30.0, 30.0), "the other tools keep their sizes");
+    assert!(w.strokes.is_empty() && w.edits.is_empty() && w.undo.is_empty(), "resizing selected nothing");
+    assert!(w.resize.is_none(), "the gesture ends with the button");
+    // Alt with the left button is still the subtracting stroke.
+    drag(&mut h, PointerButton::Primary, Modifiers::ALT, vec2(30.0, 0.0));
+    let w = h.state().distort.select_mask.as_ref().unwrap();
+    // A Brush stroke is an edit (Quick Selection's are strokes).
+    assert_eq!(w.edits.len(), 1, "Alt+left-drag selects");
+    assert_eq!(w.edits[0]["mode"], json!("subtract"));
+    assert_eq!(w.brush_size, want, "and doesn't resize");
+    // Control+Alt-drag (the macOS gesture) resizes Quick Selection on its own.
+    h.state_mut().distort.select_mask.as_mut().unwrap().pick(SmTool::Quick);
+    drag(&mut h, PointerButton::Primary, Modifiers::CTRL | Modifiers::ALT, vec2(-10.0, 0.0));
+    let w = h.state().distort.select_mask.as_ref().unwrap();
+    assert_eq!(w.quick_size, (30.0 - 2.0 * f64::from(10.0 / zoom)).round().max(1.0));
+    assert_eq!((w.brush_size, w.hardness), (want, 70.0), "the Brush keeps its size and hardness");
+    assert!(w.strokes.is_empty() && w.edits.len() == 1, "resizing Quick Selection selected nothing");
+}

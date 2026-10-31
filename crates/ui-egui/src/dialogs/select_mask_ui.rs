@@ -426,6 +426,9 @@ pub struct SelectMaskWorkspace {
     /// Document px per reduced-copy px (High Quality Preview uses 1).
     k: u32,
     pressed: bool,
+    /// An on-canvas brush resize in progress (#10497): where it began on screen, and the size and
+    /// hardness then.
+    resize: Option<(Pos2, f64, f32)>,
     /// The device's texture side limit, as the context reports it each frame.
     texture_limit: usize,
     image_tex: Option<TextureHandle>,
@@ -761,6 +764,7 @@ pub fn open(app: &mut PhotocraftApp) -> Result<(), String> {
         hide_view: false,
         k,
         pressed: false,
+        resize: None,
         texture_limit: 2048,
         image_tex: None,
         zoom: 0.0,
@@ -1747,13 +1751,27 @@ fn paint_cursor(ctx: &egui::Context, w: &mut SelectMaskWorkspace, clip: &egui::P
             ctx.set_cursor_icon(egui::CursorIcon::Grab);
         } else if w.tool.brushes() {
             let r = (w.size() as f32 * 0.5 * v.zoom).max(2.0);
-            clip.circle_stroke(hp, r, Stroke::new(1.5, Color32::BLACK));
-            clip.circle_stroke(hp, r, Stroke::new(0.75, Color32::WHITE));
-            let add = w.add != alt;
-            for s in [Stroke::new(2.5, Color32::from_black_alpha(140)), Stroke::new(1.0, Color32::from_white_alpha(220))] {
-                clip.line_segment([hp - vec2(3.0, 0.0), hp + vec2(3.0, 0.0)], s);
-                if add {
-                    clip.line_segment([hp - vec2(0.0, 3.0), hp + vec2(0.0, 3.0)], s);
+            // While its size is dragged the circle stays where the drag began, with the
+            // Diameter/Hardness readout beside the pointer, as on the main canvas (#10497).
+            let center = w.resize.map_or(hp, |(anchor, ..)| anchor);
+            clip.circle_stroke(center, r, Stroke::new(1.5, Color32::BLACK));
+            clip.circle_stroke(center, r, Stroke::new(0.75, Color32::WHITE));
+            if w.resize.is_some() {
+                let hardness = if w.tool == SmTool::Brush { format!("{}%", w.hardness.round() as i64) } else { "—".into() };
+                crate::canvas::draw_readout(
+                    ctx,
+                    "select-mask-brush-resize-readout",
+                    hp,
+                    ["Diameter:", "Hardness:"],
+                    [format!("{} px", w.size().round() as i64), hardness],
+                );
+            } else {
+                let add = w.add != alt;
+                for s in [Stroke::new(2.5, Color32::from_black_alpha(140)), Stroke::new(1.0, Color32::from_white_alpha(220))] {
+                    clip.line_segment([hp - vec2(3.0, 0.0), hp + vec2(3.0, 0.0)], s);
+                    if add {
+                        clip.line_segment([hp - vec2(0.0, 3.0), hp + vec2(0.0, 3.0)], s);
+                    }
                 }
             }
             ctx.set_cursor_icon(egui::CursorIcon::None);
@@ -1780,6 +1798,32 @@ fn canvas_input(
     events: &mut Vec<ToolEvent>,
     mods: &mut egui::Modifiers,
 ) {
+    // Alt+right-drag, or Control+Alt-drag, resizes the brush instead of selecting (#10497), from
+    // the press on, so its first frame never starts a stroke. Alt+left-drag still subtracts.
+    let (secondary, now) = ui.input(|i| (i.pointer.button_down(egui::PointerButton::Secondary), i.modifiers));
+    let gesture = if secondary { crate::brush_resize::is_right_gesture(now) } else { crate::brush_resize::is_gesture(now) };
+    if !pan && w.tool.brushes() && !w.pressed && (w.resize.is_some() || (resp.is_pointer_button_down_on() && gesture)) {
+        if w.resize.is_none()
+            && let Some(p) = ui.input(|i| i.pointer.press_origin()).or_else(|| resp.interact_pointer_pos())
+        {
+            w.resize = Some((p, w.size(), w.hardness));
+        }
+        if let (Some((anchor, size0, hardness0)), Some(p)) = (w.resize, resp.interact_pointer_pos()) {
+            let d = p - anchor;
+            let zoom = if w.zoom.is_finite() && w.zoom > 0.0 { w.zoom } else { 1.0 };
+            let (size, hardness) = crate::brush_resize::resized((size0 as f32, hardness0 / 100.0), f64::from(d.x / zoom), f64::from(d.y / zoom), zoom);
+            w.set_size(f64::from(size));
+            // Only the Brush tool has a hardness; Quick Selection and Refine Edge change size only.
+            if w.tool == SmTool::Brush {
+                w.hardness = (hardness * 100.0).round();
+            }
+        }
+        if resp.drag_stopped() || !ui.input(|i| i.pointer.any_down()) {
+            w.resize = None;
+        }
+        ctx.request_repaint();
+        return;
+    }
     if pan && resp.dragged() {
         let dl = resp.drag_delta();
         w.center = [w.center[0] - f64::from(dl.x / w.zoom), w.center[1] - f64::from(dl.y / w.zoom)];
