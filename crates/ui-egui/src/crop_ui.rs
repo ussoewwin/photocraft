@@ -666,6 +666,16 @@ pub fn sizing(app: &PhotocraftApp) -> Option<[f64; 2]> {
     frame_size(app.ui.crop_rect?)
 }
 
+/// The Info panel's W and H while the Crop tool shows a frame: the frame's size (its own, before
+/// any turn), as Photoshop's Info panel shows it, so its ratio can be matched (#3145). `None`
+/// with another tool or no frame, and the panel shows the selection's size.
+pub fn info_size(app: &PhotocraftApp) -> Option<[f64; 2]> {
+    if app.ui.tool != Tool::Crop {
+        return None;
+    }
+    frame_size(app.ui.crop_rect?)
+}
+
 /// The Crop tool owns the arrow keys and X: a pending frame and no gesture in progress.
 pub fn takes_keys(app: &PhotocraftApp) -> bool {
     app.ui.tool == Tool::Crop && app.crop.drag.is_none() && app.ui.transform.is_none() && app.ui.crop_rect.is_some_and(|r| r.iter().all(|v| v.is_finite()))
@@ -2179,5 +2189,24 @@ mod tests {
         assert_eq!(frame_size([0.0, 0.0, 0.2, 0.4]), Some([1.0, 1.0]));
         assert_eq!(frame_size([f64::NAN, 0.0, 1.0, 1.0]), None);
         assert_eq!(frame_size([-f64::MAX, 0.0, f64::MAX, 1.0]), None);
+    }
+
+    /// #3145: the Info panel shows the pending frame's W × H while the Crop tool is active
+    /// (between gestures too, and its own size when turned), and nothing for other tools.
+    #[test]
+    fn info_panel_shows_the_pending_frame_size() {
+        let mut app = app(SampleType::U8);
+        app.ui.tool = Tool::Crop;
+        app.ui.crop_rect = None;
+        assert_eq!(info_size(&app), None, "no frame");
+        app.ui.crop_rect = Some([20.0, 20.0, 100.0, 65.4]);
+        assert_eq!(info_size(&app), Some([80.0, 45.0]), "rounded as ↵ crops it");
+        app.ui.crop_angle = 30.0;
+        assert_eq!(info_size(&app), Some([80.0, 45.0]), "a turned frame keeps its own size");
+        app.ui.crop_rect = Some([f64::NAN, 0.0, 1.0, 1.0]);
+        assert_eq!(info_size(&app), None, "a broken frame shows nothing");
+        app.ui.crop_rect = Some([20.0, 20.0, 100.0, 60.0]);
+        app.ui.tool = Tool::Move;
+        assert_eq!(info_size(&app), None, "another tool shows the selection instead");
     }
 }

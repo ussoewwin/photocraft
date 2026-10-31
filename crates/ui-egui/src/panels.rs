@@ -1878,7 +1878,9 @@ fn info_panel(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     let fx = move |px: f64| units.format(px, dpi, size.width as f64);
     let units_y = app.session.prefs().units_and_rulers.clone();
     let fy = move |px: f64| units_y.format(px, dpi, size.height as f64);
-    let sel = st.doc.selection.as_ref().map(photocraft_compose::bounds::content_bounds);
+    let sel = st.doc.selection.as_ref().map(photocraft_compose::bounds::content_bounds).map(|r| [r.width() as f64, r.height() as f64]);
+    // With the Crop tool, W and H are the pending frame's, as in Photoshop (#3145).
+    let wh = crate::crop_ui::info_size(app).or(sel);
     let pos = app
         .hover_doc
         .map(|p| (p[0].floor() as i32, p[1].floor() as i32))
@@ -1931,8 +1933,8 @@ fn info_panel(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
         // Measured from the rulers' zero point (#2955).
         row(&mut cols[0], "X:", guide_x.map(|p| fx(p - origin[0])).or_else(|| pos.map(|p| fx(p.0 as f64 - origin[0]))).unwrap_or_else(dash));
         row(&mut cols[0], "Y:", guide_y.map(|p| fy(p - origin[1])).or_else(|| pos.map(|p| fy(p.1 as f64 - origin[1]))).unwrap_or_else(dash));
-        row(&mut cols[1], "W:", sel.map_or_else(dash, |r| fx(r.width() as f64)));
-        row(&mut cols[1], "H:", sel.map_or_else(dash, |r| fy(r.height() as f64)));
+        row(&mut cols[1], "W:", wh.map_or_else(dash, |s| fx(s[0])));
+        row(&mut cols[1], "H:", wh.map_or_else(dash, |s| fy(s[1])));
     });
     widgets::hairline(ui);
     ui.label(
