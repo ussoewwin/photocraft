@@ -923,3 +923,42 @@ fn a_resize_released_while_space_pans_lets_the_next_drag_paint() {
     assert_eq!(w.edits[0]["mode"], json!("add"));
     assert!(w.resize.is_none());
 }
+
+/// A resize belongs to the tool it began on (CodeRabbit on #10559): if another tool is picked
+/// mid-drag, the rest of the drag neither resizes that tool nor selects with it.
+#[test]
+fn picking_another_tool_mid_resize_neither_resizes_nor_selects() {
+    use egui::PointerButton;
+    let (mut h, over) = resize_harness("brush");
+    let zoom = h.state().distort.select_mask.as_ref().unwrap().zoom;
+    let want = (30.0 + 2.0 * f64::from(40.0 / zoom)).round();
+    // Alt+right-drag the Brush larger, let go of Alt, press W (Quick Selection) and drag on.
+    pointer_down(&mut h, over, PointerButton::Secondary, Modifiers::ALT);
+    pointer_move(&mut h, over, vec2(40.0, 0.0));
+    h.event(egui::Event::ModifiersChanged(Modifiers::NONE));
+    tap_key(&mut h, Key::W, true);
+    tap_key(&mut h, Key::W, false);
+    assert_eq!(h.state().distort.select_mask.as_ref().unwrap().tool, SmTool::Quick);
+    pointer_move(&mut h, over + vec2(40.0, 0.0), vec2(40.0, 0.0));
+    h.event(egui::Event::PointerButton { pos: over + vec2(80.0, 0.0), button: PointerButton::Secondary, pressed: false, modifiers: Modifiers::NONE });
+    h.run_steps(2);
+    let w = h.state().distort.select_mask.as_ref().unwrap();
+    assert_eq!((w.brush_size, w.quick_size), (want, 30.0), "Quick Selection keeps its size");
+    assert!(w.strokes.is_empty() && w.edits.is_empty() && w.undo.is_empty(), "nothing was selected");
+    // The same with the Lasso (not a brush) picked mid-drag: the rest of the drag draws no lasso.
+    tap_key(&mut h, Key::B, true);
+    tap_key(&mut h, Key::B, false);
+    pointer_down(&mut h, over, PointerButton::Secondary, Modifiers::ALT);
+    pointer_move(&mut h, over, vec2(20.0, 0.0));
+    h.event(egui::Event::ModifiersChanged(Modifiers::NONE));
+    tap_key(&mut h, Key::L, true);
+    tap_key(&mut h, Key::L, false);
+    assert_eq!(h.state().distort.select_mask.as_ref().unwrap().tool, SmTool::Lasso);
+    pointer_move(&mut h, over + vec2(20.0, 0.0), vec2(0.0, 60.0));
+    pointer_move(&mut h, over + vec2(20.0, 60.0), vec2(-60.0, 0.0));
+    h.event(egui::Event::PointerButton { pos: over + vec2(-40.0, 60.0), button: PointerButton::Secondary, pressed: false, modifiers: Modifiers::NONE });
+    h.run_steps(2);
+    let w = h.state().distort.select_mask.as_ref().unwrap();
+    assert!(w.strokes.is_empty() && w.edits.is_empty() && w.undo.is_empty(), "the Lasso selected nothing");
+    assert!(w.resize.is_none(), "the gesture ends with the button");
+}

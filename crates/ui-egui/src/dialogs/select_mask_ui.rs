@@ -426,9 +426,9 @@ pub struct SelectMaskWorkspace {
     /// Document px per reduced-copy px (High Quality Preview uses 1).
     k: u32,
     pressed: bool,
-    /// An on-canvas brush resize in progress (#10497): where it began on screen, and the size and
-    /// hardness then.
-    resize: Option<(Pos2, f64, f32)>,
+    /// An on-canvas brush resize in progress (#10497): the tool it resizes, where it began on
+    /// screen, and the size and hardness then.
+    resize: Option<(SmTool, Pos2, f64, f32)>,
     /// The device's texture side limit, as the context reports it each frame.
     texture_limit: usize,
     image_tex: Option<TextureHandle>,
@@ -1753,10 +1753,11 @@ fn paint_cursor(ctx: &egui::Context, w: &mut SelectMaskWorkspace, clip: &egui::P
             let r = (w.size() as f32 * 0.5 * v.zoom).max(2.0);
             // While its size is dragged the circle stays where the drag began, with the
             // Diameter/Hardness readout beside the pointer, as on the main canvas (#10497).
-            let center = w.resize.map_or(hp, |(anchor, ..)| anchor);
+            let resize = w.resize.filter(|&(tool, ..)| tool == w.tool);
+            let center = resize.map_or(hp, |(_, anchor, ..)| anchor);
             clip.circle_stroke(center, r, Stroke::new(1.5, Color32::BLACK));
             clip.circle_stroke(center, r, Stroke::new(0.75, Color32::WHITE));
-            if w.resize.is_some() {
+            if resize.is_some() {
                 let hardness = if w.tool == SmTool::Brush { format!("{}%", w.hardness.round() as i64) } else { "—".into() };
                 crate::canvas::draw_readout(
                     ctx,
@@ -1802,17 +1803,27 @@ fn canvas_input(
     // the press on, so its first frame never starts a stroke. Alt+left-drag still subtracts.
     let (secondary, now) = ui.input(|i| (i.pointer.button_down(egui::PointerButton::Secondary), i.modifiers));
     let gesture = if secondary { crate::brush_resize::is_right_gesture(now) } else { crate::brush_resize::is_gesture(now) };
-    // Space or the middle button may pan mid-resize; letting go of the button still ends it.
-    if pan && !ui.input(|i| i.pointer.any_down()) {
-        w.resize = None;
+    // A resize keeps its drag until the button is let go: Space or the middle button may pan
+    // meanwhile, and if another tool is picked mid-drag the rest of it neither resizes nor
+    // selects with that tool.
+    if let Some((tool, ..)) = w.resize
+        && (pan || tool != w.tool)
+    {
+        if !ui.input(|i| i.pointer.any_down()) {
+            w.resize = None;
+        }
+        if !pan {
+            ctx.request_repaint();
+            return;
+        }
     }
     if !pan && w.tool.brushes() && !w.pressed && (w.resize.is_some() || (resp.is_pointer_button_down_on() && gesture)) {
         if w.resize.is_none()
             && let Some(p) = ui.input(|i| i.pointer.press_origin()).or_else(|| resp.interact_pointer_pos())
         {
-            w.resize = Some((p, w.size(), w.hardness));
+            w.resize = Some((w.tool, p, w.size(), w.hardness));
         }
-        if let (Some((anchor, size0, hardness0)), Some(p)) = (w.resize, resp.interact_pointer_pos()) {
+        if let (Some((_, anchor, size0, hardness0)), Some(p)) = (w.resize, resp.interact_pointer_pos()) {
             let d = p - anchor;
             let zoom = if w.zoom.is_finite() && w.zoom > 0.0 { w.zoom } else { 1.0 };
             let (size, hardness) = crate::brush_resize::resized((size0 as f32, hardness0 / 100.0), f64::from(d.x / zoom), f64::from(d.y / zoom), zoom);
