@@ -26,6 +26,9 @@ pub(crate) fn dpi_of_ppm(ppm: u32) -> f32 {
     if (whole / f64::from(METERS_PER_INCH)).round() == f64::from(ppm) { whole as f32 } else { dpi as f32 }
 }
 
+/// Decode a PNG into an [`Image`] with its metadata, within `limits`: the text and `iCCP` chunks
+/// are read here rather than by png, which inflates them without a cap of its own, and the pixel
+/// dimensions, EXIF and ICC profile travel with the image.
 pub(crate) fn decode(bytes: &[u8], limits: &Limits) -> Result<Image, CodecError> {
     let mut input = Cursor::new(bytes);
     let mut decoder = png::Decoder::new_with_limits(&mut input, png::Limits { bytes: limits.alloc_usize() });
