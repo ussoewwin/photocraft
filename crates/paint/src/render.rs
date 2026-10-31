@@ -1130,7 +1130,7 @@ impl StrokeRenderer {
     /// of tiles, so doing both twice cost as much as the rest of the frame.
     pub fn composite_live(&mut self, old: Rect, pre: &Surface, target: &mut Surface, selection: Option<&Surface>, lock_transparency: bool) -> (Rect, Rect) {
         let mut tail = self.tail_preview();
-        let redrawn_by_tail: HashSet<(i32, i32)> = tail.as_ref().map(|t| t.cov.tiles.keys().copied().collect()).unwrap_or_default();
+        let redrawn_by_tail: HashSet<u64> = tail.as_ref().map(|t| t.cov.tiles.keys().copied().collect()).unwrap_or_default();
         if !old.is_empty() {
             self.mark_dirty(old);
             let bounds = self.bounds();
@@ -1140,9 +1140,9 @@ impl StrokeRenderer {
                 for tx in old.x0.div_euclid(COV_TILE)..=(old.x1 - 1).div_euclid(COV_TILE) {
                     let tile = Rect::new(tx * COV_TILE, ty * COV_TILE, (tx + 1) * COV_TILE, (ty + 1) * COV_TILE);
                     let part = tile.intersect(&old);
-                    let written = if redrawn_by_tail.contains(&(tx, ty)) {
+                    let written = if redrawn_by_tail.contains(&tile_key((tx, ty))) {
                         tile.intersect(&tail_bounds)
-                    } else if self.cov.tiles.contains_key(&(tx, ty)) {
+                    } else if self.cov.tiles.contains_key(&tile_key((tx, ty))) {
                         tile.intersect(&bounds)
                     } else {
                         Rect::EMPTY
@@ -1155,7 +1155,7 @@ impl StrokeRenderer {
                 }
             }
         }
-        self.cov.dirty.retain(|k| !redrawn_by_tail.contains(k));
+        self.cov.dirty.retain(|k| !redrawn_by_tail.contains(&tile_key(*k)));
         let mut dmg = old.union(&self.composite(pre, target, selection, lock_transparency, false));
         let tail_rect = tail.as_mut().map_or(Rect::EMPTY, |t| t.composite(pre, target, selection, lock_transparency, false));
         dmg = dmg.union(&tail_rect);
@@ -1305,7 +1305,7 @@ impl StrokeRenderer {
                 let sel = selection.map(|s| (s.channels(), s.read_region(tr)));
                 // The Dual Brush's coverage lies on the same tile grid: one lookup per tile, not
                 // one per pixel (`CoverageMap::get` reads 0 where it has no tile).
-                let dual = self.dual.as_ref().map(|d| d.tiles.get(&(tx, ty)));
+                let dual = self.dual.as_ref().map(|d| d.tiles.get(&tile_key((tx, ty))));
                 // Per-dab colour rewrites the source per pixel, so each tile works on its own copy
                 // that starts from the brush colour. (Before the tiles ran in parallel, one `src`
                 // carried over from tile to tile; a tile without per-dab colour then painted with
