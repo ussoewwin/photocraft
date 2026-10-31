@@ -427,8 +427,8 @@ pub struct SelectMaskWorkspace {
     k: u32,
     pressed: bool,
     /// An on-canvas brush resize in progress (#10497): the tool it resizes, where it began on
-    /// screen, and the size and hardness then.
-    resize: Option<(SmTool, Pos2, f64, f32)>,
+    /// screen, the size and hardness then, and the button that drags it.
+    resize: Option<(SmTool, Pos2, f64, f32, egui::PointerButton)>,
     /// The device's texture side limit, as the context reports it each frame.
     texture_limit: usize,
     image_tex: Option<TextureHandle>,
@@ -1803,13 +1803,14 @@ fn canvas_input(
     // the press on, so its first frame never starts a stroke. Alt+left-drag still subtracts.
     let (secondary, now) = ui.input(|i| (i.pointer.button_down(egui::PointerButton::Secondary), i.modifiers));
     let gesture = if secondary { crate::brush_resize::is_right_gesture(now) } else { crate::brush_resize::is_gesture(now) };
-    // A resize keeps its drag until the button is let go: Space or the middle button may pan
+    // A resize keeps its drag until its button is let go: Space or the middle button may pan
     // meanwhile, and if another tool is picked mid-drag the rest of it neither resizes nor
     // selects with that tool.
-    if let Some((tool, ..)) = w.resize
+    let held = |button| ui.input(|i| i.pointer.button_down(button));
+    if let Some((tool, .., button)) = w.resize
         && (pan || tool != w.tool)
     {
-        if !ui.input(|i| i.pointer.any_down()) {
+        if !held(button) {
             w.resize = None;
         }
         if !pan {
@@ -1821,9 +1822,10 @@ fn canvas_input(
         if w.resize.is_none()
             && let Some(p) = ui.input(|i| i.pointer.press_origin()).or_else(|| resp.interact_pointer_pos())
         {
-            w.resize = Some((w.tool, p, w.size(), w.hardness));
+            let button = if secondary { egui::PointerButton::Secondary } else { egui::PointerButton::Primary };
+            w.resize = Some((w.tool, p, w.size(), w.hardness, button));
         }
-        if let (Some((_, anchor, size0, hardness0)), Some(p)) = (w.resize, resp.interact_pointer_pos()) {
+        if let (Some((_, anchor, size0, hardness0, _)), Some(p)) = (w.resize, resp.interact_pointer_pos()) {
             let d = p - anchor;
             let zoom = if w.zoom.is_finite() && w.zoom > 0.0 { w.zoom } else { 1.0 };
             let (size, hardness) = crate::brush_resize::resized((size0 as f32, hardness0 / 100.0), f64::from(d.x / zoom), f64::from(d.y / zoom), zoom);
@@ -1833,7 +1835,7 @@ fn canvas_input(
                 w.hardness = (hardness * 100.0).round();
             }
         }
-        if resp.drag_stopped() || !ui.input(|i| i.pointer.any_down()) {
+        if resp.drag_stopped() || w.resize.is_some_and(|(.., button)| !held(button)) {
             w.resize = None;
         }
         ctx.request_repaint();

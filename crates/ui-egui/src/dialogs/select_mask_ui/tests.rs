@@ -962,3 +962,39 @@ fn picking_another_tool_mid_resize_neither_resizes_nor_selects() {
     assert!(w.strokes.is_empty() && w.edits.is_empty() && w.undo.is_empty(), "the Lasso selected nothing");
     assert!(w.resize.is_none(), "the gesture ends with the button");
 }
+
+/// A resize ends when its own button comes up, even while the middle button pans (CodeRabbit on
+/// #10559): a left-drag begun before the middle button is let go doesn't resize the brush from
+/// the old anchor when the pan ends.
+#[test]
+fn a_resize_released_while_the_middle_button_pans_ends_with_its_button() {
+    use egui::PointerButton;
+    let (mut h, over) = resize_harness("brush");
+    let zoom = h.state().distort.select_mask.as_ref().unwrap().zoom;
+    let want = (30.0 + 2.0 * f64::from(40.0 / zoom)).round();
+    pointer_down(&mut h, over, PointerButton::Secondary, Modifiers::ALT);
+    pointer_move(&mut h, over, vec2(40.0, 0.0));
+    let at = over + vec2(40.0, 0.0);
+    h.event(egui::Event::PointerButton { pos: at, button: PointerButton::Middle, pressed: true, modifiers: Modifiers::ALT });
+    h.run_steps(1);
+    h.event(egui::Event::PointerButton { pos: at, button: PointerButton::Secondary, pressed: false, modifiers: Modifiers::ALT });
+    h.event(egui::Event::ModifiersChanged(Modifiers::NONE));
+    h.run_steps(2);
+    assert_eq!(h.state().distort.select_mask.as_ref().unwrap().brush_size, want);
+    // The left button goes down while the middle one still pans, then the middle one comes up
+    // and the left drag goes on.
+    pointer_move(&mut h, at, vec2(0.0, 20.0));
+    let at = at + vec2(0.0, 20.0);
+    h.event(egui::Event::PointerButton { pos: at, button: PointerButton::Primary, pressed: true, modifiers: Modifiers::NONE });
+    h.run_steps(1);
+    pointer_move(&mut h, at, vec2(30.0, -20.0));
+    let at = at + vec2(30.0, -20.0);
+    h.event(egui::Event::PointerButton { pos: at, button: PointerButton::Middle, pressed: false, modifiers: Modifiers::NONE });
+    h.run_steps(1);
+    pointer_move(&mut h, at, vec2(60.0, -40.0));
+    h.event(egui::Event::PointerButton { pos: at + vec2(60.0, -40.0), button: PointerButton::Primary, pressed: false, modifiers: Modifiers::NONE });
+    h.run_steps(2);
+    let w = h.state().distort.select_mask.as_ref().unwrap();
+    assert_eq!((w.brush_size, w.hardness), (want, 100.0), "the later drag doesn't resize the brush");
+    assert!(w.resize.is_none(), "the gesture ended with its button");
+}
