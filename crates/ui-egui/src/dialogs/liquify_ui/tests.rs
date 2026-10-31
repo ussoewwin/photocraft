@@ -1017,3 +1017,56 @@ fn workspaces_open_on_a_smart_object_with_its_filter_mask_targeted() {
     let Some(photocraft_doc::LayerContent::Smart(sm)) = st.doc.layer(layer).map(|l| &l.content) else { panic!("not a smart object") };
     assert_eq!(sm.smart_filters.iter().map(|f| f.command.as_str()).collect::<Vec<_>>(), ["filter.blur.gaussianBlur", photocraft_engine::distort_cmds::LIQUIFY]);
 }
+
+/// Preview off shows the image unwarped while strokes still change the field, and P turns it back
+/// on, as Photoshop's Liquify Preview checkbox does (#7905). Each opening starts with it on.
+#[test]
+fn preview_off_shows_the_original_and_p_toggles_it() {
+    let ctx = egui::Context::default();
+    let mut app = app_with_layer();
+    open(&mut app, &ctx).unwrap();
+    let render = |d: &LiquifyDialog, field: &LiquifyField| {
+        let mut out = vec![[0u8; 4]; d.proxy.w * d.proxy.h];
+        d.proxy.render(field, [0, 0, d.proxy.w, d.proxy.h], &mut out);
+        out
+    };
+    let d = app.distort.liquify.as_ref().unwrap();
+    assert!(d.preview && d.describe()["preview"] == json!(true), "Liquify opens with Preview on");
+    let original = render(d, &LiquifyField::new(d.canvas, d.cell));
+    let stroke = |app: &mut PhotocraftApp, y: f64| {
+        for ev in [ToolEvent::Down { x: 35.0, y, pressure: 1.0 }, ToolEvent::Move { x: 60.0, y, pressure: 1.0 }, ToolEvent::Up { x: 60.0, y }] {
+            pointer(app, ev, egui::Modifiers::NONE);
+        }
+    };
+    control(&mut app, &json!({"tool": "forwardWarp", "size": 40})).unwrap();
+    stroke(&mut app, 40.0);
+    let d = app.distort.liquify.as_ref().unwrap();
+    assert_ne!(d.out, original, "the warp shows");
+
+    let r = control(&mut app, &json!({"preview": false})).unwrap();
+    assert_eq!(r["preview"], json!(false));
+    let d = app.distort.liquify.as_ref().unwrap();
+    assert_eq!(d.out, original, "Preview off: the image as it was");
+    // A stroke with Preview off still warps the field, unseen.
+    stroke(&mut app, 30.0);
+    let d = app.distort.liquify.as_ref().unwrap();
+    assert_eq!(d.strokes.len(), 2);
+    assert_eq!(d.out, original, "still unwarped while Preview is off");
+    {
+        let d = app.distort.liquify.as_mut().unwrap();
+        d.zoom = 2.0;
+        d.view_bounds = Some(Rect::new(0, 0, 20, 20));
+        d.view_dirty = None;
+    }
+
+    // P turns it back on, with both strokes.
+    let mut input = egui::RawInput::default();
+    input.events.push(egui::Event::Key { key: egui::Key::P, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE });
+    ctx.begin_pass(input);
+    keys(&mut app, &ctx);
+    ctx.end_pass().textures_delta.clear();
+    let d = app.distort.liquify.as_ref().unwrap();
+    assert!(d.preview);
+    assert_eq!(d.out, render(d, &d.field), "Preview on: the warp of both strokes");
+    assert_eq!(d.view_dirty, d.view_bounds, "the zoomed preview is redrawn too");
+}
