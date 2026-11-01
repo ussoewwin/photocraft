@@ -95,7 +95,12 @@ pub fn open(app: &mut PhotocraftApp, name: &str, bytes: &[u8]) -> Option<Result<
         "kys" | "psp" => return Some(crate::kys_import::open_bytes(app, name, bytes).map(|_| ())),
         _ => return None,
     };
-    let stem = std::path::Path::new(name).file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| tl!("Imported").into());
+    // Trimmed like the engine trims `group`, so the clash check sees the name the import uses.
+    let stem = std::path::Path::new(name)
+        .file_stem()
+        .map(|s| s.to_string_lossy().trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| tl!("Imported").into());
     let mut p = source(name, bytes);
     p["group"] = json!(stem);
     if what == "brushes" {
@@ -202,6 +207,12 @@ mod tests {
         crate::dialogs::cancel(&mut app, id).unwrap();
         assert_eq!((in_group(&app, "Kit"), in_group(&app, "Kit (2)")), (2, 0));
         assert!(app.held_preset_import.is_none());
+
+        // A file name with a trailing space (`Kit .abr`) names the same group.
+        open(&mut app, "Kit .abr", &abr).unwrap().unwrap();
+        let id = prompt(&app).expect("the prompt is open for the trimmed name");
+        crate::dialogs::cancel(&mut app, id).unwrap();
+        assert_eq!(in_group(&app, "Kit (2)"), 0);
 
         // The default answer imports beside it.
         open(&mut app, "Kit.abr", &abr).unwrap().unwrap();

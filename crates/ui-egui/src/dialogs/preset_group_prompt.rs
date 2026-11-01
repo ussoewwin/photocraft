@@ -49,12 +49,24 @@ pub(crate) fn intercept(app: &mut PhotocraftApp, held: Held) -> Result<Option<He
     if app.ui.dialogs.iter().any(|d| owns(&d.fields)) {
         return Err(tl!("Answer the open import question first, then import this file again.").into());
     }
-    let (label, one, other) = if held.what == "gradients" {
-        ("Import Gradients", "The gradient group “{group}” already exists ({n} gradient).", "The gradient group “{group}” already exists ({n} gradients).")
+    let (label, message) = if held.what == "gradients" {
+        let text = crate::i18n::trn(
+            crate::i18n::current(),
+            n as u64,
+            "The gradient group “{group}” already exists ({n} gradient).",
+            "The gradient group “{group}” already exists ({n} gradients).",
+        );
+        ("Import Gradients", text)
     } else {
-        ("Import Brushes", "The brush group “{group}” already has {n} brush of yours.", "The brush group “{group}” already has {n} brushes of yours.")
+        let text = crate::i18n::trn(
+            crate::i18n::current(),
+            n as u64,
+            "The brush group “{group}” already has {n} brush of yours.",
+            "The brush group “{group}” already has {n} brushes of yours.",
+        );
+        ("Import Brushes", text)
     };
-    let message = crate::i18n::fmt(&crate::i18n::trn(crate::i18n::current(), n as u64, one, other), &[("group", &held.stem)]);
+    let message = crate::i18n::fmt(&message, &[("group", &held.stem)]);
     let fields = json!({MARK: true, "__label": label, "message": message, "group": held.stem, "kind": held.what, "choice": "new"});
     app.held_preset_import = Some(held);
     app.ui.open_dialog(DialogKind::Command, fields.as_object().cloned().unwrap_or_default());
