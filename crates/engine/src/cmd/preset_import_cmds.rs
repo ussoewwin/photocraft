@@ -133,8 +133,9 @@ fn add_abr_presets(s: &mut Session, p: &Value, group: String, imp: photocraft_io
         s.tools.presets.retain(|x| x.builtin || x.group != group);
         group
     } else {
-        let presets = &s.tools.presets;
-        free_group(&group, |g| presets.iter().any(|x| x.group == g))
+        // One pass over the library, not one per numbered candidate.
+        let groups: std::collections::HashSet<&str> = s.tools.presets.iter().map(|x| x.group.as_str()).collect();
+        free_group(&group, |g| groups.contains(g))
     };
     let mut taken = UniqueNames::new(s.tools.presets.iter().map(|x| x.name.as_str()));
     let mut names = Vec::with_capacity(imp.presets.len());

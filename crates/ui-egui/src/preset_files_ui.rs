@@ -225,6 +225,42 @@ mod tests {
         assert!(prompt(&app).is_none());
     }
 
+    /// The same prompt guards a gradient group: `Fire.grd` again asks, Cancel imports nothing,
+    /// Import as New Group adds "Fire (2)", Replace swaps "Fire" alone (#10640).
+    #[test]
+    fn reimporting_a_gradient_file_asks_before_touching_its_group() {
+        use photocraft_psd::grd::{GrdColor, GrdGradient, GrdStop, write};
+        let stop = |location: f32, color| GrdStop { location, midpoint: 0.5, color };
+        let ember =
+            GrdGradient { name: "Ember".into(), stops: vec![stop(0.0, GrdColor::Foreground), stop(1.0, GrdColor::Rgb([1.0, 0.0, 0.0]))], ..Default::default() };
+        let grd = write(&[ember]);
+        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+        let groups = |app: &PhotocraftApp, g: &str| app.session.presets.gradients.iter().filter(|x| x.name == g).count();
+        let prompt = |app: &PhotocraftApp| app.ui.dialogs.iter().find(|d| crate::preset_group_prompt::owns(&d.fields)).map(|d| d.id);
+        open(&mut app, "Fire.grd", &grd).unwrap().unwrap();
+        assert_eq!(groups(&app, "Fire"), 1);
+        assert!(prompt(&app).is_none(), "a new group imports without asking");
+
+        open(&mut app, "Fire.grd", &grd).unwrap().unwrap();
+        let id = prompt(&app).expect("the prompt is open");
+        crate::dialogs::cancel(&mut app, id).unwrap();
+        assert_eq!((groups(&app, "Fire"), groups(&app, "Fire (2)")), (1, 0));
+
+        open(&mut app, "Fire.grd", &grd).unwrap().unwrap();
+        let id = prompt(&app).expect("the prompt is open");
+        crate::dialogs::confirm(&mut app, id).unwrap();
+        assert_eq!((groups(&app, "Fire"), groups(&app, "Fire (2)")), (1, 1));
+        assert!(app.ui.status.ends_with("from Fire into “Fire (2)”"), "{}", app.ui.status);
+
+        open(&mut app, "Fire.grd", &grd).unwrap().unwrap();
+        let id = prompt(&app).expect("the prompt is open");
+        if let Some(d) = app.ui.dialogs.iter_mut().find(|d| d.id == id) {
+            d.fields.insert("choice".into(), json!("replace"));
+        }
+        crate::dialogs::confirm(&mut app, id).unwrap();
+        assert_eq!((groups(&app, "Fire"), groups(&app, "Fire (2)"), groups(&app, "Fire (3)")), (1, 1, 0));
+    }
+
     /// Import Brushes… with a PNG: the image becomes the current brush's tip (TOOL-213-12).
     #[test]
     fn import_brushes_turns_an_image_into_a_brush_tip() {
