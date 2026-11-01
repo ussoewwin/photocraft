@@ -208,3 +208,29 @@ fn caps_lock_gives_the_properties_eyedroppers_the_precise_crosshair() {
     caps(&mut h, false);
     assert_eq!(fp(&h), standard, "releasing caps lock restores the pipette");
 }
+
+/// #9836 review: the Color Picker's own eyedropper is the third dialog state that owns the image,
+/// beside Levels/Curves and Properties, and it answers caps lock the same way.
+#[test]
+fn caps_lock_gives_the_color_pickers_eyedropper_the_precise_crosshair() {
+    let mut h = capslock_harness();
+    // A tool whose own cursor ignores caps lock, so only the eyedropper can answer it.
+    h.state_mut().ui.tool = Tool::Move;
+    crate::color_picker_ui::open(h.state_mut(), "foreground");
+    assert!(crate::color_picker_ui::top(h.state()).is_some(), "the Color Picker owns the image");
+    h.run_steps(3);
+    other(&mut h, "standard");
+    let standard = fp(&h);
+    assert_eq!(standard.icon, CursorIcon::None, "the drawn pipette, not the Move tool's arrow over it");
+    other(&mut h, "precise");
+    let precise = fp(&h);
+    assert_eq!(precise.icon, CursorIcon::Crosshair, "Precise: the crosshair");
+    assert_ne!(standard, precise);
+    other(&mut h, "standard");
+    caps(&mut h, true);
+    assert_eq!(fp(&h), precise, "caps lock turns the pipette into the precise crosshair");
+    other(&mut h, "precise");
+    assert_eq!(fp(&h), standard, "and the precise crosshair back into the pipette");
+    caps(&mut h, false);
+    assert_eq!(fp(&h), precise, "releasing caps lock restores the preference");
+}
