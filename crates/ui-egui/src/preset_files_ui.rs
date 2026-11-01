@@ -132,9 +132,12 @@ pub(crate) fn run_import(app: &mut PhotocraftApp, cmd: &str, what: &str, stem: &
             "patterns" => ("Imported {n} pattern from {file}", "Imported {n} patterns from {file}"),
             _ => ("Imported {n} gradient from {file}", "Imported {n} gradients from {file}"),
         };
-        // The group it landed in: "Kit (2)" beside an existing "Kit" (#10640).
-        let group = r.get("group").and_then(Value::as_str).unwrap_or(stem);
-        let imported = crate::i18n::fmt(&crate::i18n::trn(crate::i18n::current(), n, one, other), &[("file", group)]);
+        let imported = crate::i18n::fmt(&crate::i18n::trn(crate::i18n::current(), n, one, other), &[("file", stem)]);
+        // Name the group too when it isn't the file's: "Kit (2)" beside an existing "Kit" (#10640).
+        let imported = match r.get("group").and_then(Value::as_str) {
+            Some(group) if group != stem.trim() => crate::i18n::fmt(tl!("{message} into “{group}”"), &[("message", &imported), ("group", group)]),
+            _ => imported,
+        };
         app.ui.status = match warnings.first() {
             Some(warning) => {
                 let template = "{message} (notes: {n}; {warning})";
@@ -187,6 +190,7 @@ mod tests {
         open(&mut app, "Kit.abr", &abr).unwrap().unwrap();
         assert_eq!(in_group(&app, "Kit"), 2);
         assert!(prompt(&app).is_none(), "a new group imports without asking");
+        assert!(app.ui.status.ends_with("brushes from Kit"), "{}", app.ui.status);
         // The user edits one of its brushes.
         let edited = app.session.tools.presets.iter_mut().find(|p| p.group == "Kit").unwrap();
         edited.brush.size = 77.0;
@@ -204,7 +208,8 @@ mod tests {
         let id = prompt(&app).expect("the prompt is open");
         crate::dialogs::confirm(&mut app, id).unwrap();
         assert_eq!((in_group(&app, "Kit"), in_group(&app, "Kit (2)")), (2, 2));
-        assert!(app.ui.status.contains("Kit (2)"), "{}", app.ui.status);
+        // The status names the file and the group it landed in.
+        assert!(app.ui.status.ends_with("from Kit into “Kit (2)”"), "{}", app.ui.status);
         let size = |app: &PhotocraftApp| app.session.tools.presets.iter().find(|p| p.name == edited).map(|p| p.brush.size);
         assert_eq!(size(&app), Some(77.0), "the edited brush is kept");
 
