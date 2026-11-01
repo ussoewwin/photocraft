@@ -101,12 +101,26 @@ pub fn open(app: &mut PhotocraftApp, name: &str, bytes: &[u8]) -> Option<Result<
     if what == "brushes" {
         p["select"] = json!(true);
     }
-    Some(app.run(cmd, p).map(|r| {
+    // A group of the same name with the user's presets: ask before importing (#10640).
+    if matches!(what, "brushes" | "gradients") {
+        let held = crate::preset_group_prompt::Held { cmd, what, stem, params: p };
+        return Some(match crate::preset_group_prompt::intercept(app, held) {
+            Ok(Some(held)) => run_import(app, held.cmd, held.what, &held.stem, held.params),
+            Ok(None) => Ok(()),
+            Err(e) => Err(e),
+        });
+    }
+    Some(run_import(app, cmd, what, &stem, p))
+}
+
+/// Run the import command for a preset file and report it in the status bar.
+pub(crate) fn run_import(app: &mut PhotocraftApp, cmd: &str, what: &str, stem: &str, p: Value) -> Result<(), String> {
+    app.run(cmd, p).map(|r| {
         // A background import (#210): `jobs_ui` reports the count when it lands.
         if r.get("pending").and_then(Value::as_bool) == Some(true) {
             app.ui.status_error = false;
             let template = "Importing {what} from {file}…";
-            app.ui.status = crate::i18n::fmt(tl!(template), &[("what", tl!(what)), ("file", &stem)]);
+            app.ui.status = crate::i18n::fmt(tl!(template), &[("what", tl!(what)), ("file", stem)]);
             return;
         }
         let n = r.get("count").and_then(Value::as_u64).unwrap_or(0);
@@ -118,7 +132,9 @@ pub fn open(app: &mut PhotocraftApp, name: &str, bytes: &[u8]) -> Option<Result<
             "patterns" => ("Imported {n} pattern from {file}", "Imported {n} patterns from {file}"),
             _ => ("Imported {n} gradient from {file}", "Imported {n} gradients from {file}"),
         };
-        let imported = crate::i18n::fmt(&crate::i18n::trn(crate::i18n::current(), n, one, other), &[("file", &stem)]);
+        // The group it landed in: "Kit (2)" beside an existing "Kit" (#10640).
+        let group = r.get("group").and_then(Value::as_str).unwrap_or(stem);
+        let imported = crate::i18n::fmt(&crate::i18n::trn(crate::i18n::current(), n, one, other), &[("file", group)]);
         app.ui.status = match warnings.first() {
             Some(warning) => {
                 let template = "{message} (notes: {n}; {warning})";
@@ -134,7 +150,7 @@ pub fn open(app: &mut PhotocraftApp, name: &str, bytes: &[u8]) -> Option<Result<
         if what == "styles" {
             app.ui.presets_ui.styles = true;
         }
-    }))
+    })
 }
 
 #[cfg(test)]
@@ -151,6 +167,57 @@ mod tests {
         assert!(is_preset_file("Debaser-ColourLibrary-Part6.PAT"));
         assert!(!is_preset_file("photo.psd"));
         assert!(!is_preset_file("abr"));
+    }
+
+    /// Opening `Kit.abr` when the library has a "Kit" group of the user's asks first: Import as
+    /// New Group (Enter) keeps it, Cancel imports nothing, Replace deletes it (#10640).
+    #[test]
+    fn reimporting_a_brush_file_asks_before_touching_its_group() {
+        use photocraft_psd::abr::{LegacyBrush, LegacyTip, write_v12};
+        let round = |name: &str| LegacyBrush {
+            name: name.into(),
+            spacing: 25,
+            anti_alias: true,
+            tip: LegacyTip::Computed { diameter: 9, hardness: 100, angle: 0, roundness: 100 },
+        };
+        let abr = write_v12(2, &[round("Chalk"), round("Ink")], true).unwrap();
+        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+        let in_group = |app: &PhotocraftApp, g: &str| app.session.tools.presets.iter().filter(|p| p.group == g).count();
+        let prompt = |app: &PhotocraftApp| app.ui.dialogs.iter().find(|d| crate::preset_group_prompt::owns(&d.fields)).map(|d| d.id);
+        open(&mut app, "Kit.abr", &abr).unwrap().unwrap();
+        assert_eq!(in_group(&app, "Kit"), 2);
+        assert!(prompt(&app).is_none(), "a new group imports without asking");
+        // The user edits one of its brushes.
+        let edited = app.session.tools.presets.iter_mut().find(|p| p.group == "Kit").unwrap();
+        edited.brush.size = 77.0;
+        let edited = edited.name.clone();
+
+        // Cancel imports nothing.
+        open(&mut app, "Kit.abr", &abr).unwrap().unwrap();
+        let id = prompt(&app).expect("the prompt is open");
+        crate::dialogs::cancel(&mut app, id).unwrap();
+        assert_eq!((in_group(&app, "Kit"), in_group(&app, "Kit (2)")), (2, 0));
+        assert!(app.held_preset_import.is_none());
+
+        // The default answer imports beside it.
+        open(&mut app, "Kit.abr", &abr).unwrap().unwrap();
+        let id = prompt(&app).expect("the prompt is open");
+        crate::dialogs::confirm(&mut app, id).unwrap();
+        assert_eq!((in_group(&app, "Kit"), in_group(&app, "Kit (2)")), (2, 2));
+        assert!(app.ui.status.contains("Kit (2)"), "{}", app.ui.status);
+        let size = |app: &PhotocraftApp| app.session.tools.presets.iter().find(|p| p.name == edited).map(|p| p.brush.size);
+        assert_eq!(size(&app), Some(77.0), "the edited brush is kept");
+
+        // Replace deletes the group's brushes first.
+        open(&mut app, "Kit.abr", &abr).unwrap().unwrap();
+        let id = prompt(&app).expect("the prompt is open");
+        if let Some(d) = app.ui.dialogs.iter_mut().find(|d| d.id == id) {
+            d.fields.insert("choice".into(), json!("replace"));
+        }
+        crate::dialogs::confirm(&mut app, id).unwrap();
+        assert_eq!((in_group(&app, "Kit"), in_group(&app, "Kit (2)")), (2, 2));
+        assert_eq!(size(&app), Some(9.0), "the file's own brush replaced the edited one");
+        assert!(prompt(&app).is_none());
     }
 
     /// Import Brushes… with a PNG: the image becomes the current brush's tip (TOOL-213-12).
