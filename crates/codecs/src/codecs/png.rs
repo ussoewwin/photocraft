@@ -189,10 +189,12 @@ fn latin1_len(bytes: &[u8]) -> Option<usize> {
 /// allocation limit, so a few kilobytes of zlib could ask for gigabytes (#8599).
 const MAX_ICC_BYTES: u64 = 255 * 65_519;
 
-/// The ICC profile of the first CRC-valid `iCCP` chunk before the image data, inflated to at
-/// most [`MAX_ICC_BYTES`] or `max_alloc`, whichever is smaller (png kept profiles within the
-/// allocation limit too). `None` when there is none, or it is malformed or larger: the image
-/// then opens untagged, as png left a broken profile out.
+/// The ICC profile of the `iCCP` chunk before the image data, inflated to at most
+/// [`MAX_ICC_BYTES`] or `max_alloc`, whichever is smaller (png kept profiles within the
+/// allocation limit too). `None` when there is none, or the one there has a broken CRC, name or
+/// zlib stream, or inflates past the cap: the image then opens untagged, as png left a broken
+/// profile out. A PNG carries at most one `iCCP` (spec 11.3.3.3), so the first one decides and
+/// no later chunk is looked for.
 fn read_iccp(bytes: &[u8], max_alloc: u64) -> Option<Vec<u8>> {
     let cap = MAX_ICC_BYTES.min(max_alloc);
     use std::io::Read;
