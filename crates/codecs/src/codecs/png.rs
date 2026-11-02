@@ -1350,5 +1350,33 @@ mod streamed_tests {
         let png = crate::encode(&img(vec![7; 2000]), Format::Png, &EncodeOptions::default()).unwrap();
         assert_eq!(read_iccp(&png, 1999), None);
         assert_eq!(read_iccp(&png, 2000).map(|p| p.len()), Some(2000));
+        // And one byte under the cap comes through whole.
+        let png = crate::encode(&img(vec![3; cap - 1]), Format::Png, &EncodeOptions::default()).unwrap();
+        assert_eq!(decode(&png, &Limits::default()).unwrap().icc.map(|p| p.len()), Some(cap - 1));
+    }
+
+    /// #8599 review: a profile of the size a real one has survives the round trip byte for byte,
+    /// and a file cut off inside its `iCCP` opens untagged instead of reading past the chunk.
+    #[test]
+    fn a_real_sized_profile_round_trips_and_a_truncated_chunk_is_left_out() {
+        // 3 KB of varied bytes, the order of magnitude of an sRGB profile, so it neither
+        // compresses to nothing nor hits any cap.
+        let profile: Vec<u8> = (0..3072u32).map(|i| (i.wrapping_mul(2_654_435_761) >> 13) as u8).collect();
+        let img = Image::from_raw(2, 2, ChannelLayout::Rgb, SampleType::U8, vec![9; 12]).unwrap().with_icc(Some(profile.clone()));
+        let png = crate::encode(&img, Format::Png, &EncodeOptions::default()).unwrap();
+        let decoded = decode(&png, &Limits::default()).unwrap();
+        assert_eq!(decoded.icc.as_deref(), Some(&profile[..]), "the profile comes back byte for byte");
+        assert_eq!(decoded.data(), &[9u8; 12][..]);
+        // Cut the file inside the iCCP chunk: the walk runs out of bytes and reads no profile.
+        // (A cut after the chunk still reads it, which is why these all land inside it.)
+        let iccp = png.windows(4).position(|w| w == b"iCCP").expect("the file carries an iCCP chunk");
+        let len = u32::from_be_bytes(png[iccp - 4..iccp].try_into().expect("four length bytes")) as usize;
+        for cut in [iccp + 4, iccp + 20, iccp + 4 + len / 2, iccp + 4 + len - 1] {
+            assert_eq!(read_iccp(&png[..cut], u64::from(u32::MAX)), None, "cut at {cut} of {}", png.len());
+        }
+        // A length field claiming more than the file holds is refused the same way.
+        let mut lying = png.clone();
+        lying[iccp - 4..iccp].copy_from_slice(&u32::to_be_bytes(0x7fff_ffff));
+        assert_eq!(read_iccp(&lying, u64::from(u32::MAX)), None, "a length past the end of the file");
     }
 }
