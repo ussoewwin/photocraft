@@ -146,9 +146,9 @@ fn a_move_tool_selection_drag_onto_a_tab_copies_selected_pixels_to_destination()
 
     // Destination now has the copied selection layer
     assert_eq!(h.state().session.documents()[1].doc.layers.len(), 2);
-    // Source layer had the pixels cut
+    // Source layer keeps its pixels intact (not cut)
     let src_bounds = source_square(&h, paint);
-    assert_eq!(src_bounds, photocraft_geom::Rect::new(9, 6, 14, 16));
+    assert_eq!(src_bounds, photocraft_geom::Rect::new(4, 6, 14, 16), "source remains intact");
 }
 
 #[test]
@@ -177,7 +177,7 @@ fn a_move_tool_selection_drag_in_arranged_view_transfers_directly_to_neighbour_c
 
     // Destination now has the transferred layer!
     assert_eq!(h.state().session.documents()[1].doc.layers.len(), 2);
-    // Source layer had the pixels cut!
+    // Source layer keeps its pixels intact (not cut)
     let src_bounds = source_square(&h, paint);
-    assert_eq!(src_bounds, photocraft_geom::Rect::new(9, 6, 14, 16));
+    assert_eq!(src_bounds, photocraft_geom::Rect::new(4, 6, 14, 16), "source remains intact");
 }
