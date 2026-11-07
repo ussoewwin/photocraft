@@ -19,7 +19,7 @@ use crate::state::Tool;
 #[derive(Clone, Debug)]
 pub enum TransferKind {
     Layers(Vec<u64>),
-    Selection { cut: bool },
+    Selection,
 }
 
 /// The layers or selection being dragged and where from.
@@ -58,10 +58,10 @@ fn begin_layers(app: &PhotocraftApp, ctx: &egui::Context, id: LayerId, grab: Opt
     true
 }
 
-fn begin_selection(app: &PhotocraftApp, ctx: &egui::Context, grab: [f64; 2], cut: bool) -> bool {
+fn begin_selection(app: &PhotocraftApp, ctx: &egui::Context, grab: [f64; 2]) -> bool {
     let Some(st) = app.session.active() else { return false };
     let label = tl!("Selection");
-    let t = Transfer { source: st.doc.id, kind: TransferKind::Selection { cut }, grab: Some(grab), label: label.to_string() };
+    let t = Transfer { source: st.doc.id, kind: TransferKind::Selection, grab: Some(grab), label: label.to_string() };
     ctx.data_mut(|d| d.insert_temp(key(), t));
     true
 }
@@ -125,11 +125,11 @@ fn arm_move_drag(app: &mut PhotocraftApp, ctx: &egui::Context, drag: MoveDrag) {
                 begin_layers(app, ctx, active, Some(grab));
             }
         }
-        MoveDrag::Selection { grab, cut } => {
+        MoveDrag::Selection { grab, .. } => {
             if let Some(st) = app.session.active_mut() {
                 st.floating = None;
             }
-            begin_selection(app, ctx, grab, cut);
+            begin_selection(app, ctx, grab);
         }
     }
 }
@@ -207,6 +207,8 @@ fn target_at(app: &PhotocraftApp, p: egui::Pos2) -> Option<(usize, Option<[f64; 
 }
 
 /// Copy the dragged layers or selection into document `dest`, at document point `at`.
+/// When transferring a selection to another document, the source document remains intact (not cut),
+/// matching Photoshop's cross-document drag behaviour.
 fn drop(app: &mut PhotocraftApp, ctx: &egui::Context, dest: usize, at: Option<[f64; 2]>) {
     let Some(t) = get(ctx) else { return };
     clear(ctx);
@@ -244,12 +246,12 @@ fn drop(app: &mut PhotocraftApp, ctx: &egui::Context, dest: usize, at: Option<[f
                 app.ui.status_error = true;
             }
         }
-        TransferKind::Selection { cut } => {
+        TransferKind::Selection => {
             let mut p = json!({
                 "document": dest,
                 "source": src,
                 "selection": true,
-                "cut": cut,
+                "cut": false,
             });
             match at.filter(|_| !ctx.input(|i| i.modifiers.shift)) {
                 Some(at) => match t.grab {
