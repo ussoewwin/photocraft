@@ -24,6 +24,20 @@ pause
 exit /b 1
 
 :run
+rem Normalize compiler environment variables that leak from developer shells.
+rem The Rust build tools detect MSVC themselves; a wrong INCLUDE/LIB makes the
+rem aws-lc-sys C build fail (cl.exe exit code 2).
+set INCLUDE=
+set LIB=
+set CL=
+set _CL_=
+set CC=
+set CXX=
+set CFLAGS=
+set CXXFLAGS=
+set RUSTFLAGS=
+set CARGO_TARGET_DIR=
+set CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS=
 echo [PhotoCraft] Building and starting the desktop app (cargo run --release -p photocraft).
 echo [PhotoCraft] The first run compiles the whole workspace and may take a long time.
 "%CARGO%" run --release -p photocraft
