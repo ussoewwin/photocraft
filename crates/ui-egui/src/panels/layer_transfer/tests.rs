@@ -132,6 +132,7 @@ fn dropping_back_on_the_source_copies_nothing() {
 }
 
 #[test]
+/// Dragging a selection onto another document's tab copies the selected pixels and leaves the source intact.
 fn a_move_tool_selection_drag_onto_a_tab_copies_selected_pixels_to_destination() {
     let (mut h, paint) = harness();
     // Create a selection inside the red square
@@ -158,6 +159,7 @@ fn a_move_tool_selection_drag_onto_a_tab_copies_selected_pixels_to_destination()
 }
 
 #[test]
+/// Dragging a mask selection onto a tab copies the mask gray and leaves the layer's pixels.
 fn a_move_tool_mask_selection_drag_onto_a_tab_copies_the_mask_and_leaves_layer_pixels() {
     let (mut h, paint) = harness();
     h.state_mut().session.execute("layer.layerMask.revealAll", json!({})).unwrap();
@@ -166,6 +168,22 @@ fn a_move_tool_mask_selection_drag_onto_a_tab_copies_the_mask_and_leaves_layer_p
     h.state_mut().ui.mask_target = true;
     h.state_mut().ui.tool = Tool::Move;
     h.run_steps(2);
+
+    // Snapshot the source mask and selection: arming the transfer and copying the selected
+    // pixels must leave both unchanged.
+    let src_doc = h.state().session.active().unwrap().doc.id;
+    let src_layer = h.state().session.active().unwrap().active_layer;
+    let mask_sample = |h: &Harness<'static, PhotocraftApp>| {
+        let st = h.state().session.documents().iter().find(|s| s.doc.id == src_doc).unwrap();
+        let layer = src_layer.and_then(|id| st.doc.layer(id)).unwrap();
+        let mut px = [0.0f32; 4];
+        layer.surface().unwrap().read_pixel(6, 8, &mut px);
+        px
+    };
+    let selection_present =
+        |h: &Harness<'static, PhotocraftApp>| h.state().session.documents().iter().find(|s| s.doc.id == src_doc).is_some_and(|s| s.doc.selection.is_some());
+    let before_mask = mask_sample(&h);
+    let before_selection = selection_present(&h);
 
     let grab = ViewXform::active(h.state()).unwrap().to_screen(6.0, 11.0);
     let over_tab = tab(&h, "dest-doc");
@@ -180,9 +198,12 @@ fn a_move_tool_mask_selection_drag_onto_a_tab_copies_the_mask_and_leaves_layer_p
     dst_layer.surface().unwrap().read_pixel(r.min.x as i32 + 1, r.min.y as i32 + 1, &mut sample);
     assert!((sample[0] - sample[1]).abs() < 0.02 && (sample[0] - 128.0 / 255.0).abs() < 0.02, "copied mask gray, not red layer pixels: {sample:?}");
     assert_eq!(source_square(&h, paint), photocraft_geom::Rect::new(4, 6, 14, 16), "source layer pixels remain intact");
+    assert_eq!(mask_sample(&h), before_mask, "arming and copying leave the source mask unchanged");
+    assert_eq!(selection_present(&h), before_selection, "arming and copying leave the source selection unchanged");
 }
 
 #[test]
+/// In Arrange views, dragging a selection into the neighbouring cell transfers it there directly.
 fn a_move_tool_selection_drag_in_arranged_view_transfers_directly_to_neighbour_cell() {
     let (mut h, paint) = harness();
     h.state_mut().ui.view.arrange = "twoUpVertical".into();
@@ -229,6 +250,7 @@ fn a_move_tool_selection_drag_in_arranged_view_transfers_directly_to_neighbour_c
 }
 
 #[test]
+/// In Arrange views, dragging the Background into the neighbouring cell transfers it there directly.
 fn a_move_tool_background_layer_drag_in_arranged_view_transfers_directly_to_neighbour_cell() {
     let (mut h, paint) = harness();
     h.state_mut().session.execute("layer.delete", json!({"layer": paint.0})).unwrap();
@@ -261,6 +283,7 @@ fn a_move_tool_background_layer_drag_in_arranged_view_transfers_directly_to_neig
 }
 
 #[test]
+/// A blocked Move drag inside one document shows the lock message even with two documents open.
 fn same_document_blocked_move_with_multiple_documents_shows_lock_message() {
     let (mut h, paint) = harness();
     h.state_mut().session.execute("layer.delete", json!({"layer": paint.0})).unwrap();
@@ -273,7 +296,12 @@ fn same_document_blocked_move_with_multiple_documents_shows_lock_message() {
     tool_event(h.state_mut(), ToolEvent::Down { x: 20.0, y: 20.0, pressure: 1.0 }, Modifiers::NONE);
     tool_event(h.state_mut(), ToolEvent::Up { x: 20.0, y: 20.0 }, Modifiers::NONE);
     let error_dialogs = |app: &crate::PhotocraftApp| -> Vec<String> {
-        app.ui.dialogs.iter().filter(|d| d.kind == crate::state::DialogKind::Error).filter_map(|d| d.fields.get("message")?.as_str().map(String::from)).collect()
+        app.ui
+            .dialogs
+            .iter()
+            .filter(|d| d.kind == crate::state::DialogKind::Error)
+            .filter_map(|d| d.fields.get("message")?.as_str().map(String::from))
+            .collect()
     };
     assert!(error_dialogs(h.state()).is_empty() && !h.state().move_blocked);
 
@@ -288,6 +316,7 @@ fn same_document_blocked_move_with_multiple_documents_shows_lock_message() {
 }
 
 #[test]
+/// Releasing a blocked Move drag clears the blocked state.
 fn blocked_move_gesture_release_clears_blocked_state() {
     let (mut h, _) = harness();
     h.state_mut().ui.tool = Tool::Move;
@@ -295,12 +324,14 @@ fn blocked_move_gesture_release_clears_blocked_state() {
     h.state_mut().move_blocked_start = Some([10.0, 10.0]);
 
     // When the mouse button is not down or released, finish clears the blocked move state
-    let ctx = h.ctx.clone(); crate::layer_transfer::finish(h.state_mut(), &ctx);
+    let ctx = h.ctx.clone();
+    crate::layer_transfer::finish(h.state_mut(), &ctx);
     assert!(!h.state().move_blocked);
     assert_eq!(h.state().move_blocked_start, None);
 }
 
 #[test]
+/// A gesture begun in another document window survives the main window's `finish`.
 fn extra_window_move_gesture_preserved_when_main_window_finishes() {
     let (mut h, _) = harness();
     let main_ctx = h.ctx.clone();
@@ -329,4 +360,113 @@ fn extra_window_move_gesture_preserved_when_main_window_finishes() {
     assert!(!h.state().move_blocked);
     assert_eq!(h.state().move_blocked_start, None);
     assert!(h.state().layer_box.is_none());
+}
+
+/// #11971 review: a document window's `finish` must not complete a transfer the main window
+/// armed. The transfer lives in the shared `Context`, so a second viewport of the same context
+/// sees it; only the viewport that armed it may complete it.
+#[test]
+fn a_document_window_does_not_complete_a_transfer_armed_in_the_main_window() {
+    let (mut h, paint) = harness();
+    // One context, two viewports: the main window arms the transfer, the document window's
+    // `finish` runs with its own (idle) pointer state.
+    let ctx = egui::Context::default();
+    let extra_vid = egui::ViewportId::from_hash_of("docwin-transfer");
+
+    crate::layer_transfer::begin_from_panel(h.state_mut(), &ctx, paint);
+    assert!(crate::layer_transfer::is_transfer_armed(&ctx), "the main window armed a transfer");
+
+    // The document window finishes first: its pointer is up, but the transfer belongs to the
+    // main window, so it must stay armed.
+    let mut raw = egui::RawInput { viewport_id: extra_vid, ..Default::default() };
+    raw.viewports.insert(extra_vid, egui::ViewportInfo::default());
+    let mut out = ctx.run_ui(raw, |ui| {
+        crate::layer_transfer::finish(h.state_mut(), ui.ctx());
+    });
+    out.textures_delta.clear();
+    assert!(crate::layer_transfer::is_transfer_armed(&ctx), "the main window's transfer survives another viewport's finish");
+
+    // The main window's own release completes it.
+    let mut raw = egui::RawInput::default();
+    raw.events.push(egui::Event::PointerButton {
+        pos: egui::Pos2::new(20.0, 20.0),
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: Modifiers::NONE,
+    });
+    let mut out = ctx.run_ui(raw, |ui| {
+        crate::layer_transfer::finish(h.state_mut(), ui.ctx());
+    });
+    out.textures_delta.clear();
+    assert!(!crate::layer_transfer::is_transfer_armed(&ctx), "the main window completes its transfer");
+}
+
+/// #11971 review: releasing the secondary button during a locked-layer drag keeps the marquee,
+/// so the primary release still selects the layers it covers.
+#[test]
+fn a_secondary_button_release_keeps_the_marquee_until_the_primary_release() {
+    let (mut h, paint) = harness();
+    h.state_mut().ui.tool = Tool::Move;
+    h.state_mut().ui.tool_options.move_auto_select = false;
+
+    // A marquee over a locked layer, as a blocked Move drag leaves it.
+    crate::tools::move_box::begin_with_layer(h.state_mut(), [20.0, 20.0], false, Some(paint));
+    h.state_mut().move_blocked = true;
+    h.state_mut().move_blocked_start = Some([20.0, 20.0]);
+
+    // The secondary button is released while the primary button is still down.
+    let ctx = h.ctx.clone();
+    let mut raw = egui::RawInput::default();
+    raw.events.push(egui::Event::PointerButton {
+        pos: egui::Pos2::new(20.0, 20.0),
+        button: egui::PointerButton::Secondary,
+        pressed: false,
+        modifiers: Modifiers::NONE,
+    });
+    raw.events.push(egui::Event::PointerButton {
+        pos: egui::Pos2::new(20.0, 20.0),
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers: Modifiers::NONE,
+    });
+    let mut out = ctx.run_ui(raw, |ui| {
+        crate::layer_transfer::finish(h.state_mut(), ui.ctx());
+    });
+    out.textures_delta.clear();
+
+    assert!(h.state().layer_box.is_some(), "the marquee survives a secondary-button release");
+    assert!(h.state().move_blocked, "the blocked move survives a secondary-button release");
+    assert_eq!(h.state().move_blocked_start, Some([20.0, 20.0]));
+}
+
+/// #11971 review: a secondary-button release while the drag is held must not complete a
+/// cross-document transfer; only the primary release does.
+#[test]
+fn a_secondary_button_release_does_not_complete_a_transfer() {
+    let (mut h, paint) = harness();
+    let ctx = egui::Context::default();
+
+    crate::layer_transfer::begin_from_panel(h.state_mut(), &ctx, paint);
+    assert!(crate::layer_transfer::is_transfer_armed(&ctx), "the window armed a transfer");
+
+    // The secondary button is released while the primary button is still down.
+    let mut raw = egui::RawInput::default();
+    raw.events.push(egui::Event::PointerButton {
+        pos: egui::Pos2::new(20.0, 20.0),
+        button: egui::PointerButton::Secondary,
+        pressed: false,
+        modifiers: Modifiers::NONE,
+    });
+    raw.events.push(egui::Event::PointerButton {
+        pos: egui::Pos2::new(20.0, 20.0),
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers: Modifiers::NONE,
+    });
+    let mut out = ctx.run_ui(raw, |ui| {
+        crate::layer_transfer::finish(h.state_mut(), ui.ctx());
+    });
+    out.textures_delta.clear();
+
+    assert!(crate::layer_transfer::is_transfer_armed(&ctx), "a secondary release leaves the transfer armed for the intended primary drop");
 }
