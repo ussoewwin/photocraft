@@ -117,8 +117,8 @@ fn windows_directory_flush_opens_a_directory_and_reports_open_errors() {
     let d = TempDir::new("sync-directory");
     RealFs.sync_dir(&d.0).unwrap();
     assert_eq!(RealFs.sync_dir(&d.0.join("missing")).unwrap_err().kind(), io::ErrorKind::NotFound);
-    // Unsupported flush errors (50: ERROR_NOT_SUPPORTED, 1: ERROR_INVALID_FUNCTION, 120: ERROR_CALL_NOT_IMPLEMENTED)
-    // are classified as non-fatal by dir_synced, while open errors remain preserved.
+    // Unsupported open or flush errors (50: ERROR_NOT_SUPPORTED, 1: ERROR_INVALID_FUNCTION, 120: ERROR_CALL_NOT_IMPLEMENTED)
+    // are classified as non-fatal by dir_synced / dir_sync_unsupported, while fatal open errors (e.g. NotFound) remain preserved.
     assert!(dir_synced(Err(io::Error::from_raw_os_error(50))).is_ok());
     assert!(dir_synced(Err(io::Error::from_raw_os_error(1))).is_ok());
     assert!(dir_synced(Err(io::Error::from_raw_os_error(120))).is_ok());
