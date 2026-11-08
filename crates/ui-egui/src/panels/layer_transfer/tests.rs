@@ -299,3 +299,34 @@ fn blocked_move_gesture_release_clears_blocked_state() {
     assert!(!h.state().move_blocked);
     assert_eq!(h.state().move_blocked_start, None);
 }
+
+#[test]
+fn extra_window_move_gesture_preserved_when_main_window_finishes() {
+    let (mut h, _) = harness();
+    let main_ctx = h.ctx.clone();
+    let extra_vid = egui::ViewportId::from_hash_of("docwin-1");
+
+    h.state_mut().ui.tool = Tool::Move;
+    h.state_mut().move_blocked = true;
+    h.state_mut().move_blocked_start = Some([10.0, 10.0]);
+    crate::tools::move_box::begin_with_layer(h.state_mut(), [10.0, 10.0], false, Some(photocraft_doc::LayerId(1)));
+    h.state_mut().move_viewport = Some(extra_vid);
+
+    // When the main window's finish runs, the extra window's gesture is preserved
+    crate::layer_transfer::finish(h.state_mut(), &main_ctx);
+    assert!(h.state().move_blocked);
+    assert_eq!(h.state().move_blocked_start, Some([10.0, 10.0]));
+    assert!(h.state().layer_box.is_some());
+
+    // When the gesture's viewport finishes, the state is cleared
+    let extra_ctx = egui::Context::default();
+    let mut raw = egui::RawInput { viewport_id: extra_vid, ..Default::default() };
+    raw.viewports.insert(extra_vid, egui::ViewportInfo::default());
+    let mut out = extra_ctx.run_ui(raw, |ui| {
+        crate::layer_transfer::finish(h.state_mut(), ui.ctx());
+    });
+    out.textures_delta.clear();
+    assert!(!h.state().move_blocked);
+    assert_eq!(h.state().move_blocked_start, None);
+    assert!(h.state().layer_box.is_none());
+}
