@@ -637,7 +637,10 @@ fn a_directory_flush_the_file_system_cannot_do_still_saves() {
         // ERROR_SHARING_VIOLATION (32) is a real failure
         assert!(dir_synced(Err(io::Error::from_raw_os_error(32))).is_err());
         let fs_fatal = Faulty { fail_sync_dir: Some(Ok(32)), ..Default::default() };
-        assert!(atomic_write_with(&fs_fatal, NO_RETRY, &p, b"fatal").is_err());
+        let error = atomic_write_with(&fs_fatal, NO_RETRY, &p, b"fatal").unwrap_err();
+        assert_eq!(fs_fatal.synced.get(), 1);
+        assert!(error.to_string().contains("may not survive"), "{error}");
+        assert_eq!(std::fs::read(&p).unwrap(), b"fatal");
 
         let fs_webdav = Faulty { fail_sync_dir: Some(Ok(50)), ..Default::default() };
         atomic_write_with(&fs_webdav, NO_RETRY, &p, b"webdav").unwrap();
