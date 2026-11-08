@@ -225,7 +225,7 @@ fn claim_single_instance(
     // keeps its own process instead of handing its files over and being ignored.
     launch_options.extend_from_slice(&single_instance::env_launch_options());
     let context = single_instance::LaunchContext {
-        per_user_settings: app_dirs::current().mode == app_dirs::Mode::Platform,
+        per_user_settings: matches!(app_dirs::current().mode, app_dirs::Mode::Platform | app_dirs::Mode::Portable),
         new_instance_flag: new_instance,
         new_instance_env: new_instance_env.as_deref(),
         control,
