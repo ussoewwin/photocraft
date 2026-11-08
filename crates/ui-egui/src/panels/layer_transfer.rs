@@ -125,6 +125,11 @@ pub fn check_arranged_drag(app: &mut PhotocraftApp, ctx: &egui::Context) {
     if get(ctx).is_some() {
         return;
     }
+    // Only the window that began the move owns it: another window's frame must not read its
+    // own pointer against this gesture and arm a transfer on the first window's behalf.
+    if app.move_viewport.is_some_and(|v| v != ctx.viewport_id()) {
+        return;
+    }
     let Some(drag) = current_move_drag(app) else { return };
     let Some(pointer) = ctx.input(|i| i.pointer.latest_pos()) else { return };
     let Some(cells) = crate::canvas::arranged_cells(app, app.last_canvas_rect) else { return };
@@ -216,7 +221,9 @@ pub fn finish(app: &mut PhotocraftApp, ctx: &egui::Context) {
     if t.viewport != ctx.viewport_id() {
         return;
     }
-    let (pos, released, down) = ctx.input(|i| (i.pointer.latest_pos(), i.pointer.any_released(), i.pointer.primary_down()));
+    // Only the primary button completes a transfer: a secondary release while the drag is
+    // held leaves it armed for the intended drop.
+    let (pos, released, down) = ctx.input(|i| (i.pointer.latest_pos(), i.pointer.primary_released(), i.pointer.primary_down()));
     let target = pos.and_then(|p| target_at(app, p));
     if !released {
         if !down {
