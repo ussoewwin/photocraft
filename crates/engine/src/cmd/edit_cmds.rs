@@ -455,6 +455,7 @@ fn copy_mask(s: &mut Session, filter: bool) -> Result<Value> {
     Ok(json!({"bounds": [b.x0, b.y0, b.width(), b.height()], "target": if filter { "filterMask" } else { "mask" }}))
 }
 
+/// Clear the selected area of layer `id` to `background`, leaving the rest untouched.
 pub(crate) fn clear_selected(doc: &mut Document, id: LayerId, background: [f32; 4]) -> Result<()> {
     let sel = doc.selection.clone();
     let canvas = doc.bounds();
