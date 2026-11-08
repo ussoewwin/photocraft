@@ -132,6 +132,7 @@ fn dropping_back_on_the_source_copies_nothing() {
 }
 
 #[test]
+/// Dragging a selection onto another document's tab copies the selected pixels and leaves the source intact.
 fn a_move_tool_selection_drag_onto_a_tab_copies_selected_pixels_to_destination() {
     let (mut h, paint) = harness();
     // Create a selection inside the red square
@@ -158,6 +159,7 @@ fn a_move_tool_selection_drag_onto_a_tab_copies_selected_pixels_to_destination()
 }
 
 #[test]
+/// Dragging a mask selection onto a tab copies the mask gray and leaves the layer's pixels.
 fn a_move_tool_mask_selection_drag_onto_a_tab_copies_the_mask_and_leaves_layer_pixels() {
     let (mut h, paint) = harness();
     h.state_mut().session.execute("layer.layerMask.revealAll", json!({})).unwrap();
@@ -201,6 +203,7 @@ fn a_move_tool_mask_selection_drag_onto_a_tab_copies_the_mask_and_leaves_layer_p
 }
 
 #[test]
+/// In Arrange views, dragging a selection into the neighbouring cell transfers it there directly.
 fn a_move_tool_selection_drag_in_arranged_view_transfers_directly_to_neighbour_cell() {
     let (mut h, paint) = harness();
     h.state_mut().ui.view.arrange = "twoUpVertical".into();
@@ -247,6 +250,7 @@ fn a_move_tool_selection_drag_in_arranged_view_transfers_directly_to_neighbour_c
 }
 
 #[test]
+/// In Arrange views, dragging the Background into the neighbouring cell transfers it there directly.
 fn a_move_tool_background_layer_drag_in_arranged_view_transfers_directly_to_neighbour_cell() {
     let (mut h, paint) = harness();
     h.state_mut().session.execute("layer.delete", json!({"layer": paint.0})).unwrap();
@@ -279,6 +283,7 @@ fn a_move_tool_background_layer_drag_in_arranged_view_transfers_directly_to_neig
 }
 
 #[test]
+/// A blocked Move drag inside one document shows the lock message even with two documents open.
 fn same_document_blocked_move_with_multiple_documents_shows_lock_message() {
     let (mut h, paint) = harness();
     h.state_mut().session.execute("layer.delete", json!({"layer": paint.0})).unwrap();
@@ -311,6 +316,7 @@ fn same_document_blocked_move_with_multiple_documents_shows_lock_message() {
 }
 
 #[test]
+/// Releasing a blocked Move drag clears the blocked state.
 fn blocked_move_gesture_release_clears_blocked_state() {
     let (mut h, _) = harness();
     h.state_mut().ui.tool = Tool::Move;
@@ -325,6 +331,7 @@ fn blocked_move_gesture_release_clears_blocked_state() {
 }
 
 #[test]
+/// A gesture begun in another document window survives the main window's `finish`.
 fn extra_window_move_gesture_preserved_when_main_window_finishes() {
     let (mut h, _) = harness();
     let main_ctx = h.ctx.clone();
