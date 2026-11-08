@@ -74,8 +74,8 @@ impl AtomicFs for Faulty {
     fn sync_dir(&self, dir: &Path) -> io::Result<()> {
         self.synced.set(self.synced.get() + 1);
         match self.fail_sync_dir {
-            Some(Ok(code)) => Err(io::Error::from_raw_os_error(code)),
-            Some(Err(kind)) => Err(io::Error::new(kind, "injected directory flush failure")),
+            Some(Ok(code)) => dir_synced(Err(io::Error::from_raw_os_error(code))),
+            Some(Err(kind)) => dir_synced(Err(io::Error::new(kind, "injected directory flush failure"))),
             None => RealFs.sync_dir(dir),
         }
     }
@@ -117,6 +117,12 @@ fn windows_directory_flush_opens_a_directory_and_reports_open_errors() {
     let d = TempDir::new("sync-directory");
     RealFs.sync_dir(&d.0).unwrap();
     assert_eq!(RealFs.sync_dir(&d.0.join("missing")).unwrap_err().kind(), io::ErrorKind::NotFound);
+    // Unsupported flush errors (50: ERROR_NOT_SUPPORTED, 1: ERROR_INVALID_FUNCTION, 120: ERROR_CALL_NOT_IMPLEMENTED)
+    // are classified as non-fatal by dir_synced, while open errors remain preserved.
+    assert!(dir_synced(Err(io::Error::from_raw_os_error(50))).is_ok());
+    assert!(dir_synced(Err(io::Error::from_raw_os_error(1))).is_ok());
+    assert!(dir_synced(Err(io::Error::from_raw_os_error(120))).is_ok());
+    assert!(dir_synced(Err(io::Error::from_raw_os_error(32))).is_err());
 }
 
 #[test]
