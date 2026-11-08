@@ -171,8 +171,7 @@ pub fn finish_stroke(app: &mut PhotocraftApp, tool: Tool, points: &[[f64; 3]], m
         },
         Tool::QuickSelection => {
             let size = app.session.tools.brush.size;
-            let bar = o.quick_selection_mode;
-            let mode = crate::canvas::tool_feedback::selection_mode(tool, bar, mods);
+            let mode = crate::canvas::tool_feedback::document_selection_mode(app, tool, mods);
             let xy: Vec<[f64; 2]> = points.iter().map(|q| [q[0], q[1]]).collect();
             let (sample_all, enhance) = (o.sample_all.quick_selection, o.enhance_edge);
             let r = app.run("select.quick", json!({"points": xy, "size": size, "mode": mode, "enhanceEdge": enhance, "sampleAllLayers": sample_all}));
