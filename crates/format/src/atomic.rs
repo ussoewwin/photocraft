@@ -370,27 +370,28 @@ fn open_dir_for_sync(dir: &Path) -> io::Result<Option<std::fs::File>> {
 /// Flush directory publication on Windows using `open_dir_for_sync`.
 #[cfg(windows)]
 pub(crate) fn sync_dir_windows(dir: &Path) -> io::Result<()> {
-    sync_dir_windows_with(dir, open_dir_for_sync)
+    sync_dir_windows_with(dir, open_dir_for_sync, |d| d.sync_all())
 }
 
-/// Flush directory publication on Windows with a custom opener `open`, treating
+/// Flush directory publication on Windows with a custom opener `open` and flusher `sync`, treating
 /// unsupported errors (such as `ERROR_NOT_SUPPORTED` on WebDAV/cloud virtual drives) as non-fatal.
 #[cfg(windows)]
-pub(crate) fn sync_dir_windows_with<F>(dir: &Path, open: F) -> io::Result<()>
+pub(crate) fn sync_dir_windows_with<F, S>(dir: &Path, open: F, sync: S) -> io::Result<()>
 where
     F: FnOnce(&Path) -> io::Result<std::fs::File>,
+    S: FnOnce(&std::fs::File) -> io::Result<()>,
 {
     let directory = match open(dir) {
         Ok(d) => d,
         Err(e) if dir_sync_unsupported(&e) => return Ok(()),
         Err(e) => return Err(e),
     };
-    dir_synced(directory.sync_all())
+    dir_synced(sync(&directory))
 }
 
 /// Open `dir` on Windows with `FILE_ADD_FILE` and `FILE_FLAG_BACKUP_SEMANTICS` for directory flush.
 #[cfg(windows)]
-fn open_dir_for_sync(dir: &Path) -> io::Result<std::fs::File> {
+pub(crate) fn open_dir_for_sync(dir: &Path) -> io::Result<std::fs::File> {
     use std::os::windows::fs::OpenOptionsExt;
 
     // FILE_ADD_FILE is the directory equivalent of FILE_WRITE_DATA. Requesting only
