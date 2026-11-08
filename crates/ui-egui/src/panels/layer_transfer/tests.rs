@@ -273,7 +273,12 @@ fn same_document_blocked_move_with_multiple_documents_shows_lock_message() {
     tool_event(h.state_mut(), ToolEvent::Down { x: 20.0, y: 20.0, pressure: 1.0 }, Modifiers::NONE);
     tool_event(h.state_mut(), ToolEvent::Up { x: 20.0, y: 20.0 }, Modifiers::NONE);
     let error_dialogs = |app: &crate::PhotocraftApp| -> Vec<String> {
-        app.ui.dialogs.iter().filter(|d| d.kind == crate::state::DialogKind::Error).filter_map(|d| d.fields.get("message")?.as_str().map(String::from)).collect()
+        app.ui
+            .dialogs
+            .iter()
+            .filter(|d| d.kind == crate::state::DialogKind::Error)
+            .filter_map(|d| d.fields.get("message")?.as_str().map(String::from))
+            .collect()
     };
     assert!(error_dialogs(h.state()).is_empty() && !h.state().move_blocked);
 
@@ -295,7 +300,8 @@ fn blocked_move_gesture_release_clears_blocked_state() {
     h.state_mut().move_blocked_start = Some([10.0, 10.0]);
 
     // When the mouse button is not down or released, finish clears the blocked move state
-    let ctx = h.ctx.clone(); crate::layer_transfer::finish(h.state_mut(), &ctx);
+    let ctx = h.ctx.clone();
+    crate::layer_transfer::finish(h.state_mut(), &ctx);
     assert!(!h.state().move_blocked);
     assert_eq!(h.state().move_blocked_start, None);
 }
