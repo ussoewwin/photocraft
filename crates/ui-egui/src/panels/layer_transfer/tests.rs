@@ -227,3 +227,35 @@ fn a_move_tool_selection_drag_in_arranged_view_transfers_directly_to_neighbour_c
     let src_bounds = source_square(&h, paint);
     assert_eq!(src_bounds, photocraft_geom::Rect::new(4, 6, 14, 16), "source remains intact");
 }
+
+#[test]
+fn a_move_tool_background_layer_drag_in_arranged_view_transfers_directly_to_neighbour_cell() {
+    let (mut h, paint) = harness();
+    h.state_mut().session.execute("layer.delete", json!({"layer": paint.0})).unwrap();
+    assert_eq!(h.state().session.documents()[0].doc.layers.len(), 1, "only Background remains in source");
+
+    h.state_mut().ui.view.arrange = "twoUpVertical".into();
+    h.state_mut().ui.tool = Tool::Move;
+    h.state_mut().ui.tool_options.move_auto_select = true;
+    h.run_steps(4);
+
+    let cells = crate::canvas::arranged_cells(h.state(), h.state().last_canvas_rect).unwrap();
+    assert_eq!(cells.len(), 2);
+    let (src_cell, dest_cell) = (cells[0].1, cells[1].1);
+
+    let view_src = h.state().ui.views[0].clone();
+    let xf_src =
+        crate::canvas::ViewXform { rect: src_cell, zoom: view_src.zoom / h.state().ppp, center: view_src.center, flip: false, rotation: 0.0, aspect: 1.0 };
+    let grab = xf_src.to_screen(15.0, 15.0);
+    let drop = dest_cell.center();
+
+    // Drag Background directly from src canvas to dest canvas
+    drag_along(&mut h, &[grab, drop], Modifiers::NONE);
+
+    // Destination now has the transferred Background layer copied as an ordinary layer!
+    assert_eq!(h.state().session.documents()[1].doc.layers.len(), 2);
+    let (name, _) = copy(&h);
+    assert_eq!(name, "Layer 1");
+    // Source still has its Background intact
+    assert_eq!(h.state().session.documents()[0].doc.layers.len(), 1);
+}
