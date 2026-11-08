@@ -259,3 +259,43 @@ fn a_move_tool_background_layer_drag_in_arranged_view_transfers_directly_to_neig
     // Source still has its Background intact
     assert_eq!(h.state().session.documents()[0].doc.layers.len(), 1);
 }
+
+#[test]
+fn same_document_blocked_move_with_multiple_documents_shows_lock_message() {
+    let (mut h, paint) = harness();
+    h.state_mut().session.execute("layer.delete", json!({"layer": paint.0})).unwrap();
+    assert_eq!(h.state().session.documents().len(), 2, "two documents open");
+    h.state_mut().ui.tool = Tool::Move;
+    h.state_mut().ui.tool_options.move_auto_select = false;
+
+    use crate::canvas::{ToolEvent, tool_event};
+    // Click on Background: no message
+    tool_event(h.state_mut(), ToolEvent::Down { x: 20.0, y: 20.0, pressure: 1.0 }, Modifiers::NONE);
+    tool_event(h.state_mut(), ToolEvent::Up { x: 20.0, y: 20.0 }, Modifiers::NONE);
+    let error_dialogs = |app: &crate::PhotocraftApp| -> Vec<String> {
+        app.ui.dialogs.iter().filter(|d| d.kind == crate::state::DialogKind::Error).filter_map(|d| d.fields.get("message")?.as_str().map(String::from)).collect()
+    };
+    assert!(error_dialogs(h.state()).is_empty() && !h.state().move_blocked);
+
+    // Drag and return to press point: shows lock prompt promptly on Move
+    tool_event(h.state_mut(), ToolEvent::Down { x: 20.0, y: 20.0, pressure: 1.0 }, Modifiers::NONE);
+    tool_event(h.state_mut(), ToolEvent::Move { x: 30.0, y: 20.0, pressure: 1.0 }, Modifiers::NONE);
+    // Even if pointer returns to start before Up, the prompt is shown
+    tool_event(h.state_mut(), ToolEvent::Move { x: 20.0, y: 20.0, pressure: 1.0 }, Modifiers::NONE);
+    tool_event(h.state_mut(), ToolEvent::Up { x: 20.0, y: 20.0 }, Modifiers::NONE);
+    assert_eq!(error_dialogs(h.state()), [crate::move_lock::MESSAGE]);
+    assert!(!h.state().move_blocked && h.state().move_blocked_start.is_none());
+}
+
+#[test]
+fn blocked_move_gesture_release_clears_blocked_state() {
+    let (mut h, _) = harness();
+    h.state_mut().ui.tool = Tool::Move;
+    h.state_mut().move_blocked = true;
+    h.state_mut().move_blocked_start = Some([10.0, 10.0]);
+
+    // When the mouse button is not down or released, finish clears the blocked move state
+    let ctx = h.ctx.clone(); crate::layer_transfer::finish(h.state_mut(), &ctx);
+    assert!(!h.state().move_blocked);
+    assert_eq!(h.state().move_blocked_start, None);
+}

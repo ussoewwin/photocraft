@@ -25,6 +25,8 @@ pub(crate) fn begin(app: &mut PhotocraftApp, p: [f64; 2], add: bool) {
     begin_with_layer(app, p, add, None);
 }
 
+/// Starts a Move marquee drag at p, optionally recording a locked or background layer that was hit
+/// under the pointer for potential cross-document transfer.
 pub(crate) fn begin_with_layer(app: &mut PhotocraftApp, p: [f64; 2], add: bool, grabbed_layer: Option<photocraft_doc::LayerId>) {
     app.layer_box = Some(LayerBox { start: p, end: p, add, grabbed_layer });
     app.prefs_rt.snap = None;
