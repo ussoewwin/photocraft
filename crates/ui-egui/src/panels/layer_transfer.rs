@@ -92,7 +92,11 @@ pub fn current_move_drag(app: &PhotocraftApp) -> Option<MoveDrag> {
         }
         return None;
     }
-    if app.ui.tool == Tool::Move && st.doc.selection.is_none() && st.floating.is_none() {
+    let is_move = app.ui.tool == Tool::Move
+        || app.tool_override == Some(Tool::Move)
+        || app.move_blocked_start.is_some()
+        || app.layer_box.as_ref().is_some_and(|b| b.grabbed_layer.is_some());
+    if is_move && st.doc.selection.is_none() && st.floating.is_none() {
         if let Some(b) = app.layer_box.as_ref()
             && b.grabbed_layer.is_some()
         {
@@ -178,7 +182,20 @@ pub fn over_tab(app: &mut PhotocraftApp, ctx: &egui::Context, index: usize) {
 
 /// Every frame after the document area: a release over another document's canvas drops the
 /// layers there; while the button is held a ghost follows the pointer.
+/// Is a cross-document layer or selection transfer currently armed?
+pub fn is_transfer_in_progress(app: &PhotocraftApp) -> bool {
+    app.frame_tool_ctx.as_ref().is_some_and(|ctx| get(ctx).is_some())
+}
+
 pub fn finish(app: &mut PhotocraftApp, ctx: &egui::Context) {
+    let (released, down) = ctx.input(|i| (i.pointer.any_released(), i.pointer.primary_down()));
+    if (!down || released) && get(ctx).is_none() {
+        app.move_blocked = false;
+        app.move_blocked_start = None;
+        if let Some(b) = app.layer_box.as_ref() && b.grabbed_layer.is_some() {
+            app.layer_box = None;
+        }
+    }
     let Some(t) = get(ctx) else { return };
     let (pos, released, down) = ctx.input(|i| (i.pointer.latest_pos(), i.pointer.any_released(), i.pointer.primary_down()));
     let target = pos.and_then(|p| target_at(app, p));

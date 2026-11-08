@@ -362,7 +362,9 @@ fn handle_eyedropper_event(app: &mut PhotocraftApp, tool: Tool, ev: ToolEvent, m
     true
 }
 
-/// Tool state machine. Shared by mouse input and automation.
+/// Handles pointer gestures on locked layers or targets where movement is disallowed.
+/// When dragging within the same document, shows the lock feedback promptly upon pointer movement
+/// (including when returning to the press point), while preserving cross-document drag transfers.
 fn handle_move_blocked_event(
     app: &mut PhotocraftApp,
     ev: ToolEvent,
@@ -383,19 +385,16 @@ fn handle_move_blocked_event(
             true
         }
         ToolEvent::Move { .. } if app.move_blocked => {
-            if app.session.documents().len() <= 1 {
+            if !crate::panels::layer_transfer::is_transfer_in_progress(app) {
                 app.move_blocked = false;
                 app.move_blocked_start = None;
                 crate::move_lock::prompt(app);
             }
             true
         }
-        ToolEvent::Up { x, y } if app.move_blocked => {
+        ToolEvent::Up { .. } if app.move_blocked => {
             app.move_blocked = false;
-            let start = app.move_blocked_start.take();
-            if start.is_some_and(|s| (s[0] - x).abs() >= 1.0 || (s[1] - y).abs() >= 1.0) {
-                crate::move_lock::prompt(app);
-            }
+            app.move_blocked_start = None;
             true
         }
         _ => false,
