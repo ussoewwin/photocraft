@@ -31,6 +31,9 @@ struct Transfer {
     grab: Option<[f64; 2]>,
     /// What the ghost by the pointer says.
     label: String,
+    /// The viewport the transfer was armed in: only that viewport completes it, so a document
+    /// window's `finish` cannot clear a transfer the main window is still dragging.
+    viewport: egui::ViewportId,
 }
 
 fn key() -> egui::Id {
@@ -53,7 +56,7 @@ fn begin_layers(app: &PhotocraftApp, ctx: &egui::Context, id: LayerId, grab: Opt
         [one] => st.doc.layer(*one).map_or_else(String::new, |l| l.name.clone()),
         many => crate::i18n::trn(crate::i18n::current(), many.len() as u64, "{n} layer", "{n} layers"),
     };
-    let t = Transfer { source: st.doc.id, kind: TransferKind::Layers(layers.iter().map(|l| l.0).collect()), grab, label };
+    let t = Transfer { source: st.doc.id, kind: TransferKind::Layers(layers.iter().map(|l| l.0).collect()), grab, label, viewport: ctx.viewport_id() };
     ctx.data_mut(|d| d.insert_temp(key(), t));
     true
 }
@@ -61,7 +64,7 @@ fn begin_layers(app: &PhotocraftApp, ctx: &egui::Context, id: LayerId, grab: Opt
 fn begin_selection(app: &PhotocraftApp, ctx: &egui::Context, grab: [f64; 2], mask: bool) -> bool {
     let Some(st) = app.session.active() else { return false };
     let label = tl!("Selection");
-    let t = Transfer { source: st.doc.id, kind: TransferKind::Selection { mask }, grab: Some(grab), label: label.to_string() };
+    let t = Transfer { source: st.doc.id, kind: TransferKind::Selection { mask }, grab: Some(grab), label: label.to_string(), viewport: ctx.viewport_id() };
     ctx.data_mut(|d| d.insert_temp(key(), t));
     true
 }
@@ -188,8 +191,15 @@ pub fn is_transfer_in_progress(app: &PhotocraftApp) -> bool {
     app.frame_tool_ctx.as_ref().is_some_and(|ctx| get(ctx).is_some())
 }
 
+/// Whether a transfer is armed in `ctx` (any viewport).
+#[cfg(test)]
+pub fn is_transfer_armed(ctx: &egui::Context) -> bool {
+    get(ctx).is_some()
+}
+
 pub fn finish(app: &mut PhotocraftApp, ctx: &egui::Context) {
-    let (released, down) = ctx.input(|i| (i.pointer.any_released(), i.pointer.primary_down()));
+    // The primary button ends the gesture: a secondary release during a drag leaves it held.
+    let (released, down) = ctx.input(|i| (i.pointer.primary_released(), i.pointer.primary_down()));
     if (!down || released) && get(ctx).is_none() && app.move_viewport.is_none_or(|v| v == ctx.viewport_id()) {
         app.move_blocked = false;
         app.move_blocked_start = None;
@@ -201,6 +211,11 @@ pub fn finish(app: &mut PhotocraftApp, ctx: &egui::Context) {
         }
     }
     let Some(t) = get(ctx) else { return };
+    // Only the viewport that armed the transfer completes it: a document window's pointer state
+    // must not clear a transfer the main window is still dragging.
+    if t.viewport != ctx.viewport_id() {
+        return;
+    }
     let (pos, released, down) = ctx.input(|i| (i.pointer.latest_pos(), i.pointer.any_released(), i.pointer.primary_down()));
     let target = pos.and_then(|p| target_at(app, p));
     if !released {
