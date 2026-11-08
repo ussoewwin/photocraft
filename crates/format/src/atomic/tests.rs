@@ -44,6 +44,9 @@ struct Faulty {
     /// Fail the directory flush (the durability barrier after publication, #4968, #7858)
     /// with this raw OS error, or with this kind.
     fail_sync_dir: Option<Result<i32, io::ErrorKind>>,
+    #[cfg(windows)]
+    /// Fail the Windows sync_all call after opening the directory successfully.
+    fail_sync_all: Option<Result<i32, io::ErrorKind>>,
     synced: Cell<u32>,
 }
 
@@ -70,14 +73,23 @@ impl AtomicFs for Faulty {
     fn remove(&self, path: &Path) -> io::Result<()> {
         RealFs.remove(path)
     }
-    /// Count publication barriers and optionally fail before the real directory flush.
+    /// Count publication barriers and optionally fail before or during the directory flush.
     fn sync_dir(&self, dir: &Path) -> io::Result<()> {
         self.synced.set(self.synced.get() + 1);
-        match self.fail_sync_dir {
-            Some(Ok(code)) => Err(io::Error::from_raw_os_error(code)),
-            Some(Err(kind)) => Err(io::Error::new(kind, "injected directory flush failure")),
-            None => RealFs.sync_dir(dir),
+        if let Some(res) = self.fail_sync_dir {
+            return match res {
+                Ok(code) => Err(io::Error::from_raw_os_error(code)),
+                Err(kind) => Err(io::Error::new(kind, "injected directory flush failure")),
+            };
         }
+        #[cfg(windows)]
+        if let Some(res) = self.fail_sync_all {
+            return sync_dir_windows_with(dir, open_dir_for_sync, |_| match res {
+                Ok(code) => Err(io::Error::from_raw_os_error(code)),
+                Err(kind) => Err(io::Error::new(kind, "injected directory sync_all failure")),
+            });
+        }
+        RealFs.sync_dir(dir)
     }
     fn copy_metadata(&self, from: &Path, to: &Path) -> io::Result<()> {
         RealFs.copy_metadata(from, to)
@@ -127,11 +139,20 @@ fn windows_directory_flush_opens_a_directory_and_reports_open_errors() {
     // When the directory open itself fails with an unsupported error code (50 on WebDAV/cloud drives,
     // 1, or 120), the directory sync guard must treat it as non-fatal and succeed.
     for code in [50, 1, 120] {
-        let result = sync_dir_windows_with(&d.0, |_| Err(io::Error::from_raw_os_error(code)));
+        let result = sync_dir_windows_with(&d.0, |_| Err(io::Error::from_raw_os_error(code)), |d| d.sync_all());
         assert!(result.is_ok(), "directory open error code {code} must be treated as non-fatal");
     }
-    let fatal = sync_dir_windows_with(&d.0, |_| Err(io::Error::from(io::ErrorKind::NotFound))).unwrap_err();
+    let fatal = sync_dir_windows_with(&d.0, |_| Err(io::Error::from(io::ErrorKind::NotFound)), |d| d.sync_all()).unwrap_err();
     assert_eq!(fatal.kind(), io::ErrorKind::NotFound);
+
+    // When the directory opens successfully, but the flush fails with a fatal error (e.g. sharing violation 32),
+    // the helper must return that fatal error.
+    let fatal_flush = sync_dir_windows_with(&d.0, open_dir_for_sync, |_| Err(io::Error::from_raw_os_error(32))).unwrap_err();
+    assert_eq!(fatal_flush.raw_os_error(), Some(32));
+
+    // When the flush fails with an unsupported error code (e.g. 50), it must be treated as non-fatal.
+    let unsupp_flush = sync_dir_windows_with(&d.0, open_dir_for_sync, |_| Err(io::Error::from_raw_os_error(50)));
+    assert!(unsupp_flush.is_ok());
 }
 
 #[test]
@@ -641,6 +662,13 @@ fn a_directory_flush_the_file_system_cannot_do_still_saves() {
         assert_eq!(fs_fatal.synced.get(), 1);
         assert!(error.to_string().contains("may not survive"), "{error}");
         assert_eq!(std::fs::read(&p).unwrap(), b"fatal");
+
+        // Fatal flush error injected after the directory opens successfully:
+        let fs_flush_fatal = Faulty { fail_sync_all: Some(Ok(32)), ..Default::default() };
+        let error = atomic_write_with(&fs_flush_fatal, NO_RETRY, &p, b"fatal_flush").unwrap_err();
+        assert_eq!(fs_flush_fatal.synced.get(), 1);
+        assert!(error.to_string().contains("may not survive"), "{error}");
+        assert_eq!(std::fs::read(&p).unwrap(), b"fatal_flush");
 
         let fs_webdav = Faulty { fail_sync_dir: Some(Ok(50)), ..Default::default() };
         atomic_write_with(&fs_webdav, NO_RETRY, &p, b"webdav").unwrap();
