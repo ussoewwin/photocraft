@@ -147,7 +147,11 @@ impl AtomicFs for RealFs {
             // administrative privilege or volume-wide flush is needed.
             const FILE_ADD_FILE: u32 = 0x0002;
             const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
-            let directory = std::fs::OpenOptions::new().access_mode(FILE_ADD_FILE).custom_flags(FILE_FLAG_BACKUP_SEMANTICS).open(dir)?;
+            let directory = match std::fs::OpenOptions::new().access_mode(FILE_ADD_FILE).custom_flags(FILE_FLAG_BACKUP_SEMANTICS).open(dir) {
+                Ok(d) => d,
+                Err(e) if dir_sync_unsupported(&e) => return Ok(()),
+                Err(e) => return Err(e),
+            };
             dir_synced(directory.sync_all())
         }
         #[cfg(not(any(unix, windows)))]
