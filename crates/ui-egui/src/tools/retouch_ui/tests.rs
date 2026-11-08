@@ -1205,6 +1205,11 @@ fn quick_selection_options_bar_has_new_add_subtract_mode_buttons() {
     h.run_steps(4);
     assert_eq!(h.state().ui.tool_options.quick_selection_mode, 1);
 
+    // A saved mode exceeding 2 is normalized to Add mode (1) on render
+    h.state_mut().ui.tool_options.quick_selection_mode = 3;
+    h.run_steps(4);
+    assert_eq!(h.state().ui.tool_options.quick_selection_mode, 1, "out-of-range mode normalizes to Add mode");
+
     // Test selection_mode feedback across modes
     let none = egui::Modifiers::NONE;
     let alt = egui::Modifiers::ALT;

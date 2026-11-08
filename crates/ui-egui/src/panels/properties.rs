@@ -294,6 +294,9 @@ pub(crate) fn selection_mode_buttons(mode: &mut u8, ui: &mut egui::Ui) {
 
 /// New / add / subtract selection buttons for Quick Selection tool.
 pub(super) fn quick_selection_mode_buttons(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
+    if app.ui.tool_options.quick_selection_mode > 2 {
+        app.ui.tool_options.quick_selection_mode = 1;
+    }
     ui.spacing_mut().item_spacing.x = 2.0;
     for (i, (icon, tip)) in [
         ("quick-selection", tl!("New selection").to_string()),
