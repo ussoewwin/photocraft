@@ -79,16 +79,28 @@ pub enum MoveDrag {
 
 /// A Move-tool drag under way: whole layers or selected pixels.
 pub fn current_move_drag(app: &PhotocraftApp) -> Option<MoveDrag> {
-    let d = app.drag.as_ref().filter(|d| d.tool == Tool::Move)?;
-    let st = app.session.active()?;
     if app.ui.transform.is_some() || app.guide_drag.is_some() {
         return None;
     }
-    if let Some(cut) = d.sel_move {
-        return Some(MoveDrag::Selection { grab: d.start, cut });
+    let st = app.session.active()?;
+    if let Some(d) = app.drag.as_ref().filter(|d| d.tool == Tool::Move) {
+        if let Some(cut) = d.sel_move {
+            return Some(MoveDrag::Selection { grab: d.start, cut });
+        }
+        if st.doc.selection.is_none() && st.floating.is_none() {
+            return Some(MoveDrag::Layers(d.start));
+        }
+        return None;
     }
-    if st.doc.selection.is_none() && st.floating.is_none() {
-        return Some(MoveDrag::Layers(d.start));
+    if app.ui.tool == Tool::Move && st.doc.selection.is_none() && st.floating.is_none() {
+        if let Some(b) = app.layer_box.as_ref()
+            && b.grabbed_layer.is_some()
+        {
+            return Some(MoveDrag::Layers(b.start));
+        }
+        if let Some(start) = app.move_blocked_start {
+            return Some(MoveDrag::Layers(start));
+        }
     }
     None
 }
@@ -116,12 +128,17 @@ pub fn check_arranged_drag(app: &mut PhotocraftApp, ctx: &egui::Context) {
 }
 
 fn arm_move_drag(app: &mut PhotocraftApp, ctx: &egui::Context, drag: MoveDrag) {
+    let grabbed_layer = app.layer_box.as_ref().and_then(|b| b.grabbed_layer);
     app.drag = None;
+    app.layer_box = None;
+    app.move_blocked = false;
+    app.move_blocked_start = None;
     app.move_preview = None;
     crate::move_mods::abandon(app);
     match drag {
         MoveDrag::Layers(grab) => {
-            if let Some(active) = app.session.active().and_then(|st| st.active_layer) {
+            let target_layer = grabbed_layer.or_else(|| app.session.active().and_then(|st| st.active_layer));
+            if let Some(active) = target_layer {
                 begin_layers(app, ctx, active, Some(grab));
             }
         }
