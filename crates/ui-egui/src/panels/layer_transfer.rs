@@ -190,14 +190,13 @@ pub fn is_transfer_in_progress(app: &PhotocraftApp) -> bool {
 
 pub fn finish(app: &mut PhotocraftApp, ctx: &egui::Context) {
     let (released, down) = ctx.input(|i| (i.pointer.any_released(), i.pointer.primary_down()));
-    if (!down || released)
-        && get(ctx).is_none()
-        && app.move_viewport.is_none_or(|v| v == ctx.viewport_id())
-    {
+    if (!down || released) && get(ctx).is_none() && app.move_viewport.is_none_or(|v| v == ctx.viewport_id()) {
         app.move_blocked = false;
         app.move_blocked_start = None;
         app.move_viewport = None;
-        if let Some(b) = app.layer_box.as_ref() && b.grabbed_layer.is_some() {
+        if let Some(b) = app.layer_box.as_ref()
+            && b.grabbed_layer.is_some()
+        {
             app.layer_box = None;
         }
     }
