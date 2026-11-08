@@ -74,8 +74,8 @@ impl AtomicFs for Faulty {
     fn sync_dir(&self, dir: &Path) -> io::Result<()> {
         self.synced.set(self.synced.get() + 1);
         match self.fail_sync_dir {
-            Some(Ok(code)) => dir_synced(Err(io::Error::from_raw_os_error(code))),
-            Some(Err(kind)) => dir_synced(Err(io::Error::new(kind, "injected directory flush failure"))),
+            Some(Ok(code)) => Err(io::Error::from_raw_os_error(code)),
+            Some(Err(kind)) => Err(io::Error::new(kind, "injected directory flush failure")),
             None => RealFs.sync_dir(dir),
         }
     }
@@ -636,9 +636,16 @@ fn a_directory_flush_the_file_system_cannot_do_still_saves() {
         assert!(dir_synced(Err(io::Error::from_raw_os_error(1))).is_ok());
         // ERROR_SHARING_VIOLATION (32) is a real failure
         assert!(dir_synced(Err(io::Error::from_raw_os_error(32))).is_err());
+        let fs_fatal = Faulty { fail_sync_dir: Some(Ok(32)), ..Default::default() };
+        assert!(atomic_write_with(&fs_fatal, NO_RETRY, &p, b"fatal").is_err());
+
         let fs_webdav = Faulty { fail_sync_dir: Some(Ok(50)), ..Default::default() };
         atomic_write_with(&fs_webdav, NO_RETRY, &p, b"webdav").unwrap();
         assert_eq!(std::fs::read(&p).unwrap(), b"webdav");
+
+        let fs_invalid_func = Faulty { fail_sync_dir: Some(Ok(1)), ..Default::default() };
+        atomic_write_with(&fs_invalid_func, NO_RETRY, &p, b"invalid_func").unwrap();
+        assert_eq!(std::fs::read(&p).unwrap(), b"invalid_func");
     }
     #[cfg(not(windows))]
     {
