@@ -1247,9 +1247,18 @@ fn quick_selection_options_bar_has_new_add_subtract_mode_buttons() {
     assert!(h.state().session.active().unwrap().doc.selection.is_some());
     assert_eq!(h.state().ui.tool_options.quick_selection_mode, 1);
 
+    // When selection is empty in New mode (0), Alt-drag falls back to New selection and flips to Add (1)
+    h.state_mut().run("select.deselect", json!({})).unwrap();
     h.state_mut().ui.tool_options.quick_selection_mode = 0;
     tool_event(h.state_mut(), ToolEvent::Down { x: 20.0, y: 20.0, pressure: 1.0 }, alt);
     tool_event(h.state_mut(), ToolEvent::Up { x: 20.0, y: 20.0 }, alt);
-    assert!(h.state().session.active().unwrap().doc.selection.is_none());
+    assert!(h.state().session.active().unwrap().doc.selection.is_some(), "Alt on empty selection creates a new selection");
+    assert_eq!(h.state().ui.tool_options.quick_selection_mode, 1);
+
+    // When selection is non-empty in New mode (0), Alt-drag subtracts from it
+    h.state_mut().ui.tool_options.quick_selection_mode = 0;
+    tool_event(h.state_mut(), ToolEvent::Down { x: 20.0, y: 20.0, pressure: 1.0 }, alt);
+    tool_event(h.state_mut(), ToolEvent::Up { x: 20.0, y: 20.0 }, alt);
+    assert!(h.state().session.active().unwrap().doc.selection.is_none(), "Alt on existing selection subtracts");
     assert_eq!(h.state().ui.tool_options.quick_selection_mode, 1);
 }

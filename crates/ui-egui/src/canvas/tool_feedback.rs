@@ -165,8 +165,10 @@ pub fn badge(app: &PhotocraftApp, tool: Tool, m: egui::Modifiers) -> Option<Badg
     if matches!(tool, Tool::Lasso | Tool::PolygonLasso) && app.drag.is_none() && app.session.active().is_none_or(|st| st.doc.selection.is_none()) {
         m.alt = false;
     }
-    let bar = if tool == Tool::QuickSelection { app.ui.tool_options.quick_selection_mode } else { app.ui.selection_mode };
-    Badge::from_mode(selection_mode(tool, bar, m))
+    if tool == Tool::QuickSelection {
+        return Badge::from_mode(document_selection_mode(app, tool, m));
+    }
+    Badge::from_mode(selection_mode(tool, app.ui.selection_mode, m))
 }
 
 /// The badge's glyph as line segments around `c` (half-size `h`).
@@ -307,6 +309,10 @@ mod tests {
         // Smart selection tools.
         assert_eq!(badge(&app, Tool::QuickSelection, none), Some(Badge::Add));
         assert_eq!(badge(&app, Tool::QuickSelection, alt), Some(Badge::Subtract));
+        // Quick Selection in New mode with nothing selected falls back to a new selection (no − badge).
+        app.ui.tool_options.quick_selection_mode = 0;
+        assert_eq!(badge(&app, Tool::QuickSelection, alt), None);
+        app.ui.tool_options.quick_selection_mode = 1;
         assert_eq!(badge(&app, Tool::ObjectSelection, none), None);
         assert_eq!(badge(&app, Tool::ObjectSelection, shift), Some(Badge::Add));
         // Other tools never show one.
