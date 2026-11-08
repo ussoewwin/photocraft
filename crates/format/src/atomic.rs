@@ -353,12 +353,12 @@ fn replace_with(fs: &dyn AtomicFs, retry: RenameRetry, path: &Path, write_tmp: &
         return Err(rename_error(e, path));
     }
     // The new bytes are in place, but until the directory is flushed the rename may not survive
-    // a power loss (#4968). Windows fails the save on any failed flush (#7858). Elsewhere a file
-    // system that can't flush directories at all counts as done; any other failure is reported,
-    // so the caller keeps the document unsaved and its recovery data instead of discarding them
-    // on a save that may not last.
+    // a power loss (#4968). A file system that can't flush directories at all (e.g. WebDAV,
+    // cloud-mounted drives such as AirLiveDrive / RaiDrive, FAT32) counts as done (#7858).
+    // Any real failure is reported, so the caller keeps the document unsaved and its recovery
+    // data instead of discarding them on a save that may not last.
     #[cfg(windows)]
-    fs.sync_dir(&dir).map_err(|e| publication_error(e, path))?;
+    dir_synced(fs.sync_dir(&dir)).map_err(|e| publication_error(e, path))?;
     #[cfg(not(windows))]
     dir_synced(fs.sync_dir(&dir)).map_err(|e| unconfirmed_error(e, path))?;
     Ok(())
@@ -377,11 +377,11 @@ fn open_dir_for_sync(dir: &Path) -> io::Result<Option<std::fs::File>> {
 }
 
 /// `result` of flushing a directory, with "this file system can't flush directories" counted as
-/// success: `EINVAL` (Linux file systems without directory fsync), `ENOTSUP`/`EOPNOTSUPP` and,
-/// on Apple platforms, `ENOTTY`, or [`io::ErrorKind::Unsupported`]. Waiting or retrying won't
-/// change those, and failing every save there would make saving impossible. Any other error is
-/// returned: the flush was attempted and failed.
-#[cfg(not(windows))]
+/// success: on Windows `ERROR_NOT_SUPPORTED` (50, WebDAV/cloud drives), `ERROR_INVALID_FUNCTION` (1),
+/// `ERROR_CALL_NOT_IMPLEMENTED` (120); on Unix `EINVAL` (22), `ENOTSUP`/`EOPNOTSUPP` (95/45/102),
+/// `ENOTTY` (25), or [`io::ErrorKind::Unsupported`]. Waiting or retrying won't change those, and
+/// failing every save there would make saving impossible. Any other error is returned: the flush
+/// was attempted and failed.
 pub(crate) fn dir_synced(result: io::Result<()>) -> io::Result<()> {
     match result {
         Err(e) if dir_sync_unsupported(&e) => Ok(()),
@@ -389,27 +389,38 @@ pub(crate) fn dir_synced(result: io::Result<()>) -> io::Result<()> {
     }
 }
 
-#[cfg(not(windows))]
 fn dir_sync_unsupported(e: &io::Error) -> bool {
     if e.kind() == io::ErrorKind::Unsupported {
         return true;
     }
-    // errno values: EINVAL is 22 everywhere; ENOTSUP and EOPNOTSUPP are 95 on Linux and
-    // Android, 45 and 102 on Apple platforms, 45 on the BSDs; ENOTTY is 25. Elsewhere 45 means
-    // something else (illumos: EDEADLK), so only EINVAL and `Unsupported` count there.
-    const EINVAL: i32 = 22;
-    let unsupported: &[i32] = if cfg!(any(target_os = "linux", target_os = "android")) {
-        &[EINVAL, 95]
-    } else if cfg!(target_vendor = "apple") {
-        &[EINVAL, 45, 102, 25]
-    } else if cfg!(any(target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "dragonfly")) {
-        &[EINVAL, 45]
-    } else if cfg!(unix) {
-        &[EINVAL]
-    } else {
-        &[]
-    };
-    e.raw_os_error().is_some_and(|code| unsupported.contains(&code))
+    #[cfg(windows)]
+    {
+        const ERROR_INVALID_FUNCTION: i32 = 1;
+        const ERROR_NOT_SUPPORTED: i32 = 50;
+        const ERROR_CALL_NOT_IMPLEMENTED: i32 = 120;
+        e.raw_os_error().is_some_and(|code| {
+            code == ERROR_INVALID_FUNCTION || code == ERROR_NOT_SUPPORTED || code == ERROR_CALL_NOT_IMPLEMENTED
+        })
+    }
+    #[cfg(not(windows))]
+    {
+        // errno values: EINVAL is 22 everywhere; ENOTSUP and EOPNOTSUPP are 95 on Linux and
+        // Android, 45 and 102 on Apple platforms, 45 on the BSDs; ENOTTY is 25. Elsewhere 45 means
+        // something else (illumos: EDEADLK), so only EINVAL and `Unsupported` count there.
+        const EINVAL: i32 = 22;
+        let unsupported: &[i32] = if cfg!(any(target_os = "linux", target_os = "android")) {
+            &[EINVAL, 95]
+        } else if cfg!(target_vendor = "apple") {
+            &[EINVAL, 45, 102, 25]
+        } else if cfg!(any(target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "dragonfly")) {
+            &[EINVAL, 45]
+        } else if cfg!(unix) {
+            &[EINVAL]
+        } else {
+            &[]
+        };
+        e.raw_os_error().is_some_and(|code| unsupported.contains(&code))
+    }
 }
 
 /// The error for a file that was published but whose directory flush failed: same kind, saying
