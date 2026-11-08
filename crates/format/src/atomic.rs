@@ -139,20 +139,7 @@ impl AtomicFs for RealFs {
         }
         #[cfg(windows)]
         {
-            use std::os::windows::fs::OpenOptionsExt;
-
-            // FILE_ADD_FILE is the directory equivalent of FILE_WRITE_DATA. Requesting only
-            // this right permits FlushFileBuffers without requiring GENERIC_WRITE's additional
-            // directory permissions. BACKUP_SEMANTICS opens a directory, not a volume: no
-            // administrative privilege or volume-wide flush is needed.
-            const FILE_ADD_FILE: u32 = 0x0002;
-            const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
-            let directory = match std::fs::OpenOptions::new().access_mode(FILE_ADD_FILE).custom_flags(FILE_FLAG_BACKUP_SEMANTICS).open(dir) {
-                Ok(d) => d,
-                Err(e) if dir_sync_unsupported(&e) => return Ok(()),
-                Err(e) => return Err(e),
-            };
-            dir_synced(directory.sync_all())
+            sync_dir_windows(dir)
         }
         #[cfg(not(any(unix, windows)))]
         {
@@ -378,6 +365,37 @@ fn open_dir_for_sync(dir: &Path) -> io::Result<Option<std::fs::File>> {
         Err(e) if e.kind() == io::ErrorKind::PermissionDenied => Ok(None),
         Err(e) => Err(e),
     }
+}
+
+#[cfg(windows)]
+pub(crate) fn sync_dir_windows(dir: &Path) -> io::Result<()> {
+    sync_dir_windows_with(dir, open_dir_for_sync)
+}
+
+#[cfg(windows)]
+pub(crate) fn sync_dir_windows_with<F>(dir: &Path, open: F) -> io::Result<()>
+where
+    F: FnOnce(&Path) -> io::Result<std::fs::File>,
+{
+    let directory = match open(dir) {
+        Ok(d) => d,
+        Err(e) if dir_sync_unsupported(&e) => return Ok(()),
+        Err(e) => return Err(e),
+    };
+    dir_synced(directory.sync_all())
+}
+
+#[cfg(windows)]
+fn open_dir_for_sync(dir: &Path) -> io::Result<std::fs::File> {
+    use std::os::windows::fs::OpenOptionsExt;
+
+    // FILE_ADD_FILE is the directory equivalent of FILE_WRITE_DATA. Requesting only
+    // this right permits FlushFileBuffers without requiring GENERIC_WRITE's additional
+    // directory permissions. BACKUP_SEMANTICS opens a directory, not a volume: no
+    // administrative privilege or volume-wide flush is needed.
+    const FILE_ADD_FILE: u32 = 0x0002;
+    const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
+    std::fs::OpenOptions::new().access_mode(FILE_ADD_FILE).custom_flags(FILE_FLAG_BACKUP_SEMANTICS).open(dir)
 }
 
 /// `result` of flushing a directory, with "this file system can't flush directories" counted as

@@ -123,6 +123,15 @@ fn windows_directory_flush_opens_a_directory_and_reports_open_errors() {
     assert!(dir_synced(Err(io::Error::from_raw_os_error(1))).is_ok());
     assert!(dir_synced(Err(io::Error::from_raw_os_error(120))).is_ok());
     assert!(dir_synced(Err(io::Error::from_raw_os_error(32))).is_err());
+
+    // When the directory open itself fails with an unsupported error code (50 on WebDAV/cloud drives,
+    // 1, or 120), the directory sync guard must treat it as non-fatal and succeed.
+    for code in [50, 1, 120] {
+        let result = sync_dir_windows_with(&d.0, |_| Err(io::Error::from_raw_os_error(code)));
+        assert!(result.is_ok(), "directory open error code {code} must be treated as non-fatal");
+    }
+    let fatal = sync_dir_windows_with(&d.0, |_| Err(io::Error::from(io::ErrorKind::NotFound))).unwrap_err();
+    assert_eq!(fatal.kind(), io::ErrorKind::NotFound);
 }
 
 #[test]
