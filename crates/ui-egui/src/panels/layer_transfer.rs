@@ -61,6 +61,7 @@ fn begin_layers(app: &PhotocraftApp, ctx: &egui::Context, id: LayerId, grab: Opt
     true
 }
 
+/// Arm a selection transfer: the selected pixels follow the pointer into another document.
 fn begin_selection(app: &PhotocraftApp, ctx: &egui::Context, grab: [f64; 2], mask: bool) -> bool {
     let Some(st) = app.session.active() else { return false };
     let label = tl!("Selection");
@@ -139,6 +140,7 @@ pub fn check_arranged_drag(app: &mut PhotocraftApp, ctx: &egui::Context) {
     }
 }
 
+/// Turn the drag under way into a cross-document transfer owned by `ctx`.
 fn arm_move_drag(app: &mut PhotocraftApp, ctx: &egui::Context, drag: MoveDrag) {
     let grabbed_layer = app.layer_box.as_ref().and_then(|b| b.grabbed_layer);
     app.drag = None;
@@ -314,6 +316,7 @@ fn drop(app: &mut PhotocraftApp, ctx: &egui::Context, dest: usize, at: Option<[f
     }
 }
 
+/// Place the dropped transfer at `at`; with ⇧ it is centred when the documents differ in size.
 fn apply_drop_placement(p: &mut serde_json::Value, at: Option<[f64; 2]>, grab: Option<[f64; 2]>, shift: bool, same_size: bool) {
     match at.filter(|_| !shift) {
         Some(at) => match grab {
