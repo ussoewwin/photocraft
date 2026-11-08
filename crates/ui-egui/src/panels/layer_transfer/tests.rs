@@ -167,6 +167,22 @@ fn a_move_tool_mask_selection_drag_onto_a_tab_copies_the_mask_and_leaves_layer_p
     h.state_mut().ui.tool = Tool::Move;
     h.run_steps(2);
 
+    // Snapshot the source mask and selection: arming the transfer and copying the selected
+    // pixels must leave both unchanged.
+    let src_doc = h.state().session.active().unwrap().doc.id;
+    let src_layer = h.state().session.active().unwrap().active_layer;
+    let mask_sample = |h: &Harness<'static, PhotocraftApp>| {
+        let st = h.state().session.documents().iter().find(|s| s.doc.id == src_doc).unwrap();
+        let layer = src_layer.and_then(|id| st.doc.layer(id)).unwrap();
+        let mut px = [0.0f32; 4];
+        layer.surface().unwrap().read_pixel(6, 8, &mut px);
+        px
+    };
+    let selection_present =
+        |h: &Harness<'static, PhotocraftApp>| h.state().session.documents().iter().find(|s| s.doc.id == src_doc).is_some_and(|s| s.doc.selection.is_some());
+    let before_mask = mask_sample(&h);
+    let before_selection = selection_present(&h);
+
     let grab = ViewXform::active(h.state()).unwrap().to_screen(6.0, 11.0);
     let over_tab = tab(&h, "dest-doc");
     let drop = h.state().last_canvas_rect.center();
@@ -180,6 +196,8 @@ fn a_move_tool_mask_selection_drag_onto_a_tab_copies_the_mask_and_leaves_layer_p
     dst_layer.surface().unwrap().read_pixel(r.min.x as i32 + 1, r.min.y as i32 + 1, &mut sample);
     assert!((sample[0] - sample[1]).abs() < 0.02 && (sample[0] - 128.0 / 255.0).abs() < 0.02, "copied mask gray, not red layer pixels: {sample:?}");
     assert_eq!(source_square(&h, paint), photocraft_geom::Rect::new(4, 6, 14, 16), "source layer pixels remain intact");
+    assert_eq!(mask_sample(&h), before_mask, "arming and copying leave the source mask unchanged");
+    assert_eq!(selection_present(&h), before_selection, "arming and copying leave the source selection unchanged");
 }
 
 #[test]
@@ -412,4 +430,36 @@ fn a_secondary_button_release_keeps_the_marquee_until_the_primary_release() {
     assert!(h.state().layer_box.is_some(), "the marquee survives a secondary-button release");
     assert!(h.state().move_blocked, "the blocked move survives a secondary-button release");
     assert_eq!(h.state().move_blocked_start, Some([20.0, 20.0]));
+}
+
+/// #11971 review: a secondary-button release while the drag is held must not complete a
+/// cross-document transfer; only the primary release does.
+#[test]
+fn a_secondary_button_release_does_not_complete_a_transfer() {
+    let (mut h, paint) = harness();
+    let ctx = egui::Context::default();
+
+    crate::layer_transfer::begin_from_panel(h.state_mut(), &ctx, paint);
+    assert!(crate::layer_transfer::is_transfer_armed(&ctx), "the window armed a transfer");
+
+    // The secondary button is released while the primary button is still down.
+    let mut raw = egui::RawInput::default();
+    raw.events.push(egui::Event::PointerButton {
+        pos: egui::Pos2::new(20.0, 20.0),
+        button: egui::PointerButton::Secondary,
+        pressed: false,
+        modifiers: Modifiers::NONE,
+    });
+    raw.events.push(egui::Event::PointerButton {
+        pos: egui::Pos2::new(20.0, 20.0),
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers: Modifiers::NONE,
+    });
+    let mut out = ctx.run_ui(raw, |ui| {
+        crate::layer_transfer::finish(h.state_mut(), ui.ctx());
+    });
+    out.textures_delta.clear();
+
+    assert!(crate::layer_transfer::is_transfer_armed(&ctx), "a secondary release leaves the transfer armed for the intended primary drop");
 }
