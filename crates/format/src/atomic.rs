@@ -148,7 +148,7 @@ impl AtomicFs for RealFs {
             const FILE_ADD_FILE: u32 = 0x0002;
             const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
             let directory = std::fs::OpenOptions::new().access_mode(FILE_ADD_FILE).custom_flags(FILE_FLAG_BACKUP_SEMANTICS).open(dir)?;
-            directory.sync_all()
+            dir_synced(directory.sync_all())
         }
         #[cfg(not(any(unix, windows)))]
         {
@@ -358,7 +358,7 @@ fn replace_with(fs: &dyn AtomicFs, retry: RenameRetry, path: &Path, write_tmp: &
     // Any real failure is reported, so the caller keeps the document unsaved and its recovery
     // data instead of discarding them on a save that may not last.
     #[cfg(windows)]
-    dir_synced(fs.sync_dir(&dir)).map_err(|e| publication_error(e, path))?;
+    fs.sync_dir(&dir).map_err(|e| publication_error(e, path))?;
     #[cfg(not(windows))]
     dir_synced(fs.sync_dir(&dir)).map_err(|e| unconfirmed_error(e, path))?;
     Ok(())
