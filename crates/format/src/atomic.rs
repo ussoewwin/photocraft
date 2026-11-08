@@ -367,11 +367,14 @@ fn open_dir_for_sync(dir: &Path) -> io::Result<Option<std::fs::File>> {
     }
 }
 
+/// Flush directory publication on Windows using `open_dir_for_sync`.
 #[cfg(windows)]
 pub(crate) fn sync_dir_windows(dir: &Path) -> io::Result<()> {
     sync_dir_windows_with(dir, open_dir_for_sync)
 }
 
+/// Flush directory publication on Windows with a custom opener `open`, treating
+/// unsupported errors (such as `ERROR_NOT_SUPPORTED` on WebDAV/cloud virtual drives) as non-fatal.
 #[cfg(windows)]
 pub(crate) fn sync_dir_windows_with<F>(dir: &Path, open: F) -> io::Result<()>
 where
@@ -385,6 +388,7 @@ where
     dir_synced(directory.sync_all())
 }
 
+/// Open `dir` on Windows with `FILE_ADD_FILE` and `FILE_FLAG_BACKUP_SEMANTICS` for directory flush.
 #[cfg(windows)]
 fn open_dir_for_sync(dir: &Path) -> io::Result<std::fs::File> {
     use std::os::windows::fs::OpenOptionsExt;
