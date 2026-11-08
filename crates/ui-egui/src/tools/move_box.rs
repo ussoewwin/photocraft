@@ -29,6 +29,7 @@ pub(crate) fn begin(app: &mut PhotocraftApp, p: [f64; 2], add: bool) {
 /// under the pointer for potential cross-document transfer.
 pub(crate) fn begin_with_layer(app: &mut PhotocraftApp, p: [f64; 2], add: bool, grabbed_layer: Option<photocraft_doc::LayerId>) {
     app.layer_box = Some(LayerBox { start: p, end: p, add, grabbed_layer });
+    app.move_viewport = app.current_viewport;
     app.prefs_rt.snap = None;
     app.prefs_rt.snap_lines.clear();
     app.move_mods = Default::default();
@@ -47,6 +48,7 @@ pub(crate) fn pointer(app: &mut PhotocraftApp, ev: ToolEvent) -> bool {
         // A press never continues a marquee (one left over from a lost release).
         ToolEvent::Down { .. } => {
             app.layer_box = None;
+            app.move_viewport = None;
             false
         }
         ToolEvent::Move { x, y, .. } => {
@@ -56,6 +58,7 @@ pub(crate) fn pointer(app: &mut PhotocraftApp, ev: ToolEvent) -> bool {
         ToolEvent::Up { x, y } => {
             let b = LayerBox { end: [x, y], ..*b };
             app.layer_box = None;
+            app.move_viewport = None;
             let (w, h) = (b.end[0] - b.start[0], b.end[1] - b.start[1]);
             if w == 0.0 && h == 0.0 && !b.add {
                 // A click on the pasteboard clears the layer target; a drag from there still
