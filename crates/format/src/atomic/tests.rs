@@ -604,10 +604,9 @@ fn a_failed_directory_flush_is_reported_not_swallowed() {
     assert_no_temp(&d.0);
 }
 
-/// A file system that can't flush directories at all (Linux's EINVAL, ENOTSUP, or an
-/// `Unsupported` error) still saves: failing every save there would make saving impossible.
-/// Windows fails the save on any failed flush (#7858), so this is the Unix rule.
-#[cfg(not(windows))]
+/// A file system that can't flush directories at all (e.g. WebDAV, cloud drives like AirLiveDrive
+/// returning ERROR_NOT_SUPPORTED 50 / ERROR_INVALID_FUNCTION 1 on Windows, or Linux's EINVAL / ENOTSUP,
+/// or an `Unsupported` error) still saves: failing every save there would make saving impossible.
 #[test]
 fn a_directory_flush_the_file_system_cannot_do_still_saves() {
     let d = TempDir::new("syncdir-unsupported");
@@ -615,11 +614,25 @@ fn a_directory_flush_the_file_system_cannot_do_still_saves() {
     let fs = Faulty { fail_sync_dir: Some(Err(io::ErrorKind::Unsupported)), ..Default::default() };
     atomic_write_with(&fs, NO_RETRY, &p, b"new").unwrap();
     assert_eq!(std::fs::read(&p).unwrap(), b"new");
-    // EINVAL (22) means "can't flush a directory" only on Unix; EIO (5) is a real failure.
-    assert_eq!(dir_synced(Err(io::Error::from_raw_os_error(22))).is_ok(), cfg!(unix));
-    assert!(dir_synced(Err(io::Error::from_raw_os_error(5))).is_err());
-    let fs = Faulty { fail_sync_dir: Some(Ok(5)), ..Default::default() };
-    assert!(atomic_write_with(&fs, NO_RETRY, &p, b"newer").is_err());
+    #[cfg(windows)]
+    {
+        // 50: ERROR_NOT_SUPPORTED, 1: ERROR_INVALID_FUNCTION
+        assert!(dir_synced(Err(io::Error::from_raw_os_error(50))).is_ok());
+        assert!(dir_synced(Err(io::Error::from_raw_os_error(1))).is_ok());
+        // ERROR_SHARING_VIOLATION (32) is a real failure
+        assert!(dir_synced(Err(io::Error::from_raw_os_error(32))).is_err());
+        let fs_webdav = Faulty { fail_sync_dir: Some(Ok(50)), ..Default::default() };
+        atomic_write_with(&fs_webdav, NO_RETRY, &p, b"webdav").unwrap();
+        assert_eq!(std::fs::read(&p).unwrap(), b"webdav");
+    }
+    #[cfg(not(windows))]
+    {
+        // EINVAL (22) means "can't flush a directory" only on Unix; EIO (5) is a real failure.
+        assert_eq!(dir_synced(Err(io::Error::from_raw_os_error(22))).is_ok(), cfg!(unix));
+        assert!(dir_synced(Err(io::Error::from_raw_os_error(5))).is_err());
+        let fs = Faulty { fail_sync_dir: Some(Ok(5)), ..Default::default() };
+        assert!(atomic_write_with(&fs, NO_RETRY, &p, b"newer").is_err());
+    }
 }
 
 /// #9388: on macOS a save keeps the replaced file's creation time ("Created" in Finder), as
