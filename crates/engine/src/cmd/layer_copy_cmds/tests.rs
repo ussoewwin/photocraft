@@ -665,6 +665,7 @@ fn type_duplicated_to_a_new_document_keeps_the_sources_basic_paragraph() {
 }
 
 #[test]
+/// A selection copied to another document lands at the offset and the source keeps its pixels; cutting clears them.
 fn copies_selected_pixels_to_destination_document_with_copy_and_cut() {
     let (mut s, paint) = two_docs(40, 30, 8);
     // Select half of the 10x10 red square (x: 4..9, y: 6..16)
@@ -703,6 +704,7 @@ fn copies_selected_pixels_to_destination_document_with_copy_and_cut() {
 }
 
 #[test]
+/// A mask selection copied or cut to another document carries the mask, not the layer's pixels.
 fn copying_or_cutting_a_mask_selection_transfers_the_mask_without_touching_layer_pixels() {
     let (mut s, paint) = two_docs(40, 30, 8);
     s.execute("layer.layerMask.revealAll", json!({})).unwrap();
