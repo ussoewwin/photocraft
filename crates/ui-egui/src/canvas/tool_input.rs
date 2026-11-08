@@ -396,6 +396,13 @@ fn handle_move_blocked_event(app: &mut PhotocraftApp, ev: ToolEvent, tool: Tool,
             true
         }
         ToolEvent::Move { .. } if app.move_blocked => {
+            // The window that armed the blocked drag resolves it: a second window's pointer
+            // must not clear the state or raise the lock dialog mid-drag.
+            if let (Some(owner), Some(here)) = (app.move_viewport, app.current_viewport)
+                && owner != here
+            {
+                return true;
+            }
             if !crate::panels::layer_transfer::is_transfer_in_progress(app) {
                 app.move_blocked = false;
                 app.move_blocked_start = None;
