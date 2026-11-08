@@ -790,6 +790,7 @@ pub fn extra_windows(app: &mut PhotocraftApp, ctx: &egui::Context) {
                 // Preferences › Zoom Resizes Windows: a zoom wraps the window around the image.
                 crate::zoom_window_fit::follow(app, ui.ctx(), class, vid, &w, &mut view, rect);
             });
+            crate::layer_transfer::finish(app, ui.ctx());
         });
         if let Some(win) = app.ui.windows.iter_mut().find(|x| x.id == w.id) {
             win.view = view;
