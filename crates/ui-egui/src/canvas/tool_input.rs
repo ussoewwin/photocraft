@@ -304,6 +304,7 @@ fn handle_move_pointer(app: &mut PhotocraftApp, ev: ToolEvent, tool: Tool, mods:
             if crate::move_lock::blocked(app, tool, [x, y], mods) {
                 app.move_blocked = true;
                 app.move_blocked_start = Some([x, y]);
+                app.move_viewport = app.current_viewport;
                 return true;
             }
             // With a selection: cut the selected pixels (⌥ copies them) and drag them as a floating
@@ -382,12 +383,14 @@ fn handle_move_blocked_event(
         {
             app.move_blocked = true;
             app.move_blocked_start = Some([x, y]);
+            app.move_viewport = app.current_viewport;
             true
         }
         ToolEvent::Move { .. } if app.move_blocked => {
             if !crate::panels::layer_transfer::is_transfer_in_progress(app) {
                 app.move_blocked = false;
                 app.move_blocked_start = None;
+                app.move_viewport = None;
                 crate::move_lock::prompt(app);
             }
             true
@@ -395,6 +398,7 @@ fn handle_move_blocked_event(
         ToolEvent::Up { .. } if app.move_blocked => {
             app.move_blocked = false;
             app.move_blocked_start = None;
+            app.move_viewport = None;
             true
         }
         _ => false,
