@@ -336,3 +336,80 @@ fn extra_window_move_gesture_preserved_when_main_window_finishes() {
     assert_eq!(h.state().move_blocked_start, None);
     assert!(h.state().layer_box.is_none());
 }
+
+/// #11971 review: a document window's `finish` must not complete a transfer the main window
+/// armed. The transfer lives in the shared `Context`, so a second viewport of the same context
+/// sees it; only the viewport that armed it may complete it.
+#[test]
+fn a_document_window_does_not_complete_a_transfer_armed_in_the_main_window() {
+    let (mut h, paint) = harness();
+    // One context, two viewports: the main window arms the transfer, the document window's
+    // `finish` runs with its own (idle) pointer state.
+    let ctx = egui::Context::default();
+    let extra_vid = egui::ViewportId::from_hash_of("docwin-transfer");
+
+    crate::layer_transfer::begin_from_panel(h.state_mut(), &ctx, paint);
+    assert!(crate::layer_transfer::is_transfer_armed(&ctx), "the main window armed a transfer");
+
+    // The document window finishes first: its pointer is up, but the transfer belongs to the
+    // main window, so it must stay armed.
+    let mut raw = egui::RawInput { viewport_id: extra_vid, ..Default::default() };
+    raw.viewports.insert(extra_vid, egui::ViewportInfo::default());
+    let mut out = ctx.run_ui(raw, |ui| {
+        crate::layer_transfer::finish(h.state_mut(), ui.ctx());
+    });
+    out.textures_delta.clear();
+    assert!(crate::layer_transfer::is_transfer_armed(&ctx), "the main window's transfer survives another viewport's finish");
+
+    // The main window's own release completes it.
+    let mut raw = egui::RawInput::default();
+    raw.events.push(egui::Event::PointerButton {
+        pos: egui::Pos2::new(20.0, 20.0),
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: Modifiers::NONE,
+    });
+    let mut out = ctx.run_ui(raw, |ui| {
+        crate::layer_transfer::finish(h.state_mut(), ui.ctx());
+    });
+    out.textures_delta.clear();
+    assert!(!crate::layer_transfer::is_transfer_armed(&ctx), "the main window completes its transfer");
+}
+
+/// #11971 review: releasing the secondary button during a locked-layer drag keeps the marquee,
+/// so the primary release still selects the layers it covers.
+#[test]
+fn a_secondary_button_release_keeps_the_marquee_until_the_primary_release() {
+    let (mut h, paint) = harness();
+    h.state_mut().ui.tool = Tool::Move;
+    h.state_mut().ui.tool_options.move_auto_select = false;
+
+    // A marquee over a locked layer, as a blocked Move drag leaves it.
+    crate::tools::move_box::begin_with_layer(h.state_mut(), [20.0, 20.0], false, Some(paint));
+    h.state_mut().move_blocked = true;
+    h.state_mut().move_blocked_start = Some([20.0, 20.0]);
+
+    // The secondary button is released while the primary button is still down.
+    let ctx = h.ctx.clone();
+    let mut raw = egui::RawInput::default();
+    raw.events.push(egui::Event::PointerButton {
+        pos: egui::Pos2::new(20.0, 20.0),
+        button: egui::PointerButton::Secondary,
+        pressed: false,
+        modifiers: Modifiers::NONE,
+    });
+    raw.events.push(egui::Event::PointerButton {
+        pos: egui::Pos2::new(20.0, 20.0),
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers: Modifiers::NONE,
+    });
+    let mut out = ctx.run_ui(raw, |ui| {
+        crate::layer_transfer::finish(h.state_mut(), ui.ctx());
+    });
+    out.textures_delta.clear();
+
+    assert!(h.state().layer_box.is_some(), "the marquee survives a secondary-button release");
+    assert!(h.state().move_blocked, "the blocked move survives a secondary-button release");
+    assert_eq!(h.state().move_blocked_start, Some([20.0, 20.0]));
+}
