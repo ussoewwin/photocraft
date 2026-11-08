@@ -363,49 +363,6 @@ fn handle_eyedropper_event(app: &mut PhotocraftApp, tool: Tool, ev: ToolEvent, m
     true
 }
 
-/// Handles pointer gestures on locked layers or targets where movement is disallowed.
-/// When dragging within the same document, shows the lock feedback promptly upon pointer movement
-/// (including when returning to the press point), while preserving cross-document drag transfers.
-fn handle_move_blocked_event(
-    app: &mut PhotocraftApp,
-    ev: ToolEvent,
-    tool: Tool,
-    mods: egui::Modifiers,
-) -> bool {
-    // A locked layer (the Background without a selection, say): no drag, and the lock message
-    // once the pointer moves (a click says nothing). ⌘ with a selection tool here (#896); the Move
-    // tool below, once Auto-Select has picked the layer.
-    match ev {
-        ToolEvent::Down { x, y, .. }
-            if tool != Tool::Move
-                && app.ui.transform.is_none()
-                && crate::move_lock::blocked(app, tool, [x, y], mods) =>
-        {
-            app.move_blocked = true;
-            app.move_blocked_start = Some([x, y]);
-            app.move_viewport = app.current_viewport;
-            true
-        }
-        ToolEvent::Move { .. } if app.move_blocked => {
-            if !crate::panels::layer_transfer::is_transfer_in_progress(app) {
-                app.move_blocked = false;
-                app.move_blocked_start = None;
-                app.move_viewport = None;
-                crate::move_lock::prompt(app);
-            }
-            true
-        }
-        ToolEvent::Up { .. } if app.move_blocked => {
-            app.move_blocked = false;
-            app.move_blocked_start = None;
-            app.move_viewport = None;
-            true
-        }
-        _ => false,
-    }
-}
-
-
 /// A Mixer Brush press the engine refused: Indexed Color and Bitmap documents answer it with the
 /// reference's alert (#11958); anything else goes to the status bar, as before.
 fn mixer_press_failed(app: &mut PhotocraftApp, message: String) {
@@ -424,8 +381,47 @@ fn mixer_press_failed(app: &mut PhotocraftApp, message: String) {
     }
 }
 
-/// Tool state machine. Shared by mouse input and automation.
+/// Handles pointer gestures on locked layers or targets where movement is disallowed.
+/// When dragging within the same document, shows the lock feedback promptly upon pointer movement
+/// (including when returning to the press point), while preserving cross-document drag transfers.
+fn handle_move_blocked_event(app: &mut PhotocraftApp, ev: ToolEvent, tool: Tool, mods: egui::Modifiers) -> bool {
+    // A locked layer (the Background without a selection, say): no drag, and the lock message
+    // once the pointer moves (a click says nothing). ⌘ with a selection tool here (#896); the Move
+    // tool below, once Auto-Select has picked the layer.
+    match ev {
+        ToolEvent::Down { x, y, .. } if tool != Tool::Move && app.ui.transform.is_none() && crate::move_lock::blocked(app, tool, [x, y], mods) => {
+            app.move_blocked = true;
+            app.move_blocked_start = Some([x, y]);
+            app.move_viewport = app.current_viewport;
+            true
+        }
+        ToolEvent::Move { .. } if app.move_blocked => {
+            // The window that armed the blocked drag resolves it: a second window's pointer
+            // must not clear the state or raise the lock dialog mid-drag.
+            if let (Some(owner), Some(here)) = (app.move_viewport, app.current_viewport)
+                && owner != here
+            {
+                return true;
+            }
+            if !crate::panels::layer_transfer::is_transfer_in_progress(app) {
+                app.move_blocked = false;
+                app.move_blocked_start = None;
+                app.move_viewport = None;
+                crate::move_lock::prompt(app);
+            }
+            true
+        }
+        ToolEvent::Up { .. } if app.move_blocked => {
+            app.move_blocked = false;
+            app.move_blocked_start = None;
+            app.move_viewport = None;
+            true
+        }
+        _ => false,
+    }
+}
 
+/// Tool state machine. Shared by mouse input and automation.
 pub fn tool_event(app: &mut PhotocraftApp, ev: ToolEvent, mods: egui::Modifiers) {
     if consumes_cancelled_vector_event(app, ev) {
         return;
