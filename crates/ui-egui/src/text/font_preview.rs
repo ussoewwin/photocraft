@@ -261,6 +261,8 @@ mod tests {
     fn japanese_sample_requires_all_core_hiragana_glyphs() {
         let full = "あいうえお";
         assert_eq!(sample_texts(&charmap(full)), ("あいうえお".into(), None));
+        // A face that covers Latin as well still previews in Japanese: the hiragana check runs first
+        assert_eq!(sample_texts(&charmap(&format!("{SAMPLE}{full}"))), ("あいうえお".into(), None));
         for missing in ['あ', 'い', 'う', 'え', 'お'] {
             let partial: String = full.chars().filter(|&c| c != missing).collect();
             let (sample, second) = sample_texts(&charmap(&partial));

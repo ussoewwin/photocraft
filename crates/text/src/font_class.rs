@@ -178,12 +178,14 @@ pub fn classify(family: &str, family_class: i16, panose: [u8; 10], fixed_pitch: 
         Some(FontClass::Monospace)
     } else if has(&["slab"]) {
         Some(FontClass::SlabSerif)
-    } else if has(&["sans", "grotesk", "grotesque", "gothic", "ゴシック", "ｺﾞｼｯｸ", "meiryo", "メイリオ", "hei", "黑体", "黑體", "maru", "丸ゴシック"]) {
+    } else if has(&["sans", "grotesk", "grotesque", "gothic", "ゴシック", "ｺﾞｼｯｸ", "meiryo", "メイリオ", "hei", "黑体", "黑體", "maru", "丸ゴシック"])
+    {
         Some(FontClass::SansSerif)
     } else if has(&["serif", "roman", "garamond", "times", "bodoni", "baskerville", "caslon", "mincho", "明朝", "sung", "song", "宋体", "宋體"]) {
         Some(FontClass::Serif)
     } else if has(&["hand", "marker", "brush", "chalk", "kyokasho", "教科書", "ポップ", "ﾎﾟｯﾌﾟ"])
-        || name.contains("poptai")
+        || name.ends_with("poptai")
+        || name.split(|c: char| !c.is_alphabetic() || is_cjk_boundary(c)).any(|w| w == "poptai")
         || name.split(|c: char| !c.is_alphabetic() || is_cjk_boundary(c)).any(|w| w == "pop")
     {
         Some(FontClass::Handwritten)
@@ -265,6 +267,9 @@ mod tests {
         assert_eq!(classify("Popüler Display", 0, NONE, false), None);
         assert_eq!(classify("HG Pop体", 0, NONE, false), Some(FontClass::Handwritten));
         assert_eq!(classify("HGSoeiKakupoptai", 0, NONE, false), Some(FontClass::Handwritten));
+        // `poptai` must end a word, so an unrelated substring such as `Poptail` does not match.
+        assert_eq!(classify("Poptail", 0, NONE, false), None);
+        assert_eq!(classify("Poptail Sans", 0, NONE, false), Some(FontClass::SansSerif));
         // Japanese font classification coverage
         assert_eq!(classify("MS Mincho", 0, NONE, false), Some(FontClass::Serif));
         assert_eq!(classify("游明朝", 0, NONE, false), Some(FontClass::Serif));
