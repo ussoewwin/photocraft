@@ -16,7 +16,7 @@ const ARABIC_CORE: [char; 4] = ['\u{627}', '\u{644}', '\u{645}', '\u{639}'];
 const ARABIC_SAMPLE: &str = "أبجد هوز";
 /// Japanese Hiragana sample: standard preview for Japanese typography ("あいうえお").
 const JAPANESE_SAMPLE: &str = "あいうえお";
-const JAPANESE_CORE: [char; 3] = ['あ', 'い', 'う'];
+const JAPANESE_CORE: [char; 5] = ['あ', 'い', 'う', 'え', 'お'];
 /// The Latin and Arabic sample widths and the sample height at the menu's medium (18 pt).
 const WIDTH: f32 = 100.0;
 const ARABIC_WIDTH: f32 = 72.0;
@@ -255,6 +255,18 @@ mod tests {
         let mut engine = photocraft_text::TextEngine::new();
         let big = images(&mut engine, "Inter", 1, 32.0).unwrap().latin;
         assert_eq!(big.size, [178, 43], "the box follows the size");
+    }
+
+    #[test]
+    fn japanese_sample_requires_all_core_hiragana_glyphs() {
+        let full = "あいうえお";
+        assert_eq!(sample_texts(&charmap(full)), ("あいうえお".into(), None));
+        for missing in ['あ', 'い', 'う', 'え', 'お'] {
+            let partial: String = full.chars().filter(|&c| c != missing).collect();
+            let (sample, second) = sample_texts(&charmap(&partial));
+            assert_ne!(sample, "あいうえお", "missing {missing} should not yield Japanese sample");
+            assert_eq!(second, None);
+        }
     }
 
     #[test]
