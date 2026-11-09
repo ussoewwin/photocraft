@@ -381,12 +381,30 @@ fn mixer_press_failed(app: &mut PhotocraftApp, message: String) {
     }
 }
 
+/// The Brush's chosen Clear paints as Normal on the Background, and its Mode then reads Normal
+/// (#11897): at the press of a Brush stroke on the Background's own pixels, Clear (chosen in the
+/// options bar, not a held `~`) is turned off, so the stroke is sent as Normal. A Background whose
+/// pixels are locked refuses the stroke, so Clear stays chosen there.
+fn clear_off_on_background(app: &mut PhotocraftApp, tool: Tool) {
+    let on_background = app.session.active().is_some_and(|st| {
+        st.active_layer.is_some_and(|id| {
+            st.doc.is_background(id) && {
+                let locks = st.doc.effective_locks(id);
+                !locks.pixels && !locks.all
+            }
+        })
+    });
+    if tool == Tool::Brush && app.ui.tool_options.brush_clear && !app.held_erase && on_background && paint_target(app) == serde_json::json!("pixels") {
+        app.ui.tool_options.brush_clear = false;
+    }
+}
+
 /// Handles pointer gestures on locked layers or targets where movement is disallowed.
 /// When dragging within the same document, shows the lock feedback promptly upon pointer movement
 /// (including when returning to the press point), while preserving cross-document drag transfers.
 fn handle_move_blocked_event(app: &mut PhotocraftApp, ev: ToolEvent, tool: Tool, mods: egui::Modifiers) -> bool {
     // A locked layer (the Background without a selection, say): no drag, and the lock message
-    // once the pointer moves (a click says nothing). ⌘ with a selection tool here (#896); the Move
+    // once the pointer moves (a click says nothing). ⌥ with a selection tool here (#896); the Move
     // tool below, once Auto-Select has picked the layer.
     match ev {
         ToolEvent::Down { x, y, .. } if tool != Tool::Move && app.ui.transform.is_none() && crate::move_lock::blocked(app, tool, [x, y], mods) => {
@@ -418,6 +436,8 @@ fn handle_move_blocked_event(app: &mut PhotocraftApp, ev: ToolEvent, tool: Tool,
             true
         }
         _ => false,
+    }
+}
     }
 }
 
@@ -568,6 +588,7 @@ pub fn tool_event(app: &mut PhotocraftApp, ev: ToolEvent, mods: egui::Modifiers)
                 _ => {}
             }
             crate::paint_mouse::sync_tool_brush(app);
+            clear_off_on_background(app, tool);
             // Clear mode (`~` held, or chosen in the options bar) erases with the tool's own brush.
             let clear = crate::paint_mouse::clears(app, tool);
             let erase = std::mem::take(&mut app.secondary_erase) || tool == Tool::Eraser || clear;
