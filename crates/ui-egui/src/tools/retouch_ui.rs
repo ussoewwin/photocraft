@@ -138,6 +138,15 @@ pub fn finish_stroke(app: &mut PhotocraftApp, tool: Tool, points: &[[f64; 3]], m
             }
             ("paint.remove", remove_params(&o, crate::canvas::paint_target(app).as_str() == Some("pixels")))
         }
+        Tool::LamaCleaner => {
+            let b = &app.session.tools.brush;
+            ("paint.lamaCleaner", json!({
+                "points": points,
+                "size": b.size,
+                "hardness": b.hardness * 100.0,
+                "spacing": b.spacing * 100.0,
+            }))
+        }
         Tool::MixerBrush => ("paint.mixerBrush", json!({})),
         Tool::ColorReplacement => ("paint.colorReplacement", color_replacement_params(app)),
         Tool::PatternStamp => ("paint.patternStamp", pattern_stamp_params(app, points)),
@@ -550,6 +559,13 @@ pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui, tool: Tool) -> bo
     let composite = crate::canvas::paint_target(app).as_str() == Some("pixels");
     let o = &mut app.ui.tool_options;
     match tool {
+        Tool::LamaCleaner => {
+            opt(ui, tl!("Size:"));
+            let mut size = app.session.tools.brush.size.max(1.0);
+            if ui.add_sized([180.0, 20.0], egui::Slider::new(&mut size, 1.0..=300.0).step_by(1.0).suffix(" px")).changed() {
+                app.session.tools.brush.size = size;
+            }
+        }
         Tool::SpotHealing => {
             opt(ui, tl!("Type:"));
             for (k, l) in [("contentAware", tl!("Content-Aware")), ("createTexture", tl!("Create Texture")), ("proximityMatch", tl!("Proximity Match"))] {
