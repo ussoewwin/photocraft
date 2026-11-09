@@ -178,9 +178,9 @@ pub fn classify(family: &str, family_class: i16, panose: [u8; 10], fixed_pitch: 
         Some(FontClass::SansSerif)
     } else if has(&["serif", "roman", "garamond", "times", "bodoni", "baskerville", "caslon", "mincho", "明朝", "sung", "song", "宋体", "宋體"]) {
         Some(FontClass::Serif)
-    } else if has(&["hand", "marker", "brush", "chalk", "kyokasho", "教科書", "kaisho", "楷書", "pop", "ポップ", "ﾎﾟｯﾌﾟ"]) {
+    } else if has(&["hand", "marker", "brush", "chalk", "kyokasho", "教科書", "pop", "ポップ", "ﾎﾟｯﾌﾟ"]) {
         Some(FontClass::Handwritten)
-    } else if has(&["script", "gyosho", "行書", "sousho", "草書", "reisho", "隷書", "kanteiryu", "勘亭流"]) {
+    } else if has(&["script", "gyosho", "行書", "kaisho", "楷書", "sousho", "草書", "reisho", "隷書", "kanteiryu", "勘亭流"]) {
         Some(FontClass::Script)
     } else {
         None
@@ -188,7 +188,7 @@ pub fn classify(family: &str, family_class: i16, panose: [u8; 10], fixed_pitch: 
 }
 
 /// How unlike `b` is to `a`: 0 for the same traits, larger the more they differ. Used to list
-/// similar fonts (Photoshop's "Show similar fonts"): the class matters most, then the PANOSE
+/// similar fonts ("Show similar fonts"): the class matters most, then the PANOSE
 /// digits both fonts state (serif style, weight, proportion, contrast…), then the weight.
 pub fn difference(a: &FamilyTraits, b: &FamilyTraits) -> f32 {
     let mut d = 0.0;
@@ -254,7 +254,7 @@ mod tests {
         assert_eq!(classify("Code Pro Sans", 0x0805, NONE, false), Some(FontClass::SansSerif), "the class beats the name");
         assert_eq!(classify("Permanent Marker", 0, NONE, false), Some(FontClass::Handwritten));
         assert_eq!(classify("Unknowable", 0, NONE, false), None);
-        // Japanese fonts classification parity with Photoshop
+        // Japanese font classification coverage
         assert_eq!(classify("MS Mincho", 0, NONE, false), Some(FontClass::Serif));
         assert_eq!(classify("游明朝", 0, NONE, false), Some(FontClass::Serif));
         assert_eq!(classify("MS Gothic", 0, NONE, false), Some(FontClass::SansSerif));
@@ -263,7 +263,7 @@ mod tests {
         assert_eq!(classify("メイリオ", 0, NONE, false), Some(FontClass::SansSerif));
         assert_eq!(classify("HGGyoshotai", 0, NONE, false), Some(FontClass::Script));
         assert_eq!(classify("HG行書体", 0, NONE, false), Some(FontClass::Script));
-        assert_eq!(classify("HG正楷書体-PRO", 0, NONE, false), Some(FontClass::Handwritten));
+        assert_eq!(classify("HG正楷書体-PRO", 0, NONE, false), Some(FontClass::Script));
         assert_eq!(classify("UD デジタル 教科書体 N", 0, NONE, false), Some(FontClass::Handwritten));
         // Out-of-range or garbage table values don't panic or misfile.
         assert_eq!(classify("X", i16::MIN, [255; 10], false), None);
