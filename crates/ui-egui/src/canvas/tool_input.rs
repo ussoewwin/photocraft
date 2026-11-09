@@ -438,8 +438,6 @@ fn handle_move_blocked_event(app: &mut PhotocraftApp, ev: ToolEvent, tool: Tool,
         _ => false,
     }
 }
-    }
-}
 
 /// Tool state machine. Shared by mouse input and automation.
 pub fn tool_event(app: &mut PhotocraftApp, ev: ToolEvent, mods: egui::Modifiers) {
