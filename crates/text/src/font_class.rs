@@ -178,7 +178,9 @@ pub fn classify(family: &str, family_class: i16, panose: [u8; 10], fixed_pitch: 
         Some(FontClass::SansSerif)
     } else if has(&["serif", "roman", "garamond", "times", "bodoni", "baskerville", "caslon", "mincho", "明朝", "sung", "song", "宋体", "宋體"]) {
         Some(FontClass::Serif)
-    } else if has(&["hand", "marker", "brush", "chalk", "kyokasho", "教科書", "pop", "ポップ", "ﾎﾟｯﾌﾟ"]) {
+    } else if has(&["hand", "marker", "brush", "chalk", "kyokasho", "教科書", "ポップ", "ﾎﾟｯﾌﾟ"])
+        || name.split(|c: char| !c.is_ascii_alphanumeric()).any(|w| w == "pop")
+    {
         Some(FontClass::Handwritten)
     } else if has(&["script", "gyosho", "行書", "kaisho", "楷書", "sousho", "草書", "reisho", "隷書", "kanteiryu", "勘亭流"]) {
         Some(FontClass::Script)
@@ -254,6 +256,8 @@ mod tests {
         assert_eq!(classify("Code Pro Sans", 0x0805, NONE, false), Some(FontClass::SansSerif), "the class beats the name");
         assert_eq!(classify("Permanent Marker", 0, NONE, false), Some(FontClass::Handwritten));
         assert_eq!(classify("Unknowable", 0, NONE, false), None);
+        assert_eq!(classify("Poppins", 0, [0, 0, 5, 0, 0, 0, 0, 0, 0, 0], false), None);
+        assert_eq!(classify("HG Pop体", 0, NONE, false), Some(FontClass::Handwritten));
         // Japanese font classification coverage
         assert_eq!(classify("MS Mincho", 0, NONE, false), Some(FontClass::Serif));
         assert_eq!(classify("游明朝", 0, NONE, false), Some(FontClass::Serif));
