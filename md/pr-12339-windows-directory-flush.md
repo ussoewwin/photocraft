@@ -230,7 +230,7 @@ The run was performed on Windows, which is the platform the change targets, so t
 
 ## Differences from upstream `main`
 
-Measured with `git diff -U3 upstream/main...main`, where `upstream/main` is `95c9e465d` (storytold/photocraft) and `main` is `f328d1881`. The full range is 49 files, 8101 insertions, 182 deletions. The hunks below are every hunk in the files that carry this feature - 11 hunks, reproduced in full with their context lines, each followed by an explanation of the original code, the change, and its effect. The two `retouch_ui.rs` hunks that belong to the LaMa Cleaner tool (`Tool::LamaCleaner` at the stroke dispatch and in the options bar) are a different feature and are not reproduced here.
+Measured with `git diff -U3 upstream/main...main`, where `upstream/main` is `95c9e465d` (storytold/photocraft) and `main` is `f328d1881`. The full range is 49 files, 8101 insertions, 182 deletions. The hunks below are every hunk in the files that carry this feature - 11 hunks, reproduced in full with their context lines, each followed by an explanation of the original code, the change, and its effect.
 
 ### `crates/format/src/atomic.rs`
 

@@ -268,7 +268,7 @@ the stroke will replace.
 
 ## Differences from upstream `main`
 
-Measured with `git diff -U3 upstream/main...main`, where `upstream/main` is `95c9e465d` (storytold/photocraft) and `main` is `f328d1881`. The full range is 49 files, 8101 insertions, 182 deletions. The hunks below are every hunk in the files that carry this feature - 23 hunks, reproduced in full with their context lines, each followed by an explanation of the original code, the change, and its effect. The two `retouch_ui.rs` hunks that belong to the LaMa Cleaner tool (`Tool::LamaCleaner` at the stroke dispatch and in the options bar) are a different feature and are not reproduced here.
+Measured with `git diff -U3 upstream/main...main`, where `upstream/main` is `95c9e465d` (storytold/photocraft) and `main` is `f328d1881`. The full range is 49 files, 8101 insertions, 182 deletions. The hunks below are every hunk in the files that carry this feature - 22 hunks, reproduced in full with their context lines, each followed by an explanation of the original code, the change, and its effect.
 
 ### `ATTRIBUTION.md`
 
@@ -1436,32 +1436,3 @@ Nothing else needs to know about the reset. The field is not journaled and not p
 A detail about `reset!` worth recording: the lists are not exhaustive over the struct, they are exhaustive over *the tool's* fields. `Tool::QuickSelection` lists its two (`enhance_edge`, `quick_selection_mode`); `Tool::MagicWand` lists `tolerance, anti_alias, contiguous`; fields shared by all tools (the brush size, the sample-all-layers toggles) are reset by their own paths. That is why the reset for a tool is a short list and why a new field for a tool must be added here deliberately - the compiler cannot tell whether a field belongs to a tool.
 
 The order of the list also serves as the answer to "which fields does this tool own": a reader looking at the line sees exactly the two, and `quick_selection_mode` being second says it was added later than `enhance_edge`, which is the same order the struct declares. If the struct order ever changed, this line would be the second place to update, and a reviewer would see the two adjacent.
-
-#### 63. `crates/ui-egui/src/tools/tool_reset.rs` — hunk -270,6 +270,7
-
-**Original code (upstream `main`)**
-
-```rust
-        | Tool::Count
-        | Tool::RotateView
-        | Tool::HistoryBrush
-        | Tool::PathSelection
-        | Tool::DirectSelection
-        | Tool::SliceSelect
-```
-
-**Changed code (current `main`)**
-
-```rust
-        | Tool::Count
-        | Tool::RotateView
-        | Tool::HistoryBrush
-        | Tool::LamaCleaner
-        | Tool::PathSelection
-        | Tool::DirectSelection
-        | Tool::SliceSelect
-```
-
-**Explanation.** The second `tool_reset.rs` hunk is in `option_keys`, the table that lists the option names a tool exports. `quick_selection_mode` is added to the Quick Selection row so the key is reported alongside `enhance_edge`.
-
-`option_keys` is what the automation and scripting surface reads to know which options a tool has, so an option that exists on the struct but is missing here is invisible to that surface. The pair of hunks - the `reset!` list and this key list - are the two places a new tool option must be registered, and both are in the same file for that reason.
