@@ -270,6 +270,7 @@ pub fn option_keys(tool: Tool) -> &'static [&'static str] {
         | Tool::Hand
         | Tool::RotateView
         | Tool::HistoryBrush
+        | Tool::LamaCleaner
         | Tool::PathSelection
         | Tool::DirectSelection
         | Tool::SliceSelect
