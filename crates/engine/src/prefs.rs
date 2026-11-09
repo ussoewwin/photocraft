@@ -1058,7 +1058,7 @@ impl Default for TypePrefs {
         Self {
             smart_quotes: true,
             missing_glyph_protection: true,
-            show_font_names_in_english: false,
+            show_font_names_in_english: true,
             use_esc_to_commit: true,
             text_engine: TextEngine::WorldReady,
             font_preview: FontPreview::Medium,
