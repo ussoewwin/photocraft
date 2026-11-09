@@ -14,7 +14,7 @@ const SAMPLE: &str = "AaBbCc";
 const ARABIC_CORE: [char; 4] = ['\u{627}', '\u{644}', '\u{645}', '\u{639}'];
 /// Short, recognisable, and joins letters, so it shows the face's shaping.
 const ARABIC_SAMPLE: &str = "أبجد هوز";
-/// Japanese Hiragana sample: standard preview in Photoshop Japanese edition ("あいうえお").
+/// Japanese Hiragana sample: standard preview for Japanese typography ("あいうえお").
 const JAPANESE_SAMPLE: &str = "あいうえお";
 const JAPANESE_CORE: [char; 3] = ['あ', 'い', 'う'];
 /// The Latin and Arabic sample widths and the sample height at the menu's medium (18 pt).
