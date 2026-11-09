@@ -499,7 +499,18 @@ impl FontDb {
             let face = info.fonts().iter().min_by_key(|f| (!matches!(f.style(), FontStyle::Normal), (f.weight().value() - 400.0).abs() as u32))?.clone();
             let blob = face.load(Some(&mut self.fcx.source_cache))?;
             let font = skrifa::FontRef::from_index(blob.as_ref(), face.index()).ok()?;
-            Some(crate::font_class::traits_of(family, &font))
+            let mut t = crate::font_class::traits_of(family, &font);
+            if t.class.is_none() {
+                let names = |id| -> Vec<(String, Option<String>)> { font.localized_strings(id).map(|s| (s.chars().collect(), s.language().map(str::to_string))).collect() };
+                let typographic = names(StringId::TYPOGRAPHIC_FAMILY_NAME);
+                let names = if typographic.is_empty() { names(StringId::FAMILY_NAME) } else { typographic };
+                if let Some(local) = localized_name(family, &names) {
+                    if let Some(cls) = crate::font_class::traits_of(&local, &font).class {
+                        t.class = Some(cls);
+                    }
+                }
+            }
+            Some(t)
         })();
         self.traits_cache.insert(family.to_string(), traits.clone());
         traits
@@ -1025,8 +1036,8 @@ pub fn localized_name(english: &str, names: &[(String, Option<String>)]) -> Opti
         }
     }
     // 2. Next, any non-ASCII name if no language tag is present
-    for (name, _) in names {
-        if !name.trim().is_empty() && name != english && name.chars().any(|c| (c as u32) > 0x7F) {
+    for (name, lang) in names {
+        if lang.is_none() && !name.trim().is_empty() && name != english && name.chars().any(|c| (c as u32) > 0x7F) {
             return Some(name.clone());
         }
     }
@@ -1115,6 +1126,10 @@ mod tests {
         assert_eq!(super::localized_name("MS Gothic", &ms_gothic).as_deref(), Some("ＭＳ ゴシック"));
         let yahei = names(&[("Microsoft YaHei", Some("en")), ("微软雅黑", Some("zh-CN")), ("微軟雅黑", Some("zh-TW"))]);
         assert_eq!(super::localized_name("Microsoft YaHei", &yahei).as_deref(), Some("微软雅黑"));
+        // Untagged non-ASCII localized names are returned
+        assert_eq!(super::localized_name("MyFamily", &names(&[("MyFamily", Some("en")), ("日本語名", None)])).as_deref(), Some("日本語名"));
+        // English-tagged non-ASCII aliases are not chosen as localized fallback
+        assert_eq!(super::localized_name("MyFamily", &names(&[("MyFamily", Some("en")), ("MyFämily", Some("en"))])), None);
         // English-only fonts, other English locales, unknown languages and copies of the English
         // name give no localized name.
         assert_eq!(super::localized_name("Arial", &names(&[("Arial", Some("en-US"))])), None);

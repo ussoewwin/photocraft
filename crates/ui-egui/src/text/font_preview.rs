@@ -258,6 +258,18 @@ mod tests {
     }
 
     #[test]
+    fn japanese_sample_requires_all_core_hiragana_glyphs() {
+        let full = "あいうえお";
+        assert_eq!(sample_texts(&charmap(full)), ("あいうえお".into(), None));
+        for missing in ['あ', 'い', 'う', 'え', 'お'] {
+            let partial: String = full.chars().filter(|&c| c != missing).collect();
+            let (sample, second) = sample_texts(&charmap(&partial));
+            assert_ne!(sample, "あいうえお", "missing {missing} should not yield Japanese sample");
+            assert_eq!(second, None);
+        }
+    }
+
+    #[test]
     fn latin_only_families_get_no_arabic_sample() {
         let mut engine = photocraft_text::TextEngine::new();
         for family in ["Inter", "JetBrains Mono"] {
