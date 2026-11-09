@@ -129,6 +129,10 @@ pub fn traits_of(family: &str, font: &FontRef) -> FamilyTraits {
 /// Name fragments (lowercase) that mark a blackletter face; the tables have no class for it.
 const BLACKLETTER: [&str; 7] = ["fraktur", "blackletter", "black letter", "textura", "old english", "schwabacher", "rotunda"];
 
+fn is_cjk_boundary(c: char) -> bool {
+    matches!(c as u32, 0x2E80..=0x9FFF | 0xF900..=0xFAFF | 0xFF00..=0xFFEF)
+}
+
 /// Classify from the OS/2 `sFamilyClass` (high byte: the IBM class), the PANOSE digits, the
 /// `post` fixed-pitch flag and, last, the family name.
 pub fn classify(family: &str, family_class: i16, panose: [u8; 10], fixed_pitch: bool) -> Option<FontClass> {
@@ -179,7 +183,8 @@ pub fn classify(family: &str, family_class: i16, panose: [u8; 10], fixed_pitch: 
     } else if has(&["serif", "roman", "garamond", "times", "bodoni", "baskerville", "caslon", "mincho", "明朝", "sung", "song", "宋体", "宋體"]) {
         Some(FontClass::Serif)
     } else if has(&["hand", "marker", "brush", "chalk", "kyokasho", "教科書", "ポップ", "ﾎﾟｯﾌﾟ"])
-        || name.split(|c: char| !c.is_ascii_alphanumeric()).any(|w| w == "pop")
+        || name.contains("poptai")
+        || name.split(|c: char| !c.is_alphabetic() || is_cjk_boundary(c)).any(|w| w == "pop")
     {
         Some(FontClass::Handwritten)
     } else if has(&["script", "gyosho", "行書", "kaisho", "楷書", "sousho", "草書", "reisho", "隷書", "kanteiryu", "勘亭流"]) {
@@ -257,7 +262,9 @@ mod tests {
         assert_eq!(classify("Permanent Marker", 0, NONE, false), Some(FontClass::Handwritten));
         assert_eq!(classify("Unknowable", 0, NONE, false), None);
         assert_eq!(classify("Poppins", 0, [0, 0, 5, 0, 0, 0, 0, 0, 0, 0], false), None);
+        assert_eq!(classify("Popüler Display", 0, NONE, false), None);
         assert_eq!(classify("HG Pop体", 0, NONE, false), Some(FontClass::Handwritten));
+        assert_eq!(classify("HGSoeiKakupoptai", 0, NONE, false), Some(FontClass::Handwritten));
         // Japanese font classification coverage
         assert_eq!(classify("MS Mincho", 0, NONE, false), Some(FontClass::Serif));
         assert_eq!(classify("游明朝", 0, NONE, false), Some(FontClass::Serif));
