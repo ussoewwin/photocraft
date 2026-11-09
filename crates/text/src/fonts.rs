@@ -1014,11 +1014,30 @@ pub fn localized_name(english: &str, names: &[(String, Option<String>)]) -> Opti
         let primary = lang.split(['-', '_']).next().unwrap_or(lang);
         primary.eq_ignore_ascii_case("en")
     };
-    names
-        .iter()
-        .filter(|(name, lang)| lang.as_deref().is_some_and(|l| !l.is_empty() && !is_english(l)) && !name.trim().is_empty() && name != english)
-        .map(|(name, _)| name.clone())
-        .next()
+    // 1. Prefer Japanese localized name if present
+    for (name, lang) in names {
+        if !name.trim().is_empty() && name != english {
+            if let Some(l) = lang.as_deref() {
+                let primary = l.split(['-', '_']).next().unwrap_or(l);
+                if primary.eq_ignore_ascii_case("ja") {
+                    return Some(name.clone());
+                }
+            }
+        }
+    }
+    // 2. Next, any other non-English localized name or non-ASCII name
+    for (name, lang) in names {
+        if !name.trim().is_empty() && name != english {
+            if let Some(l) = lang.as_deref() {
+                if !l.is_empty() && !is_english(l) {
+                    return Some(name.clone());
+                }
+            } else if name.chars().any(|c| (c as u32) > 0x7F) {
+                return Some(name.clone());
+            }
+        }
+    }
+    None
 }
 
 pub fn is_hidden_family(name: &str) -> bool {
