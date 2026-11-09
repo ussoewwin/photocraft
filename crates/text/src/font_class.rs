@@ -178,12 +178,17 @@ pub fn classify(family: &str, family_class: i16, panose: [u8; 10], fixed_pitch: 
         Some(FontClass::Monospace)
     } else if has(&["slab"]) {
         Some(FontClass::SlabSerif)
-    } else if has(&["sans", "grotesk", "grotesque", "gothic", "ゴシック", "ｺﾞｼｯｸ", "meiryo", "メイリオ", "hei", "黑体", "黑體", "maru", "丸ゴシック"]) {
+    } else if has(&["sans", "grotesk", "grotesque", "gothic", "ゴシック", "ｺﾞｼｯｸ", "meiryo", "メイリオ", "黑体", "黑體", "丸ゴシック"])
+        || name.split(|c: char| !c.is_alphabetic() || is_cjk_boundary(c)).any(|w| {
+            matches!(w, "hei" | "heiti" | "maru") || w.ends_with("hei") || w.ends_with("heiti")
+        })
+    {
         Some(FontClass::SansSerif)
     } else if has(&["serif", "roman", "garamond", "times", "bodoni", "baskerville", "caslon", "mincho", "明朝", "sung", "song", "宋体", "宋體"]) {
         Some(FontClass::Serif)
     } else if has(&["hand", "marker", "brush", "chalk", "kyokasho", "教科書", "ポップ", "ﾎﾟｯﾌﾟ"])
-        || name.contains("poptai")
+        || name.ends_with("poptai")
+        || name.split(|c: char| !c.is_alphabetic() || is_cjk_boundary(c)).any(|w| w == "poptai")
         || name.split(|c: char| !c.is_alphabetic() || is_cjk_boundary(c)).any(|w| w == "pop")
     {
         Some(FontClass::Handwritten)
@@ -195,7 +200,7 @@ pub fn classify(family: &str, family_class: i16, panose: [u8; 10], fixed_pitch: 
 }
 
 /// How unlike `b` is to `a`: 0 for the same traits, larger the more they differ. Used to list
-/// similar fonts ("Show similar fonts"): the class matters most, then the PANOSE
+/// similar fonts (Photoshop's "Show similar fonts"): the class matters most, then the PANOSE
 /// digits both fonts state (serif style, weight, proportion, contrast…), then the weight.
 pub fn difference(a: &FamilyTraits, b: &FamilyTraits) -> f32 {
     let mut d = 0.0;
@@ -265,6 +270,15 @@ mod tests {
         assert_eq!(classify("Popüler Display", 0, NONE, false), None);
         assert_eq!(classify("HG Pop体", 0, NONE, false), Some(FontClass::Handwritten));
         assert_eq!(classify("HGSoeiKakupoptai", 0, NONE, false), Some(FontClass::Handwritten));
+        // `poptai` must end a word, so an unrelated substring such as `Poptail` does not match.
+        assert_eq!(classify("Poptail", 0, NONE, false), None);
+        assert_eq!(classify("Poptail Sans", 0, NONE, false), Some(FontClass::SansSerif));
+        // `hei` and `maru` match as standalone markers, so unrelated Latin names such as `Theia Serif` are not misclassified.
+        assert_eq!(classify("Theia Serif", 0, NONE, false), Some(FontClass::Serif));
+        assert_eq!(classify("Theia", 0, NONE, false), None);
+        assert_eq!(classify("SimHei", 0, NONE, false), Some(FontClass::SansSerif));
+        assert_eq!(classify("Microsoft YaHei", 0, NONE, false), Some(FontClass::SansSerif));
+        assert_eq!(classify("Maru Gothic", 0, NONE, false), Some(FontClass::SansSerif));
         // Japanese font classification coverage
         assert_eq!(classify("MS Mincho", 0, NONE, false), Some(FontClass::Serif));
         assert_eq!(classify("游明朝", 0, NONE, false), Some(FontClass::Serif));
