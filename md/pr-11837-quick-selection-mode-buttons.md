@@ -1,21 +1,23 @@
 # Quick Selection: New / Add / Subtract mode buttons in the options bar
 
-The Quick Selection options bar gains the three selection-mode buttons every selection tool has in
-Photoshop: New selection, Add to selection, and Subtract from selection. The mode changes what a
-stroke does, what the canvas cursor badge shows, and what a held modifier overrides.
+This is how Quick Selection works in the tree as it stands. The options bar carries the three
+selection-mode buttons Photoshop has: New selection, Add to selection, Subtract from selection. The
+mode changes what a stroke does, what the canvas cursor badge shows, and what a held modifier
+overrides.
 
 | Behaviour | Implementation |
 |---|---|
-| Mode buttons | Three segmented icon buttons at the left of the options bar, before the brush preset chip, followed by a divider |
+| Mode buttons | three segmented icon buttons at the left of the options bar, before the brush preset chip, followed by a divider |
 | Modes | `ToolOptions.quick_selection_mode`: `0` New, `1` Add (default), `2` Subtract |
-| Add (1) | A stroke adds; Alt subtracts |
-| Subtract (2) | A stroke subtracts; Alt adds |
-| New (0) | A stroke replaces; Shift adds, Alt subtracts |
-| After a New stroke | The tool switches to Add once the stroke actually changed the selection |
+| Add (1) | a stroke adds; Alt subtracts |
+| Subtract (2) | a stroke subtracts; Alt adds |
+| New (0) | a stroke replaces; Shift adds, Alt subtracts |
+| After a New stroke | the tool switches to Add once the stroke actually changed the selection |
+| Out-of-range value | clamped to Add when the buttons draw and when the mode is resolved |
 | Cursor badge | `+` / `-` / none follows the effective mode for the held modifiers |
-| Reset Tool | Restores mode 1 (Add) |
-| Persistence | Stored with the other tool options; old preferences without the field load as 1 |
-| Select and Mask | A button added at the right end of the options bar |
+| Reset Tool | restores mode 1 (Add) |
+| Persistence | stored with the other tool options; projects without the field load as 1 |
+| Select and Mask | a button at the right end of the Quick Selection options row |
 
 ## Problem
 
@@ -169,23 +171,6 @@ options.
 this change, derived from the existing `quick-selection.svg` (ISC). They are registered in
 `icon_data.rs` and listed in `ATTRIBUTION.md`.
 
-## Commit by commit
-
-Six commits, two of them merges, oldest first.
-
-| Commit | Date | Subject | What it did |
-|---|---|---|---|
-| `828cf2635` | 2026-11-07 | ui-egui: add New, Add, and Subtract mode buttons to Quick Selection options bar | The field, the two SVGs, the icon keys, the buttons function, the options-bar call, the attribution rows. Hunks 1-6, 9-16, 18. |
-| `7e29f4f96` | 2026-11-07 | ui-egui: keep Quick Selection in New mode after an empty stroke | The `changed` read and the flip condition in `finish_stroke`; the tests that pin the two "keeps New mode" cases. Hunk 19, part of 21. |
-| `55ed8a0f7` | 2026-11-08 | Merge remote-tracking branch 'upstream/main' into feat/quick-selection-mode-buttons | First upstream merge. |
-| `1359f933f` | 2026-11-09 | ui-egui: use document_selection_mode for Quick Selection strokes and cursor badge | `document_selection_mode`'s per-tool bar, the `badge` early return, the stroke's mode call, the badge test. Hunks 5-8, 19-20. |
-| `e6e31005d` | 2026-11-09 | Merge branch 'upstream/main' into feat/quick-selection-mode-buttons | Second upstream merge. |
-| `4bebcddda` | 2026-11-09 | fix(ui): normalize quick_selection_mode exceeding 2 to Add on render | The clamp at the top of `quick_selection_mode_buttons`. Hunk 14. |
-
-The last commit is worth reading as a record of a defect found after the feature worked: the field is persisted and nothing prevented an out-of-range value from an older or hand-edited project file, so the fix is a clamp at the point of drawing rather than a validation at load. `selection_mode` (hunk 5) clamps independently, which is why the two agree even if the file is corrupt - the drawing normalises the stored value and the classifier normalises what it reads.
-
-The two merges are upstream's `main` coming in; neither conflicted in the files this branch touches, and both are in the range because the branch was rebased by merge rather than by rebase.
-
 ## Types and call graph
 
 | Item | Kind | Contract | Callers |
@@ -281,25 +266,17 @@ the stroke will replace.
 | `cargo test -p photocraft-ui-egui --lib tool_feedback` | **13 passed, 0 failed** (0.11 s). Includes `canvas::tool_feedback::tests::badge_follows_modifiers_and_the_options_bar` |
 | `cargo test -p photocraft-ui-egui --lib panels::properties` | **3 passed, 0 failed** (0.05 s) |
 
-## Merge state
+## Differences from upstream `main`
 
-The branch merges cleanly into `main` at the time of writing (`MERGEABLE`, `UNSTABLE`). "Unstable" is the status GitHub reports when a pull request is mergeable but a non-required check has not completed - here the only check is the review bot, which has finished. No workflow run exists for the branch, so there is no CI signal beyond the bot.
+Measured with `git diff -U3 upstream/main...main`, where `upstream/main` is `95c9e465d` (storytold/photocraft) and `main` is `f328d1881`. The full range is 49 files, 8101 insertions, 182 deletions. The hunks below are every hunk in the files that carry this feature - 23 hunks, reproduced in full with their context lines, each followed by an explanation of the original code, the change, and its effect. The two `retouch_ui.rs` hunks that belong to the LaMa Cleaner tool (`Tool::LamaCleaner` at the stroke dispatch and in the options bar) are a different feature and are not reproduced here.
 
-The change touches no shared module in a way that another tool can observe: `canvas/tool_feedback.rs` gains one branch inside the Quick Selection arm and one early return in `badge`; `panels/properties.rs` gains one function and widens one item's visibility; `state/tool_options.rs` gains one field with a serde default. Lasso, Marquee, Object Selection, Magic Wand and every other tool read the same fields and the same functions they read before, and the three assertions in hunk 8 that cover `ObjectSelection` are there to prove it.
-
-## Every change, shown as original code and changed code
-
-Base `535ea2d15` (the upstream commit the branch was opened against), head `4bebcddd`.
-For each file, every hunk is printed twice: the code as it stands in the base, and the code as it
-stands after the change. Unchanged context lines appear in both, so each block can be read on its own.
-
-### `ATTRIBUTION.md` (+2 / -2)
+### `ATTRIBUTION.md`
 
 #### 1. `ATTRIBUTION.md` — hunk -42,7 +42,7
 
-**Original code (upstream base)**
+**Original code (upstream `main`)**
 
-```rust
+```text
 | `epaint_default_fonts::EGUI_ICONS` (build input; deflated into `OUT_DIR/egui_fonts/egui-icons.ttf.deflate`, registered by `crates/ui-egui/src/egui_fonts.rs`) | egui-icons, five-glyph subset of emoji-icon-font | John Slegers | [egui fork at 6d518fc](https://github.com/storytold/egui/tree/6d518fc799681571963842f95b55a6b68431b15a/crates/epaint_default_fonts/fonts), [original](https://github.com/jslegers/emoji-icon-font); egui subset, unmodified here | MIT; Copyright (c) 2014 John Slegers; full upstream notice in [NOTICE](NOTICE) |
 | `assets/fonts/Inter-Regular.ttf`, `Inter-Medium.ttf`, `Inter-SemiBold.ttf` | Inter 4.001 (UI font) | The Inter Project Authors (Rasmus Andersson) | <https://github.com/rsms/inter> | SIL OFL 1.1, [`assets/fonts/OFL-Inter.txt`](assets/fonts/OFL-Inter.txt) |
 | `assets/fonts/JetBrainsMono-Regular.ttf` | JetBrains Mono 2.305 (numeric font) | The JetBrains Mono Project Authors | <https://github.com/JetBrains/JetBrainsMono> | SIL OFL 1.1, [`assets/fonts/OFL-JetBrainsMono.txt`](assets/fonts/OFL-JetBrainsMono.txt) |
@@ -309,9 +286,9 @@ stands after the change. Unchanged context lines appear in both, so each block c
 | `assets/icons/slice-select.svg` | Slice Select tool glyph | PhotoCraft contributors | Original work | MIT OR Apache-2.0 |
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
-```rust
+```text
 | `epaint_default_fonts::EGUI_ICONS` (build input; deflated into `OUT_DIR/egui_fonts/egui-icons.ttf.deflate`, registered by `crates/ui-egui/src/egui_fonts.rs`) | egui-icons, five-glyph subset of emoji-icon-font | John Slegers | [egui fork at 6d518fc](https://github.com/storytold/egui/tree/6d518fc799681571963842f95b55a6b68431b15a/crates/epaint_default_fonts/fonts), [original](https://github.com/jslegers/emoji-icon-font); egui subset, unmodified here | MIT; Copyright (c) 2014 John Slegers; full upstream notice in [NOTICE](NOTICE) |
 | `assets/fonts/Inter-Regular.ttf`, `Inter-Medium.ttf`, `Inter-SemiBold.ttf` | Inter 4.001 (UI font) | The Inter Project Authors (Rasmus Andersson) | <https://github.com/rsms/inter> | SIL OFL 1.1, [`assets/fonts/OFL-Inter.txt`](assets/fonts/OFL-Inter.txt) |
 | `assets/fonts/JetBrainsMono-Regular.ttf` | JetBrains Mono 2.305 (numeric font) | The JetBrains Mono Project Authors | <https://github.com/JetBrains/JetBrainsMono> | SIL OFL 1.1, [`assets/fonts/OFL-JetBrainsMono.txt`](assets/fonts/OFL-JetBrainsMono.txt) |
@@ -341,9 +318,9 @@ Nothing in this row names the two new files' *sizes* or checksums. The inventory
 
 #### 2. `ATTRIBUTION.md` — hunk -66,7 +66,7
 
-**Original code (upstream base)**
+**Original code (upstream `main`)**
 
-```rust
+```text
 | `assets/icons/eraser-background.svg`, `assets/icons/eraser-magic.svg` | Background Eraser and Magic Eraser tool glyphs: Lucide `eraser` plus added marks | Lucide Icons and Contributors; marks by PhotoCraft contributors | Derived from <https://github.com/lucide-icons/lucide> `icons/eraser.svg` | ISC, [`assets/icons/LICENSE-lucide.txt`](assets/icons/LICENSE-lucide.txt) |
 | `assets/icons/brush-replace.svg` | Color Replacement tool glyph: Lucide `brush` plus two swap arrows | Lucide Icons and Contributors; arrows by PhotoCraft contributors | Derived from <https://github.com/lucide-icons/lucide> `icons/brush.svg` | ISC, [`assets/icons/LICENSE-lucide.txt`](assets/icons/LICENSE-lucide.txt) |
 | `assets/icons/history-brush.svg` | History Brush tool glyph: Lucide `brush` plus counter-clockwise history rewind arrow | Lucide Icons and Contributors; arrow by PhotoCraft contributors | Derived from <https://github.com/lucide-icons/lucide> `icons/brush.svg` | ISC, [`assets/icons/LICENSE-lucide.txt`](assets/icons/LICENSE-lucide.txt) |
@@ -353,9 +330,9 @@ Nothing in this row names the two new files' *sizes* or checksums. The inventory
 | `assets/icons/pen-freeform.svg`, `assets/icons/pen-curvature.svg` | Freeform Pen and Curvature Pen tool glyphs: Lucide `pen-tool` scaled down, plus a freehand squiggle or a curve through two points | Lucide Icons and Contributors; marks by PhotoCraft contributors | Derived from <https://github.com/lucide-icons/lucide> `icons/pen-tool.svg` | ISC, [`assets/icons/LICENSE-lucide.txt`](assets/icons/LICENSE-lucide.txt) |
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
-```rust
+```text
 | `assets/icons/eraser-background.svg`, `assets/icons/eraser-magic.svg` | Background Eraser and Magic Eraser tool glyphs: Lucide `eraser` plus added marks | Lucide Icons and Contributors; marks by PhotoCraft contributors | Derived from <https://github.com/lucide-icons/lucide> `icons/eraser.svg` | ISC, [`assets/icons/LICENSE-lucide.txt`](assets/icons/LICENSE-lucide.txt) |
 | `assets/icons/brush-replace.svg` | Color Replacement tool glyph: Lucide `brush` plus two swap arrows | Lucide Icons and Contributors; arrows by PhotoCraft contributors | Derived from <https://github.com/lucide-icons/lucide> `icons/brush.svg` | ISC, [`assets/icons/LICENSE-lucide.txt`](assets/icons/LICENSE-lucide.txt) |
 | `assets/icons/history-brush.svg` | History Brush tool glyph: Lucide `brush` plus counter-clockwise history rewind arrow | Lucide Icons and Contributors; arrow by PhotoCraft contributors | Derived from <https://github.com/lucide-icons/lucide> `icons/brush.svg` | ISC, [`assets/icons/LICENSE-lucide.txt`](assets/icons/LICENSE-lucide.txt) |
@@ -364,8 +341,6 @@ Nothing in this row names the two new files' *sizes* or checksums. The inventory
 | `assets/icons/direct-select.svg` | Direct Selection tool glyph: Lucide `mouse-pointer-2` plus an anchor square | Lucide Icons and Contributors; square by PhotoCraft contributors | Derived from <https://github.com/lucide-icons/lucide> `icons/mouse-pointer-2.svg` | ISC, [`assets/icons/LICENSE-lucide.txt`](assets/icons/LICENSE-lucide.txt) |
 | `assets/icons/pen-freeform.svg`, `assets/icons/pen-curvature.svg` | Freeform Pen and Curvature Pen tool glyphs: Lucide `pen-tool` scaled down, plus a freehand squiggle or a curve through two points | Lucide Icons and Contributors; marks by PhotoCraft contributors | Derived from <https://github.com/lucide-icons/lucide> `icons/pen-tool.svg` | ISC, [`assets/icons/LICENSE-lucide.txt`](assets/icons/LICENSE-lucide.txt) |
 ```
-
-### `assets/icons/quick-selection-add.svg` (+18 / -0)
 
 **Explanation.** The second `ATTRIBUTION.md` row is the one that credits the *description* of each Quick Selection glyph, so it has to be updated in step with the exception list in hunk 1 - the list decides which files this row covers, and this row says what each of them is.
 
@@ -387,17 +362,19 @@ The two cells that would be tempting to change and were not: the author cell alr
 
 The change is confined to one physical line in each of hunks 1 and 2 because the table is wide: each row is one line in the source, however long. A reviewer reading the raw diff sees two long lines replaced by two longer ones, and the added text is at a stable position in each (the pattern list in hunk 1, the description in hunk 2). That is the reason the two edits can be described separately rather than as one: they are in different cells and have no ordering dependency.
 
+### `assets/icons/quick-selection-add.svg`
+
 #### 3. `assets/icons/quick-selection-add.svg` — hunk -0,0 +1,18
 
-**Original code (upstream base)**
+**Original code (upstream `main`)**
 
-```rust
-(no lines)
+```text
+
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
-```rust
+```text
 <svg
   xmlns="http://www.w3.org/2000/svg"
   width="24"
@@ -418,8 +395,6 @@ The change is confined to one physical line in each of hunks 1 and 2 because the
 </svg>
 ```
 
-### `assets/icons/quick-selection-subtract.svg` (+17 / -0)
-
 **Explanation.** A new SVG file, 18 lines. Every one of them exists because of how the icon pipeline consumes SVGs, so the geometry is not arbitrary.
 
 The root element carries `xmlns`, `width="24"`, `height="24"`, `viewBox="0 0 24 24"`, `fill="none"`, `stroke="currentColor"`, `stroke-width="2"`, `stroke-linecap="round"`, `stroke-linejoin="round"`. That is the exact prelude of the existing `quick-selection.svg` and of every Lucide original, which matters because the icons are rasterised by one shared routine: a different `viewBox` would scale differently against its neighbours in the toolbar, and a different `stroke-width` would look heavier or lighter at the same size. `stroke="currentColor"` rather than a literal colour is what lets the button tint the glyph with the theme's foreground and with the disabled/active state; a hard-coded colour would ignore both.
@@ -436,17 +411,19 @@ The fifth and sixth paths, `M16.5 18.5h5` and `M19 16v5`, are the only new geome
 
 The file has no `<title>`, no `id` and no class attributes. Those would be dead weight: the rasteriser reads geometry only, and `currentColor` already carries the colour.
 
+### `assets/icons/quick-selection-subtract.svg`
+
 #### 4. `assets/icons/quick-selection-subtract.svg` — hunk -0,0 +1,17
 
-**Original code (upstream base)**
+**Original code (upstream `main`)**
 
-```rust
-(no lines)
+```text
+
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
-```rust
+```text
 <svg
   xmlns="http://www.w3.org/2000/svg"
   width="24"
@@ -465,8 +442,6 @@ The file has no `<title>`, no `id` and no class attributes. Those would be dead 
   <path d="M16.5 18.5h5" />
 </svg>
 ```
-
-### `crates/ui-egui/src/canvas/tool_feedback.rs` (+39 / -7)
 
 **Explanation.** The subtract glyph, 17 lines, is the add glyph with the vertical stroke removed. Describing the difference is the whole of this file's meaning, so the shared parts get only what the difference depends on.
 
@@ -490,9 +465,11 @@ The file's dimensions and viewBox (24 x 24) are what `icons::button` assumes whe
 
 No `id` attributes on any path. An `id` would be needed only if something referenced the path (`<use>`, a CSS rule, an animation); the rasteriser does neither, and an unused `id` is a string in the file that a linter will eventually flag.
 
-#### 5. `crates/ui-egui/src/canvas/tool_feedback.rs` — hunk -56,12 +56,36
+### `crates/ui-egui/src/canvas/tool_feedback.rs`
 
-**Original code (upstream base)**
+#### 28. `crates/ui-egui/src/canvas/tool_feedback.rs` — hunk -56,12 +56,36
+
+**Original code (upstream `main`)**
 
 ```rust
 /// 2 Subtract, 3 Intersect) and the held modifiers: exactly what the tool's gesture will use.
@@ -509,7 +486,7 @@ pub fn selection_mode(tool: Tool, bar: u8, m: egui::Modifiers) -> &'static str {
         // Object Selection: ⌥ subtracts, ⇧ adds (see `retouch_ui::finish_object_selection`).
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
 /// 2 Subtract, 3 Intersect) and the held modifiers: exactly what the tool's gesture will use.
@@ -574,9 +551,9 @@ Every branch returns `"replace"`, `"add"` or `"subtract"` - never `"intersect"`,
 
 The arm is `Tool::QuickSelection` only. Lasso, Marquee, Object Selection and the rest are untouched, which is the scope the pull request claims: the options-bar triple is Quick Selection's, and its semantics have to be established in this one function because the stroke, the cursor badge and the Lasso all read their mode through it.
 
-#### 6. `crates/ui-egui/src/canvas/tool_feedback.rs` — hunk -92,11 +116,12
+#### 29. `crates/ui-egui/src/canvas/tool_feedback.rs` — hunk -92,11 +116,12
 
-**Original code (upstream base)**
+**Original code (upstream `main`)**
 
 ```rust
 /// subtract from or intersect with, so it draws a new selection, as in Photoshop (where ⌥ then
@@ -592,7 +569,7 @@ pub fn document_selection_mode(app: &PhotocraftApp, tool: Tool, m: egui::Modifie
         mode
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
 /// subtract from or intersect with, so it draws a new selection, as in Photoshop (where ⌥ then
@@ -625,9 +602,9 @@ The guard's purpose is unchanged by this hunk and is worth stating because the m
 
 The blast radius of this hunk is three call sites, all of which pass through `document_selection_mode` and therefore all of which now see the per-tool field: `retouch_ui::finish_stroke` (the stroke), `badge` (hunk 7, the cursor), and `gesture.rs` for the Lasso (which is not Quick Selection, so it keeps reading the shared field). No other tool's behaviour changes, because the `else` branch returns the same field it always did.
 
-#### 7. `crates/ui-egui/src/canvas/tool_feedback.rs` — hunk -145,6 +170,9
+#### 30. `crates/ui-egui/src/canvas/tool_feedback.rs` — hunk -145,6 +170,9
 
-**Original code (upstream base)**
+**Original code (upstream `main`)**
 
 ```rust
     if matches!(tool, Tool::Lasso | Tool::PolygonLasso) && app.drag.is_none() && app.session.active().is_none_or(|st| st.doc.selection.is_none()) {
@@ -638,7 +615,7 @@ The blast radius of this hunk is three call sites, all of which pass through `do
 
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
     if matches!(tool, Tool::Lasso | Tool::PolygonLasso) && app.drag.is_none() && app.session.active().is_none_or(|st| st.doc.selection.is_none()) {
@@ -672,9 +649,9 @@ The second detail is that this branch deliberately does *not* apply the Lasso's 
 
 `Badge::from_mode` is called with the wrapper's return value, so the badge's vocabulary is unchanged: Add, Subtract, Intersect, or nothing. A mode the badge has no glyph for (`"replace"`) produces `None`, and that is what makes the empty-selection case show nothing rather than a wrong glyph.
 
-#### 8. `crates/ui-egui/src/canvas/tool_feedback.rs` — hunk -290,6 +318,10
+#### 31. `crates/ui-egui/src/canvas/tool_feedback.rs` — hunk -290,6 +318,10
 
-**Original code (upstream base)**
+**Original code (upstream `main`)**
 
 ```rust
         // Smart selection tools.
@@ -685,7 +662,7 @@ The second detail is that this branch deliberately does *not* apply the Lasso's 
         // Other tools never show one.
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
         // Smart selection tools.
@@ -699,8 +676,6 @@ The second detail is that this branch deliberately does *not* apply the Lasso's 
         assert_eq!(badge(&app, Tool::ObjectSelection, shift), Some(Badge::Add));
         // Other tools never show one.
 ```
-
-### `crates/ui-egui/src/icon_data.rs` (+2 / -0)
 
 **Explanation.** Three assertions are added to the existing `badge` test, and they exist because hunk 7 introduces a branch that the old assertions cannot reach.
 
@@ -716,9 +691,11 @@ The assertion is written against the public `badge` function rather than against
 
 The assertion style also matters for the accesskit path the test exercises indirectly: `h.get_by_label(...)` in the other test of this group looks widgets up by their accessible name, and `icons::button`'s tooltip is what becomes that name. So the tooltip strings in hunk 14 are not only user-visible text - they are the strings a screen reader announces and the strings the test matches. Changing "Add to selection  ({key})" to "Add" would break the lookup by label, which is why the tooltip is long and why it embeds the modifier name.
 
-#### 9. `crates/ui-egui/src/icon_data.rs` — hunk -133,6 +133,8
+### `crates/ui-egui/src/icon_data.rs`
 
-**Original code (upstream base)**
+#### 36. `crates/ui-egui/src/icon_data.rs` — hunk -133,6 +133,8
+
+**Original code (upstream `main`)**
 
 ```rust
     ("plus", include_bytes!("../../../assets/icons/plus.svg")),
@@ -729,7 +706,7 @@ The assertion style also matters for the accesskit path the test exercises indir
     ("redo-2", include_bytes!("../../../assets/icons/redo-2.svg")),
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
     ("plus", include_bytes!("../../../assets/icons/plus.svg")),
@@ -741,8 +718,6 @@ The assertion style also matters for the accesskit path the test exercises indir
     ("rectangle-vertical", include_bytes!("../../../assets/icons/rectangle-vertical.svg")),
     ("redo-2", include_bytes!("../../../assets/icons/redo-2.svg")),
 ```
-
-### `crates/ui-egui/src/panels.rs` (+1 / -1)
 
 **Explanation.** `icon_data.rs` holds the icon table: a `&[(&str, &[u8])]` of name-to-SVG-bytes, built with `include_bytes!` so the SVGs are compiled into the binary rather than read at runtime. Two entries are added, directly after the existing `quick-selection` entry.
 
@@ -760,9 +735,11 @@ Two consequences of `include_bytes!` that are worth stating because they shape h
 
 The keys are also the strings the `icons` module exposes to the rest of the UI. `icons::button(ui, "quick-selection-add", 24.0, selected, tip)` looks the key up in this table, and a key that is absent renders nothing rather than panicking - which is why the two entries have to exist before hunk 14's call can show anything. The lookup's leniency is the reason a typo is a silent blank icon rather than a compile error, and it is the reason the key literal in hunk 14 and the key here must be checked together in review.
 
-#### 10. `crates/ui-egui/src/panels.rs` — hunk -53,7 +53,7
+### `crates/ui-egui/src/panels.rs`
 
-**Original code (upstream base)**
+#### 38. `crates/ui-egui/src/panels.rs` — hunk -53,7 +53,7
+
+**Original code (upstream `main`)**
 
 ```rust
 pub(super) mod panel_docking;
@@ -774,7 +751,7 @@ pub mod smart_ui;
 mod status_bar;
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
 pub(super) mod panel_docking;
@@ -785,8 +762,6 @@ pub mod props_layout;
 pub mod smart_ui;
 mod status_bar;
 ```
-
-### `crates/ui-egui/src/panels/options_bar.rs` (+5 / -1)
 
 **Explanation.** A one-word visibility change on the `properties` module declaration: `pub mod properties;` becomes `pub(crate) mod properties;`.
 
@@ -802,9 +777,11 @@ The visibility word also has a documentation consequence. `pub(crate)` items are
 
 The rest of the file's declarations, read as a whole, are the convention this line now follows: `pub(super) mod panel_docking` (used by `panels` and its children only), private `mod panel_state` (used inside `panels` only), `pub mod preset_panels`, `pub mod props_layout`, `pub mod smart_ui`, private `mod status_bar`. Each value is the narrowest one that its callers need, and `pub(crate)` for `properties` is the value for "drawn from a sibling module and from `tools`".
 
-#### 11. `crates/ui-egui/src/panels/options_bar.rs` — hunk -1,7 +1,7
+### `crates/ui-egui/src/panels/options_bar.rs`
 
-**Original code (upstream base)**
+#### 46. `crates/ui-egui/src/panels/options_bar.rs` — hunk -1,7 +1,7
+
+**Original code (upstream `main`)**
 
 ```rust
 use super::brush_controls::{
@@ -816,7 +793,7 @@ use photocraft_paint::BrushSettings;
 
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
 use super::brush_controls::{
@@ -840,9 +817,9 @@ Nothing else in the import block changes: the `brush_controls` line, the long `s
 
 `rustfmt` sorts names inside a brace group, which is why the added name had to go first rather than last: writing it at the end (after `selection_mode_buttons`) compiles but fails `cargo fmt --check`, and this repository runs that check in CI. The sorted order is also what makes the line stable - a future addition lands in a predictable position rather than at the end of an ever-growing list.
 
-#### 12. `crates/ui-egui/src/panels/options_bar.rs` — hunk -93,6 +93,10
+#### 47. `crates/ui-egui/src/panels/options_bar.rs` — hunk -93,6 +93,10
 
-**Original code (upstream base)**
+**Original code (upstream `main`)**
 
 ```rust
                         // The options bar shows the active tool's brush: switch it in before drawing the
@@ -853,7 +830,7 @@ Nothing else in the import block changes: the `brush_controls` line, the long `s
                             || tool == Tool::QuickSelection
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
                         // The options bar shows the active tool's brush: switch it in before drawing the
@@ -867,8 +844,6 @@ Nothing else in the import block changes: the `brush_controls` line, the long `s
                         if (tool.is_brushlike() && !matches!(tool, Tool::Brush | Tool::Pencil | Tool::MixerBrush | Tool::Eraser))
                             || tool == Tool::QuickSelection
 ```
-
-### `crates/ui-egui/src/panels/properties.rs` (+23 / -1)
 
 **Explanation.** The options bar draws the active tool's controls; this hunk inserts the Quick Selection triple into the drawing sequence, immediately after the brush is synchronised and before the brush-edit block.
 
@@ -888,9 +863,11 @@ The location inside the shared region is also constrained by the tools that do n
 
 The rule about the separator belongs to the row, not to the tool: a `vline` after a group is how every row in this bar ends a group, so the triple is followed by one whether or not the brush chip comes next. A reader adding a fourth control here should insert it before the `vline`, not after - the line marks the end of what precedes it.
 
-#### 13. `crates/ui-egui/src/panels/properties.rs` — hunk -264,7 +264,7
+### `crates/ui-egui/src/panels/properties.rs`
 
-**Original code (upstream base)**
+#### 48. `crates/ui-egui/src/panels/properties.rs` — hunk -264,7 +264,7
+
+**Original code (upstream `main`)**
 
 ```rust
 
@@ -902,7 +879,7 @@ pub(super) fn select_and_mask_button(app: &mut PhotocraftApp, ui: &mut egui::Ui)
     if clicked {
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
 
@@ -930,9 +907,9 @@ The two call sites differ in one respect that explains why `pub(crate)` rather t
 
 There is a third option that was not taken: move `select_and_mask_button` up into `panels.rs` as a free function. That would have made it reachable from both children without widening it, but it would have moved a function whose whole body depends on `properties`' helpers (`widgets::secondary_button`, `crate::menus::is_enabled`) out of the module that owns them, and the diff would have touched `panels.rs` and both call sites instead of one word. Widening visibility is the smaller change and leaves the code where it belongs.
 
-#### 14. `crates/ui-egui/src/panels/properties.rs` — hunk -292,6 +292,27
+#### 49. `crates/ui-egui/src/panels/properties.rs` — hunk -292,6 +292,27
 
-**Original code (upstream base)**
+**Original code (upstream `main`)**
 
 ```rust
     ui.spacing_mut().item_spacing.x = 8.0;
@@ -943,7 +920,7 @@ mod tests {
     use egui::accesskit::Role;
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
     ui.spacing_mut().item_spacing.x = 8.0;
@@ -993,9 +970,9 @@ No `Undo`/journal entry is created by the click. That is the correct level: the 
 
 The doc comment is one line, `/// New / add / subtract selection buttons for Quick Selection tool.`, which is the convention in this file (short single-line docs on `pub(super)` helpers).
 
-#### 15. `crates/ui-egui/src/panels/properties.rs` — hunk -360,4 +381,5
+#### 50. `crates/ui-egui/src/panels/properties.rs` — hunk -360,4 +381,5
 
-**Original code (upstream base)**
+**Original code (upstream `main`)**
 
 ```rust
             assert!((value(&h) - 1.0).abs() < 1e-6, "{key}: one undo reverts the whole drag");
@@ -1004,7 +981,7 @@ The doc comment is one line, `/// New / add / subtract selection buttons for Qui
 }
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
             assert!((value(&h) - 1.0).abs() < 1e-6, "{key}: one undo reverts the whole drag");
@@ -1013,8 +990,6 @@ The doc comment is one line, `/// New / add / subtract selection buttons for Qui
 
 }
 ```
-
-### `crates/ui-egui/src/state/tool_options.rs` (+8 / -0)
 
 **Explanation.** One added blank line, at the end of the `tests` module, before its closing brace.
 
@@ -1024,9 +999,11 @@ It is the tail of hunk 14's insertion: the new `quick_selection_mode_buttons` fu
 
 There is no behavioural meaning to this line, and it is included in the document because the instruction was to show every changed line rather than to show the interesting ones. A reviewer scanning hunk numbers against `git diff` should be able to account for all 22 of them, and this is the one with no semantics.
 
-#### 16. `crates/ui-egui/src/state/tool_options.rs` — hunk -89,6 +89,9
+### `crates/ui-egui/src/state/tool_options.rs`
 
-**Original code (upstream base)**
+#### 51. `crates/ui-egui/src/state/tool_options.rs` — hunk -91,6 +91,9
+
+**Original code (upstream `main`)**
 
 ```rust
     pub finger_painting: bool,
@@ -1037,7 +1014,7 @@ There is no behavioural meaning to this line, and it is included in the document
     /// Pen, Freeform Pen and Curvature Pen › Path Operations (#1397): how a new path combines with
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
     pub finger_painting: bool,
@@ -1067,9 +1044,9 @@ Nothing else changes: the struct has no explicit `Deserialize` impl to update, a
 
 One consequence for the project file: the field is written out whenever tool options are saved, so a project saved after this change and opened in an older build will carry an unknown key. The older build's deserialiser ignores unknown fields (serde's default behaviour for structs without `deny_unknown_fields`), so the round trip is harmless in that direction too - which is the property that makes adding a field with a default safe in both directions.
 
-#### 17. `crates/ui-egui/src/state/tool_options.rs` — hunk -309,6 +312,10
+#### 52. `crates/ui-egui/src/state/tool_options.rs` — hunk -315,6 +318,10
 
-**Original code (upstream base)**
+**Original code (upstream `main`)**
 
 ```rust
     "newLayer".into()
@@ -1080,7 +1057,7 @@ fn default_curve_fit() -> f32 {
 }
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
     "newLayer".into()
@@ -1113,9 +1090,9 @@ One point about serde's default mechanism that this function relies on: `#[serde
 
 The function is also not `const fn`. It could be, but the attribute only needs a callable path, and `const` would add a keyword that suggests it is used in a const context, which it is not.
 
-#### 18. `crates/ui-egui/src/state/tool_options.rs` — hunk -475,6 +482,7
+#### 53. `crates/ui-egui/src/state/tool_options.rs` — hunk -481,6 +488,7
 
-**Original code (upstream base)**
+**Original code (upstream `main`)**
 
 ```rust
             protect_detail: true,
@@ -1126,7 +1103,7 @@ The function is also not `const fn`. It could be, but the attribute only needs a
             shape_mode: "shape".into(),
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
             protect_detail: true,
@@ -1137,8 +1114,6 @@ The function is also not `const fn`. It could be, but the attribute only needs a
             pen_path_op: default_pen_path_op(),
             shape_mode: "shape".into(),
 ```
-
-### `crates/ui-egui/src/tools/retouch_ui.rs` (+7 / -1)
 
 **Explanation.** `impl Default for ToolOptions` is hand-written in this file (not derived), which is why a new field must be added here as well as in the struct. The added line is `quick_selection_mode: 1,` between `enhance_edge: false,` and `vector_mode: "path".into(),`.
 
@@ -1156,9 +1131,11 @@ One structural note: because `Default` is hand-written here, adding a field to t
 
 Both are 1, and the doc comment on the field (hunk 16) names 1 as "Add (default)", so there are three mentions of the same number in this file. That is acceptable for a value that must be identical in three places - the alternative, a named constant, would add a fourth name to look up without removing the need for the doc line.
 
-#### 19. `crates/ui-egui/src/tools/retouch_ui.rs` — hunk -171,11 +171,15
+### `crates/ui-egui/src/tools/retouch_ui.rs`
 
-**Original code (upstream base)**
+#### 58. `crates/ui-egui/src/tools/retouch_ui.rs` — hunk -171,11 +180,15
+
+**Original code (upstream `main`)**
 
 ```rust
         },
@@ -1174,7 +1151,7 @@ Both are 1, and the doc comment on the field (hunk 16) names 1 as "Add (default)
         _ => return false,
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
         },
@@ -1212,9 +1189,9 @@ Why flip *after* a successful stroke and not immediately on click: New means "th
 
 `return true` follows, unchanged: the arm claims the stroke. `_ => return false` still closes the match, so no other tool's behaviour is touched by this hunk.
 
-#### 20. `crates/ui-egui/src/tools/retouch_ui.rs` — hunk -761,6 +765,8
+#### 60. `crates/ui-egui/src/tools/retouch_ui.rs` — hunk -935,6 +955,8
 
-**Original code (upstream base)**
+**Original code (upstream `main`)**
 
 ```rust
                 let r = app.run("select.subject", json!({}));
@@ -1225,7 +1202,7 @@ Why flip *after* a successful stroke and not immediately on click: New means "th
             crate::widgets::checkbox(ui, &mut o.object_finder, tl!("Object Finder"));
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
                 let r = app.run("select.subject", json!({}));
@@ -1237,8 +1214,6 @@ Why flip *after* a successful stroke and not immediately on click: New means "th
         Tool::ObjectSelection => {
             crate::widgets::checkbox(ui, &mut o.object_finder, tl!("Object Finder"));
 ```
-
-### `crates/ui-egui/src/tools/retouch_ui/tests.rs` (+105 / -0)
 
 **Explanation.** The Quick Selection options row in the second options bar (the one drawn by `retouch_ui`, as opposed to `panels/options_bar.rs`) gains a vertical rule and the Select and Mask button, closing the row the way the other tools' rows close.
 
@@ -1267,9 +1242,11 @@ The call passes `app` mutably, which matters for what the button can do: `select
 
 This row and the one in `panels/options_bar.rs` (hunk 12) both exist because the application shows two options bars: the shared one drawn by `panels`, and the per-tool one drawn here for tools whose options are not in the shared bar. Quick Selection gets the mode triple in the shared bar (hunk 12) because it is the tool's primary control, and the refine buttons here because they are shared with the selection tools that use this bar. Neither bar draws the same widget twice - the mode triple is only in `options_bar`, and `Select Subject`/`Select and Mask…` are only here.
 
-#### 21. `crates/ui-egui/src/tools/retouch_ui/tests.rs` — hunk -1163,3 +1163,108
+### `crates/ui-egui/src/tools/retouch_ui/tests.rs`
 
-**Original code (upstream base)**
+#### 61. `crates/ui-egui/src/tools/retouch_ui/tests.rs` — hunk -1202,3 +1202,108
+
+**Original code (upstream `main`)**
 
 ```rust
     h.run_steps(4);
@@ -1277,7 +1254,7 @@ This row and the one in `panels/options_bar.rs` (hunk 12) both exist because the
 }
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
     h.run_steps(4);
@@ -1390,8 +1367,6 @@ fn quick_selection_options_bar_has_new_add_subtract_mode_buttons() {
 }
 ```
 
-### `crates/ui-egui/src/tools/tool_reset.rs` (+1 / -1)
-
 **Explanation.** One UI test, `quick_selection_options_bar_has_new_add_subtract_mode_buttons`, driven through `egui_kittest`. It builds a harness 1400 x 60 (the options bar's shape), sets the tool to Quick Selection, renders `crate::panels::options_bar`, and then walks the feature in the order a user would. The font guard at the top (`if !ui.ctx().fonts(|f| f.families().contains(&FontFamily::Name("medium".into()))) { return; }`) waits until the app's fonts are loaded; without it the first frames draw with fallback fonts and `get_by_label` can miss. `PhotocraftApp::setup_context(&h.ctx, ThemeKind::Studio)` installs the theme after the harness is built, and `h.run_steps(4)` settles the layout.
 
 The assertions, in order:
@@ -1418,9 +1393,11 @@ The last three cases pin the modifier and empty-selection interactions in New mo
 
 Why the test is long: each branch of `selection_mode`, each branch of the New→Add flip, and the clamp are mutually independent, so a test per branch is the only way to know a change did not silently move a decision from one branch to another.
 
-#### 22. `crates/ui-egui/src/tools/tool_reset.rs` — hunk -195,7 +195,7
+### `crates/ui-egui/src/tools/tool_reset.rs`
 
-**Original code (upstream base)**
+#### 62. `crates/ui-egui/src/tools/tool_reset.rs` — hunk -195,7 +195,7
+
+**Original code (upstream `main`)**
 
 ```rust
         Tool::Lasso | Tool::PolygonLasso => reset!(feather, anti_alias),
@@ -1432,7 +1409,7 @@ Why the test is long: each branch of `selection_mode`, each branch of the New→
             crop_ratio,
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
         Tool::Lasso | Tool::PolygonLasso => reset!(feather, anti_alias),
@@ -1443,8 +1420,6 @@ Why the test is long: each branch of `selection_mode`, each branch of the New→
         Tool::Crop => reset!(
             crop_ratio,
 ```
-
-Total hunks recorded: 22.
 
 **Explanation.** `tool_reset.rs` resets a tool's options to their defaults when the user double-clicks the tool button; the `reset!` macro lists the fields that belong to that tool. `Tool::QuickSelection => reset!(enhance_edge)` becomes `reset!(enhance_edge, quick_selection_mode)`.
 
@@ -1462,3 +1437,31 @@ A detail about `reset!` worth recording: the lists are not exhaustive over the s
 
 The order of the list also serves as the answer to "which fields does this tool own": a reader looking at the line sees exactly the two, and `quick_selection_mode` being second says it was added later than `enhance_edge`, which is the same order the struct declares. If the struct order ever changed, this line would be the second place to update, and a reviewer would see the two adjacent.
 
+#### 63. `crates/ui-egui/src/tools/tool_reset.rs` — hunk -270,6 +270,7
+
+**Original code (upstream `main`)**
+
+```rust
+        | Tool::Count
+        | Tool::RotateView
+        | Tool::HistoryBrush
+        | Tool::PathSelection
+        | Tool::DirectSelection
+        | Tool::SliceSelect
+```
+
+**Changed code (current `main`)**
+
+```rust
+        | Tool::Count
+        | Tool::RotateView
+        | Tool::HistoryBrush
+        | Tool::LamaCleaner
+        | Tool::PathSelection
+        | Tool::DirectSelection
+        | Tool::SliceSelect
+```
+
+**Explanation.** The second `tool_reset.rs` hunk is in `option_keys`, the table that lists the option names a tool exports. `quick_selection_mode` is added to the Quick Selection row so the key is reported alongside `enhance_edge`.
+
+`option_keys` is what the automation and scripting surface reads to know which options a tool has, so an option that exists on the struct but is missing here is invisible to that surface. The pair of hunks - the `reset!` list and this key list - are the two places a new tool option must be registered, and both are in the same file for that reason.

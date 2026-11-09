@@ -1,21 +1,21 @@
 # Move tool: cross-document transfer of layers and selections
 
-A clean-room implementation of Photoshop's Move-tool cross-document drag: dragging the selected
-pixels, or a whole layer, from one document's canvas onto another document's tab or arranged cell
-duplicates it there. The source document keeps its pixels unless a cut is asked for.
+This is how the feature works in the tree as it stands: dragging a selection or a layer with the
+Move tool onto another document's tab, or into another cell of an arranged view, duplicates it in
+that document. The source document keeps its pixels unless a cut is requested.
 
 | Behaviour | Implementation |
 |---|---|
-| Drag a selection to another document | `layer.copyToDocument` with `selection: true`, `cut: false`; the selected pixels land as a new layer centred on the drop point |
-| Drag a whole layer (no selection) | `MoveDrag::Layers` promoted from `layer_box.grabbed_layer` or `move_blocked_start`; the layer is copied, the source layer stays |
-| Drag over another document's tab | `over_tab` arms the transfer, switches the active document, and drops on release |
-| Drag across an arranged view cell | `check_arranged_drag` arms the transfer as soon as the pointer leaves the active cell; `target_at` maps the release into the destination document |
-| Locked or Background layer | Auto-Select picks the layer on press (`move_blocked_start` records the point), so the drag can still start a transfer |
-| Floating selection or floating mask | `CutParts::piece()` is carried instead of the layer surface, so the floating piece itself moves |
-| Layer mask targeted | `Mask` target travels with the transfer; the destination receives mask content, not layer pixels |
-| Release | Only the **primary** button completes a transfer; a secondary release leaves it armed |
-| Multi-window | Only the viewport that armed the transfer completes or clears it |
-| Drop inside the source document | A single layer dropped in-document over a frame sets that frame's content (`layer.frame.setContent`) |
+| Drag a selection to another document | `layer.copyToDocument` with `selection: true`, `cut: false`; the selected pixels land as a new layer |
+| Drag a whole layer (no selection) | `MoveDrag::Layers` built from `layer_box.grabbed_layer` or `move_blocked_start`; the layer is copied, the source stays |
+| Drag over another document's tab | `over_tab` arms the transfer, switches the active document, drops on release |
+| Drag across an arranged-view cell | `check_arranged_drag` arms the transfer when the pointer leaves the active cell; `target_at` maps the release into the destination |
+| Locked or Background layer | the press is refused (`move_lock::blocked`), `move_blocked_start` records the point, the drag still starts a transfer |
+| Floating selection | `CutParts::piece()` travels instead of the layer surface, so the floating piece itself moves |
+| Layer mask targeted | `TransferKind::Selection { mask: true }` sends `"target": "mask"`; the destination receives mask content |
+| Release | only the primary button completes a transfer; a secondary release leaves it armed |
+| Multi-window | only the viewport that armed the transfer completes or clears it |
+| Drop inside the source document | a single layer dropped over a frame sets that frame's content (`layer.frame.setContent`) |
 | Modifiers | Shift centres the copy when the documents differ in size; otherwise the drop point is used |
 
 ## Problem
@@ -29,6 +29,31 @@ Three behaviours were missing or destructive:
 3. A document window's frame ran the transfer cleanup for every viewport, so a second window could
    clear a marquee or a transfer the first window was still dragging.
 
+## How it works in the current code
+
+Five inputs can start a transfer, and they all funnel into two functions: `current_move_drag` (what is being dragged) and `arm_move_drag` (turn that into a `Transfer`).
+
+| Input | Where it is handled | What it produces |
+|---|---|---|
+| Layers-panel row drag | `panels/layer_row.rs` calls `layer_transfer::begin_from_panel(app, ctx, id)` | a `Transfer` armed immediately, labelled with the layer's name |
+| Move press on a selection | `canvas/tool_input.rs` records `app.drag` with `sel_move: Some(cut)` | `MoveDrag::Selection { grab: d.start, cut }` |
+| Move press with no selection | the same press path, `sel_move: None` | `MoveDrag::Layers(d.start)` |
+| Move press on a locked layer or the Background | `move_lock::blocked` refuses the drag; the arm sets `move_blocked = true`, `move_blocked_start = Some([x, y])`, `move_viewport = current_viewport` | `MoveDrag::Layers(start)` from `move_blocked_start` |
+| Marquee that grabbed a layer | `move_box::begin_with_layer(app, p, add, hit_id)` records `layer_box.grabbed_layer` | `MoveDrag::Layers(b.start)` |
+
+`current_move_drag` answers the first question. It returns `None` while a transform or a guide drag is active, then, when `app.drag` exists and its tool is Move: `Selection` when `d.sel_move` is `Some(cut)`, `Layers(d.start)` when the document has neither a selection nor a float, and `None` otherwise (the pixels are being dragged, not the layer). With no `app.drag` it asks whether a marquee or a refused press is live - `ui.tool == Move`, `tool_override == Move`, `move_blocked_start.is_some()`, or a `layer_box` with a `grabbed_layer` - and promotes that to `Layers`.
+
+The second question is answered per frame, by three functions called from `canvas/tabs.rs`:
+
+- `check_arranged_drag(app, ctx)` runs before the documents are drawn. It returns early if a transfer is already armed, if `move_viewport` names another window, or if there is no drag, no pointer, or no arranged cells. When the pointer is inside a cell that is not the active document's, it calls `arm_move_drag`.
+- `over_tab(app, ctx, index)` runs from the tab strip. When nothing is armed and the hovered tab is not the active document, it arms; then it switches the active document, clears the jobs focus, drops the Layers-panel drag key (`Id::unique("layer-drag")`) so the new document's rows do not inherit the drag, and on a release drops into that document with `at: None` (the tab has no document point).
+- `finish(app, ctx)` runs after the documents. It reads `primary_released` and `primary_down`; when the button is up or has just been released, no transfer is armed, and `move_viewport` is either unset or this viewport, it clears the move state. Then, if a transfer is armed in this viewport and the primary button was released, it maps the pointer to a document with `target_at` and either completes the transfer with `drop` or, over the source document, clears it.
+
+`arm_move_drag` is the conversion. It reads `grabbed_layer` from the marquee, clears every piece of in-flight drag state (`app.drag`, `layer_box`, `move_blocked`, `move_blocked_start`, `move_viewport`, `move_preview`, `move_mods`), then arms. For `Layers` it uses `grabbed_layer` or the active layer. For `Selection` it decides `mask` from the float (`f.parts.is_mask()`) or from `layer_mask_targeted()`, discards a float that has not moved (`!f.moved && f.offset == (0, 0)`) so the transfer starts from the original pixels, and arms with `begin_selection`.
+
+`drop` builds the command. It clears the transfer first, finds the source index from `t.source`, handles the in-document case (`dest == src`: a single layer over a frame becomes `layer.frame.setContent`), then builds either `{"layers": [...]}` or `{"selection": true, "cut": false}` plus `"target": "mask"` when the content is a mask. `apply_drop_placement` adds placement: with `at` and a `grab` it computes a rounded `offset`; with `at` and no `grab` it sets `at` (centre the copy there); with no `at`, or with Shift, it sets `center` to `!same_size`. Then `app.session.set_active(dest)` and `app.run("layer.copyToDocument", p)`, reporting a failure into `app.ui.status` / `status_error`.
+
+Behind all of this, `Transfer` is stored in the egui context under `Id::unique("pc-layer-transfer")` as temp data. Every viewport of the context can see it, which is why the struct carries `viewport`: only that viewport may complete or clear it. `get` clones the value out, so no borrow is held while `finish` mutates the app.
 ## Design
 
 The feature is split across three layers so that each owns one concern:
@@ -205,29 +230,6 @@ app.current_viewport`, which is what `finish` and `check_arranged_drag` compare 
   `current_viewport: Option<egui::ViewportId>`.
 * `canvas/tabs.rs`: calls `check_arranged_drag` while a drag is under way.
 * `canvas.rs`: exposes the arranged-cell hit test used by `target_at`.
-
-## Commit by commit
-
-The branch has twelve commits, one of which is a merge. In order, oldest first.
-
-| Commit | Date | Subject | What it did |
-|---|---|---|---|
-| `9fc2ed62b` | 2026-11-07 | transfer: drag selected pixels between documents while preserving source | The core: `TransferKind`, `MoveDrag`, `arm_move_drag`, the selection branch of `drop`, `copy_to_document`'s `selection`/`cut` fields and the engine-side branch. Hunks 3-8, 17-22. |
-| `160f3ac15` | 2026-11-07 | Address review feedback for cross-document selection drag transfer | The first review round: the primary-release rule, the viewport field, the tests that pin them. Hunks 13-15, 18, 23. |
-| `fea500430` | 2026-11-08 | Address additional review feedback on selection transfer | Second round: `over_tab`'s promotion, `pointer_if_armed`, the document-point mapping in `target_at`. Hunks 11, 12, 19-21. |
-| `fff221958` | 2026-11-08 | Collapse nested if in layer_transfer::arm_move_drag for clippy | A `&&` chain instead of nested `if let`, so `clippy::collapsible_if` is satisfied. Hunk 19. |
-| `6261ae800` | 2026-11-08 | Preserve layer mask target and floating mask piece during selection transfer | `mask: bool` in the kind, `CutParts::is_mask`/`piece`/`place_rest`, the mask assertions in tests 2. Hunks 3-5, 23. |
-| `f052fa3ae` | 2026-11-08 | ui-egui: support cross-document layer drag with Move tool when no selection | The `Layers` path: `grabbed_layer`, `begin_with_layer`, the promotion from a refused press. Hunks 13, 16, 24-26. |
-| `cc23fe3ea` | 2026-11-08 | ui-egui: refine blocked move gesture cleanup and lock prompt handling | `handle_move_blocked_event` extracted, the two guards in its `Move` arm. Hunk 15. |
-| `699279711` | 2026-11-08 | ui-egui: scope move gesture and marquee cleanup to gesture viewport | `move_viewport` writes and clears at every site, `check_arranged_drag`'s guard. Hunks 9-11, 14, 16, 24-26. |
-| `b9d598bfd` | 2026-11-09 | ui-egui: complete a cross-document transfer only in the viewport that armed it | `Transfer::viewport` and the comparison in `finish`; tests 7 and 8. Hunks 18, 21-23. |
-| `57faf8987` | 2026-11-09 | ui-egui: resolve a cross-document transfer only on the primary release | `primary_released` in both pointer reads; tests 9 and 10. Hunks 13, 15, 23. |
-| `d367f3af6` | 2026-11-09 | Add doc comments to the cross-document transfer paths | Doc comments only: the module header, every new function, the new fields. Hunk 17 and the doc lines of 18-26. Raises the crate's docstring coverage to 28/28. |
-| `9e3723e43` | 2026-11-09 | Merge remote-tracking branch 'upstream/main' into feat/move-tool-selection-drag-transfer | The upstream merge that produced the one conflict in `tool_input.rs` (upstream's `clear_off_on_background` from #11897 landed in the same arm). The resolution keeps both. |
-
-The order is not exactly the order the decisions were made: `fff221958` (clippy) and the two "review feedback" commits are corrections applied after the feature worked, and the mask commit (`6261ae800`) came after the layer commit (`f052fa3ae`) even though the mask flag belongs to the selection path that came first. Reading the table top to bottom gives the dependency order; reading `git log` gives the working order.
-
-The last real commit (`d367f3af6`) adds no behaviour. It exists because the repository's CI requires every public item in this crate to carry a doc comment, and the tool reported 15 uncovered items after the feature commits. Adding them is what makes the branch pass that check without an exemption.
 
 ## Types and call graph
 
@@ -450,23 +452,15 @@ cargo xtask layers
 Measured on the branch: engine `layer_copy` 26 passed, ui-egui `layer_transfer` 14 passed, clippy
 0 warnings, `cargo xtask layers` 31 crates with 0 violations.
 
-## Merge state
+## Differences from upstream `main`
 
-The branch is based on `848fa306f`; current `main` is further ahead, and the only textual conflict is
-`crates/ui-egui/src/canvas/tool_input.rs`, where `main` added `clear_off_on_background` (#11897) at the
-same insertion point this branch adds `handle_move_blocked_event`. Both functions are independent and
-are kept together.
-## Every change, shown as original code and changed code
+Measured with `git diff -U3 upstream/main...main`, where `upstream/main` is `95c9e465d` (storytold/photocraft) and `main` is `f328d1881`. The full range is 49 files, 8101 insertions, 182 deletions. The hunks below are every hunk in the files that carry this feature - 27 hunks, reproduced in full with their context lines, each followed by an explanation of the original code, the change, and its effect. The two `retouch_ui.rs` hunks that belong to the LaMa Cleaner tool (`Tool::LamaCleaner` at the stroke dispatch and in the options bar) are a different feature and are not reproduced here.
 
-Base `848fa306f` (the upstream commit the branch was opened against), head `d367f3af6`.
-For each file, every hunk is printed twice: the code as it stands in the base, and the code as it
-stands after the change. Unchanged context lines appear in both, so each block can be read on its own.
+### `crates/engine/src/cmd/edit_cmds.rs`
 
-### `crates/engine/src/cmd/edit_cmds.rs` (+3 / -2)
+#### 5. `crates/engine/src/cmd/edit_cmds.rs` — hunk -205,7 +205,7
 
-#### 1. `crates/engine/src/cmd/edit_cmds.rs` — hunk -205,7 +205,7
-
-**Original code (upstream base)**
+**Original code (upstream `main`)**
 
 ```rust
 /// selected or no selection, already in the clip's format) is shared copy-on-write, so a plain
@@ -478,7 +472,7 @@ fn lift(src: &Surface, sel: Option<&Surface>, canvas: Rect) -> Result<Clip> {
     let area = match sel {
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
 /// selected or no selection, already in the clip's format) is shared copy-on-write, so a plain
@@ -520,9 +514,9 @@ The change is a visibility change only. The compiled code is identical; the func
 
 The edge cases the new caller inherits are the ones Copy already lives with, and they are all deliberate. No selection: the whole canvas is lifted. A selection entirely outside the canvas: the intersection is empty, the clip has zero bounds, and the caller rejects it with "the selected area is empty" rather than inserting an empty layer. A source without alpha: the clip gains alpha, so the copied layer has a transparent border matching the selection's edge. A selection that is partially covered: the clip keeps the partial alpha, which is what makes a soft-edged selection travel as a soft-edged copy.
 
-#### 2. `crates/engine/src/cmd/edit_cmds.rs` — hunk -455,7 +455,8
+#### 6. `crates/engine/src/cmd/edit_cmds.rs` — hunk -455,7 +455,8
 
-**Original code (upstream base)**
+**Original code (upstream `main`)**
 
 ```rust
     Ok(json!({"bounds": [b.x0, b.y0, b.width(), b.height()], "target": if filter { "filterMask" } else { "mask" }}))
@@ -534,7 +528,7 @@ fn clear_selected(doc: &mut Document, id: LayerId, background: [f32; 4]) -> Resu
     let area = sel.as_ref().map_or(canvas, |m| m.content_bounds().intersect(&canvas));
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
     Ok(json!({"bounds": [b.x0, b.y0, b.width(), b.height()], "target": if filter { "filterMask" } else { "mask" }}))
@@ -546,8 +540,6 @@ pub(crate) fn clear_selected(doc: &mut Document, id: LayerId, background: [f32; 
     let canvas = doc.bounds();
     let area = sel.as_ref().map_or(canvas, |m| m.content_bounds().intersect(&canvas));
 ```
-
-### `crates/engine/src/cmd/float_cmds.rs` (+23 / -1)
 
 **What the original code does, line by line.**
 
@@ -575,9 +567,11 @@ Visibility only; no codegen change, no behaviour change. Existing callers - the 
 
 The edge cases are worth stating because the transfer depends on them. With no selection, the function clears the entire canvas of that layer - which is what Cut with no selection does. With a selection that extends past the canvas, `intersect` clips it, so the clear covers exactly the visible part. With a mask missing on the layer, the caller never reaches this function for the mask case; the mask branch has its own `clear_mask`. With a layer that has no pixels (a group), the function errors through `surface_mut` rather than silently doing nothing.
 
-#### 3. `crates/engine/src/cmd/float_cmds.rs` — hunk -103,6 +103,28
+### `crates/engine/src/cmd/float_cmds.rs`
 
-**Original code (upstream base)**
+#### 7. `crates/engine/src/cmd/float_cmds.rs` — hunk -103,6 +103,28
+
+**Original code (upstream `main`)**
 
 ```rust
         self.outline.as_ref()
@@ -588,7 +582,7 @@ The edge cases are worth stating because the transfer depends on them. With no s
         let mut d = doc.clone();
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
         self.outline.as_ref()
@@ -653,9 +647,9 @@ The struct gains no fields and the floating state machine is unchanged; the thre
 
 The edge cases fall out of the bodies. A floating piece on a layer whose mask was removed after the float began: `place_rest` errors rather than silently writing pixels. A float whose layer was deleted: `layer_mut` returns `NoLayer(self.layer)`. A float that has not moved: the transfer discards it before arming (see `arm_move_drag`), so it never reaches `place_rest`; a cut of an unmoved float is therefore identical to a cut of the selection.
 
-#### 4. `crates/engine/src/cmd/float_cmds.rs` — hunk -340,7 +362,7
+#### 8. `crates/engine/src/cmd/float_cmds.rs` — hunk -340,7 +362,7
 
-**Original code (upstream base)**
+**Original code (upstream `main`)**
 
 ```rust
 
@@ -667,7 +661,7 @@ fn keeps_floating(id: &str) -> bool {
 
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
 
@@ -678,8 +672,6 @@ fn keeps_floating(id: &str) -> bool {
 }
 
 ```
-
-### `crates/engine/src/cmd/layer_copy_cmds.rs` (+124 / -1)
 
 **What the original code does, line by line.**
 
@@ -709,9 +701,11 @@ The interaction with `select.drop` is worth noting. Both are on the list, so a `
 
 The edge case the list does not cover, and should not, is a command that both reads and writes the float. There is none today; a future one would need its own rule rather than a prefix.
 
-#### 5. `crates/engine/src/cmd/layer_copy_cmds.rs` — hunk -211,6 +211,9
+### `crates/engine/src/cmd/layer_copy_cmds.rs`
 
-**Original code (upstream base)**
+#### 9. `crates/engine/src/cmd/layer_copy_cmds.rs` — hunk -211,6 +211,9
+
+**Original code (upstream `main`)**
 
 ```rust
 
@@ -722,7 +716,7 @@ fn copy_to_document(s: &mut Session, p: &Value) -> Result<Value> {
         Some(i) => i,
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
 
@@ -772,9 +766,9 @@ For every existing caller the parameter is absent, so the condition is true and 
 
 The new caller sends `selection: true`, so the float survives into the command body. That is what the selection branch reads. The edge case worth naming: a caller that sends `selection: true` with no float and no selection. The branch then lifts the whole layer surface (no selection means the canvas), which is a legitimate request - "copy the active layer into the destination by the selection path" - and the result is a single-layer copy, not an error.
 
-#### 6. `crates/engine/src/cmd/layer_copy_cmds.rs` — hunk -221,6 +224,126
+#### 10. `crates/engine/src/cmd/layer_copy_cmds.rs` — hunk -221,6 +224,126
 
-**Original code (upstream base)**
+**Original code (upstream `main`)**
 
 ```rust
     }
@@ -785,7 +779,7 @@ The new caller sends `selection: true`, so the float survives into the command b
         Some(v) => v
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
     }
@@ -976,9 +970,9 @@ The interaction with the float is the part that needs care. `keeps_floating` kee
 
 Failure modes, in order of likelihood: a bad index (rejected before any edit), a destination job (rejected before any edit), an empty selection (rejected before the scratch document is built), a non-layered document (rejected before any pixel is touched), and a destination edit failure (rolled back). In every case the source is either untouched or restored.
 
-#### 7. `crates/engine/src/cmd/layer_copy_cmds.rs` — hunk -399,7 +522,7
+#### 11. `crates/engine/src/cmd/layer_copy_cmds.rs` — hunk -399,7 +522,7
 
-**Original code (upstream base)**
+**Original code (upstream `main`)**
 
 ```rust
         label: "Copy Layers to Document",
@@ -990,7 +984,7 @@ Failure modes, in order of likelihood: a bad index (rejected before any edit), a
         journal: true,
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
         label: "Copy Layers to Document",
@@ -1001,8 +995,6 @@ Failure modes, in order of likelihood: a bad index (rejected before any edit), a
         run: copy_to_document,
         journal: true,
 ```
-
-### `crates/engine/src/cmd/layer_copy_cmds/tests.rs` (+68 / -0)
 
 **What the original code does, line by line.**
 
@@ -1034,9 +1026,11 @@ The two added keys sit between `"source"` and `"center"`, which is the order the
 
 Note what the schema does not say: it does not describe the `target` key that `drop` adds for a mask. That key is documented on the command's own handler (where the mask-vs-pixels decision is made) rather than in this summary, which is the file's convention - the params string lists the shape a caller must know to call the command at all, and the handler's doc comment carries the semantics of each field. A reviewer looking for the mask flag should read `copy_to_document`, not this line.
 
-#### 8. `crates/engine/src/cmd/layer_copy_cmds/tests.rs` — hunk -663,3 +663,71
+### `crates/engine/src/cmd/layer_copy_cmds/tests.rs`
 
-**Original code (upstream base)**
+#### 12. `crates/engine/src/cmd/layer_copy_cmds/tests.rs` — hunk -663,3 +663,71
+
+**Original code (upstream `main`)**
 
 ```rust
     s.execute("type.characterStyle.clearOverride", json!({"layer": id.0})).unwrap();
@@ -1044,7 +1038,7 @@ Note what the schema does not say: it does not describe the `target` key that `d
 }
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
     s.execute("type.characterStyle.clearOverride", json!({"layer": id.0})).unwrap();
@@ -1120,8 +1114,6 @@ fn copying_or_cutting_a_mask_selection_transfers_the_mask_without_touching_layer
 }
 ```
 
-### `crates/ui-egui/src/app.rs` (+3 / -0)
-
 **What the original code does, line by line.**
 
 The visible context is the end of the previous test: `s.execute("type.characterStyle.clearOverride", json!({"layer": id.0})).unwrap();` clears a character style override, `assert!(close(text(&s, i, id).runs[0].style.size_pt, 30.0), ...)` checks the size came back, and the closing brace ends that test. That is the end of the file's existing coverage of `layer.copyToDocument`: everything above it exercises whole-layer copies.
@@ -1156,9 +1148,11 @@ The tests are additive; no existing test changes. They pin four behaviours the f
 
 The tests also act as documentation of the parameter shape: `{"document", "selection", "cut", "offset", "target"}` appears in executable form, which is what a future reader is more likely to trust than the prose in `specs`.
 
-#### 9. `crates/ui-egui/src/app.rs` — hunk -52,6 +52,9
+### `crates/ui-egui/src/app.rs`
 
-**Original code (upstream base)**
+#### 24. `crates/ui-egui/src/app.rs` — hunk -52,6 +52,9
+
+**Original code (upstream `main`)**
 
 ```rust
             drag: None,
@@ -1169,7 +1163,7 @@ The tests also act as documentation of the parameter shape: `{"document", "selec
             committed_stroke: None,
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
             drag: None,
@@ -1182,8 +1176,6 @@ The tests also act as documentation of the parameter shape: `{"document", "selec
             live_stroke: None,
             committed_stroke: None,
 ```
-
-### `crates/ui-egui/src/canvas.rs` (+1 / -0)
 
 **Explanation.** This is the struct literal that builds `PhotocraftApp` at start-up. Rust requires every field of a struct literal to be named, so adding a field to the struct makes this block a compile error until the new field is initialised here; the three lines are not a design choice, they are the compiler holding the constructor to the type.
 
@@ -1203,9 +1195,11 @@ The three are initialised to `None`, which is the correct resting state for all 
 
 `current_viewport: None` in particular matters at startup: the first frames run before any canvas draws, and `finish` is called from `canvas/tabs.rs` on every frame including those. With `None` the comparison in `finish` (`Some(owner) == Some(here)`) cannot match, so an early frame cannot complete a transfer that does not exist. Initialising it to some placeholder id would be worse than `None` because `ViewportId` has no meaningful "root" value that is guaranteed distinct from a real window.
 
-#### 10. `crates/ui-egui/src/canvas.rs` — hunk -1900,6 +1900,7
+### `crates/ui-egui/src/canvas.rs`
 
-**Original code (upstream base)**
+#### 25. `crates/ui-egui/src/canvas.rs` — hunk -1932,6 +1932,7
+
+**Original code (upstream `main`)**
 
 ```rust
 
@@ -1216,7 +1210,7 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
     if primary {
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
 
@@ -1227,8 +1221,6 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
     // bar that also records it can be hidden.
     if primary {
 ```
-
-### `crates/ui-egui/src/canvas/tabs.rs` (+2 / -0)
 
 **Explanation.** `canvas_view` is the function that draws one document's canvas into a rectangle; it runs once per document view per frame, inside whatever viewport is being drawn. The added line, `app.current_viewport = Some(ctx.viewport_id());`, is the first statement after `let ctx = ui.ctx().clone();`, so every later line in the function - the pointer handling, the tool events, the marquee - runs with `app.current_viewport` already naming the viewport it belongs to.
 
@@ -1250,9 +1242,11 @@ Placement immediately after the `let ctx` line and before the `if primary` block
 
 No condition guards it, not even "only when the Move tool is active". The field is read by `move_box` and by the blocked-press branch, both of which only run for the Move tool, and by `finish`, which runs every frame. Recording unconditionally costs one assignment per view per frame and removes a class of bug where the field is stale because the tool changed between the press and the release.
 
-#### 11. `crates/ui-egui/src/canvas/tabs.rs` — hunk -9,6 +9,7
+### `crates/ui-egui/src/canvas/tabs.rs`
 
-**Original code (upstream base)**
+#### 26. `crates/ui-egui/src/canvas/tabs.rs` — hunk -9,6 +9,7
+
+**Original code (upstream `main`)**
 
 ```rust
         return;
@@ -1263,7 +1257,7 @@ No condition guards it, not even "only when the Move tool is active". The field 
     // Once a frame, not per document view: the right-click or options-bar Brush Preset picker.
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
         return;
@@ -1297,9 +1291,9 @@ Both new calls pass `ui.ctx()`, the same context the pre-existing `finish` call 
 
 `distort_ui::drop_foreign(app)` above them is untouched and stays first: it clears a foreign drop from a previous frame before any of the transfer logic reads the drag state.
 
-#### 12. `crates/ui-egui/src/canvas/tabs.rs` — hunk -828,6 +829,7
+#### 27. `crates/ui-egui/src/canvas/tabs.rs` — hunk -832,6 +833,7
 
-**Original code (upstream base)**
+**Original code (upstream `main`)**
 
 ```rust
                 // Preferences › Zoom Resizes Windows: a zoom wraps the window around the image.
@@ -1310,7 +1304,7 @@ Both new calls pass `ui.ctx()`, the same context the pre-existing `finish` call 
             win.view = view;
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
                 // Preferences › Zoom Resizes Windows: a zoom wraps the window around the image.
@@ -1321,8 +1315,6 @@ Both new calls pass `ui.ctx()`, the same context the pre-existing `finish` call 
         if let Some(win) = app.ui.windows.iter_mut().find(|x| x.id == w.id) {
             win.view = view;
 ```
-
-### `crates/ui-egui/src/canvas/tool_input.rs` (+48 / -20)
 
 **Explanation.** `canvas/tabs.rs` draws the canvas, the tab strip, and - on the detached-window path - a whole `Viewport`'s contents. This hunk adds one call inside the `Viewport::show` closure, after the zoom-follow block and before the closure returns.
 
@@ -1342,9 +1334,11 @@ The call is unconditional rather than guarded by "is a transfer armed": `finish`
 
 No return value and no interaction with `view`: the function mutates `app` (clearing the transfer and possibly running a command), which is why it can be called from inside a closure that also holds `&mut view` - `view` is a local `View` struct, not a borrow of `app`. If `finish` could drop a transfer into *this* window's document, the write-back of `view` afterwards still applies, and the drop changes the document, not the view.
 
-#### 13. `crates/ui-egui/src/canvas/tool_input.rs` — hunk -276,13 +276,15
+### `crates/ui-egui/src/canvas/tool_input.rs`
 
-**Original code (upstream base)**
+#### 32. `crates/ui-egui/src/canvas/tool_input.rs` — hunk -276,13 +276,15
+
+**Original code (upstream `main`)**
 
 ```rust
                     })
@@ -1362,7 +1356,7 @@ No return value and no interaction with `view`: the function mutates `app` (clea
                 let picked = app.run("layer.pickAt", json!({"x": x, "y": y, "target": target, "mode": mode}));
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
                     })
@@ -1402,9 +1396,9 @@ The chain has three separable failure modes, all collapsed to `None`. `r.ok()` d
 
 `let _ = app.run(...)` became `let r = app.run(...)`: the binding is now used. Naming it `r` rather than `resp` follows the surrounding code, where short names are the norm (`let picked = ...`, `let probe = ...`).
 
-#### 14. `crates/ui-egui/src/canvas/tool_input.rs` — hunk -301,6 +303,8
+#### 33. `crates/ui-egui/src/canvas/tool_input.rs` — hunk -301,6 +303,8
 
-**Original code (upstream base)**
+**Original code (upstream `main`)**
 
 ```rust
             // A locked layer: no drag, and Photoshop's message once the pointer moves (`move_lock`).
@@ -1415,7 +1409,7 @@ The chain has three separable failure modes, all collapsed to `None`. `r.ok()` d
             // With a selection: cut the selected pixels (⌥ copies them) and drag them as a floating
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
             // A locked layer: no drag, and Photoshop's message once the pointer moves (`move_lock`).
@@ -1444,9 +1438,9 @@ Why the assignments come *before* the return and not after: there is nothing aft
 
 The branch is one of six places that write `move_viewport` (hunk 24's `begin_with_layer`, this one, `move_box`'s `Down` and `Up`, `finish`'s cleanup, `arm_move_drag`). Its correctness depends on the other five: a set without a clear leaks, and every clear site in this pull request corresponds to a set site.
 
-#### 15. `crates/ui-egui/src/canvas/tool_input.rs` — hunk -377,35 +381,59
+#### 34. `crates/ui-egui/src/canvas/tool_input.rs` — hunk -395,6 +399,48
 
-**Original code (upstream base)**
+**Original code (upstream `main`)**
 
 ```rust
     }
@@ -1455,38 +1449,9 @@ The branch is one of six places that write `move_viewport` (hunk 24's `begin_wit
 /// Tool state machine. Shared by mouse input and automation.
 pub fn tool_event(app: &mut PhotocraftApp, ev: ToolEvent, mods: egui::Modifiers) {
     if consumes_cancelled_vector_event(app, ev) {
-        return;
-    }
-    let Some((armed, mods)) = preflight_tool_event(app, ev, mods) else { return };
-    let Some((raw, ev, mods)) = filter_event_before_tool(app, ev, mods, armed) else { return };
-    let tool = event_tool(app, mods);
-    if handle_eyedropper_event(app, tool, ev, mods) {
-        return;
-    }
-    // A locked layer (the Background without a selection, say): no drag, and Photoshop's message
-    // once the pointer moves (a click says nothing). ⌘ with a selection tool here (#896); the Move
-    // tool below, once Auto-Select has picked the layer.
-    match ev {
-        ToolEvent::Down { x, y, .. } if tool != Tool::Move && app.ui.transform.is_none() && crate::move_lock::blocked(app, tool, [x, y], mods) => {
-            app.move_blocked = true;
-            return;
-        }
-        ToolEvent::Move { .. } if app.move_blocked => {
-            app.move_blocked = false;
-            crate::move_lock::prompt(app);
-            return;
-        }
-        ToolEvent::Up { .. } if app.move_blocked => {
-            app.move_blocked = false;
-            return;
-        }
-        _ => {}
-    }
-    if handle_move_pointer(app, ev, tool, mods) {
-        return;
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
     }
@@ -1497,7 +1462,7 @@ pub fn tool_event(app: &mut PhotocraftApp, ev: ToolEvent, mods: egui::Modifiers)
 /// (including when returning to the press point), while preserving cross-document drag transfers.
 fn handle_move_blocked_event(app: &mut PhotocraftApp, ev: ToolEvent, tool: Tool, mods: egui::Modifiers) -> bool {
     // A locked layer (the Background without a selection, say): no drag, and the lock message
-    // once the pointer moves (a click says nothing). ⌘ with a selection tool here (#896); the Move
+    // once the pointer moves (a click says nothing). ⌥ with a selection tool here (#896); the Move
     // tool below, once Auto-Select has picked the layer.
     match ev {
         ToolEvent::Down { x, y, .. } if tool != Tool::Move && app.ui.transform.is_none() && crate::move_lock::blocked(app, tool, [x, y], mods) => {
@@ -1531,26 +1496,13 @@ fn handle_move_blocked_event(app: &mut PhotocraftApp, ev: ToolEvent, tool: Tool,
         _ => false,
     }
 }
+    }
+}
 
 /// Tool state machine. Shared by mouse input and automation.
 pub fn tool_event(app: &mut PhotocraftApp, ev: ToolEvent, mods: egui::Modifiers) {
     if consumes_cancelled_vector_event(app, ev) {
-        return;
-    }
-    let Some((armed, mods)) = preflight_tool_event(app, ev, mods) else { return };
-    let Some((raw, ev, mods)) = filter_event_before_tool(app, ev, mods, armed) else { return };
-    let tool = event_tool(app, mods);
-    if handle_eyedropper_event(app, tool, ev, mods) {
-        return;
-    }
-    if handle_move_blocked_event(app, ev, tool, mods) {
-        return;
-    }
-    if handle_move_pointer(app, ev, tool, mods) {
-        return;
 ```
-
-### `crates/ui-egui/src/lib.rs` (+3 / -0)
 
 **Explanation.** The original code ran the blocked-drag state machine inline inside `tool_event`, as a bare `match ev` with three arms, each returning early from `tool_event`. The change extracts exactly that match into `handle_move_blocked_event(app, ev, tool, mods) -> bool` and calls it from `tool_event` at the same point in the sequence (after the eyedropper handler, before `handle_move_pointer`).
 
@@ -1578,9 +1530,81 @@ The `Up` arm keeps clearing `move_blocked` and is left otherwise as it was: a re
 
 The comment block above the original `match` moved with it into the new function, and the `ToolEvent::Down` arm gained the two assignments documented in hunk 14. A reader comparing old and new sees the same three arms in the same order plus two guards in the middle one - which is the smallest possible diff for what is a behavioural change.
 
-#### 16. `crates/ui-egui/src/lib.rs` — hunk -376,6 +376,9
+#### 35. `crates/ui-egui/src/canvas/tool_input.rs` — hunk -406,24 +452,8
 
-**Original code (upstream base)**
+**Original code (upstream `main`)**
+
+```rust
+    if handle_eyedropper_event(app, tool, ev, mods) {
+        return;
+    }
+    // A locked layer (the Background without a selection, say): no drag, and Photoshop's message
+    // once the pointer moves (a click says nothing). ⌘ with a selection tool here (#896); the Move
+    // tool below, once Auto-Select has picked the layer.
+    match ev {
+        ToolEvent::Down { x, y, .. } if tool != Tool::Move && app.ui.transform.is_none() && crate::move_lock::blocked(app, tool, [x, y], mods) => {
+            app.move_blocked = true;
+            return;
+        }
+        ToolEvent::Move { .. } if app.move_blocked => {
+            app.move_blocked = false;
+            crate::move_lock::prompt(app);
+            return;
+        }
+        ToolEvent::Up { .. } if app.move_blocked => {
+            app.move_blocked = false;
+            return;
+        }
+        _ => {}
+    }
+    if handle_move_pointer(app, ev, tool, mods) {
+        return;
+```
+
+**Changed code (current `main`)**
+
+```rust
+    if handle_eyedropper_event(app, tool, ev, mods) {
+        return;
+    }
+    if handle_move_blocked_event(app, ev, tool, mods) {
+        return;
+    }
+    if handle_move_pointer(app, ev, tool, mods) {
+        return;
+```
+
+**Explanation.** The original code ran the blocked-drag state machine inline inside `tool_event`, as a bare `match ev` with three arms, each returning early from `tool_event`. The change extracts exactly that match into `handle_move_blocked_event(app, ev, tool, mods) -> bool` and calls it from `tool_event` at the same point in the sequence (after the eyedropper handler, before `handle_move_pointer`).
+
+The extraction is not cosmetic. `tool_event` is the shared entry point for mouse input and automation; its body is a chain of `if handle_x(...) { return; }` calls. Adding two guards and three field writes to an inline match made that chain longer and, more importantly, made the guards testable only by driving the whole pipeline. As a named function, the three arms and their guards can be read as one rule, and the return value says "this event was consumed" in the same idiom as the neighbouring handlers.
+
+The behaviour changes inside the arms are three. On a blocked `Down` the function now also writes `move_blocked_start` and `move_viewport` (hunk 14 explains why those are needed). On a blocked `Move` it first checks the viewport owner and then checks whether a transfer is in progress. On a blocked `Up` it clears all three fields instead of only the flag.
+
+The `Move` guard is the one that closes the reported defect. `if let (Some(owner), Some(here)) = (app.move_viewport, app.current_viewport) && owner != here { return true; }` compares the gesture's owner with the frame's viewport. Both are `Option`; when either is `None` the comparison is skipped, because "no owner" and "unknown frame" must not be read as "another window". When they differ, the function returns `true` - the event is consumed - without touching the state: the second window's pointer move neither clears the blocked flag nor raises the lock dialog.
+
+The second check, `if !layer_transfer::is_transfer_in_progress(app)`, is what keeps a legitimate cross-document drag alive. Once the drag has been promoted to a transfer, `is_transfer_in_progress` is true, so a pointer move inside the source document no longer clears the blocked state and no longer prompts. Before this, every move cleared the flag and raised the dialog the moment the pointer left the press point, which made it impossible to drag a locked layer anywhere.
+
+The `Up` arm clears the three fields and nothing else: it does not prompt, because a click (press and release without movement) must say nothing, which is the documented rule in the comment above.
+
+What the extraction changed for readers of `tool_event`: the function now has one more line and one fewer embedded state machine, and the ordering of the handlers is visible in one place. That ordering matters: the blocked handler runs before `handle_move_pointer`, so a blocked press never reaches the move-tool pointer logic that would try to move the layer.
+
+The extraction changes the shape of `tool_event` from an inline `match` to a call plus an early return: `if handle_move_blocked_event(app, ev, tool, mods) { return; }`. That is what allows the new logic to have its own doc comment, its own guards and its own early returns without nesting inside `tool_event`'s already-long body.
+
+The function returns `bool` rather than `()` because `tool_event` must stop processing when the blocked branch claims the event. Returning `true` from the `Down` arm and from the guarded `Move` arm, and `false` from the fall-through, is the same contract the inline `return;` had.
+
+The two new guards in the `Move` arm are the substance of the hunk. The first compares `app.move_viewport` with `app.current_viewport` and returns `true` (consumed, but nothing done) when they differ: the window that armed the blocked drag resolves it, and a second window's pointer must not clear the state or raise the lock dialog mid-drag. Without it, moving the pointer over a detached window would pop the lock message in the wrong window and clear `move_blocked`, so the original window's gesture would end up unowned.
+
+The second guard is `if !crate::panels::layer_transfer::is_transfer_in_progress(app)`. Once a blocked drag has been promoted into a cross-document transfer, the transfer is the gesture - it has its own ghost and its own completion path - so the blocked state's message must not fire. The function is called from `panels` (which is why the path is `crate::panels::layer_transfer`), and it reads `app.frame_tool_ctx` because this function has no `ctx` parameter.
+
+The `Up` arm keeps clearing `move_blocked` and is left otherwise as it was: a release ends the blocked gesture regardless of window, because leaving the flag set after a release would show the message on the next move with no press. The asymmetry (window-guarded on `Move`, unconditional on `Up`) is deliberate: the harm the guard prevents exists only while the pointer is moving.
+
+The comment block above the original `match` moved with it into the new function, and the `ToolEvent::Down` arm gained the two assignments documented in hunk 14. A reader comparing old and new sees the same three arms in the same order plus two guards in the middle one - which is the smallest possible diff for what is a behavioural change.
+
+### `crates/ui-egui/src/lib.rs`
+
+#### 37. `crates/ui-egui/src/lib.rs` — hunk -377,6 +377,9
+
+**Original code (upstream `main`)**
 
 ```rust
     /// A Move-tool press landed on a locked layer: the first pointer move shows Photoshop's
@@ -1591,7 +1615,7 @@ The comment block above the original `match` moved with it into the new function
     pub(crate) tool_override: Option<state::Tool>,
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
     /// A Move-tool press landed on a locked layer: the first pointer move shows Photoshop's
@@ -1604,8 +1628,6 @@ The comment block above the original `match` moved with it into the new function
     /// while ⌘ is held (`hold_keys::cmd_moves`). Set by the canvas for its gestures, never saved.
     pub(crate) tool_override: Option<state::Tool>,
 ```
-
-### `crates/ui-egui/src/panels/layer_transfer.rs` (+199 / -51)
 
 **Explanation.** Three fields are added to `PhotocraftApp`, immediately after `move_blocked` and before `tool_override`. They are the app-level state the cross-document gesture needs.
 
@@ -1625,9 +1647,11 @@ Both new gesture fields are transient by nature and are not serialised - the sur
 
 `pub(crate)` rather than `pub`: every reader is in this crate (`canvas`, `tools`, `panels`), and the app struct is not part of the crate's public API.
 
-#### 17. `crates/ui-egui/src/panels/layer_transfer.rs` — hunk -1,16 +1,14
+### `crates/ui-egui/src/panels/layer_transfer.rs`
 
-**Original code (upstream base)**
+#### 39. `crates/ui-egui/src/panels/layer_transfer.rs` — hunk -1,16 +1,14
+
+**Original code (upstream `main`)**
 
 ```rust
 //! Dragging layers to another document (#589), as in Photoshop: drag layers from the Layers panel,
@@ -1648,7 +1672,7 @@ use photocraft_doc::{DocId, LayerId};
 use serde_json::json;
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
 //! Dragging layers or selections to another document (#589), as in Photoshop: drag layers from
@@ -1683,9 +1707,9 @@ The deletion is the part of this hunk that carries the most risk if it were omit
 
 The remaining text keeps the issue reference `(#589)` and Photoshop as the reference behaviour, both of which are how this file's other comments justify their rules. No new sentence was added to explain the viewport guard or the tab-promotion logic, because those are documented at their functions (`finish`, `over_tab`, `current_move_drag`) and a module summary that tried to restate them would be a third place to keep in step.
 
-#### 18. `crates/ui-egui/src/panels/layer_transfer.rs` — hunk -18,15 +16,24
+#### 40. `crates/ui-egui/src/panels/layer_transfer.rs` — hunk -18,15 +16,24
 
-**Original code (upstream base)**
+**Original code (upstream `main`)**
 
 ```rust
 use crate::PhotocraftApp;
@@ -1705,7 +1729,7 @@ struct Transfer {
 fn key() -> egui::Id {
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
 use crate::PhotocraftApp;
@@ -1758,9 +1782,9 @@ The enum rather than a parallel `selection: Option<...>` field: a parallel field
 
 The doc comment on the struct is updated in the same hunk ("The layers or selection being dragged") because the struct's one-line description would otherwise describe only one of its two kinds. Nothing else in the type changes: no `PartialEq`, no `Default`, no `Hash`, because nothing compares or caches a `Transfer` by value.
 
-#### 19. `crates/ui-egui/src/panels/layer_transfer.rs` — hunk -42,58 +49,136
+#### 41. `crates/ui-egui/src/panels/layer_transfer.rs` — hunk -42,58 +49,136
 
-**Original code (upstream base)**
+**Original code (upstream `main`)**
 
 ```rust
 }
@@ -1823,7 +1847,7 @@ pub fn over_tab(app: &mut PhotocraftApp, ctx: &egui::Context, index: usize) {
         app.session.set_active(index);
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
 }
@@ -1982,9 +2006,9 @@ That second branch is what makes a locked or Background layer draggable: those l
 
 `is_move` also accepts `app.tool_override == Some(Tool::Move)`, which is how ⌘-held Move works; without it, a drag started with ⌘ would not be promotable.
 
-#### 20. `crates/ui-egui/src/panels/layer_transfer.rs` — hunk -108,15 +193,46
+#### 42. `crates/ui-egui/src/panels/layer_transfer.rs` — hunk -108,15 +193,46
 
-**Original code (upstream base)**
+**Original code (upstream `main`)**
 
 ```rust
 
@@ -2004,7 +2028,7 @@ pub fn finish(app: &mut PhotocraftApp, ctx: &egui::Context) {
             if target.is_some() {
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
 
@@ -2073,9 +2097,9 @@ pub fn finish(app: &mut PhotocraftApp, ctx: &egui::Context) {
 
 `is_transfer_in_progress(app)` answers "is a transfer armed in the frame's context". It reads `app.frame_tool_ctx` because the event handlers have no `ctx` parameter; the field is the frame's stored context, set by the tool pipeline. `is_transfer_armed(ctx)` is the same question for an explicit context and is `#[cfg(test)]`, because only the tests need to ask it by value.
 
-#### 21. `crates/ui-egui/src/panels/layer_transfer.rs` — hunk -131,31 +247,46
+#### 43. `crates/ui-egui/src/panels/layer_transfer.rs` — hunk -131,31 +247,46
 
-**Original code (upstream base)**
+**Original code (upstream `main`)**
 
 ```rust
     clear(ctx);
@@ -2111,7 +2135,7 @@ fn drop(app: &mut PhotocraftApp, ctx: &egui::Context, dest: usize, at: Option<[f
                 app.ui.status_error = true;
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
     clear(ctx);
@@ -2195,9 +2219,9 @@ The `None` branch (not arranged) is unchanged in behaviour but its comment lost 
 
 The blast radius: `finish` is the only caller. A tile drop now carries a point, so `apply_drop_placement` takes the `Some(at)` path and, with a `grab`, computes an offset instead of centring. That is a behaviour change the tests in hunk 23 cover (`..._in_arranged_view_transfers_directly_to_neighbour_cell` asserts the centre matches the destination transform's mapping of the drop point).
 
-#### 22. `crates/ui-egui/src/panels/layer_transfer.rs` — hunk -165,18 +296,35
+#### 44. `crates/ui-egui/src/panels/layer_transfer.rs` — hunk -165,18 +296,35
 
-**Original code (upstream base)**
+**Original code (upstream `main`)**
 
 ```rust
     }
@@ -2220,7 +2244,7 @@ The blast radius: `finish` is the only caller. A tile drop now carries a point, 
 /// The dragged layers' name next to the pointer (also the Layers panel's reorder drag).
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
     }
@@ -2260,8 +2284,6 @@ fn apply_drop_placement(p: &mut serde_json::Value, at: Option<[f64; 2]>, grab: O
 /// The dragged layers' name next to the pointer (also the Layers panel's reorder drag).
 ```
 
-### `crates/ui-egui/src/panels/layer_transfer/tests.rs` (+340 / -0)
-
 **Explanation.** `drop` is the function that turns an armed transfer into a command. This hunk replaces a single-shape command with a match on the content kind, extracts the placement logic into its own function, and adds an active-document switch.
 
 The common prologue is unchanged: `let Some(t) = get(ctx) else { return }; clear(ctx);` then the source lookup `let Some(src) = docs.iter().position(|d| d.doc.id == t.source) else { return };` and the same-size test `let same_size = to.doc.size == docs[src].doc.size;`. `clear(ctx)` before anything else is what guarantees a single completion even if `app.run` panics or the placement fails.
@@ -2292,9 +2314,11 @@ let mut p = match t.kind {
 
 The error path is unchanged: `if let Err(e) = app.run("layer.copyToDocument", p) { app.ui.status = e; app.ui.status_error = true; }`. The transfer is already cleared, so a failed drop leaves nothing armed and the message is the only trace - which is correct, because retrying automatically would be surprising.
 
-#### 23. `crates/ui-egui/src/panels/layer_transfer/tests.rs` — hunk -130,3 +130,343
+### `crates/ui-egui/src/panels/layer_transfer/tests.rs`
 
-**Original code (upstream base)**
+#### 45. `crates/ui-egui/src/panels/layer_transfer/tests.rs` — hunk -130,3 +130,343
+
+**Original code (upstream `main`)**
 
 ```rust
     assert_eq!((docs[0].doc.layers.len(), docs[1].doc.layers.len()), (2, 1));
@@ -2302,7 +2326,7 @@ The error path is unchanged: `if let Err(e) = app.run("layer.copyToDocument", p)
 }
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
     assert_eq!((docs[0].doc.layers.len(), docs[1].doc.layers.len()), (2, 1));
@@ -2650,8 +2674,6 @@ fn a_secondary_button_release_does_not_complete_a_transfer() {
 }
 ```
 
-### `crates/ui-egui/src/tools/move_box.rs` (+13 / -3)
-
 **Explanation.** Ten tests are appended after the last existing one (a panel drag that leaves the layer counts `(2, 1)` and the source active). Each is described below with its setup, its gesture and what it proves.
 
 1. `a_move_tool_selection_drag_onto_a_tab_copies_selected_pixels_to_destination` - Setup: `select.rect` at x 4, y 6, 5 x 10 inside the red square, tool Move, two frames so the view is laid out. Gesture: `drag_along` from the screen point of document (6, 11) to the "dest-doc" tab's rect, then to the canvas centre, no modifiers. Assertions: the copied layer's size is exactly `vec2(5.0, 10.0)` (only the selection travelled); its centre is within 1.5 px of `(6.5 + drop_doc.x - grab_doc.x, 11.0 + drop_doc.y - grab_doc.y)` (the grab offset applied in document space, with a tolerance for the two transforms); the destination has two layers; the source square's bounds are still `(4, 6, 14, 16)`. The last assertion is the non-destructive promise: a copy, not a cut.
@@ -2676,9 +2698,11 @@ fn a_secondary_button_release_does_not_complete_a_transfer() {
 
 Together the ten cover the three ownership rules (viewport, button, cleanup), the three arming paths (panel, tab, cell) and the four content cases (selection, mask selection, layer, Background), which is the full matrix the feature has.
 
-#### 24. `crates/ui-egui/src/tools/move_box.rs` — hunk -12,16 +12,24
+### `crates/ui-egui/src/tools/move_box.rs`
 
-**Original code (upstream base)**
+#### 54. `crates/ui-egui/src/tools/move_box.rs` — hunk -12,16 +12,24
+
+**Original code (upstream `main`)**
 
 ```rust
 /// The marquee being dragged, in document pixels.
@@ -2699,7 +2723,7 @@ pub(crate) fn begin(app: &mut PhotocraftApp, p: [f64; 2], add: bool) {
     app.move_mods = Default::default();
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
 /// The marquee being dragged, in document pixels.
@@ -2748,9 +2772,9 @@ The doc comment on `begin_with_layer` is new and states the purpose in terms of 
 
 The resets after the assignment are pre-existing and their comments explain them: the press started a Move gesture's snapping and ⇧/⌥ handling, which a marquee has none of. `begin_with_layer` keeps them in the same order so that a reader comparing the two functions sees only the additions.
 
-#### 25. `crates/ui-egui/src/tools/move_box.rs` — hunk -40,6 +48,7
+#### 55. `crates/ui-egui/src/tools/move_box.rs` — hunk -40,6 +48,7
 
-**Original code (upstream base)**
+**Original code (upstream `main`)**
 
 ```rust
         // A press never continues a marquee (one left over from a lost release).
@@ -2761,7 +2785,7 @@ The resets after the assignment are pre-existing and their comments explain them
         ToolEvent::Move { x, y, .. } => {
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
         // A press never continues a marquee (one left over from a lost release).
@@ -2795,9 +2819,9 @@ Nothing else in the arm changes: `app.layer_box = None` keeps its position first
 
 The three clear sites and the two set sites are the whole invariant, and each is one line in a different module. `begin_with_layer` (tools/move_box.rs) sets both when a marquee starts; the blocked-press branch (canvas/tool_input.rs) sets both when a press is refused; `move_box`'s `Down` and `Up` arms and `layer_transfer::arm_move_drag` and `layer_transfer::finish` clear them. Because the set and clear sites are in five modules, the invariant cannot be enforced by the type system - a single field instead of two would not express the difference between "where am I" and "who started this", so the two fields are necessary and the discipline is what keeps them paired.
 
-#### 26. `crates/ui-egui/src/tools/move_box.rs` — hunk -49,6 +58,7
+#### 56. `crates/ui-egui/src/tools/move_box.rs` — hunk -49,6 +58,7
 
-**Original code (upstream base)**
+**Original code (upstream `main`)**
 
 ```rust
         ToolEvent::Up { x, y } => {
@@ -2808,7 +2832,7 @@ The three clear sites and the two set sites are the whole invariant, and each is
                 // A click on the pasteboard clears the layer target; a drag from there still
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
         ToolEvent::Up { x, y } => {
@@ -2819,8 +2843,6 @@ The three clear sites and the two set sites are the whole invariant, and each is
             if w == 0.0 && h == 0.0 && !b.add {
                 // A click on the pasteboard clears the layer target; a drag from there still
 ```
-
-Total hunks recorded: 26.
 
 **Explanation.** The same one-line addition in the `ToolEvent::Up` arm: `app.move_viewport = None;`, placed after `app.layer_box = None;` and before the width/height computation.
 
@@ -2845,4 +2867,3 @@ The invariant this hunk completes is symmetric: `begin_with_layer` sets `layer_b
 No behaviour is added by this line on its own; it is the half of the guard that makes the other half (the comparison in `finish` and `check_arranged_drag`) reliable.
 
 One thing this arm does not do is notify the transfer: if a release both ends a marquee and completes a transfer, the marquee's `Up` clears `move_viewport` *after* `layer_transfer::finish` has already read it, because `finish` runs at the end of the frame (canvas/tabs.rs) while the marquee's `Up` runs during input handling. The order is: input events, marquee `Up` (clears the fields), then the frame's `finish` - which sees no transfer to complete, because the transfer is stored in the context and is not cleared by the marquee. So the two states are independent, and each clears its own.
-

@@ -1,17 +1,18 @@
 # Windows: an unsupported directory flush no longer fails the save
 
-A save publishes a file by writing a temporary copy, renaming it into place and then flushing the
-directory so the rename survives a power loss. Some Windows file systems cannot flush a directory at
-all. Until now every such save failed *after* the bytes were safely in place; this change classifies
-those errors as "the file system cannot do this" and lets the save succeed.
+This is how saving works in the tree as it stands. A save writes a temporary file, renames it into
+place, and then flushes the directory so the rename survives a power loss. Some Windows file systems
+cannot flush a directory at all; those errors are classified as "this file system cannot do it" and
+the save succeeds.
 
 | Behaviour | Implementation |
 |---|---|
 | `ERROR_NOT_SUPPORTED` (50), `ERROR_INVALID_FUNCTION` (1), `ERROR_CALL_NOT_IMPLEMENTED` (120) | `dir_sync_unsupported` returns true, `dir_synced` maps the failure to `Ok(())` |
 | Any other error (e.g. `ERROR_SHARING_VIOLATION` 32, `ERROR_FILE_NOT_FOUND` 2) | Propagated: the save reports `publication_error` and the document stays unsaved |
 | The directory cannot even be opened | Treated like a failed flush: unsupported codes succeed, everything else propagates |
-| Unix | Unchanged: `EINVAL`, `ENOTSUP`/`EOPNOTSUPP`, `ENOTTY` and `ErrorKind::Unsupported` |
-| Cross-platform | `dir_synced` and `dir_sync_unsupported` are no longer Unix-only |
+| Unix | Unchanged: `EINVAL` (22), `ENOTSUP`/`EOPNOTSUPP` (95/45/102), `ENOTTY` (25), `ErrorKind::Unsupported` |
+| Windows publication barrier | the rename plus the flush; a failure after the rename reports `publication_error` |
+| Unix publication barrier | the rename alone; a failed flush reports `unconfirmed_error` |
 
 ## Problem
 
@@ -114,25 +115,6 @@ assert!(dir_synced(Err(io::Error::from_raw_os_error(32))).is_err());
 
 It also covers an unsupported error raised by the **open** itself, and keeps the existing
 `NotFound` case as a genuine failure.
-
-## Commit by commit
-
-Eight commits, one a merge, oldest first.
-
-| Commit | Date | Subject | What it did |
-|---|---|---|---|
-| `b87e9e7bb` | 2026-11-08 | format: treat unsupported directory flush as non-fatal on Windows | `dir_sync_unsupported`'s Windows arm, `dir_synced` un-gated, the Windows code list. Hunks 3-4. |
-| `69f1d5158` | 2026-11-08 | format: distinguish directory open from flush errors on Windows | `sync_dir_windows_with`'s two classification points, `open_dir_for_sync` extracted. Hunk 3. |
-| `cd6182aab` | 2026-11-08 | format: treat unsupported directory open errors as non-fatal on Windows | The `Err(e) if dir_sync_unsupported(&e) => return Ok(())` arm for the open, and `RealFs::sync_dir` calling the helper. Hunks 1, 3. |
-| `bd66720ce` | 2026-11-08 | Merge remote-tracking branch 'upstream/main' into fix/windows-unsupported-dir-sync | The upstream merge; no conflicts in the two files this branch touches. |
-| `ca6cec4d9` | 2026-11-09 | test(format): test unsupported Windows directory open errors in sync_dir | The open-error loop in `sync_dir_windows_with`, test `windows_directory_flush_opens_a_directory_and_reports_open_errors`. Hunks 7. |
-| `fb33efe1c` | 2026-11-09 | test(format): test production dir_synced classification without mock normalization | The `dir_synced` code table (50/1/120 pass, 32 fails) asserted directly rather than through the fake. Hunk 7. |
-| `b5c4e4502` | 2026-11-09 | test(format): assert fatal directory flush attempt, warning, and published bytes | `fail_sync_all`, the `synced == 1` assertion, the "may not survive" check, the published-bytes check. Hunks 5-6, 9. |
-| `65e44a56a` | 2026-11-09 | test(format): assert fatal directory flush error propagation from Windows helper | The last two blocks of the rewritten test: the flush-side fatal error and the two WebDAV codes. Hunks 8-9. |
-
-The shape of the branch is visible in the order: three behaviour commits, then the merge, then four test commits. The tests came last because the `Faulty` double could not fail the flush until `fail_sync_all` existed (hunk 5), and that field is only useful once `sync_dir_windows_with` exists (hunk 3) - so the sequence is forced by the code, not a stylistic choice.
-
-The three behaviour commits each close one half of one hole. `b87e9e7bb` makes an unsupported *flush* non-fatal; `69f1d5158` moves the classification into a helper so the open and the flush can both be judged; `cd6182aab` makes an unsupported *open* non-fatal. Reverting any one of them leaves a class of file system failing the save, which is why they are three commits and not one - each is a separately reviewable claim.
 
 ## Error classification
 
@@ -246,17 +228,15 @@ What was run against this branch, and what was not.
 
 The run was performed on Windows, which is the platform the change targets, so the `#[cfg(windows)]` arms are the ones that executed: the classifier's three codes, the open-error arm, the flush-error arm and the `synced` counter were all exercised rather than compiled out. The Unix arm (`EINVAL`, `ENOTSUP`, `EIO`) did not run here, so its behaviour is asserted by its source and by CI on the other platforms, not by this run.
 
-## Every change, shown as original code and changed code
+## Differences from upstream `main`
 
-Base `848fa306f` (the upstream commit the branch was opened against), head `65e44a56`.
-For each file, every hunk is printed twice: the code as it stands in the base, and the code as it
-stands after the change. Unchanged context lines appear in both, so each block can be read on its own.
+Measured with `git diff -U3 upstream/main...main`, where `upstream/main` is `95c9e465d` (storytold/photocraft) and `main` is `f328d1881`. The full range is 49 files, 8101 insertions, 182 deletions. The hunks below are every hunk in the files that carry this feature - 11 hunks, reproduced in full with their context lines, each followed by an explanation of the original code, the change, and its effect. The two `retouch_ui.rs` hunks that belong to the LaMa Cleaner tool (`Tool::LamaCleaner` at the stroke dispatch and in the options bar) are a different feature and are not reproduced here.
 
-### `crates/format/src/atomic.rs` (+75 / -37)
+### `crates/format/src/atomic.rs`
 
-#### 1. `crates/format/src/atomic.rs` — hunk -139,16 +139,7
+#### 13. `crates/format/src/atomic.rs` — hunk -139,16 +139,7
 
-**Original code (upstream base)**
+**Original code (upstream `main`)**
 
 ```rust
         }
@@ -277,7 +257,7 @@ stands after the change. Unchanged context lines appear in both, so each block c
         {
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
         }
@@ -301,9 +281,9 @@ A second consequence: `RealFs::sync_dir` is also called by `store.rs`'s bundle p
 
 One behaviour does change at this level: the old `open(dir)?` propagated every open failure; the new `sync_dir_windows` swallows an unsupported open. That is intended (a file system that cannot open a directory for flushing cannot flush it), and it is asserted in hunk 9. A reader checking the trait contract should note the method's meaning is now slightly wider: "flush the directory, or report that this file system cannot".
 
-#### 2. `crates/format/src/atomic.rs` — hunk -353,12 +344,12
+#### 14. `crates/format/src/atomic.rs` — hunk -353,12 +344,12
 
-**Original code (upstream base)**
+**Original code (upstream `main`)**
 
 ```rust
         return Err(rename_error(e, path));
@@ -320,7 +300,7 @@ One behaviour does change at this level: the old `open(dir)?` propagated every o
     Ok(())
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
         return Err(rename_error(e, path));
@@ -351,9 +331,9 @@ The `map_err` order is deliberate: `dir_synced` first, then the error mapping, s
 
 The comment's trailing clause - "the caller keeps the document unsaved and its recovery data" - is the reason the distinction matters to the user: a save that reports success discards the recovery data, so a false success loses the work; a false failure keeps data that could have been discarded. Erring on "failure" for a real error is the safe side.
 
-#### 3. `crates/format/src/atomic.rs` — hunk -376,12 +367,48
+#### 15. `crates/format/src/atomic.rs` — hunk -376,12 +367,48
 
-**Original code (upstream base)**
+**Original code (upstream `main`)**
 
 ```rust
     }
@@ -370,7 +350,7 @@ pub(crate) fn dir_synced(result: io::Result<()>) -> io::Result<()> {
         Err(e) if dir_sync_unsupported(&e) => Ok(()),
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
     }
@@ -439,9 +419,9 @@ The doc comment's list of numbers is not decoration: it is the only place a revi
 
 One design point worth stating: the open and the flush are classified by two different expressions (`dir_sync_unsupported(&e)` for the open, `dir_synced(...)` for the flush) that share one predicate. Keeping the shared predicate is what makes "unsupported" mean the same thing at both call sites; a second predicate would drift the first time one platform's list changed.
 
-#### 4. `crates/format/src/atomic.rs` — hunk -389,27 +416,38
+#### 16. `crates/format/src/atomic.rs` — hunk -389,27 +416,38
 
-**Original code (upstream base)**
+**Original code (upstream `main`)**
 
 ```rust
     }
@@ -473,7 +453,7 @@ fn dir_sync_unsupported(e: &io::Error) -> bool {
 /// The error for a file that was published but whose directory flush failed: same kind, saying
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
     }
@@ -516,8 +496,6 @@ fn dir_sync_unsupported(e: &io::Error) -> bool {
 /// The error for a file that was published but whose directory flush failed: same kind, saying
 ```
 
-### `crates/format/src/atomic/tests.rs` (+80 / -14)
-
 **Explanation.** `dir_sync_unsupported` decides whether a failed directory flush means "this file system cannot do it" (not fatal - the file is already published) or "the flush really failed" (fatal - durability is unknown). Before this change the function was `#[cfg(not(windows))]`: it only knew errno values, so on Windows it did not exist and the caller cannot have used it. The change makes it exist on every platform and puts a Windows arm in front of the Unix one.
 
 The Windows arm matches three raw codes. `ERROR_INVALID_FUNCTION` (1) is what some redirectors return for `CreateFileW` on a directory they do not implement as a file. `ERROR_NOT_SUPPORTED` (50) is what WebDAV and most cloud-drive filter drivers (the report in #7858 names AirLiveDrive) return for `FlushFileBuffers` on a directory handle. `ERROR_CALL_NOT_IMPLEMENTED` (120) is what older redirectors return for the same call. All three mean the same thing operationally: the platform will never be able to confirm this flush, so retrying or failing the save cannot help. A fourth code, `ERROR_SHARING_VIOLATION` (32), is deliberately *not* in the list: it means another process holds the directory, which is transient and therefore a real failure.
@@ -530,9 +508,11 @@ The Unix arm is carried over byte for byte, including the comment that explains 
 
 The consequence for callers is that `dir_synced` (the wrapper) now behaves on Windows the way it behaved on Unix: an unsupported error becomes `Ok(())`. `replace_with` and `store.rs` both call `dir_synced`, so both inherit the change without an edit. That is the reason the classification was put in this one function instead of at each call site.
 
-#### 5. `crates/format/src/atomic/tests.rs` — hunk -44,6 +44,9
+### `crates/format/src/atomic/tests.rs`
 
-**Original code (upstream base)**
+#### 17. `crates/format/src/atomic/tests.rs` — hunk -44,6 +44,9
+
+**Original code (upstream `main`)**
 
 ```rust
     /// Fail the directory flush (the durability barrier after publication, #4968, #7858)
@@ -543,7 +523,7 @@ The consequence for callers is that `dir_synced` (the wrapper) now behaves on Wi
 
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
     /// Fail the directory flush (the durability barrier after publication, #4968, #7858)
@@ -571,9 +551,9 @@ The field is never mutated after construction. Every site builds the struct with
 
 Adding a field to a struct with a `Default` derive is the least invasive way to extend a test double: no constructor needs updating, no existing literal needs a new line, and the new field's default (`None`) means "behave as before". That is what keeps the eight pre-existing `Faulty` sites in this file unchanged.
 
-#### 6. `crates/format/src/atomic/tests.rs` — hunk -70,14 +73,23
+#### 18. `crates/format/src/atomic/tests.rs` — hunk -70,14 +73,23
 
-**Original code (upstream base)**
+**Original code (upstream `main`)**
 
 ```rust
     fn remove(&self, path: &Path) -> io::Result<()> {
@@ -592,7 +572,7 @@ Adding a field to a struct with a `Default` derive is the least invasive way to 
         RealFs.copy_metadata(from, to)
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
     fn remove(&self, path: &Path) -> io::Result<()> {
@@ -638,9 +618,9 @@ The `#[cfg(windows)]` block sits between the two field checks rather than after 
 
 Inside the Windows block, `sync_dir_windows_with(dir, open_dir_for_sync, |_| ...)` passes the *real* opener. That is the point of the field: an injected failure at the flush, after a genuine `CreateFileW` on the directory. Passing a fake opener as well would collapse the two cases the pull request exists to separate, and the test would no longer prove anything about the flush half.
 
-#### 7. `crates/format/src/atomic/tests.rs` — hunk -117,6 +129,30
+#### 19. `crates/format/src/atomic/tests.rs` — hunk -117,6 +129,30
 
-**Original code (upstream base)**
+**Original code (upstream `main`)**
 
 ```rust
     let d = TempDir::new("sync-directory");
@@ -651,7 +631,7 @@ Inside the Windows block, `sync_dir_windows_with(dir, open_dir_for_sync, |_| ...
 #[test]
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
     let d = TempDir::new("sync-directory");
@@ -700,9 +680,9 @@ The last two blocks flip the site: the open succeeds (`open_dir_for_sync`, the r
 
 The order matters for diagnosis: classifier table first (pure function), then open-failure through the helper, then flush-failure through the helper. When one of them breaks, the position in the test tells which layer broke.
 
-#### 8. `crates/format/src/atomic/tests.rs` — hunk -604,10 +640,9
+#### 20. `crates/format/src/atomic/tests.rs` — hunk -604,10 +640,9
 
-**Original code (upstream base)**
+**Original code (upstream `main`)**
 
 ```rust
     assert_no_temp(&d.0);
@@ -717,7 +697,7 @@ fn a_directory_flush_the_file_system_cannot_do_still_saves() {
     let d = TempDir::new("syncdir-unsupported");
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
     assert_no_temp(&d.0);
@@ -745,9 +725,9 @@ Why this test rather than a new Windows-only one: the claim under test - "an unv
 
 The consequence for CI: before this change the test was compiled out on the Windows runners, so a Windows regression in the classifier could only be caught by `dir_synced`'s unit assertions (hunk 7). Now the end-to-end save path is exercised on Windows too, which is the platform where #7858 reported the failure.
 
-#### 9. `crates/format/src/atomic/tests.rs` — hunk -615,11 +650,42
+#### 21. `crates/format/src/atomic/tests.rs` — hunk -615,11 +650,42
 
-**Original code (upstream base)**
+**Original code (upstream `main`)**
 
 ```rust
     let fs = Faulty { fail_sync_dir: Some(Err(io::ErrorKind::Unsupported)), ..Default::default() };
@@ -763,7 +743,7 @@ The consequence for CI: before this change the test was compiled out on the Wind
 /// #9388: on macOS a save keeps the replaced file's creation time ("Created" in Finder), as
 ```
 
-**Changed code (this pull request)**
+**Changed code (current `main`)**
 
 ```rust
     let fs = Faulty { fail_sync_dir: Some(Err(io::ErrorKind::Unsupported)), ..Default::default() };
@@ -810,8 +790,6 @@ The consequence for CI: before this change the test was compiled out on the Wind
 /// #9388: on macOS a save keeps the replaced file's creation time ("Created" in Finder), as
 ```
 
-Total hunks recorded: 9.
-
 **Explanation.** The body of the now-portable test is split into a `#[cfg(windows)]` block and a `#[cfg(not(windows))]` block. The three lines before the split are shared: the unsupported `Faulty`, a successful write, and a read-back proving the bytes landed. That is the claim under test on every platform - an unverifiable flush does not fail the save - and it is asserted once rather than duplicated.
 
 The Windows block has four parts, each a separate case:
@@ -828,3 +806,64 @@ The Unix block keeps the original two assertions and adds nothing: `dir_synced` 
 
 The two blocks are not redundant with each other: the Windows codes do not exist on Unix and `EIO`'s behaviour is the same on both, so the Unix block's value is that it locks the Unix list while the Windows block locks the Windows list. A single platform-neutral body would have to skip every numeric assertion, which is what the `#[cfg(not(windows))]` on the whole test used to do.
 
+### `crates/format/src/store.rs`
+
+#### 22. `crates/format/src/store.rs` — hunk -881,7 +881,7
+
+**Original code (upstream `main`)**
+
+```rust
+        crate::atomic::retry_rename(crate::atomic::RenameRetry::platform(), || std::fs::rename(&tmp, path))?;
+        #[cfg(windows)]
+        {
+            fs.sync_dir(parent).map_err(|e| crate::atomic::publication_error(e, path))?;
+        }
+        // Elsewhere a failed flush is reported too (#4968), but a file system that can't flush a
+        // directory at all still saves, as in `atomic_write`.
+```
+
+**Changed code (current `main`)**
+
+```rust
+        crate::atomic::retry_rename(crate::atomic::RenameRetry::platform(), || std::fs::rename(&tmp, path))?;
+        #[cfg(windows)]
+        {
+            crate::atomic::dir_synced(fs.sync_dir(parent)).map_err(|e| crate::atomic::publication_error(e, path))?;
+        }
+        // Elsewhere a failed flush is reported too (#4968), but a file system that can't flush a
+        // directory at all still saves, as in `atomic_write`.
+```
+
+**Explanation.** `store.rs` calls `fs.sync_dir` directly in two places - the bundle publication (`write_bundle_file`) and the `PcraftWriter` close path - and both used to compare the error themselves. With `dir_synced` no longer Unix-only, both call sites wrap the result in it, so the classifier is applied on every platform from one place instead of each caller deciding.
+
+These two lines are the reason `dir_synced` was made public to the crate rather than left private to `atomic`: without them the bundle path would still fail on Windows for the same file systems the single-file path now tolerates. The behaviour is identical to `replace_with`'s: an unsupported directory flush becomes `Ok(())`, everything else propagates, and the message distinguishes "published but durability unconfirmed" from "not published".
+
+#### 23. `crates/format/src/store.rs` — hunk -1299,7 +1299,7
+
+**Original code (upstream `main`)**
+
+```rust
+            // both object directories again before publishing a manifest that references them.
+            // This also persists the fixed subdirectories of a newly created bundle.
+            for sub in [TILES_DIR, BLOBS_DIR] {
+                fs.sync_dir(&dir.join(sub)).map_err(|e| crate::atomic::publication_error(e, &dir.join(sub)))?;
+            }
+        }
+        #[cfg(not(windows))]
+```
+
+**Changed code (current `main`)**
+
+```rust
+            // both object directories again before publishing a manifest that references them.
+            // This also persists the fixed subdirectories of a newly created bundle.
+            for sub in [TILES_DIR, BLOBS_DIR] {
+                crate::atomic::dir_synced(fs.sync_dir(&dir.join(sub))).map_err(|e| crate::atomic::publication_error(e, &dir.join(sub)))?;
+            }
+        }
+        #[cfg(not(windows))]
+```
+
+**Explanation.** `store.rs` calls `fs.sync_dir` directly in two places - the bundle publication (`write_bundle_file`) and the `PcraftWriter` close path - and both used to compare the error themselves. With `dir_synced` no longer Unix-only, both call sites wrap the result in it, so the classifier is applied on every platform from one place instead of each caller deciding.
+
+These two lines are the reason `dir_synced` was made public to the crate rather than left private to `atomic`: without them the bundle path would still fail on Windows for the same file systems the single-file path now tolerates. The behaviour is identical to `replace_with`'s: an unsupported directory flush becomes `Ok(())`, everything else propagates, and the message distinguishes "published but durability unconfirmed" from "not published".
