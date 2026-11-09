@@ -170,17 +170,17 @@ pub fn classify(family: &str, family_class: i16, panose: [u8; 10], fixed_pitch: 
         }
     }
     // Last, the name.
-    if words.iter().any(|w| matches!(*w, "mono" | "monospace" | "monospaced" | "code" | "courier") || w.starts_with("consol")) {
+    if words.iter().any(|w| matches!(*w, "mono" | "monospace" | "monospaced" | "code" | "courier" | "等幅") || w.starts_with("consol")) || has(&["等幅"]) {
         Some(FontClass::Monospace)
     } else if has(&["slab"]) {
         Some(FontClass::SlabSerif)
-    } else if has(&["sans", "grotesk", "grotesque", "gothic"]) {
+    } else if has(&["sans", "grotesk", "grotesque", "gothic", "ゴシック", "ｺﾞｼｯｸ", "meiryo", "メイリオ", "hei", "黑体", "黑體", "maru", "丸ゴシック"]) {
         Some(FontClass::SansSerif)
-    } else if has(&["serif", "roman", "garamond", "times", "bodoni", "baskerville", "caslon"]) {
+    } else if has(&["serif", "roman", "garamond", "times", "bodoni", "baskerville", "caslon", "mincho", "明朝", "sung", "song", "宋体", "宋體"]) {
         Some(FontClass::Serif)
-    } else if has(&["hand", "marker", "brush", "chalk"]) {
+    } else if has(&["hand", "marker", "brush", "chalk", "kyokasho", "教科書", "pop", "ポップ", "ﾎﾟｯﾌﾟ"]) {
         Some(FontClass::Handwritten)
-    } else if has(&["script"]) {
+    } else if has(&["script", "gyosho", "行書", "kaisho", "楷書", "sousho", "草書", "reisho", "隷書", "kanteiryu", "勘亭流"]) {
         Some(FontClass::Script)
     } else {
         None
@@ -254,6 +254,17 @@ mod tests {
         assert_eq!(classify("Code Pro Sans", 0x0805, NONE, false), Some(FontClass::SansSerif), "the class beats the name");
         assert_eq!(classify("Permanent Marker", 0, NONE, false), Some(FontClass::Handwritten));
         assert_eq!(classify("Unknowable", 0, NONE, false), None);
+        // Japanese font classification coverage
+        assert_eq!(classify("MS Mincho", 0, NONE, false), Some(FontClass::Serif));
+        assert_eq!(classify("游明朝", 0, NONE, false), Some(FontClass::Serif));
+        assert_eq!(classify("MS Gothic", 0, NONE, false), Some(FontClass::SansSerif));
+        assert_eq!(classify("游ゴシック", 0, NONE, false), Some(FontClass::SansSerif));
+        assert_eq!(classify("Meiryo", 0, NONE, false), Some(FontClass::SansSerif));
+        assert_eq!(classify("メイリオ", 0, NONE, false), Some(FontClass::SansSerif));
+        assert_eq!(classify("HGGyoshotai", 0, NONE, false), Some(FontClass::Script));
+        assert_eq!(classify("HG行書体", 0, NONE, false), Some(FontClass::Script));
+        assert_eq!(classify("HG正楷書体-PRO", 0, NONE, false), Some(FontClass::Script));
+        assert_eq!(classify("UD デジタル 教科書体 N", 0, NONE, false), Some(FontClass::Handwritten));
         // Out-of-range or garbage table values don't panic or misfile.
         assert_eq!(classify("X", i16::MIN, [255; 10], false), None);
         assert_eq!(classify("X", -1, [2, 200, 0, 0, 0, 0, 0, 0, 0, 0], false), None);

@@ -14,6 +14,9 @@ const SAMPLE: &str = "AaBbCc";
 const ARABIC_CORE: [char; 4] = ['\u{627}', '\u{644}', '\u{645}', '\u{639}'];
 /// Short, recognisable, and joins letters, so it shows the face's shaping.
 const ARABIC_SAMPLE: &str = "أبجد هوز";
+/// Japanese Hiragana sample: standard preview for Japanese typography ("あいうえお").
+const JAPANESE_SAMPLE: &str = "あいうえお";
+const JAPANESE_CORE: [char; 3] = ['あ', 'い', 'う'];
 /// The Latin and Arabic sample widths and the sample height at the menu's medium (18 pt).
 const WIDTH: f32 = 100.0;
 const ARABIC_WIDTH: f32 = 72.0;
@@ -73,6 +76,9 @@ struct SampleImages {
 /// Latin sample and get no second sample.
 fn sample_texts(chars: &[char]) -> (String, Option<&'static str>) {
     let has = |c: char| chars.binary_search(&c).is_ok();
+    if JAPANESE_CORE.into_iter().all(has) {
+        return (JAPANESE_SAMPLE.into(), None);
+    }
     if !SAMPLE.chars().all(has) {
         return (chars.iter().copied().filter(|c| !c.is_whitespace()).take(6).collect(), None);
     }
