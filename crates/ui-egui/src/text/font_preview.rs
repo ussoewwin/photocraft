@@ -16,7 +16,7 @@ const ARABIC_CORE: [char; 4] = ['\u{627}', '\u{644}', '\u{645}', '\u{639}'];
 const ARABIC_SAMPLE: &str = "أبجد هوز";
 /// Japanese Hiragana sample: standard preview for Japanese typography ("あいうえお").
 const JAPANESE_SAMPLE: &str = "あいうえお";
-const JAPANESE_CORE: [char; 3] = ['あ', 'い', 'う'];
+const JAPANESE_CORE: [char; 5] = ['あ', 'い', 'う', 'え', 'お'];
 /// The Latin and Arabic sample widths and the sample height at the menu's medium (18 pt).
 const WIDTH: f32 = 100.0;
 const ARABIC_WIDTH: f32 = 72.0;
