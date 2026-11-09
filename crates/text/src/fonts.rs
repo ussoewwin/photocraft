@@ -1077,7 +1077,10 @@ pub fn localized_candidates(english: &str, names: &[(String, Option<String>)]) -
         if lang.is_some() || name.trim().is_empty() || name == english {
             continue;
         }
-        if !name.chars().any(|c| (c as u32) > 0x7F) || fold(name) == english_folded || out.contains(name) {
+        if !name.chars().any(|c| (c as u32) > 0x7F)
+            || (!english_folded.is_empty() && fold(name) == english_folded)
+            || out.contains(name)
+        {
             continue;
         }
         out.push(name.clone());
@@ -1177,6 +1180,9 @@ mod tests {
         assert_eq!(super::localized_name("MyFamily", &names(&[("MyFamily", Some("en")), ("MyFämily", Some("en"))])), None);
         // An untagged accented spelling of the English name is not a localization either
         assert_eq!(super::localized_name("MyFamily", &names(&[("MyFamily", None), ("MyFämily", None)])), None);
+        // An untagged non-ASCII name is preserved when the base family name folds to empty
+        let cjk_base = names(&[("日本語", None), ("明朝", None)]);
+        assert_eq!(super::localized_candidates("日本語", &cjk_base), vec!["明朝".to_string()]);
         // Every tagged candidate is listed in record order, so classification can try them all
         let mixed = names(&[("MyFamily", Some("en")), ("明朝", Some("ja-JP")), ("黑體", Some("zh-TW")), ("ポップ体", Some("ja-JP"))]);
         assert_eq!(super::localized_candidates("MyFamily", &mixed), vec!["明朝".to_string(), "黑體".to_string(), "ポップ体".to_string()]);
