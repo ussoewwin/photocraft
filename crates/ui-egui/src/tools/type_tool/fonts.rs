@@ -34,6 +34,7 @@ pub(super) fn font_labels_id() -> egui::Id {
 /// localized (native-language) name by that name, as Photoshop does ("MS Gothic" reads
 /// "ＭＳ ゴシック"). Called once a frame; the menus read the labels from the context.
 pub fn sync_font_names(ctx: &egui::Context, show_in_english: bool) {
+    let show_in_english = show_in_english && crate::i18n::current().code() != "ja";
     let labels = (!show_in_english).then(localized_families);
     ctx.data_mut(|d| {
         if let Some(labels) = labels {
