@@ -32,6 +32,7 @@ mod pattern_stamp;
 pub use pattern_stamp::live_impressionist as live_pattern_impressionist;
 mod periodic;
 mod remove;
+mod lama_cleaner;
 pub use content_aware_move::{ContentAwarePreview, preview as content_aware_move_preview};
 pub use patch::preview as patch_preview;
 
@@ -306,6 +307,18 @@ pub fn specs() -> Vec<CommandSpec> {
             ),
             enabled: has_pixel_layer,
             run: remove::remove,
+            journal: true,
+        },
+        CommandSpec {
+            id: "paint.lamaCleaner",
+            label: "LaMa Cleaner",
+            menu: &[],
+            shortcut: None,
+            params: brush_params!(
+                r#","strokes":[[[x,y,pressure?],…]|{"points":[…],"size"?,"hardness"?,"spacing"?},…]?,"closeLoops":bool=true,"sampleAllLayers":bool=false,"newLayer":bool=false → {"damage","layer"?}"#
+            ),
+            enabled: has_pixel_layer,
+            run: lama_cleaner::lama_cleaner,
             journal: true,
         },
         CommandSpec {
