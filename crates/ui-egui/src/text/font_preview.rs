@@ -268,6 +268,9 @@ mod tests {
             let (sample, second) = sample_texts(&charmap(&partial));
             assert_ne!(sample, "あいうえお", "missing {missing} should not yield Japanese sample");
             assert_eq!(second, None);
+            let (sample_mixed, second_mixed) = sample_texts(&charmap(&format!("{SAMPLE}{partial}")));
+            assert_eq!(sample_mixed, SAMPLE);
+            assert_eq!(second_mixed, None);
         }
     }
 

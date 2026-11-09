@@ -178,7 +178,10 @@ pub fn classify(family: &str, family_class: i16, panose: [u8; 10], fixed_pitch: 
         Some(FontClass::Monospace)
     } else if has(&["slab"]) {
         Some(FontClass::SlabSerif)
-    } else if has(&["sans", "grotesk", "grotesque", "gothic", "ゴシック", "ｺﾞｼｯｸ", "meiryo", "メイリオ", "hei", "黑体", "黑體", "maru", "丸ゴシック"])
+    } else if has(&["sans", "grotesk", "grotesque", "gothic", "ゴシック", "ｺﾞｼｯｸ", "meiryo", "メイリオ", "黑体", "黑體", "丸ゴシック"])
+        || name.split(|c: char| !c.is_alphabetic() || is_cjk_boundary(c)).any(|w| {
+            matches!(w, "hei" | "heiti" | "maru") || w.ends_with("hei") || w.ends_with("heiti")
+        })
     {
         Some(FontClass::SansSerif)
     } else if has(&["serif", "roman", "garamond", "times", "bodoni", "baskerville", "caslon", "mincho", "明朝", "sung", "song", "宋体", "宋體"]) {
@@ -270,6 +273,12 @@ mod tests {
         // `poptai` must end a word, so an unrelated substring such as `Poptail` does not match.
         assert_eq!(classify("Poptail", 0, NONE, false), None);
         assert_eq!(classify("Poptail Sans", 0, NONE, false), Some(FontClass::SansSerif));
+        // `hei` and `maru` match as standalone markers, so unrelated Latin names such as `Theia Serif` are not misclassified.
+        assert_eq!(classify("Theia Serif", 0, NONE, false), Some(FontClass::Serif));
+        assert_eq!(classify("Theia", 0, NONE, false), None);
+        assert_eq!(classify("SimHei", 0, NONE, false), Some(FontClass::SansSerif));
+        assert_eq!(classify("Microsoft YaHei", 0, NONE, false), Some(FontClass::SansSerif));
+        assert_eq!(classify("Maru Gothic", 0, NONE, false), Some(FontClass::SansSerif));
         // Japanese font classification coverage
         assert_eq!(classify("MS Mincho", 0, NONE, false), Some(FontClass::Serif));
         assert_eq!(classify("游明朝", 0, NONE, false), Some(FontClass::Serif));
