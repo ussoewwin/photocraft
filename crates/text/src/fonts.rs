@@ -1059,6 +1059,7 @@ pub fn localized_candidates(english: &str, names: &[(String, Option<String>)]) -
     };
     let english_folded = fold(english);
     let mut out: Vec<String> = Vec::new();
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
     // 1. Names tagged with a non-English language, in the font's own record order.
     for (name, lang) in names {
         if name.trim().is_empty() || name == english {
@@ -1067,7 +1068,7 @@ pub fn localized_candidates(english: &str, names: &[(String, Option<String>)]) -
         if let Some(l) = lang.as_deref()
             && !l.is_empty()
             && !is_english(l)
-            && !out.contains(name)
+            && seen.insert(name.clone())
         {
             out.push(name.clone());
         }
@@ -1079,10 +1080,11 @@ pub fn localized_candidates(english: &str, names: &[(String, Option<String>)]) -
         }
         if !name.chars().any(|c| (c as u32) > 0x7F)
             || (!english_folded.is_empty() && fold(name) == english_folded)
-            || out.contains(name)
+            || seen.contains(name)
         {
             continue;
         }
+        seen.insert(name.clone());
         out.push(name.clone());
     }
     out
