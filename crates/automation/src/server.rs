@@ -1430,8 +1430,10 @@ mod tests {
         .unwrap();
         let before = mcp.headless_op(|h| h.inspect(None)).await.unwrap().unwrap();
         let mut waiter = Waiter::new(None);
-        let waited = mcp.headless_wait("filter.blur.gaussianBlur".into(), json!({"radius": 1000}), &mut waiter, (0, 1));
-        assert!(tokio::time::timeout(std::time::Duration::from_millis(100), waited).await.is_err(), "the blur ended before it was dropped");
+        // Per-pixel noise is seconds of work on any machine, so the job is still running when
+        // the waiter is dropped (a GPU blur can finish inside the 100 ms window).
+        let waited = mcp.headless_wait("filter.noise.addNoise".into(), json!({"amount": 50}), &mut waiter, (0, 1));
+        assert!(tokio::time::timeout(std::time::Duration::from_millis(100), waited).await.is_err(), "the noise ended before it was dropped");
         let t = std::time::Instant::now();
         loop {
             let (running, cancelled) =
