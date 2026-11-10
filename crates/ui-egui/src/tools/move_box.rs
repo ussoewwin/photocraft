@@ -16,19 +16,36 @@ pub(crate) struct LayerBox {
     pub(crate) end: [f64; 2],
     /// ⇧ at the press: add to the layer selection.
     add: bool,
+    /// A locked or background layer that was hit under the pointer, kept for a cross-document transfer.
     pub(crate) grabbed_layer: Option<photocraft_doc::LayerId>,
+    /// The actual Move tool skips Position locks. Temporary Move keeps ordinary rectangle picks.
+    move_auto_select: bool,
+    /// An empty plain marquee from a locked-only hit clears the selection.
+    clear_on_empty: bool,
 }
 
-/// A Move-tool press that Auto-Select found nothing under: start the marquee at `p`. The press
-/// started a Move gesture's snapping and ⇧/⌥ handling, which a marquee has none of.
-pub(crate) fn begin(app: &mut PhotocraftApp, p: [f64; 2], add: bool) {
-    begin_with_layer(app, p, add, None);
+/// Start the marquee at `p` after an empty or locked-only hit. With `move_auto_select`, the
+/// real Move tool skips effective Position as well as All locks. Set `clear_on_empty` for its
+/// locked-only press so an empty replacement marquee clears the selection.
+/// Temporary Move keeps ordinary lock filtering. Marquees clear the press's snapping and ⇧/⌥ state.
+pub(crate) fn begin(app: &mut PhotocraftApp, p: [f64; 2], add: bool, move_auto_select: bool, clear_on_empty: bool) {
+    app.layer_box = Some(LayerBox { start: p, end: p, add, grabbed_layer: None, move_auto_select, clear_on_empty });
+    app.prefs_rt.snap = None;
+    app.prefs_rt.snap_lines.clear();
+    app.move_mods = Default::default();
 }
 
 /// Starts a Move marquee drag at p, optionally recording a locked or background layer that was hit
 /// under the pointer for potential cross-document transfer.
-pub(crate) fn begin_with_layer(app: &mut PhotocraftApp, p: [f64; 2], add: bool, grabbed_layer: Option<photocraft_doc::LayerId>) {
-    app.layer_box = Some(LayerBox { start: p, end: p, add, grabbed_layer });
+pub(crate) fn begin_with_layer(
+    app: &mut PhotocraftApp,
+    p: [f64; 2],
+    add: bool,
+    grabbed_layer: Option<photocraft_doc::LayerId>,
+    move_auto_select: bool,
+    clear_on_empty: bool,
+) {
+    app.layer_box = Some(LayerBox { start: p, end: p, add, grabbed_layer, move_auto_select, clear_on_empty });
     app.move_viewport = app.current_viewport;
     app.prefs_rt.snap = None;
     app.prefs_rt.snap_lines.clear();
@@ -79,7 +96,10 @@ pub(crate) fn pointer(app: &mut PhotocraftApp, ev: ToolEvent) -> bool {
             }
             let target = app.ui.tool_options.move_target.clone();
             let mode = if b.add { "add" } else { "replace" };
-            let p = json!({"x": b.start[0], "y": b.start[1], "width": w, "height": h, "target": target, "mode": mode});
+            let p = json!({
+                "x": b.start[0], "y": b.start[1], "width": w, "height": h, "target": target, "mode": mode,
+                "moveAutoSelect": b.move_auto_select, "clearOnEmpty": b.clear_on_empty,
+            });
             if let Err(e) = app.run("layer.selectInRect", p) {
                 app.ui.status = e;
                 app.ui.status_error = true;

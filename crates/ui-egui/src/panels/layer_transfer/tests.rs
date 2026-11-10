@@ -575,7 +575,7 @@ fn extra_window_move_gesture_preserved_when_main_window_finishes() {
     h.state_mut().ui.tool = Tool::Move;
     h.state_mut().move_blocked = true;
     h.state_mut().move_blocked_start = Some([10.0, 10.0]);
-    crate::tools::move_box::begin_with_layer(h.state_mut(), [10.0, 10.0], false, Some(photocraft_doc::LayerId(1)));
+    crate::tools::move_box::begin_with_layer(h.state_mut(), [10.0, 10.0], false, Some(photocraft_doc::LayerId(1)), false, false);
     h.state_mut().move_viewport = Some(extra_vid);
 
     // When the main window's finish runs, the extra window's gesture is preserved
@@ -645,7 +645,7 @@ fn a_secondary_button_release_keeps_the_marquee_until_the_primary_release() {
     h.state_mut().ui.tool_options.move_auto_select = false;
 
     // A marquee over a locked layer, as a blocked Move drag leaves it.
-    crate::tools::move_box::begin_with_layer(h.state_mut(), [20.0, 20.0], false, Some(paint));
+    crate::tools::move_box::begin_with_layer(h.state_mut(), [20.0, 20.0], false, Some(paint), false, false);
     h.state_mut().move_blocked = true;
     h.state_mut().move_blocked_start = Some([20.0, 20.0]);
 
@@ -819,13 +819,15 @@ fn a_blocked_move_over_empty_space_does_not_transfer_locked_active_layer() {
     let (mut h, paint) = harness();
     // Hide Background and lock `paint` in place so (25, 25) is transparent empty space.
     let bg = h.state().session.documents()[0].doc.layers[0].id;
-    h.state_mut().session.edit("hide bg and lock paint", |doc, active| {
-        doc.layer_mut(bg).unwrap().visible = false;
-        doc.layer_mut(paint).unwrap().locks.position = true;
-        *active = Some(paint);
-        Ok(())
-    })
-    .unwrap();
+    h.state_mut()
+        .session
+        .edit("hide bg and lock paint", |doc, active| {
+            doc.layer_mut(bg).unwrap().visible = false;
+            doc.layer_mut(paint).unwrap().locks.position = true;
+            *active = Some(paint);
+            Ok(())
+        })
+        .unwrap();
     h.state_mut().ui.tool = Tool::Move;
     h.state_mut().ui.tool_options.move_auto_select = false;
     h.run_steps(2);
