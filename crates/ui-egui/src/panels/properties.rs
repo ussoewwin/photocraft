@@ -381,5 +381,4 @@ mod tests {
             assert!((value(&h) - 1.0).abs() < 1e-6, "{key}: one undo reverts the whole drag");
         }
     }
-
 }
