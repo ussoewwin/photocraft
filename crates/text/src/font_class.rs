@@ -251,7 +251,7 @@ mod tests {
     }
 
     #[test]
-    fn fixed_pitch_and_names_decide_the_rest() {
+    fn fixed_pitch_and_the_class_beat_the_name() {
         assert_eq!(classify("Anything", 0x0805, NONE, true), Some(FontClass::Monospace), "fixed pitch beats the class");
         assert_eq!(classify("UnifrakturMaguntia", 0, NONE, false), Some(FontClass::Blackletter));
         assert_eq!(classify("Old English Text MT", 0x0805, NONE, false), Some(FontClass::Blackletter));
@@ -268,6 +268,10 @@ mod tests {
         assert_eq!(classify("Unknowable", 0, NONE, false), None);
         assert_eq!(classify("Poppins", 0, [0, 0, 5, 0, 0, 0, 0, 0, 0, 0], false), None);
         assert_eq!(classify("Popüler Display", 0, NONE, false), None);
+    }
+
+    #[test]
+    fn japanese_names_and_their_markers_are_read() {
         assert_eq!(classify("HG Pop体", 0, NONE, false), Some(FontClass::Handwritten));
         assert_eq!(classify("HGSoeiKakupoptai", 0, NONE, false), Some(FontClass::Handwritten));
         // `poptai` must end a word, so an unrelated substring such as `Poptail` does not match.
@@ -290,6 +294,10 @@ mod tests {
         assert_eq!(classify("HG行書体", 0, NONE, false), Some(FontClass::Script));
         assert_eq!(classify("HG正楷書体-PRO", 0, NONE, false), Some(FontClass::Script));
         assert_eq!(classify("UD デジタル 教科書体 N", 0, NONE, false), Some(FontClass::Handwritten));
+    }
+
+    #[test]
+    fn odd_tables_do_not_panic_or_misfile() {
         // Out-of-range or garbage table values don't panic or misfile.
         assert_eq!(classify("X", i16::MIN, [255; 10], false), None);
         assert_eq!(classify("X", -1, [2, 200, 0, 0, 0, 0, 0, 0, 0, 0], false), None);
