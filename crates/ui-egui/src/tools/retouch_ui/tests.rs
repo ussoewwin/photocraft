@@ -1273,14 +1273,33 @@ fn quick_selection_options_bar_has_new_add_subtract_mode_buttons() {
     assert_eq!(crate::canvas::tool_feedback::selection_mode(Tool::QuickSelection, 0, alt), "subtract");
     assert_eq!(crate::canvas::tool_feedback::selection_mode(Tool::QuickSelection, 0, shift), "add");
 
-    // After drawing a stroke in New mode (0), it automatically flips back to Add mode (1)
-    h.state_mut().ui.tool_options.quick_selection_mode = 0;
+    // After drawing a stroke in New mode (0), it automatically flips back to Add mode (1).
     let modifiers = egui::Modifiers::NONE;
+    let selected = |app: &PhotocraftApp, x: i32, y: i32| app.session.active().unwrap().doc.selection.as_ref().is_some_and(|s| s.sample_channel(x, y, 0) > 0.0);
+    // A filled patch gives the Quick Selection something to segment, so the selection it makes
+    // covers that patch alone.
+    h.state_mut().run("layer.new.layer", json!({"name": "Patch"})).unwrap();
+    h.state_mut().run("select.rect", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    h.state_mut().run("edit.fill", json!({"color": "#ff0000"})).unwrap();
+    h.state_mut().run("select.deselect", json!({})).unwrap();
+    h.state_mut().ui.tool_options.quick_selection_mode = 0;
     tool_event(h.state_mut(), ToolEvent::Down { x: 20.0, y: 20.0, pressure: 1.0 }, modifiers);
     tool_event(h.state_mut(), ToolEvent::Up { x: 20.0, y: 20.0 }, modifiers);
     assert!(!h.state().ui.status_error, "{}", h.state().ui.status);
     assert!(h.state().session.active().unwrap().doc.selection.is_some(), "select.quick created a selection");
+    assert!(selected(h.state(), 20, 20), "the stroke's own region is selected");
     assert_eq!(h.state().ui.tool_options.quick_selection_mode, 1, "New mode automatically flips to Add mode after stroke");
+
+    // New mode replaces the selection: a selection made elsewhere is gone after the stroke
+    // instead of being added to.
+    h.state_mut().run("select.deselect", json!({})).unwrap();
+    h.state_mut().run("select.rect", json!({"x": 60, "y": 20, "width": 20, "height": 20})).unwrap();
+    h.state_mut().ui.tool_options.quick_selection_mode = 0;
+    tool_event(h.state_mut(), ToolEvent::Down { x: 20.0, y: 20.0, pressure: 1.0 }, modifiers);
+    tool_event(h.state_mut(), ToolEvent::Up { x: 20.0, y: 20.0 }, modifiers);
+    assert!(!h.state().ui.status_error, "{}", h.state().ui.status);
+    assert!(selected(h.state(), 20, 20), "the stroke's own region is selected");
+    assert!(!selected(h.state(), 70, 30), "New mode replaces the selection: the region selected before the stroke is gone");
 
     // An empty stroke (outside canvas, changed: false) or failed stroke (no points) in New mode keeps New mode (0)
     h.state_mut().run("select.deselect", json!({})).unwrap();
