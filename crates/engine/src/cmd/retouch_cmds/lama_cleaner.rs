@@ -152,8 +152,80 @@ fn hole(plan: &Plan, sel: Option<&Surface>) -> Result<Vec<bool>> {
     Ok(m)
 }
 
+/// The LaMa helper program and its model, resolved before any work starts.
 #[cfg(not(target_arch = "wasm32"))]
-fn execute_lama(w: usize, h: usize, ch: usize, fmt: &PixelFormat, img_data: &[f32], hole: &[bool]) -> Result<Vec<f32>> {
+#[derive(Debug)]
+struct LamaTool {
+    exe: std::path::PathBuf,
+    model: std::path::PathBuf,
+}
+
+/// The wasm build cannot run a helper process: the command reports that it needs the desktop app.
+#[cfg(target_arch = "wasm32")]
+struct LamaTool;
+
+#[cfg(target_arch = "wasm32")]
+impl LamaTool {
+    fn resolve(_s: &Session, _p: &Value) -> Result<Self> {
+        Err(EngineError::Other("LaMa Cleaner is only available in the desktop app".into()))
+    }
+}
+
+/// The helper's file name on this platform.
+#[cfg(not(target_arch = "wasm32"))]
+const HELPER: &str = if cfg!(windows) { "lama-cleaner.exe" } else { "lama-cleaner" };
+
+#[cfg(not(target_arch = "wasm32"))]
+impl LamaTool {
+    /// Where the helper is looked for, most specific first: the plug-ins folder set in
+    /// Preferences › Plug-ins, then the `plugins` folder beside the running executable, then the
+    /// executable's own folder. The working directory is never searched (it depends on how the app
+    /// was started), and no machine's absolute path is written into the code.
+    fn folders(s: &Session) -> Vec<std::path::PathBuf> {
+        let mut folders: Vec<std::path::PathBuf> = Vec::new();
+        let plug_ins = &s.prefs().plug_ins;
+        let chosen = plug_ins.additional_plugins_folder.trim();
+        if plug_ins.use_additional_plugins_folder && !chosen.is_empty() {
+            folders.push(std::path::PathBuf::from(chosen));
+        }
+        if let Some(dir) = std::env::current_exe().ok().and_then(|e| e.parent().map(std::path::Path::to_path_buf)) {
+            for folder in [dir.join("plugins"), dir] {
+                if !folders.contains(&folder) {
+                    folders.push(folder);
+                }
+            }
+        }
+        folders
+    }
+
+    /// `key` in the command's params names the file outright; without it the first copy in
+    /// [`Self::folders`] is used. The error names every place searched, so a missing helper is a
+    /// message the user can act on rather than a silent fallback to something else.
+    fn file(s: &Session, p: &Value, key: &str, name: &str) -> Result<std::path::PathBuf> {
+        if let Some(given) = p.get(key) {
+            let given = given.as_str().ok_or_else(|| bad(CMD, format!("`{key}` must be a file path")))?;
+            let path = std::path::PathBuf::from(given);
+            return if path.exists() { Ok(path) } else { Err(EngineError::Other(format!("`{key}` names {given}, which does not exist"))) };
+        }
+        let folders = Self::folders(s);
+        if let Some(found) = folders.iter().map(|folder| folder.join(name)).find(|path| path.exists()) {
+            return Ok(found);
+        }
+        let searched: Vec<String> = folders.iter().map(|folder| folder.join(name).display().to_string()).collect();
+        Err(EngineError::Other(format!(
+            "{name} is not installed. Pass `{key}`, or put it in Preferences › Plug-ins › Additional Plug-ins Folder, or in a `plugins` folder beside the app. Looked in: {}",
+            searched.join(", ")
+        )))
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn resolve(s: &Session, p: &Value) -> Result<Self> {
+        Ok(Self { exe: Self::file(s, p, "exe", HELPER)?, model: Self::file(s, p, "model", "big-lama.onnx")? })
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn execute_lama(w: usize, h: usize, ch: usize, fmt: &PixelFormat, img_data: &[f32], hole: &[bool], tool: &LamaTool) -> Result<Vec<f32>> {
     let mut rgb_bytes = Vec::with_capacity(w * h * 3);
     for i in 0..(w * h) {
         let rgba = to_rgba(fmt, &img_data[i * ch..(i + 1) * ch]);
@@ -181,36 +253,7 @@ fn execute_lama(w: usize, h: usize, ch: usize, fmt: &PixelFormat, img_data: &[f3
     std::fs::write(&in_p, img_png).map_err(|e| EngineError::Other(e.to_string()))?;
     std::fs::write(&mask_p, mask_png).map_err(|e| EngineError::Other(e.to_string()))?;
 
-    let mut exe_candidates = vec![
-        std::path::PathBuf::from(r"D:\USERFILES\GitHub\photocraft\plugins\lama-cleaner.exe"),
-        std::path::PathBuf::from(r"D:\USERFILES\GitHub\photocraft\plugins\lama-cleaner\target\release\lama-cleaner.exe"),
-        std::path::PathBuf::from(r"plugins\lama-cleaner.exe"),
-    ];
-    if let Ok(cur_exe) = std::env::current_exe()
-        && let Some(parent) = cur_exe.parent()
-    {
-        exe_candidates.push(parent.join("plugins").join("lama-cleaner.exe"));
-        exe_candidates.push(parent.join("lama-cleaner.exe"));
-    }
-    let exe = exe_candidates
-        .iter()
-        .find(|p| p.exists())
-        .ok_or_else(|| EngineError::Other("lama-cleaner.exe が見つかりません。plugins/lama-cleaner.exe を配置してください。".into()))?;
-
-    let mut model_candidates =
-        vec![std::path::PathBuf::from(r"D:\USERFILES\GitHub\photocraft\plugins\big-lama.onnx"), std::path::PathBuf::from(r"plugins\big-lama.onnx")];
-    if let Ok(cur_exe) = std::env::current_exe()
-        && let Some(parent) = cur_exe.parent()
-    {
-        model_candidates.push(parent.join("plugins").join("big-lama.onnx"));
-        model_candidates.push(parent.join("big-lama.onnx"));
-    }
-    let model = model_candidates
-        .iter()
-        .find(|p| p.exists())
-        .ok_or_else(|| EngineError::Other("big-lama.onnx が見つかりません。plugins/big-lama.onnx を配置してください。".into()))?;
-
-    let output = std::process::Command::new(exe)
+    let output = std::process::Command::new(&tool.exe)
         .arg("-i")
         .arg(&in_p)
         .arg("-m")
@@ -218,13 +261,13 @@ fn execute_lama(w: usize, h: usize, ch: usize, fmt: &PixelFormat, img_data: &[f3
         .arg("-o")
         .arg(&out_p)
         .arg("--model")
-        .arg(model)
+        .arg(&tool.model)
         .output()
-        .map_err(|e| EngineError::Other(format!("lama-cleaner 実行エラー: {e}")))?;
+        .map_err(|e| EngineError::Other(format!("lama-cleaner failed: {e}")))?;
 
     if !output.status.success() {
         let err_msg = String::from_utf8_lossy(&output.stderr);
-        return Err(EngineError::Other(format!("LaMa 推論エラー: {err_msg}")));
+        return Err(EngineError::Other(format!("LaMa inpainting failed: {err_msg}")));
     }
 
     let out_bytes = std::fs::read(&out_p).map_err(|e| EngineError::Other(e.to_string()))?;
@@ -247,11 +290,18 @@ fn execute_lama(w: usize, h: usize, ch: usize, fmt: &PixelFormat, img_data: &[f3
 }
 
 #[cfg(target_arch = "wasm32")]
-fn execute_lama(_w: usize, _h: usize, _ch: usize, _fmt: &PixelFormat, _img_data: &[f32], _hole: &[bool]) -> Result<Vec<f32>> {
-    Err(EngineError::Other("LaMa Cleaner is only available on desktop platforms".into()))
+fn execute_lama(_w: usize, _h: usize, _ch: usize, _fmt: &PixelFormat, _img_data: &[f32], _hole: &[bool], _tool: &LamaTool) -> Result<Vec<f32>> {
+    Err(EngineError::Other("LaMa Cleaner is only available in the desktop app".into()))
 }
 
-fn run_lama_cleaner(doc: &mut Document, plan: &Plan, p: &Value, ctx: &crate::jobs::JobCtx, label: &str) -> Result<Option<(Region, Vec<bool>)>> {
+fn run_lama_cleaner(
+    doc: &mut Document,
+    plan: &Plan,
+    p: &Value,
+    ctx: &crate::jobs::JobCtx,
+    label: &str,
+    tool: &LamaTool,
+) -> Result<Option<(Region, Vec<bool>)>> {
     let hole = hole(plan, doc.selection.as_ref())?;
     if !hole.iter().any(|m| *m) {
         return Err(bad(CMD, "the stroke doesn't cover anything that can change"));
@@ -268,7 +318,7 @@ fn run_lama_cleaner(doc: &mut Document, plan: &Plan, p: &Value, ctx: &crate::job
         return Ok(None);
     }
     let (w, h) = (win.width() as usize, win.height() as usize);
-    let mut data = ctx.stage(0.0, 1.0, label, |_| execute_lama(w, h, img.ch, &fmt, &img.data, &hole)).map_err(|_| EngineError::Cancelled)?;
+    let mut data = ctx.stage(0.0, 1.0, label, |_| execute_lama(w, h, img.ch, &fmt, &img.data, &hole, tool)).map_err(|_| EngineError::Cancelled)?;
     clamp_samples(&fmt, &mut data);
     Ok(Some((Region { rect: win, ch: img.ch, data }, hole)))
 }
@@ -301,6 +351,7 @@ fn fill_to_new_layer(doc: &mut Document, id: Option<LayerId>, out: &Region, hole
 
 pub(super) fn lama_cleaner(s: &mut Session, p: &Value) -> Result<Value> {
     let plan = plan(s, p)?;
+    let tool = LamaTool::resolve(s, p)?;
     let label = "LaMa Cleaner";
     let d = s.active().ok_or(EngineError::NoDocument)?;
     let doc = d.doc.clone();
@@ -316,7 +367,7 @@ pub(super) fn lama_cleaner(s: &mut Session, p: &Value) -> Result<Value> {
             move |ctx| {
                 ctx.progress(0.0, label);
                 let mut work = (*doc).clone();
-                run_lama_cleaner(&mut work, &plan, &p, ctx, label)
+                run_lama_cleaner(&mut work, &plan, &p, ctx, label, &tool)
             }
         },
         move |s, filled| {
@@ -335,4 +386,92 @@ pub(super) fn lama_cleaner(s: &mut Session, p: &Value) -> Result<Value> {
             Ok(json!({ "damage": damage_json(damage) }))
         },
     )
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use super::*;
+
+    fn session() -> Session {
+        Session::new()
+    }
+
+    /// The preferences folder comes first, then the app's own folders, built from wherever the
+    /// running executable is: nothing depends on the machine this test runs on.
+    #[test]
+    fn folders_are_the_preferences_folder_then_the_apps_own() {
+        let d = tempfile::tempdir().unwrap();
+        let mut s = session();
+        let chosen = d.path().to_string_lossy().into_owned();
+        s.edit_prefs(|p| {
+            p.plug_ins.use_additional_plugins_folder = true;
+            p.plug_ins.additional_plugins_folder = chosen.clone();
+        });
+        let exe_dir = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
+        assert_eq!(LamaTool::folders(&s), [d.path().to_path_buf(), exe_dir.join("plugins"), exe_dir]);
+    }
+
+    /// The plug-ins folder is only searched when Preferences says to use it, as for the WebAssembly
+    /// plug-ins in the same folder.
+    #[test]
+    fn the_preferences_folder_is_searched_only_when_it_is_enabled() {
+        let d = tempfile::tempdir().unwrap();
+        let mut s = session();
+        let chosen = d.path().to_string_lossy().into_owned();
+        s.edit_prefs(|p| {
+            p.plug_ins.use_additional_plugins_folder = false;
+            p.plug_ins.additional_plugins_folder = chosen;
+        });
+        assert!(!LamaTool::folders(&s).contains(&d.path().to_path_buf()));
+    }
+
+    #[test]
+    fn a_path_given_in_the_params_is_used_as_given() {
+        let d = tempfile::tempdir().unwrap();
+        let exe = d.path().join(HELPER);
+        let model = d.path().join("big-lama.onnx");
+        std::fs::write(&exe, b"helper").unwrap();
+        std::fs::write(&model, b"model").unwrap();
+        let tool = LamaTool::resolve(&session(), &serde_json::json!({"exe": exe, "model": model})).unwrap();
+        assert_eq!((tool.exe, tool.model), (exe, model));
+    }
+
+    #[test]
+    fn a_path_given_in_the_params_that_is_not_there_says_so() {
+        let d = tempfile::tempdir().unwrap();
+        let exe = d.path().join("absent-helper");
+        let error = LamaTool::resolve(&session(), &serde_json::json!({"exe": exe})).unwrap_err().to_string();
+        assert!(error.contains("absent-helper"), "{error}");
+    }
+
+    /// A helper that is nowhere says every place it looked, so the fix is in the message: no
+    /// silent fallback, no machine-specific path baked into the code.
+    #[test]
+    fn a_missing_helper_names_every_place_searched() {
+        let d = tempfile::tempdir().unwrap();
+        let mut s = session();
+        let chosen = d.path().to_string_lossy().into_owned();
+        s.edit_prefs(|p| {
+            p.plug_ins.use_additional_plugins_folder = true;
+            p.plug_ins.additional_plugins_folder = chosen;
+        });
+        let error = LamaTool::resolve(&s, &serde_json::json!({})).unwrap_err().to_string();
+        for folder in LamaTool::folders(&s) {
+            assert!(error.contains(&folder.join(HELPER).display().to_string()), "{error}");
+        }
+    }
+
+    /// Guards the rule that repository code carries no machine's absolute path: every path this
+    /// file builds comes from the executable, the preferences folder or a parameter.
+    #[test]
+    fn no_machine_absolute_path_is_written_in_this_file() {
+        let src = include_str!("lama_cleaner.rs");
+        for letter in ['C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'] {
+            let drive = format!("{letter}:\\");
+            assert!(!src.contains(&drive), "this file writes the absolute path {drive}");
+        }
+        for home in [concat!("/Us", "ers/"), concat!("/ho", "me/")] {
+            assert!(!src.contains(home), "this file writes the absolute path {home}");
+        }
+    }
 }
