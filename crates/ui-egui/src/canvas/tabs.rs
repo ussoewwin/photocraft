@@ -830,6 +830,7 @@ pub fn extra_windows(app: &mut PhotocraftApp, ctx: &egui::Context) {
                 app.drawing_window = Some(w.id);
                 view = canvas_view(app, ui, w.document, rect, view.clone(), focused);
                 app.drawing_window = None;
+                crate::layer_transfer::finish(app, ui.ctx());
                 // Preferences › Zoom Resizes Windows: a zoom wraps the window around the image.
                 crate::zoom_window_fit::follow(app, ui.ctx(), class, vid, &w, &mut view, rect);
             });
@@ -839,6 +840,12 @@ pub fn extra_windows(app: &mut PhotocraftApp, ctx: &egui::Context) {
             win.focused = focused;
             if close {
                 win.open = false;
+                if app.move_viewport == Some(vid) {
+                    app.clear_move_blocked();
+                    if app.layer_box.as_ref().is_some_and(|b| b.grabbed_layer.is_some()) {
+                        app.layer_box = None;
+                    }
+                }
             }
         }
     }

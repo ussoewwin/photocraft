@@ -73,6 +73,17 @@ fn selection_only_copy_rejects_missing_selection_and_wrong_parameter_type() {
         assert!(s.execute("layer.copyToDocument", json!({"document": 1, "selectionOnly": option})).is_err());
         assert_eq!(doc(&s, 1).layers.len(), 1);
     }
+    s.execute("select.rect", json!({"x": 4, "y": 6, "width": 5, "height": 10})).unwrap();
+    let before = doc(&s, 0).clone();
+    for bad_cut in [
+        json!({"document": 1, "selectionOnly": true, "cut": true}),
+        json!({"document": 1, "cut": true}),
+        json!({"document": 1, "selection": true, "cut": "yes"}),
+    ] {
+        assert!(s.execute("layer.copyToDocument", bad_cut.clone()).is_err(), "{bad_cut}");
+        assert_eq!(*doc(&s, 0), before, "{bad_cut}: source untouched");
+        assert_eq!(doc(&s, 1).layers.len(), 1, "{bad_cut}: destination untouched");
+    }
 }
 
 fn bounds(s: &Session, i: usize, id: LayerId) -> Rect {
