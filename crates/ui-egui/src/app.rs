@@ -53,6 +53,8 @@ impl PhotocraftApp {
             cancelled_vector_drag: false,
             move_blocked: false,
             move_blocked_start: None,
+            move_blocked_moved: false,
+            move_blocked_layer: None,
             move_viewport: None,
             current_viewport: None,
             tool_override: None,
@@ -307,6 +309,17 @@ impl eframe::App for PhotocraftApp {
         }
         self.ui_frame(ui, frame);
         self.finish_type_reset_pass(ui.ctx());
+    }
+}
+
+impl PhotocraftApp {
+    /// Clear state tracking a refused Move-tool press and its candidate transfer layer.
+    pub(crate) fn clear_move_blocked(&mut self) {
+        self.move_blocked = false;
+        self.move_blocked_start = None;
+        self.move_blocked_moved = false;
+        self.move_blocked_layer = None;
+        self.move_viewport = None;
     }
 }
 

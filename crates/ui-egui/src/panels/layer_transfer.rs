@@ -80,7 +80,17 @@ fn move_drag(app: &PhotocraftApp) -> Option<[f64; 2]> {
     }
     // A press that found nothing movable starts a marquee; when that marquee grabbed a layer
     // (a locked layer or the Background), the marquee can still become a transfer of it.
+    // Likewise, a blocked Move press (Auto-Select off) recorded its start point for transfer.
     let st = app.session.active()?;
+    if app.move_blocked
+        && let Some(start) = app.move_blocked_start
+        && app.ui.transform.is_none()
+        && app.guide_drag.is_none()
+        && st.floating.is_none()
+        && st.active_layer.is_some()
+    {
+        return Some(start);
+    }
     if st.doc.selection.is_some() || st.floating.is_some() {
         return None;
     }
@@ -106,11 +116,24 @@ fn arm_move_transfer(app: &mut PhotocraftApp, ctx: &egui::Context, index: usize)
         if app.session.active_index() == Some(index) {
             return false;
         }
-        // A marquee that grabbed a layer has no drag object and no floating piece to take
-        // back: the grabbed layer is what transfers.
+        // A marquee that grabbed a layer or a blocked Move press has no drag object and no
+        // floating piece to take back: the grabbed or hit layer is what transfers.
         if app.drag.is_none() {
-            let Some(grabbed) = app.layer_box.as_ref().and_then(|b| b.grabbed_layer) else { return false };
-            app.layer_box = None;
+            if app.move_viewport.is_some_and(|v| v != ctx.viewport_id()) {
+                return false;
+            }
+            let grabbed = if let Some(b) = app.layer_box.as_ref() {
+                let Some(g) = b.grabbed_layer else { return false };
+                app.layer_box = None;
+                app.move_viewport = None;
+                g
+            } else if app.move_blocked {
+                let hit = app.move_blocked_layer.unwrap_or(active);
+                app.clear_move_blocked();
+                hit
+            } else {
+                return false;
+            };
             return begin(app, ctx, grabbed, Some(grab));
         }
         let Some(previous) = app.drag.as_ref().map(|d| d.transfer_floating_before.clone()) else { return false };
@@ -170,9 +193,11 @@ pub fn finish(app: &mut PhotocraftApp, ctx: &egui::Context) {
     // A blocked Move press is cleaned up by the window that owns it, so another window's
     // pointer state cannot clear the source window's gesture.
     if (!primary_down || primary_released) && get(ctx).is_none() && app.move_viewport.is_none_or(|v| v == ctx.viewport_id()) {
-        app.move_blocked = false;
-        app.move_blocked_start = None;
-        app.move_viewport = None;
+        let show_lock = app.move_blocked && app.move_blocked_moved;
+        app.clear_move_blocked();
+        if show_lock {
+            crate::move_lock::prompt(app);
+        }
         if let Some(b) = app.layer_box.as_ref()
             && b.grabbed_layer.is_some()
         {
@@ -227,7 +252,7 @@ pub(crate) fn prepare(app: &mut PhotocraftApp, ctx: &egui::Context) {
     // Do not consume a source drag merely because it passes over another tile. On release this
     // runs before canvas input, so a destination can take ownership without the source committing;
     // returning to the source still releases as the original move.
-    if !ctx.input(|i| i.pointer.any_released()) {
+    if !ctx.input(|i| i.pointer.primary_released()) {
         return;
     }
     let Some(pos) = pointer_if_armed(app, ctx) else { return };

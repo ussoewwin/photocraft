@@ -237,8 +237,8 @@ fn copy_to_document(s: &mut Session, p: &Value) -> Result<Value> {
     if ids.is_empty() {
         return Err(bad("no layers to copy"));
     }
-    // `selectionOnly` is the documented spelling; `selection` is the older one and still
-    // accepted. Both mean the same thing: copy the selected pixels, not the whole layer.
+    // `selectionOnly` copies selected pixels from one raster layer without cutting or targeting a mask.
+    // `selection` enables copying or cutting selected pixels or mask content (`cut`, `target: "mask"`).
     let selection_only = match p.get("selectionOnly") {
         None => false,
         Some(Value::Bool(on)) => *on,
@@ -247,8 +247,6 @@ fn copy_to_document(s: &mut Session, p: &Value) -> Result<Value> {
     if selection_only && (ids.len() != 1 || sdoc.selection.is_none()) {
         return Err(bad("copying selected pixels requires a selection and one pixel layer"));
     }
-    // Whether the selected pixels are cut out of the source, and whether the layer's mask is
-    // the content that travels (`"target": "mask"`).
     let selection = match p.get("selection") {
         None => false,
         Some(Value::Bool(on)) => *on,
@@ -257,7 +255,14 @@ fn copy_to_document(s: &mut Session, p: &Value) -> Result<Value> {
     if selection && (ids.len() != 1 || sdoc.selection.is_none()) {
         return Err(bad("copying a selection requires a selection and one pixel layer"));
     }
-    let cut = selection && p.get("cut").and_then(Value::as_bool).unwrap_or(false);
+    let cut = match p.get("cut") {
+        None => false,
+        Some(Value::Bool(on)) => *on,
+        Some(_) => return Err(bad("`cut` must be a boolean")),
+    };
+    if cut && !selection {
+        return Err(bad("`cut` requires `selection: true`"));
+    }
     let mask_target = selection && crate::channel_cmds::target_of(p) == crate::channel_cmds::Target::Mask;
     for (doc, role) in [(&sdoc, "source"), (&ddoc, "destination")] {
         if !layered(doc.mode) {
@@ -500,7 +505,7 @@ pub fn specs() -> Vec<CommandSpec> {
         label: "Copy Layers to Document",
         menu: &[],
         shortcut: None,
-        params: r##"{"document":index (destination),"layers":[id,…]?=the source's selected layers,"source":index?=active,"selectionOnly":bool=false (copy selected pixels from one raster layer),"cut":bool=false (when selectionOnly is true: clear the selected pixels in the source),"target":"mask"? (the layer's mask is the content that travels),"center":bool=false (centre on the destination's canvas),"at":[x,y]? (centre the copies on this point),"offset":[dx,dy]?=[0,0] (from their place in the source),"name":str? (one layer: the copy's name)}"##,
+        params: r##"{"document":index (destination),"layers":[id,…]?=the source's selected layers,"source":index?=active,"selectionOnly":bool=false (copy selected pixels from one raster layer),"selection":bool=false (copy or cut selected pixels or mask content from one layer),"cut":bool=false (when selection is true: clear the selected pixels in the source),"target":"mask"? (when selection is true: the layer's mask is the content that travels),"center":bool=false (centre on the destination's canvas),"at":[x,y]? (centre the copies on this point),"offset":[dx,dy]?=[0,0] (from their place in the source),"name":str? (one layer: the copy's name)}"##,
         enabled,
         run: copy_to_document,
         journal: true,

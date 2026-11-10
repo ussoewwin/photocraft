@@ -705,3 +705,109 @@ fn a_secondary_button_release_does_not_complete_a_transfer() {
 
     assert!(crate::layer_transfer::is_transfer_armed(&ctx), "a secondary release leaves the transfer armed for the intended primary drop");
 }
+
+/// #11971 review: with Auto-Select off, pressing a locked layer (e.g. Background) and dragging
+/// onto another document tab transfers the layer without firing the lock dialog mid-drag.
+#[test]
+fn a_move_tool_background_layer_drag_with_auto_select_off_transfers_via_tab_without_lock_dialog() {
+    let (mut h, paint) = harness();
+    h.state_mut().session.execute("layer.delete", json!({"layer": paint.0})).unwrap();
+    h.state_mut().ui.tool = Tool::Move;
+    h.state_mut().ui.tool_options.move_auto_select = false;
+    h.run_steps(2);
+
+    let grab = ViewXform::active(h.state()).unwrap().to_screen(15.0, 15.0);
+    let over_tab = tab(&h, "dest-doc");
+    let drop = h.state().last_canvas_rect.center();
+    drag_along(&mut h, &[grab, over_tab, drop], Modifiers::NONE);
+
+    assert_eq!(h.state().session.documents()[1].doc.layers.len(), 2);
+    let (name, _) = copy(&h);
+    assert_eq!(name, "Layer 1");
+    assert!(h.state().ui.dialogs.iter().all(|d| d.kind != crate::state::DialogKind::Error), "no lock dialog during transfer");
+}
+
+/// #11971 review: with Auto-Select off, dragging Background directly to an arranged neighbour
+/// cell transfers it without popping up the lock dialog.
+#[test]
+fn a_move_tool_background_layer_drag_with_auto_select_off_transfers_in_arranged_view() {
+    let (mut h, paint) = harness();
+    h.state_mut().session.execute("layer.delete", json!({"layer": paint.0})).unwrap();
+    h.state_mut().ui.view.arrange = "twoUpVertical".into();
+    h.state_mut().ui.tool = Tool::Move;
+    h.state_mut().ui.tool_options.move_auto_select = false;
+    h.run_steps(4);
+
+    let cells = crate::canvas::arranged_cells(h.state(), h.state().last_canvas_rect).unwrap();
+    assert_eq!(cells.len(), 2);
+    let (src_cell, dest_cell) = (cells[0].1, cells[1].1);
+
+    let view_src = h.state().ui.views[0].clone();
+    let xf_src =
+        crate::canvas::ViewXform { rect: src_cell, zoom: view_src.zoom / h.state().ppp, center: view_src.center, flip: false, rotation: 0.0, aspect: 1.0 };
+    let grab = xf_src.to_screen(15.0, 15.0);
+    let drop = dest_cell.center();
+    drag_along(&mut h, &[grab, drop], Modifiers::NONE);
+
+    assert_eq!(h.state().session.documents()[1].doc.layers.len(), 2);
+    let (name, _) = copy(&h);
+    assert_eq!(name, "Layer 1");
+    assert!(h.state().ui.dialogs.iter().all(|d| d.kind != crate::state::DialogKind::Error), "no lock dialog during arranged transfer");
+}
+
+/// #11971 review: with Auto-Select off and a locked active layer (Background), pressing over
+/// another layer (`paint`) captures that pressed layer for cross-document transfer instead of
+/// transferring the active locked layer.
+#[test]
+fn a_blocked_move_with_auto_select_off_transfers_the_pressed_layer() {
+    let (mut h, paint) = harness();
+    let bg = h.state().session.documents()[0].doc.layers[0].id;
+    h.state_mut().session.execute("layer.select", json!({"layer": bg.0})).unwrap();
+    h.state_mut().ui.tool = Tool::Move;
+    h.state_mut().ui.tool_options.move_auto_select = false;
+    h.run_steps(2);
+
+    // Press directly over the 10x10 red square on `paint` while Background is active.
+    let grab = ViewXform::active(h.state()).unwrap().to_screen(8.0, 10.0);
+    let over_tab = tab(&h, "dest-doc");
+    let drop = h.state().last_canvas_rect.center();
+    drag_along(&mut h, &[grab, over_tab, drop], Modifiers::NONE);
+
+    let (name, r) = copy(&h);
+    assert_eq!(name, "paint", "transfers the layer hit at the press, not Background");
+    assert_eq!(r.size(), vec2(10.0, 10.0));
+    assert_eq!(h.state().session.documents()[0].active_layer, Some(bg), "source active layer stayed unchanged");
+    assert!(h.state().session.documents()[0].doc.layer(paint).is_some());
+}
+
+/// #11971 review: when a blocked Move gesture starts in an extra document window, running the
+/// extra-window pass (`extra_windows`) and starting a fresh press in another viewport do not leave
+/// stale blocked state consuming later events.
+#[test]
+fn stale_blocked_move_from_extra_window_cleans_up_before_consuming_other_viewport_events() {
+    let (mut h, _paint) = harness();
+    let main_vid = h.ctx.viewport_id();
+    let extra_vid = egui::ViewportId::from_hash_of("docwin-stale");
+    h.state_mut().ui.tool = Tool::Move;
+    h.state_mut().ui.tool_options.move_auto_select = false;
+
+    use crate::canvas::{ToolEvent, tool_event};
+    // Blocked drag begins in the extra viewport (`move_viewport = Some(extra_vid)`).
+    h.state_mut().current_viewport = Some(extra_vid);
+    let bg = h.state().session.documents()[0].doc.layers[0].id;
+    h.state_mut().session.execute("layer.select", json!({"layer": bg.0})).unwrap();
+    tool_event(h.state_mut(), ToolEvent::Down { x: 20.0, y: 20.0, pressure: 1.0 }, Modifiers::NONE);
+    assert!(h.state().move_blocked);
+    assert_eq!(h.state().move_viewport, Some(extra_vid));
+
+    // A fresh Down on an unlocked layer in the main viewport clears stale extra-window state
+    // rather than letting later Move/Up events get eaten by the old blocked gesture.
+    h.state_mut().current_viewport = Some(main_vid);
+    let paint = h.state().session.documents()[0].doc.layers[1].id;
+    h.state_mut().session.execute("layer.select", json!({"layer": paint.0})).unwrap();
+    tool_event(h.state_mut(), ToolEvent::Down { x: 8.0, y: 10.0, pressure: 1.0 }, Modifiers::NONE);
+    assert!(!h.state().move_blocked);
+    assert!(h.state().move_blocked_layer.is_none());
+    assert!(h.state().drag.is_some(), "unlocked drag starts cleanly in main viewport");
+    tool_event(h.state_mut(), ToolEvent::Up { x: 8.0, y: 10.0 }, Modifiers::NONE);
+}
