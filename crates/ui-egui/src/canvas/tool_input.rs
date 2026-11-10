@@ -306,6 +306,7 @@ fn handle_move_pointer(app: &mut PhotocraftApp, ev: ToolEvent, tool: Tool, mods:
                 // The press is refused, so no drag object exists; the point is recorded so the
                 // gesture can still become a cross-document transfer of that layer.
                 app.move_blocked_start = Some([x, y]);
+                app.move_blocked_moved = false;
                 app.move_viewport = app.current_viewport;
                 return true;
             }
@@ -414,10 +415,11 @@ fn handle_move_blocked_event(app: &mut PhotocraftApp, ev: ToolEvent, tool: Tool,
         ToolEvent::Down { x, y, .. } if tool != Tool::Move && app.ui.transform.is_none() && crate::move_lock::blocked(app, tool, [x, y], mods) => {
             app.move_blocked = true;
             app.move_blocked_start = Some([x, y]);
+            app.move_blocked_moved = false;
             app.move_viewport = app.current_viewport;
             true
         }
-        ToolEvent::Move { .. } if app.move_blocked => {
+        ToolEvent::Move { x, y, .. } if app.move_blocked => {
             // The window that armed the blocked drag resolves it: a second window's pointer
             // must not clear the state or raise the lock dialog mid-drag.
             if let (Some(owner), Some(here)) = (app.move_viewport, app.current_viewport)
@@ -426,17 +428,36 @@ fn handle_move_blocked_event(app: &mut PhotocraftApp, ev: ToolEvent, tool: Tool,
                 return true;
             }
             if !crate::panels::layer_transfer::is_transfer_in_progress(app) {
-                app.move_blocked = false;
-                app.move_blocked_start = None;
-                app.move_viewport = None;
-                crate::move_lock::prompt(app);
+                if app.move_blocked_start.is_some_and(|s| [x, y] != s) {
+                    app.move_blocked_moved = true;
+                }
+                // Defer the lock dialog while a cross-document Move transfer is still possible, so
+                // dragging off the source canvas onto another document or tab arms cleanly.
+                let may_transfer = tool == Tool::Move && app.session.documents().len() > 1 && app.ui.transform.is_none() && app.guide_drag.is_none();
+                if !may_transfer {
+                    app.move_blocked = false;
+                    app.move_blocked_start = None;
+                    app.move_blocked_moved = false;
+                    app.move_viewport = None;
+                    crate::move_lock::prompt(app);
+                }
             }
             true
         }
-        ToolEvent::Up { .. } if app.move_blocked => {
+        ToolEvent::Up { x, y } if app.move_blocked => {
+            if let (Some(owner), Some(here)) = (app.move_viewport, app.current_viewport)
+                && owner != here
+            {
+                return true;
+            }
+            let show_lock = app.move_blocked_moved || app.move_blocked_start.is_some_and(|s| [x, y] != s);
             app.move_blocked = false;
             app.move_blocked_start = None;
+            app.move_blocked_moved = false;
             app.move_viewport = None;
+            if show_lock && !crate::panels::layer_transfer::is_transfer_in_progress(app) {
+                crate::move_lock::prompt(app);
+            }
             true
         }
         _ => false,

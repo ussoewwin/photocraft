@@ -705,3 +705,52 @@ fn a_secondary_button_release_does_not_complete_a_transfer() {
 
     assert!(crate::layer_transfer::is_transfer_armed(&ctx), "a secondary release leaves the transfer armed for the intended primary drop");
 }
+
+/// #11971 review: with Auto-Select off, pressing a locked layer (e.g. Background) and dragging
+/// onto another document tab transfers the layer without firing the lock dialog mid-drag.
+#[test]
+fn a_move_tool_background_layer_drag_with_auto_select_off_transfers_via_tab_without_lock_dialog() {
+    let (mut h, paint) = harness();
+    h.state_mut().session.execute("layer.delete", json!({"layer": paint.0})).unwrap();
+    h.state_mut().ui.tool = Tool::Move;
+    h.state_mut().ui.tool_options.move_auto_select = false;
+    h.run_steps(2);
+
+    let grab = ViewXform::active(h.state()).unwrap().to_screen(15.0, 15.0);
+    let over_tab = tab(&h, "dest-doc");
+    let drop = h.state().last_canvas_rect.center();
+    drag_along(&mut h, &[grab, over_tab, drop], Modifiers::NONE);
+
+    assert_eq!(h.state().session.documents()[1].doc.layers.len(), 2);
+    let (name, _) = copy(&h);
+    assert_eq!(name, "Layer 1");
+    assert!(h.state().ui.dialogs.iter().all(|d| d.kind != crate::state::DialogKind::Error), "no lock dialog during transfer");
+}
+
+/// #11971 review: with Auto-Select off, dragging Background directly to an arranged neighbour
+/// cell transfers it without popping up the lock dialog.
+#[test]
+fn a_move_tool_background_layer_drag_with_auto_select_off_transfers_in_arranged_view() {
+    let (mut h, paint) = harness();
+    h.state_mut().session.execute("layer.delete", json!({"layer": paint.0})).unwrap();
+    h.state_mut().ui.view.arrange = "twoUpVertical".into();
+    h.state_mut().ui.tool = Tool::Move;
+    h.state_mut().ui.tool_options.move_auto_select = false;
+    h.run_steps(4);
+
+    let cells = crate::canvas::arranged_cells(h.state(), h.state().last_canvas_rect).unwrap();
+    assert_eq!(cells.len(), 2);
+    let (src_cell, dest_cell) = (cells[0].1, cells[1].1);
+
+    let view_src = h.state().ui.views[0].clone();
+    let xf_src =
+        crate::canvas::ViewXform { rect: src_cell, zoom: view_src.zoom / h.state().ppp, center: view_src.center, flip: false, rotation: 0.0, aspect: 1.0 };
+    let grab = xf_src.to_screen(15.0, 15.0);
+    let drop = dest_cell.center();
+    drag_along(&mut h, &[grab, drop], Modifiers::NONE);
+
+    assert_eq!(h.state().session.documents()[1].doc.layers.len(), 2);
+    let (name, _) = copy(&h);
+    assert_eq!(name, "Layer 1");
+    assert!(h.state().ui.dialogs.iter().all(|d| d.kind != crate::state::DialogKind::Error), "no lock dialog during arranged transfer");
+}
