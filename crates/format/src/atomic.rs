@@ -425,9 +425,7 @@ fn dir_sync_unsupported(e: &io::Error) -> bool {
         const ERROR_INVALID_FUNCTION: i32 = 1;
         const ERROR_NOT_SUPPORTED: i32 = 50;
         const ERROR_CALL_NOT_IMPLEMENTED: i32 = 120;
-        e.raw_os_error().is_some_and(|code| {
-            code == ERROR_INVALID_FUNCTION || code == ERROR_NOT_SUPPORTED || code == ERROR_CALL_NOT_IMPLEMENTED
-        })
+        e.raw_os_error().is_some_and(|code| code == ERROR_INVALID_FUNCTION || code == ERROR_NOT_SUPPORTED || code == ERROR_CALL_NOT_IMPLEMENTED)
     }
     #[cfg(not(windows))]
     {
