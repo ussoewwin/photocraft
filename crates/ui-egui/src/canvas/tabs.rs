@@ -9,7 +9,7 @@ pub fn document_area(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
         return;
     }
     crate::distort_ui::drop_foreign(app);
-    crate::layer_transfer::check_arranged_drag(app, ui.ctx());
+    crate::layer_transfer::prepare(app, ui.ctx());
     documents(app, ui);
     crate::layer_transfer::finish(app, ui.ctx());
     // Once a frame, not per document view: the right-click or options-bar Brush Preset picker.
@@ -833,7 +833,6 @@ pub fn extra_windows(app: &mut PhotocraftApp, ctx: &egui::Context) {
                 // Preferences › Zoom Resizes Windows: a zoom wraps the window around the image.
                 crate::zoom_window_fit::follow(app, ui.ctx(), class, vid, &w, &mut view, rect);
             });
-            crate::layer_transfer::finish(app, ui.ctx());
         });
         if let Some(win) = app.ui.windows.iter_mut().find(|x| x.id == w.id) {
             win.view = view;
