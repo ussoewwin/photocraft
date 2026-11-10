@@ -9,7 +9,7 @@ use crate::panels::toolbar::{TOOL_SECTIONS, next_slot_tool, toolbar};
 use crate::state::Tool;
 
 const HEALING: [Tool; 6] = [Tool::SpotHealing, Tool::Remove, Tool::Healing, Tool::Patch, Tool::ContentAwareMove, Tool::RedEye];
-const BRUSH: [Tool; 4] = [Tool::Brush, Tool::Pencil, Tool::ColorReplacement, Tool::MixerBrush];
+const BRUSH: [Tool; 5] = [Tool::Brush, Tool::Pencil, Tool::ColorReplacement, Tool::MixerBrush, Tool::LamaCleaner];
 
 fn app() -> PhotocraftApp {
     let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
@@ -92,7 +92,7 @@ fn shift_j_follows_the_reference_sequence() {
 #[test]
 fn shift_b_follows_the_reference_sequence() {
     let want: Vec<Tool> = BRUSH.iter().chain(&BRUSH[..1]).copied().collect();
-    assert_eq!(shift_sequence(Key::B, 5), want);
+    assert_eq!(shift_sequence(Key::B, 6), want);
 }
 
 fn frame(app: &mut PhotocraftApp, ctx: &egui::Context, time: f64, events: Vec<egui::Event>) {

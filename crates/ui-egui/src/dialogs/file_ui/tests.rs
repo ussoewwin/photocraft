@@ -410,7 +410,11 @@ fn save_for_web_writes_the_picked_file_when_no_folder_is_given_or_the_name_chang
 #[test]
 fn save_for_web_starts_at_the_current_document_size() {
     let (mut app, _) = app();
-    let path = std::env::temp_dir().join(format!("pc-webui-size-{}.png", std::process::id())).to_string_lossy().into_owned();
+    // A dedicated folder, not the shared temp root: Windows can refuse a directory flush there,
+    // which would make the save report that it may not survive a power loss.
+    let dir = std::env::temp_dir().join(format!("pc-webui-size-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("size.png").to_string_lossy().into_owned();
     app.run("file.export.saveForWebLegacy", json!({"path": path, "format": "png24", "width": 60, "height": 40, "percent": 50})).unwrap();
     app.run("file.new", json!({"width": 240, "height": 160, "name": "next"})).unwrap();
     let id = open_web(&mut app);
@@ -483,7 +487,11 @@ fn save_for_web_width_keeps_proportions_and_sizes_the_file() {
     }
     let f = h.state().ui.dialogs[0].fields.clone();
     assert_eq!((f["width"].as_f64(), f["height"].as_f64(), f.get("__constrain")), (Some(60.0), Some(40.0), Some(&json!(true))), "{f:?}");
-    let path = std::env::temp_dir().join(format!("pc-webui-wh-{}.png", std::process::id())).to_string_lossy().into_owned();
+    // A dedicated folder, not the shared temp root: Windows can refuse a directory flush there,
+    // which would make the save report that it may not survive a power loss.
+    let dir = std::env::temp_dir().join(format!("pc-webui-wh-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("wh.png").to_string_lossy().into_owned();
     h.state_mut().ui.dialog_mut(id).unwrap().fields.insert("path".into(), json!(path));
     let r = crate::dialogs::confirm(h.state_mut(), id).unwrap();
     assert_eq!((r["width"].as_u64(), r["height"].as_u64()), (Some(60), Some(40)), "{r}");
@@ -498,7 +506,11 @@ fn save_for_web_reopens_at_full_size_with_the_resample_method() {
     let (app, _) = app();
     let (mut h, id) = web_size_dialog(app);
     type_into_field(&mut h, 120.0, "60");
-    let path = std::env::temp_dir().join(format!("pc-webui-reopen-{}.png", std::process::id())).to_string_lossy().into_owned();
+    // A dedicated folder, not the shared temp root: Windows can refuse a directory flush there,
+    // which would make the save report that it may not survive a power loss.
+    let dir = std::env::temp_dir().join(format!("pc-webui-reopen-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("reopen.png").to_string_lossy().into_owned();
     let d = h.state_mut().ui.dialog_mut(id).unwrap();
     d.fields.insert("resample".into(), json!("nearest"));
     d.fields.insert("path".into(), json!(path));
@@ -958,7 +970,11 @@ fn print_dialog_and_toggles() {
     let (mut app, ctx) = app();
     let r = crate::menus::invoke(&mut app, &ctx, "file.print", json!({})).unwrap();
     let id = r["dialog"].as_u64().unwrap();
-    let out = std::env::temp_dir().join(format!("pc-printui-{}.pdf", std::process::id())).to_string_lossy().into_owned();
+    // A dedicated folder, not the shared temp root: Windows can refuse a directory flush there,
+    // which would make the save report that it may not survive a power loss.
+    let dir = std::env::temp_dir().join(format!("pc-printui-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let out = dir.join("print.pdf").to_string_lossy().into_owned();
     app.ui.dialog_mut(id).unwrap().fields.insert("output".into(), json!(out));
     let r = crate::dialogs::confirm(&mut app, id).unwrap();
     assert_eq!(r["sent"], false);
@@ -1063,13 +1079,17 @@ fn save_as_pdf_browse_fills_the_output_from_a_save_dialog() {
 fn print_dialog_does_not_inherit_scripted_send_override() {
     for send in [false, true] {
         let (mut app, ctx) = app();
-        let out = std::env::temp_dir().join(format!("pc-printui-state-{}-{send}.pdf", std::process::id())).to_string_lossy().into_owned();
+        // A dedicated folder, not the shared temp root: Windows can refuse a directory flush there,
+        // which would make the save report that it may not survive a power loss.
+        let dir = std::env::temp_dir().join(format!("pc-printui-state-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let out = dir.join(format!("state-{send}.pdf")).to_string_lossy().into_owned();
         app.session.execute("file.print", json!({"output": out, "send": send, "dryRun": true})).unwrap();
         assert!(app.session.file_menu.last_print.as_ref().unwrap().get("send").is_none());
         let r = crate::menus::invoke(&mut app, &ctx, "file.print", json!({})).unwrap();
         let id = r["dialog"].as_u64().unwrap();
         assert!(app.ui.dialog_mut(id).unwrap().fields.get("send").is_none());
-        std::fs::remove_file(out).unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }
 

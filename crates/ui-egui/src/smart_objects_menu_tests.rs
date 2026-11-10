@@ -95,10 +95,14 @@ fn embed_all_linked_is_disabled_without_a_linked_smart_object_and_enabled_with_o
     app.sync_views();
     let enabled = |app: &PhotocraftApp, id: &str| submenu(app).iter().find(|i| i.id == id).unwrap().enabled;
     assert!(!enabled(&app, "layer.smartObjects.embedAllLinked"));
-    let path = std::env::temp_dir().join(format!("pc-so-menu-{}.pcraft", std::process::id()));
+    // A dedicated folder, not the shared temp root: Windows can refuse a directory flush there,
+    // which would make the save report that it may not survive a power loss.
+    let dir = std::env::temp_dir().join(format!("pc-so-menu-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("linked.pcraft");
     app.run("layer.smartObjects.convertToLinked", json!({"path": path.to_str().unwrap()})).unwrap();
     app.sync_views();
     assert!(enabled(&app, "layer.smartObjects.embedAllLinked"));
     assert!(enabled(&app, "layer.smartObjects.convertToEmbedded"));
-    std::fs::remove_file(&path).ok();
+    std::fs::remove_dir_all(&dir).ok();
 }

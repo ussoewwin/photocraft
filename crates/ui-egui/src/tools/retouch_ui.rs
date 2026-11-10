@@ -142,12 +142,15 @@ pub fn finish_stroke(app: &mut PhotocraftApp, tool: Tool, points: &[[f64; 3]], m
         }
         Tool::LamaCleaner => {
             let b = &app.session.tools.brush;
-            ("paint.lamaCleaner", json!({
-                "points": points,
-                "size": b.size,
-                "hardness": b.hardness * 100.0,
-                "spacing": b.spacing * 100.0,
-            }))
+            (
+                "paint.lamaCleaner",
+                json!({
+                    "points": points,
+                    "size": b.size,
+                    "hardness": b.hardness * 100.0,
+                    "spacing": b.spacing * 100.0,
+                }),
+            )
         }
         Tool::MixerBrush => ("paint.mixerBrush", json!({})),
         Tool::ColorReplacement => ("paint.colorReplacement", color_replacement_params(app)),
