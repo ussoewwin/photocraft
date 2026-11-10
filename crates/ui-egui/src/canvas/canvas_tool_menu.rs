@@ -1376,7 +1376,8 @@ pub fn show(app: &mut PhotocraftApp, ctx: &Context) {
                         ui.separator();
                         continue;
                     };
-                    let item = egui::Button::selectable(mode_checked(app, &menu, command), tl!(label)).min_size(egui::vec2(200.0, 20.0));
+                    let item = egui::Button::selectable(mode_checked(app, &menu, command), crate::i18n::tr_id(crate::i18n::current(), command, label))
+                        .min_size(egui::vec2(200.0, 20.0));
                     if ui.add_enabled(entry_enabled(app, &menu, command), item).clicked() {
                         selected = Some((*command).to_string());
                     }
