@@ -865,8 +865,10 @@ fn a_thread_holding_the_spooler_does_not_wait_for_itself() {
         });
         done.send(answers).unwrap();
     });
-    // Bounded, so a thread that waits for itself fails the test rather than hanging it.
-    let answers = finished.recv_timeout(std::time::Duration::from_secs(30)).expect("a thread holding the spooler waited for itself");
+    // Bounded, so a thread that waits for itself fails the test rather than hanging it. The bound
+    // covers self-deadlock only: the whole suite runs in parallel, and another test's hold can
+    // take far longer than an idle machine's, so it is sized like the child-process bound below.
+    let answers = finished.recv_timeout(std::time::Duration::from_secs(120)).expect("a thread holding the spooler waited for itself");
     assert_eq!(answers, (7, Some(Some(8)), Some(json!("Office"))));
 }
 

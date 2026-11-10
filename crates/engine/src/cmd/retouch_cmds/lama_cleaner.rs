@@ -88,7 +88,7 @@ fn plan(s: &Session, p: &Value) -> Result<Plan> {
     if area.is_empty() {
         return Err(bad(CMD, "the stroke is outside the canvas"));
     }
-    let margin = ((area.width().max(area.height()) as f32 * 0.5) as i32).max(128).min(MAX_MARGIN);
+    let margin = ((area.width().max(area.height()) as f32 * 0.5) as i32).clamp(128, MAX_MARGIN);
     let mut win = area.inflate(margin);
     // Ensure at least a 512x512 context window around the stroke so LaMa sees rich surrounding structure at 1:1 scale
     if win.width() < 512 {
@@ -167,15 +167,11 @@ fn execute_lama(w: usize, h: usize, ch: usize, fmt: &PixelFormat, img_data: &[f3
         mask_bytes.push(if *m { 255u8 } else { 0u8 });
     }
 
-    let img_obj = Image::from_raw(w as u32, h as u32, ChannelLayout::Rgb, SampleType::U8, rgb_bytes)
-        .map_err(|e| EngineError::Other(e.to_string()))?;
-    let mask_obj = Image::from_raw(w as u32, h as u32, ChannelLayout::Gray, SampleType::U8, mask_bytes)
-        .map_err(|e| EngineError::Other(e.to_string()))?;
+    let img_obj = Image::from_raw(w as u32, h as u32, ChannelLayout::Rgb, SampleType::U8, rgb_bytes).map_err(|e| EngineError::Other(e.to_string()))?;
+    let mask_obj = Image::from_raw(w as u32, h as u32, ChannelLayout::Gray, SampleType::U8, mask_bytes).map_err(|e| EngineError::Other(e.to_string()))?;
 
-    let img_png = photocraft_codecs::encode(&img_obj, Format::Png, &Default::default())
-        .map_err(|e| EngineError::Other(e.to_string()))?;
-    let mask_png = photocraft_codecs::encode(&mask_obj, Format::Png, &Default::default())
-        .map_err(|e| EngineError::Other(e.to_string()))?;
+    let img_png = photocraft_codecs::encode(&img_obj, Format::Png, &Default::default()).map_err(|e| EngineError::Other(e.to_string()))?;
+    let mask_png = photocraft_codecs::encode(&mask_obj, Format::Png, &Default::default()).map_err(|e| EngineError::Other(e.to_string()))?;
 
     let temp_dir = tempfile::tempdir().map_err(|e| EngineError::Other(e.to_string()))?;
     let in_p = temp_dir.path().join("lama_in.png");
@@ -190,33 +186,39 @@ fn execute_lama(w: usize, h: usize, ch: usize, fmt: &PixelFormat, img_data: &[f3
         std::path::PathBuf::from(r"D:\USERFILES\GitHub\photocraft\plugins\lama-cleaner\target\release\lama-cleaner.exe"),
         std::path::PathBuf::from(r"plugins\lama-cleaner.exe"),
     ];
-    if let Ok(cur_exe) = std::env::current_exe() {
-        if let Some(parent) = cur_exe.parent() {
-            exe_candidates.push(parent.join("plugins").join("lama-cleaner.exe"));
-            exe_candidates.push(parent.join("lama-cleaner.exe"));
-        }
+    if let Ok(cur_exe) = std::env::current_exe()
+        && let Some(parent) = cur_exe.parent()
+    {
+        exe_candidates.push(parent.join("plugins").join("lama-cleaner.exe"));
+        exe_candidates.push(parent.join("lama-cleaner.exe"));
     }
-    let exe = exe_candidates.iter().find(|p| p.exists())
+    let exe = exe_candidates
+        .iter()
+        .find(|p| p.exists())
         .ok_or_else(|| EngineError::Other("lama-cleaner.exe が見つかりません。plugins/lama-cleaner.exe を配置してください。".into()))?;
 
-    let mut model_candidates = vec![
-        std::path::PathBuf::from(r"D:\USERFILES\GitHub\photocraft\plugins\big-lama.onnx"),
-        std::path::PathBuf::from(r"plugins\big-lama.onnx"),
-    ];
-    if let Ok(cur_exe) = std::env::current_exe() {
-        if let Some(parent) = cur_exe.parent() {
-            model_candidates.push(parent.join("plugins").join("big-lama.onnx"));
-            model_candidates.push(parent.join("big-lama.onnx"));
-        }
+    let mut model_candidates =
+        vec![std::path::PathBuf::from(r"D:\USERFILES\GitHub\photocraft\plugins\big-lama.onnx"), std::path::PathBuf::from(r"plugins\big-lama.onnx")];
+    if let Ok(cur_exe) = std::env::current_exe()
+        && let Some(parent) = cur_exe.parent()
+    {
+        model_candidates.push(parent.join("plugins").join("big-lama.onnx"));
+        model_candidates.push(parent.join("big-lama.onnx"));
     }
-    let model = model_candidates.iter().find(|p| p.exists())
+    let model = model_candidates
+        .iter()
+        .find(|p| p.exists())
         .ok_or_else(|| EngineError::Other("big-lama.onnx が見つかりません。plugins/big-lama.onnx を配置してください。".into()))?;
 
     let output = std::process::Command::new(exe)
-        .arg("-i").arg(&in_p)
-        .arg("-m").arg(&mask_p)
-        .arg("-o").arg(&out_p)
-        .arg("--model").arg(model)
+        .arg("-i")
+        .arg(&in_p)
+        .arg("-m")
+        .arg(&mask_p)
+        .arg("-o")
+        .arg(&out_p)
+        .arg("--model")
+        .arg(model)
         .output()
         .map_err(|e| EngineError::Other(format!("lama-cleaner 実行エラー: {e}")))?;
 
@@ -226,8 +228,7 @@ fn execute_lama(w: usize, h: usize, ch: usize, fmt: &PixelFormat, img_data: &[f3
     }
 
     let out_bytes = std::fs::read(&out_p).map_err(|e| EngineError::Other(e.to_string()))?;
-    let decoded = photocraft_codecs::decode_as(Format::Png, &out_bytes)
-        .map_err(|e| EngineError::Other(e.to_string()))?;
+    let decoded = photocraft_codecs::decode_as(Format::Png, &out_bytes).map_err(|e| EngineError::Other(e.to_string()))?;
 
     let inpainted_rgb = decoded.data();
     let mut out_data = img_data.to_vec();
@@ -267,9 +268,7 @@ fn run_lama_cleaner(doc: &mut Document, plan: &Plan, p: &Value, ctx: &crate::job
         return Ok(None);
     }
     let (w, h) = (win.width() as usize, win.height() as usize);
-    let mut data = ctx
-        .stage(0.0, 1.0, label, |_| execute_lama(w, h, img.ch, &fmt, &img.data, &hole))
-        .map_err(|_| EngineError::Cancelled)?;
+    let mut data = ctx.stage(0.0, 1.0, label, |_| execute_lama(w, h, img.ch, &fmt, &img.data, &hole)).map_err(|_| EngineError::Cancelled)?;
     clamp_samples(&fmt, &mut data);
     Ok(Some((Region { rect: win, ch: img.ch, data }, hole)))
 }

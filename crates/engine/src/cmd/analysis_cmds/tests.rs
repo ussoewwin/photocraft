@@ -334,12 +334,16 @@ fn log_delete_and_csv_export() {
     assert!(lines.next().unwrap().contains(",5.0,"), "{csv}");
     #[cfg(not(target_arch = "wasm32"))]
     {
-        let path = std::env::temp_dir().join(format!("pc-log-{}.csv", std::process::id()));
+        // A dedicated folder, not the shared temp root: Windows can refuse a directory flush there,
+        // which would make the save report that it may not survive a power loss.
+        let dir = std::env::temp_dir().join(format!("pc-log-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("log.csv");
         let r = s.execute("measurementLog.export", json!({"path": path.to_str().unwrap(), "rows": [2]})).unwrap();
         assert_eq!(r["rows"], 1);
         let text = std::fs::read_to_string(&path).unwrap();
         assert_eq!(text.lines().count(), 2);
-        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_dir_all(&dir);
     }
     s.execute("measurementLog.delete", json!({"rows": [1]})).unwrap();
     assert_eq!(s.analysis.log.len(), 1);

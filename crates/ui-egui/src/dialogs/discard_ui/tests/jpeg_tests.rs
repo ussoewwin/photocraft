@@ -117,11 +117,15 @@ fn resaving_an_opened_jpeg_starts_at_its_own_quality() {
 #[test]
 fn a_copy_recorded_from_the_engine_command_replays() {
     let (mut h, writes) = jpeg_app("unused.jpg");
-    let path = std::env::temp_dir().join(format!("photocraft-jpeg-copy-{}.jpg", std::process::id())).to_string_lossy().into_owned();
+    // A dedicated folder, not the shared temp root: Windows can refuse a directory flush there,
+    // which would make the save report that it may not survive a power loss.
+    let dir = std::env::temp_dir().join(format!("photocraft-jpeg-copy-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("copy.jpg").to_string_lossy().into_owned();
     h.state_mut().run("actions.record", json!({})).unwrap();
     h.state_mut().run("file.saveACopy", json!({"path": path, "quality": 90})).unwrap();
     h.state_mut().run("actions.stop", json!({})).unwrap();
-    let _ = std::fs::remove_file(&path);
+    let _ = std::fs::remove_dir_all(&dir);
     assert_eq!(h.state().session.actions.list[0].steps, [("file.saveACopy".into(), json!({"path": path, "quality": 90}))]);
     let played = h.state_mut().run("actions.play", json!({"action": 0})).unwrap();
     assert!(played.get("failed").is_none(), "{played}");
