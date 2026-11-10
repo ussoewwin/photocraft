@@ -211,9 +211,6 @@ pub(crate) fn translate_copies(copies: &mut Document, destination: &Document, dx
 
 /// `layer.copyToDocument`.
 fn copy_to_document(s: &mut Session, p: &Value) -> Result<Value> {
-    if !p.get("selection").and_then(Value::as_bool).unwrap_or(false) {
-        crate::float_cmds::drop_floating(s)?;
-    }
     let dest = doc_index(s, p, "document")?.ok_or_else(|| bad("missing `document` (the destination's index)"))?;
     let src = match doc_index(s, p, "source")? {
         Some(i) => i,
@@ -224,126 +221,7 @@ fn copy_to_document(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let (from, to) = (&s.documents()[src], &s.documents()[dest]);
     let (sdoc, ddoc) = (from.doc.clone(), to.doc.clone());
-    if let Some(job) = s.job_on(ddoc.id) {
-        return Err(EngineError::Disabled(CMD.into(), format!("“{}” is still running on this document; wait for it to finish or cancel it (Esc)", job.label)));
-    }
-
-    if p.get("selection").and_then(Value::as_bool).unwrap_or(false) {
-        let cut = p.get("cut").and_then(Value::as_bool).unwrap_or(false);
-        if cut && let Some(job) = s.job_on(sdoc.id) {
-            return Err(EngineError::Disabled(
-                CMD.into(),
-                format!("“{}” is still running on this document; wait for it to finish or cancel it (Esc)", job.label),
-            ));
-        }
-        let id = from.active_layer.ok_or_else(|| bad("no active layer in source document"))?;
-        let src_layer = sdoc.layer(id).ok_or(EngineError::NoLayer(id))?;
-        let mask_target = crate::channel_cmds::target_of(p) == crate::channel_cmds::Target::Mask
-            || from.channel_view.target == crate::channel_cmds::ChannelTarget::LayerMask
-            || crate::mask_view_cmds::current(from).is_some_and(|v| !v.filter);
-        let floating_parts = crate::float_cmds::floating(from).filter(|f| f.layer == id).map(|f| {
-            let (piece, bounds) = f.parts.piece();
-            (piece.clone(), bounds, f.offset, f.parts.clone())
-        });
-        let (clip_surface, clip_bounds, float_off, float_cut) = match floating_parts {
-            Some((piece, bounds, off, parts)) => (piece, bounds, off, Some(parts)),
-            None => {
-                let surf = if mask_target {
-                    &src_layer.mask.as_ref().ok_or_else(|| EngineError::Other("the active layer has no layer mask".into()))?.surface
-                } else {
-                    src_layer.surface().ok_or_else(|| EngineError::Other("the active layer has no pixels to copy".into()))?
-                };
-                let clip = crate::cmd::edit_cmds::lift(surf, sdoc.selection.as_ref(), sdoc.bounds())?;
-                (clip.surface, clip.bounds, (0, 0), None)
-            }
-        };
-        if clip_bounds.is_empty() {
-            return Err(bad("the selected area is empty"));
-        }
-        for (doc, role) in [(&sdoc, "source"), (&ddoc, "destination")] {
-            if !layered(doc.mode) {
-                return Err(EngineError::Other(format!("layers can't be copied with a {:?} {role} document", doc.mode)));
-            }
-        }
-        let target_fmt = photocraft_color::PixelFormat::new(sdoc.mode, sdoc.depth, true);
-        let clip_surface = if clip_surface.format() == target_fmt { clip_surface } else { clip_surface.convert(target_fmt) };
-        let mut copies = Document::new("", sdoc.size, sdoc.mode, sdoc.depth);
-        copies.icc_profile = sdoc.icc_profile.clone();
-        copies.resolution_dpi = sdoc.resolution_dpi;
-        let mut l = Layer::raster(ddoc.next_layer_name("Layer"), target_fmt);
-        *crate::pixels_mut(&mut l)? = clip_surface;
-        copies.layers.push(l);
-
-        let content = clip_bounds.translate(float_off.0, float_off.1);
-        adapt_copies(s, &mut copies, &ddoc)?;
-        let (dx, dy) = if p.get("center").and_then(Value::as_bool).unwrap_or(false) {
-            let (c, d) = (center(content), center(ddoc.bounds()));
-            (d[0] - c[0], d[1] - c[1])
-        } else if let Some(at) = point(p, "at")? {
-            let c = center(content);
-            (at[0] - c[0], at[1] - c[1])
-        } else {
-            point(p, "offset")?.map_or((0.0, 0.0), |o| (o[0], o[1]))
-        };
-        let (dx, dy) = (dx.round() as i32 + float_off.0, dy.round() as i32 + float_off.1);
-        translate_copies(&mut copies, &ddoc, dx, dy);
-
-        let prev_active = s.active_index();
-        let pre_cut = if cut {
-            sdoc.scratch_health().map_err(EngineError::Other)?;
-            ddoc.scratch_health().map_err(EngineError::Other)?;
-            let pre_cut = s.documents()[src].clone();
-            let bg = s.tools.background;
-            s.set_active(src);
-            s.edit("Cut Pixels", |doc, _| {
-                if let Some(parts) = &float_cut {
-                    parts.place_rest(doc)?;
-                } else if mask_target {
-                    crate::cmd::edit_cmds::clear_mask(doc, id, bg, &json!({"target": "mask"}))?;
-                } else {
-                    crate::cmd::edit_cmds::clear_selected(doc, id, bg)?;
-                }
-                doc.selection = None;
-                Ok(())
-            })?;
-            Some(pre_cut)
-        } else {
-            None
-        };
-
-        s.set_active(dest);
-        let edited = match s.edit("Duplicate Layer", |doc, active| {
-            let mut above = *active;
-            let mut new = Vec::with_capacity(copies.layers.len());
-            let mut place = crate::layer_place::Place::AutoEditable;
-            for l in copies.layers {
-                let id = crate::layer_place::insert_new(doc, above, l, place);
-                new.push(id);
-                above = Some(id);
-                place = crate::layer_place::Place::Above;
-            }
-            *active = above;
-            Ok(new)
-        }) {
-            Ok(edited) => edited,
-            Err(e) => {
-                if let Some(pre_cut) = pre_cut
-                    && let Some(slot) = s.docs.get_mut(src)
-                {
-                    *slot = pre_cut;
-                }
-                if let Some(prev) = prev_active {
-                    s.set_active(prev);
-                }
-                return Err(e);
-            }
-        };
-        return Ok(json!({
-            "layers": edited.into_iter().map(|id| id.0).collect::<Vec<_>>(),
-            "offset": [dx, dy],
-        }));
-    }
-
+    let floating = crate::float_cmds::floating(from).cloned();
     let ids: Vec<LayerId> = match p.get("layers") {
         None => from.selected_layers(),
         Some(v) => v
@@ -359,6 +237,28 @@ fn copy_to_document(s: &mut Session, p: &Value) -> Result<Value> {
     if ids.is_empty() {
         return Err(bad("no layers to copy"));
     }
+    // `selectionOnly` is the documented spelling; `selection` is the older one and still
+    // accepted. Both mean the same thing: copy the selected pixels, not the whole layer.
+    let selection_only = match p.get("selectionOnly") {
+        None => false,
+        Some(Value::Bool(on)) => *on,
+        Some(_) => return Err(bad("`selectionOnly` must be a boolean")),
+    };
+    if selection_only && (ids.len() != 1 || sdoc.selection.is_none()) {
+        return Err(bad("copying selected pixels requires a selection and one pixel layer"));
+    }
+    // Whether the selected pixels are cut out of the source, and whether the layer's mask is
+    // the content that travels (`"target": "mask"`).
+    let selection = match p.get("selection") {
+        None => false,
+        Some(Value::Bool(on)) => *on,
+        Some(_) => return Err(bad("`selection` must be a boolean")),
+    };
+    if selection && (ids.len() != 1 || sdoc.selection.is_none()) {
+        return Err(bad("copying a selection requires a selection and one pixel layer"));
+    }
+    let cut = selection && p.get("cut").and_then(Value::as_bool).unwrap_or(false);
+    let mask_target = selection && crate::channel_cmds::target_of(p) == crate::channel_cmds::Target::Mask;
     for (doc, role) in [(&sdoc, "source"), (&ddoc, "destination")] {
         if !layered(doc.mode) {
             return Err(EngineError::Other(format!("layers can't be copied with a {:?} {role} document", doc.mode)));
@@ -371,9 +271,66 @@ fn copy_to_document(s: &mut Session, p: &Value) -> Result<Value> {
     // Type re-lays out at the source's resolution, so it keeps its size in pixels.
     copies.resolution_dpi = sdoc.resolution_dpi;
     copies.text_styles.clone_from(&sdoc.text_styles);
+    // A cut's parts outlive the loop: the source is changed from them after the copy.
+    /// What a cut leaves behind in the source: the cut bounds, the floating piece's offset, the
+    /// floating piece's parts (when the selection was floating) and whether the mask travelled.
+    type CutPartsOf = (photocraft_geom::Rect, (i32, i32), Option<std::sync::Arc<crate::float_cmds::CutParts>>, bool);
+    let mut cut_parts: Option<CutPartsOf> = None;
     for id in &ids {
         let src_layer = sdoc.layer(*id).ok_or(EngineError::NoLayer(*id))?;
-        let mut l = src_layer.duplicate();
+        let mut l = if selection {
+            // A floating selection travels as its piece; otherwise the selection is lifted from
+            // the layer's pixels, or from its mask when the mask is the target.
+            let floating_parts = floating.as_ref().filter(|f| f.layer == *id).map(|f| {
+                let (piece, bounds) = f.parts.piece();
+                (piece.clone(), bounds, f.offset, f.parts.clone())
+            });
+            let (clip_surface, clip_bounds, float_off, float_parts) = match floating_parts {
+                Some((piece, bounds, off, parts)) => (piece, bounds, off, Some(parts)),
+                None => {
+                    let surf = if mask_target {
+                        &src_layer.mask.as_ref().ok_or_else(|| EngineError::Other("the active layer has no layer mask".into()))?.surface
+                    } else {
+                        src_layer.surface().ok_or_else(|| EngineError::Other("the active layer has no pixels to copy".into()))?
+                    };
+                    let clip = crate::cmd::edit_cmds::lift(surf, sdoc.selection.as_ref(), sdoc.bounds())?;
+                    (clip.surface, clip.bounds, (0, 0), None)
+                }
+            };
+            if clip_bounds.is_empty() {
+                return Err(bad("the selected pixels are empty"));
+            }
+            if cut {
+                cut_parts = Some((clip_bounds, float_off, float_parts, mask_target));
+            }
+            // A mask's surface is grayscale; the copy is a colour layer, so it is converted
+            // to the source document's colour with alpha before it becomes a layer.
+            let target_fmt = photocraft_color::PixelFormat::new(sdoc.mode, sdoc.depth, true);
+            let clip_surface = if clip_surface.format() == target_fmt { clip_surface } else { clip_surface.convert(target_fmt) };
+            let mut layer = Layer::new(src_layer.name.clone(), LayerContent::Raster(clip_surface));
+            layer.opacity = src_layer.opacity;
+            if float_off != (0, 0) {
+                crate::commands::translate_layer(&sdoc, &mut layer, float_off.0, float_off.1);
+            }
+            layer
+        } else if selection_only {
+            let parts = match floating.as_ref().filter(|f| f.layer == *id) {
+                Some(f) if f.parts.is_mask() => return Err(bad("a floating layer mask cannot be transferred as selected pixels")),
+                Some(f) => f.parts.clone(),
+                None => std::sync::Arc::new(crate::float_cmds::CutParts::new(&sdoc, *id, true, s.tools.background, false)?),
+            };
+            if parts.selected_pixels().content_bounds().is_empty() {
+                return Err(bad("the selected pixels are empty"));
+            }
+            let mut layer = Layer::new(src_layer.name.clone(), LayerContent::Raster(parts.selected_pixels().clone()));
+            layer.opacity = src_layer.opacity;
+            if let Some(f) = floating.as_ref().filter(|f| f.layer == *id) {
+                crate::commands::translate_layer(&sdoc, &mut layer, f.offset.0, f.offset.1);
+            }
+            layer
+        } else {
+            src_layer.duplicate()
+        };
         // A dragged Background arrives as an ordinary layer (the destination keeps its own).
         if sdoc.is_background(*id) {
             l.name = ddoc.next_layer_name("Layer");
@@ -410,6 +367,27 @@ fn copy_to_document(s: &mut Session, p: &Value) -> Result<Value> {
     translate_copies(&mut copies, &ddoc, dx, dy);
     let patterns: Vec<_> = sdoc.patterns.iter().filter(|pat| !ddoc.patterns.iter().any(|d| d.id == pat.id)).cloned().collect();
     let styles = std::mem::take(&mut copies.text_styles);
+    // A cut leaves the source without the pixels that travel. The source is edited first, so a
+    // failure here leaves the copy unplaced rather than the source emptied.
+    if let Some((_bounds, _off, float_parts, mask_target)) = cut_parts
+        && cut
+    {
+        let cut_id = ids[0];
+        let bg = s.tools.background;
+        s.set_active(src);
+        s.edit("Cut Pixels", |doc, _| {
+            if let Some(parts) = &float_parts {
+                // A floating selection: the layer gets the rest of the piece's source.
+                parts.place_rest(doc)?;
+            } else if mask_target {
+                crate::cmd::edit_cmds::clear_mask(doc, cut_id, bg, &json!({"target": "mask"}))?;
+            } else {
+                crate::cmd::edit_cmds::clear_selected(doc, cut_id, bg)?;
+            }
+            doc.selection = None;
+            Ok(())
+        })?;
+    }
     s.set_active(dest);
     let label = if ids.len() == 1 { "Duplicate Layer" } else { "Duplicate Layers" };
     let edited = s.edit(label, |doc, active| {
@@ -522,7 +500,7 @@ pub fn specs() -> Vec<CommandSpec> {
         label: "Copy Layers to Document",
         menu: &[],
         shortcut: None,
-        params: r##"{"document":index (destination),"layers":[id,…]?=the source's selected layers,"source":index?=active,"selection":bool=false (copy the active layer's selected pixels instead of whole layers),"cut":bool=false (when selection is true: clear the selected pixels in the source),"center":bool=false (centre on the destination's canvas),"at":[x,y]? (centre the copies on this point),"offset":[dx,dy]?=[0,0] (from their place in the source),"name":str? (one layer: the copy's name)}"##,
+        params: r##"{"document":index (destination),"layers":[id,…]?=the source's selected layers,"source":index?=active,"selectionOnly":bool=false (copy selected pixels from one raster layer),"cut":bool=false (when selectionOnly is true: clear the selected pixels in the source),"target":"mask"? (the layer's mask is the content that travels),"center":bool=false (centre on the destination's canvas),"at":[x,y]? (centre the copies on this point),"offset":[dx,dy]?=[0,0] (from their place in the source),"name":str? (one layer: the copy's name)}"##,
         enabled,
         run: copy_to_document,
         journal: true,
