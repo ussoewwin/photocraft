@@ -811,3 +811,29 @@ fn stale_blocked_move_from_extra_window_cleans_up_before_consuming_other_viewpor
     assert!(h.state().drag.is_some(), "unlocked drag starts cleanly in main viewport");
     tool_event(h.state_mut(), ToolEvent::Up { x: 8.0, y: 10.0 }, Modifiers::NONE);
 }
+
+/// #11971 review: when Auto-Select is off and the active layer is locked, pressing over empty
+/// space (no layer hit under pointer, no selection) must not transfer the locked active layer.
+#[test]
+fn a_blocked_move_over_empty_space_does_not_transfer_locked_active_layer() {
+    let (mut h, paint) = harness();
+    // Hide Background and lock `paint` in place so (25, 25) is transparent empty space.
+    let bg = h.state().session.documents()[0].doc.layers[0].id;
+    h.state_mut().session.edit("hide bg and lock paint", |doc, active| {
+        doc.layer_mut(bg).unwrap().visible = false;
+        doc.layer_mut(paint).unwrap().locks.position = true;
+        *active = Some(paint);
+        Ok(())
+    })
+    .unwrap();
+    h.state_mut().ui.tool = Tool::Move;
+    h.state_mut().ui.tool_options.move_auto_select = false;
+    h.run_steps(2);
+
+    let grab = ViewXform::active(h.state()).unwrap().to_screen(25.0, 25.0);
+    let over_tab = tab(&h, "dest-doc");
+    let drop = h.state().last_canvas_rect.center();
+    drag_along(&mut h, &[grab, over_tab, drop], Modifiers::NONE);
+
+    assert_eq!(h.state().session.documents()[1].doc.layers.len(), 1, "nothing transferred from empty space");
+}

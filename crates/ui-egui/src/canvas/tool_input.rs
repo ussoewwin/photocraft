@@ -420,8 +420,10 @@ fn clear_off_on_background(app: &mut PhotocraftApp, tool: Tool) {
 }
 
 /// Handles pointer gestures on locked layers or targets where movement is disallowed.
-/// When dragging within the same document, shows the lock feedback promptly upon pointer movement
-/// (including when returning to the press point), while preserving cross-document drag transfers.
+/// When only one document is open (or no cross-document transfer is eligible), shows the lock
+/// feedback immediately on pointer movement; when a cross-document Move transfer is eligible
+/// across multiple open documents, defers the prompt until release inside the source document
+/// so dragging across the source canvas toward another tab or tile is not interrupted.
 fn handle_move_blocked_event(app: &mut PhotocraftApp, ev: ToolEvent, tool: Tool, mods: egui::Modifiers) -> bool {
     // A locked layer (the Background without a selection, say): no drag, and Photoshop's message
     // once the pointer moves (a click says nothing). ⌘ with a selection tool here (#896); the Move
@@ -453,7 +455,8 @@ fn handle_move_blocked_event(app: &mut PhotocraftApp, ev: ToolEvent, tool: Tool,
                 }
                 // Defer the lock dialog while a cross-document Move transfer is still possible, so
                 // dragging off the source canvas onto another document or tab arms cleanly.
-                let may_transfer = tool == Tool::Move && app.session.documents().len() > 1 && app.ui.transform.is_none() && app.guide_drag.is_none();
+                let has_target = app.move_blocked_layer.is_some() || app.session.active().is_some_and(|st| st.doc.selection.is_some());
+                let may_transfer = tool == Tool::Move && app.session.documents().len() > 1 && app.ui.transform.is_none() && app.guide_drag.is_none() && has_target;
                 if !may_transfer {
                     app.clear_move_blocked();
                     crate::move_lock::prompt(app);

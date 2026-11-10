@@ -87,7 +87,7 @@ fn move_drag(app: &PhotocraftApp) -> Option<[f64; 2]> {
         && app.ui.transform.is_none()
         && app.guide_drag.is_none()
         && st.floating.is_none()
-        && st.active_layer.is_some()
+        && (app.move_blocked_layer.is_some() || (st.doc.selection.is_some() && st.active_layer.is_some()))
     {
         return Some(start);
     }
@@ -128,7 +128,12 @@ fn arm_move_transfer(app: &mut PhotocraftApp, ctx: &egui::Context, index: usize)
                 app.move_viewport = None;
                 g
             } else if app.move_blocked {
-                let hit = app.move_blocked_layer.unwrap_or(active);
+                let Some(hit) = app
+                    .move_blocked_layer
+                    .or_else(|| app.session.active().is_some_and(|st| st.doc.selection.is_some()).then_some(active))
+                else {
+                    return false;
+                };
                 app.clear_move_blocked();
                 hit
             } else {
@@ -170,6 +175,8 @@ fn arm_move_transfer(app: &mut PhotocraftApp, ctx: &egui::Context, index: usize)
     true
 }
 
+/// Handles a layer transfer dragged over document tab `index`, switching the active document
+/// and completing the drop when the primary button is released.
 pub fn over_tab(app: &mut PhotocraftApp, ctx: &egui::Context, index: usize) {
     if !arm_move_transfer(app, ctx, index) {
         return;
