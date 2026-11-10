@@ -579,3 +579,13 @@ fn raw_develop_labels_are_translated_in_every_shipped_catalog() {
         }
     }
 }
+
+#[test]
+fn japanese_transform_labels_keep_skew_and_distort_distinct() {
+    assert_eq!(tr_id(JA(), "edit.transform.skew", "Skew"), "歪み");
+    assert_eq!(tr_id(JA(), "edit.transform.distort", "Distort"), "多方向に伸縮");
+    assert_eq!(tr(JA(), "Distort"), "ゆがみ");
+    assert_eq!(tr_ctx(JA(), "fontWeight", "Italic"), "斜体");
+    assert_eq!(tr(JA(), "Set horizontal skew"), "水平方向の歪みを設定");
+    assert_eq!(tr(JA(), "Set vertical skew"), "垂直方向の歪みを設定");
+}
