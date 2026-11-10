@@ -1027,11 +1027,11 @@ pub(crate) fn system_font_dirs() -> Vec<std::path::PathBuf> {
     v
 }
 
-/// A platform-private family (macOS names its UI faces with a leading '.'): never listed or
-/// picked by default.
-/// The localized family name among a font's `(name, language)` family-name records: the first
-/// one in a language other than English that differs from `english` (the name the font menus
-/// store). `None` when the font only names itself in English (most fonts).
+/// Returns all candidate localized family names among a font's `(name, language)` family-name
+/// records. Candidates include all non-English tagged names in the font's own record order,
+/// followed by untagged non-ASCII names. The result is deduplicated and excludes the English
+/// family name itself as well as folded accented spellings of the English name. Returns an empty
+/// vector when the font only names itself in English.
 pub fn localized_candidates(english: &str, names: &[(String, Option<String>)]) -> Vec<String> {
     let is_english = |lang: &str| {
         let primary = lang.split(['-', '_']).next().unwrap_or(lang);
@@ -1090,10 +1090,14 @@ pub fn localized_candidates(english: &str, names: &[(String, Option<String>)]) -
     out
 }
 
+/// The primary localized family name, returning the first candidate from [`localized_candidates`],
+/// or `None` if no non-English localization exists.
 pub fn localized_name(english: &str, names: &[(String, Option<String>)]) -> Option<String> {
     localized_candidates(english, names).into_iter().next()
 }
 
+/// A platform-private family (macOS names its UI faces with a leading '.'): never listed or
+/// picked by default.
 pub fn is_hidden_family(name: &str) -> bool {
     name.starts_with('.')
 }

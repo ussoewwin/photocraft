@@ -71,9 +71,12 @@ struct SampleImages {
     arabic: Option<ColorImage>,
 }
 
-/// The Latin sample text, and the Arabic one for a face that has both scripts. `chars` is the
-/// face's ascending charmap. Arabic-only and symbol faces show their own glyphs instead of the
-/// Latin sample and get no second sample.
+/// The sample text to display for a font face. `chars` is the face's ascending charmap.
+/// A font covering all five Hiragana characters ("あいうえお") gets the Japanese sample text
+/// with no second sample, taking precedence over Latin even when the font also covers Latin.
+/// For other fonts, returns the Latin sample text and an optional Arabic sample when both
+/// scripts are supported. Arabic-only, symbol, and incomplete faces show their own glyphs
+/// instead of the Latin sample and get no second sample.
 fn sample_texts(chars: &[char]) -> (String, Option<&'static str>) {
     let has = |c: char| chars.binary_search(&c).is_ok();
     if JAPANESE_CORE.into_iter().all(has) {
