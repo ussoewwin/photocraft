@@ -145,7 +145,7 @@ fn filter_event_before_tool(app: &mut PhotocraftApp, ev: ToolEvent, mods: egui::
     if crate::distort_ui::pointer(app, ev, mods) {
         return None;
     }
-    if crate::perspective_crop_ui::pointer(app, ev) {
+    if crate::perspective_crop_ui::pointer(app, ev, mods) {
         return None;
     }
     // Window › Modifier Keys: sticky Shift/⌘/⌥ act as held keys.
@@ -303,6 +303,8 @@ fn handle_move_pointer(app: &mut PhotocraftApp, ev: ToolEvent, tool: Tool, mods:
             // A locked layer: no drag, and Photoshop's message once the pointer moves (`move_lock`).
             if crate::move_lock::blocked(app, tool, [x, y], mods) {
                 app.move_blocked = true;
+                // The press is refused, so no drag object exists; the point is recorded so the
+                // gesture can still become a cross-document transfer of that layer.
                 app.move_blocked_start = Some([x, y]);
                 app.move_viewport = app.current_viewport;
                 return true;
@@ -310,9 +312,11 @@ fn handle_move_pointer(app: &mut PhotocraftApp, ev: ToolEvent, tool: Tool, mods:
             // With a selection: cut the selected pixels (⌥ copies them) and drag them as a floating
             // piece, from anywhere, as a marquee ⌘-drag does.
             if crate::move_ui::moves_selected_pixels_with(app, tool) {
+                let before = app.session.active().and_then(photocraft_engine::float_cmds::floating).cloned();
                 if crate::move_ui::float_selected_for_drag(app, mods.alt) {
                     let mut d = Drag::new(tool, [x, y], vec![[x, y, pressure as f64]], mods, false);
                     d.sel_move = Some(true);
+                    d.transfer_floating_before = before;
                     app.drag = Some(d);
                 }
                 return true;
@@ -381,11 +385,29 @@ fn mixer_press_failed(app: &mut PhotocraftApp, message: String) {
     }
 }
 
+/// The Brush's chosen Clear paints as Normal on the Background, and its Mode then reads Normal
+/// (#11897): at the press of a Brush stroke on the Background's own pixels, Clear (chosen in the
+/// options bar, not a held `~`) is turned off, so the stroke is sent as Normal. A Background whose
+/// pixels are locked refuses the stroke, so Clear stays chosen there.
+fn clear_off_on_background(app: &mut PhotocraftApp, tool: Tool) {
+    let on_background = app.session.active().is_some_and(|st| {
+        st.active_layer.is_some_and(|id| {
+            st.doc.is_background(id) && {
+                let locks = st.doc.effective_locks(id);
+                !locks.pixels && !locks.all
+            }
+        })
+    });
+    if tool == Tool::Brush && app.ui.tool_options.brush_clear && !app.held_erase && on_background && paint_target(app) == serde_json::json!("pixels") {
+        app.ui.tool_options.brush_clear = false;
+    }
+}
+
 /// Handles pointer gestures on locked layers or targets where movement is disallowed.
 /// When dragging within the same document, shows the lock feedback promptly upon pointer movement
 /// (including when returning to the press point), while preserving cross-document drag transfers.
 fn handle_move_blocked_event(app: &mut PhotocraftApp, ev: ToolEvent, tool: Tool, mods: egui::Modifiers) -> bool {
-    // A locked layer (the Background without a selection, say): no drag, and the lock message
+    // A locked layer (the Background without a selection, say): no drag, and Photoshop's message
     // once the pointer moves (a click says nothing). ⌘ with a selection tool here (#896); the Move
     // tool below, once Auto-Select has picked the layer.
     match ev {
@@ -568,6 +590,7 @@ pub fn tool_event(app: &mut PhotocraftApp, ev: ToolEvent, mods: egui::Modifiers)
                 _ => {}
             }
             crate::paint_mouse::sync_tool_brush(app);
+            clear_off_on_background(app, tool);
             // Clear mode (`~` held, or chosen in the options bar) erases with the tool's own brush.
             let clear = crate::paint_mouse::clears(app, tool);
             let erase = std::mem::take(&mut app.secondary_erase) || tool == Tool::Eraser || clear;
@@ -587,7 +610,7 @@ pub fn tool_event(app: &mut PhotocraftApp, ev: ToolEvent, mods: egui::Modifiers)
             }
             // ⌥ flips Dodge/Burn and Blur/Sharpen for this stroke.
             let tool = crate::retouch_ui::alt_flipped(tool, mods.alt);
-            let mut drag = Drag { clear, ..Drag::new(tool, from.map_or([x, y], |p| [p[0], p[1]]), points, mods, erase) };
+            let mut drag = Drag { clear, line: from.is_some(), ..Drag::new(tool, from.map_or([x, y], |p| [p[0], p[1]]), points, mods, erase) };
             drag.capture_vector_owners(app);
             drag.capture_selection_at_press(app);
             drag.document = super::drag::DragDocument::capture(app);
