@@ -53,6 +53,7 @@ impl PhotocraftApp {
             cancelled_vector_drag: false,
             move_blocked: false,
             move_blocked_start: None,
+            move_blocked_moved: false,
             move_viewport: None,
             current_viewport: None,
             tool_override: None,
