@@ -1281,7 +1281,7 @@ fn quick_selection_options_bar_has_new_add_subtract_mode_buttons() {
     assert!(h.state().session.active().unwrap().doc.selection.is_none());
     assert_eq!(h.state().ui.tool_options.quick_selection_mode, 0, "Empty stroke keeps New mode");
 
-    finish_stroke(h.state_mut(), Tool::QuickSelection, &[], none);
+    finish_stroke(h.state_mut(), Tool::QuickSelection, &[], none, false);
     assert!(h.state().ui.status_error);
     assert_eq!(h.state().ui.tool_options.quick_selection_mode, 0, "Failed stroke keeps New mode");
     h.state_mut().ui.status_error = false;
