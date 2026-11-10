@@ -185,11 +185,15 @@ fn render_to_file_and_base64() {
     let png = base64::engine::general_purpose::STANDARD.decode(b["base64"].as_str().unwrap()).unwrap();
     let img = photocraft_codecs::decode(&png).unwrap();
     assert_eq!(img.dimensions(), (10, 5));
-    let path = std::env::temp_dir().join(format!("pc-rpc-{}.png", std::process::id()));
+    // A dedicated folder, not the shared temp root: Windows can refuse a directory flush there,
+    // which would make the save report that it may not survive a power loss.
+    let dir = std::env::temp_dir().join(format!("pc-rpc-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("render.png");
     let r = g.handle("doc.render", json!({"path": path.to_string_lossy(), "maxSide": 0})).unwrap();
     assert!(r["bytes"].as_u64().unwrap() > 0);
     assert_eq!(photocraft_codecs::decode(&std::fs::read(&path).unwrap()).unwrap().dimensions(), (40, 20));
-    let _ = std::fs::remove_file(path);
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
