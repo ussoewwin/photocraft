@@ -98,8 +98,13 @@ fn preflight_tool_event(app: &mut PhotocraftApp, ev: ToolEvent, mods: egui::Modi
         if let ToolEvent::Down { x, y, pressure } = ev {
             app.mixer_sampling = true;
             let pen = app.stylus.sample().unwrap_or_default();
-            let p = json!({"points":[[x,y,pressure,pen.tilt_x,pen.tilt_y,pen.rotation]],"target":paint_target(app)});
-            if let Err(e) = app.run("brush.mixer.sample", p) {
+            // Load Solid Colors Only loads the one colour under the hotspot (#11952).
+            let (id, p) = if app.session.tools.brush.mixer.solid_colors_only {
+                ("paint.mixerLoad", json!({"x": x, "y": y}))
+            } else {
+                ("brush.mixer.sample", json!({"points":[[x,y,pressure,pen.tilt_x,pen.tilt_y,pen.rotation]],"target":paint_target(app)}))
+            };
+            if let Err(e) = app.run(id, p) {
                 app.ui.status = e;
                 app.ui.status_error = true;
             }
@@ -818,3 +823,7 @@ pub(crate) fn command_guide_at(app: &PhotocraftApp, tool: Tool, p: [f64; 2], mod
     let idle = app.ui.polygon.is_empty() && !crate::lasso_ui::active(app) && app.ui.transform.is_none() && app.ui.text_edit.is_none() && app.drag.is_none();
     (moves && mods.command && idle).then(|| crate::rulers::guide_at(app, p[0], p[1])).flatten()
 }
+
+#[cfg(test)]
+#[path = "art_history_shift_click_tests.rs"]
+mod art_history_shift_click_tests;
