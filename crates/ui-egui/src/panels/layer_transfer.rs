@@ -117,7 +117,7 @@ fn arm_move_transfer(app: &mut PhotocraftApp, ctx: &egui::Context, index: usize)
             return false;
         }
         // A marquee that grabbed a layer or a blocked Move press has no drag object and no
-        // floating piece to take back: the grabbed or active locked layer is what transfers.
+        // floating piece to take back: the grabbed or hit layer is what transfers.
         if app.drag.is_none() {
             if app.move_viewport.is_some_and(|v| v != ctx.viewport_id()) {
                 return false;
@@ -128,11 +128,9 @@ fn arm_move_transfer(app: &mut PhotocraftApp, ctx: &egui::Context, index: usize)
                 app.move_viewport = None;
                 g
             } else if app.move_blocked {
-                app.move_blocked = false;
-                app.move_blocked_start = None;
-                app.move_blocked_moved = false;
-                app.move_viewport = None;
-                active
+                let hit = app.move_blocked_layer.unwrap_or(active);
+                app.clear_move_blocked();
+                hit
             } else {
                 return false;
             };
@@ -196,10 +194,7 @@ pub fn finish(app: &mut PhotocraftApp, ctx: &egui::Context) {
     // pointer state cannot clear the source window's gesture.
     if (!primary_down || primary_released) && get(ctx).is_none() && app.move_viewport.is_none_or(|v| v == ctx.viewport_id()) {
         let show_lock = app.move_blocked && app.move_blocked_moved;
-        app.move_blocked = false;
-        app.move_blocked_start = None;
-        app.move_blocked_moved = false;
-        app.move_viewport = None;
+        app.clear_move_blocked();
         if show_lock {
             crate::move_lock::prompt(app);
         }
