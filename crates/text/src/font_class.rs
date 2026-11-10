@@ -191,9 +191,7 @@ pub fn classify(family: &str, family_class: i16, panose: [u8; 10], fixed_pitch: 
             .any(|w| matches!(w, "sung" | "song" | "sungti" | "songti") || w.ends_with("song") || w.ends_with("sungti") || w.ends_with("songti"))
     {
         Some(FontClass::Serif)
-    } else if name
-        .split(|c: char| !c.is_alphabetic() || is_cjk_boundary(c))
-        .any(|w| matches!(w, "hei" | "heiti" | "maru") || w.ends_with("hei") || w.ends_with("heiti"))
+    } else if name.split(|c: char| !c.is_alphabetic() || is_cjk_boundary(c)).any(|w| matches!(w, "hei" | "heiti") || w.ends_with("hei") || w.ends_with("heiti"))
     {
         Some(FontClass::SansSerif)
     } else if has(&["hand", "marker", "brush", "chalk", "kyokasho", "教科書", "ポップ", "ﾎﾟｯﾌﾟ"])
@@ -204,6 +202,10 @@ pub fn classify(family: &str, family_class: i16, panose: [u8; 10], fixed_pitch: 
         Some(FontClass::Handwritten)
     } else if has(&["script", "gyosho", "行書", "kaisho", "楷書", "sousho", "草書", "reisho", "隷書", "kanteiryu", "勘亭流"]) {
         Some(FontClass::Script)
+    } else if name.split(|c: char| !c.is_alphabetic() || is_cjk_boundary(c)).any(|w| matches!(w, "maru")) {
+        // A standalone `maru` is a round gothic, so a sans serif, but only after the handwritten
+        // and script markers: `Maru Script` and `Maru Hand` keep their own class.
+        Some(FontClass::SansSerif)
     } else {
         None
     }
@@ -296,6 +298,10 @@ mod tests {
         assert_eq!(classify("SimHei", 0, NONE, false), Some(FontClass::SansSerif));
         assert_eq!(classify("Microsoft YaHei", 0, NONE, false), Some(FontClass::SansSerif));
         assert_eq!(classify("Maru Gothic", 0, NONE, false), Some(FontClass::SansSerif));
+        // A standalone `maru` is a sans serif, but only after the handwritten and script markers.
+        assert_eq!(classify("Maru Script", 0, NONE, false), Some(FontClass::Script));
+        assert_eq!(classify("Maru Hand", 0, NONE, false), Some(FontClass::Handwritten));
+        assert_eq!(classify("Maru", 0, NONE, false), Some(FontClass::SansSerif));
         // `sung` and `song` match as CJK markers, not as arbitrary substrings of Latin names such as `SamsungOne`.
         assert_eq!(classify("SamsungOne", 0, NONE, false), None);
         assert_eq!(classify("SamsungOne Sans", 0, NONE, false), Some(FontClass::SansSerif));
