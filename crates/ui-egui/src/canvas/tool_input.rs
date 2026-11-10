@@ -302,11 +302,21 @@ fn handle_move_pointer(app: &mut PhotocraftApp, ev: ToolEvent, tool: Tool, mods:
             }
             // A locked layer: no drag, and Photoshop's message once the pointer moves (`move_lock`).
             if crate::move_lock::blocked(app, tool, [x, y], mods) {
+                let hit = if app.session.active().is_some_and(|st| st.doc.selection.is_none()) {
+                    let target = app.ui.tool_options.move_target.clone();
+                    app.run("layer.pickAt", json!({"x": x, "y": y, "target": target, "select": false}))
+                        .ok()
+                        .and_then(|v| v["layer"].as_u64())
+                        .map(photocraft_doc::LayerId)
+                } else {
+                    None
+                };
                 app.move_blocked = true;
-                // The press is refused, so no drag object exists; the point is recorded so the
-                // gesture can still become a cross-document transfer of that layer.
+                // The press is refused, so no drag object exists; the point and pressed layer are
+                // recorded so the gesture can still become a cross-document transfer.
                 app.move_blocked_start = Some([x, y]);
                 app.move_blocked_moved = false;
+                app.move_blocked_layer = hit;
                 app.move_viewport = app.current_viewport;
                 return true;
             }
@@ -412,12 +422,17 @@ fn handle_move_blocked_event(app: &mut PhotocraftApp, ev: ToolEvent, tool: Tool,
     // once the pointer moves (a click says nothing). ⌘ with a selection tool here (#896); the Move
     // tool below, once Auto-Select has picked the layer.
     match ev {
-        ToolEvent::Down { x, y, .. } if tool != Tool::Move && app.ui.transform.is_none() && crate::move_lock::blocked(app, tool, [x, y], mods) => {
-            app.move_blocked = true;
-            app.move_blocked_start = Some([x, y]);
-            app.move_blocked_moved = false;
-            app.move_viewport = app.current_viewport;
-            true
+        ToolEvent::Down { x, y, .. } => {
+            // Any new press starts a fresh gesture, clearing stale blocked state left over from a
+            // lost release in another viewport.
+            app.clear_move_blocked();
+            if tool != Tool::Move && app.ui.transform.is_none() && crate::move_lock::blocked(app, tool, [x, y], mods) {
+                app.move_blocked = true;
+                app.move_blocked_start = Some([x, y]);
+                app.move_viewport = app.current_viewport;
+                return true;
+            }
+            false
         }
         ToolEvent::Move { x, y, .. } if app.move_blocked => {
             // The window that armed the blocked drag resolves it: a second window's pointer
@@ -435,10 +450,7 @@ fn handle_move_blocked_event(app: &mut PhotocraftApp, ev: ToolEvent, tool: Tool,
                 // dragging off the source canvas onto another document or tab arms cleanly.
                 let may_transfer = tool == Tool::Move && app.session.documents().len() > 1 && app.ui.transform.is_none() && app.guide_drag.is_none();
                 if !may_transfer {
-                    app.move_blocked = false;
-                    app.move_blocked_start = None;
-                    app.move_blocked_moved = false;
-                    app.move_viewport = None;
+                    app.clear_move_blocked();
                     crate::move_lock::prompt(app);
                 }
             }
@@ -451,10 +463,7 @@ fn handle_move_blocked_event(app: &mut PhotocraftApp, ev: ToolEvent, tool: Tool,
                 return true;
             }
             let show_lock = app.move_blocked_moved || app.move_blocked_start.is_some_and(|s| [x, y] != s);
-            app.move_blocked = false;
-            app.move_blocked_start = None;
-            app.move_blocked_moved = false;
-            app.move_viewport = None;
+            app.clear_move_blocked();
             if show_lock && !crate::panels::layer_transfer::is_transfer_in_progress(app) {
                 crate::move_lock::prompt(app);
             }
