@@ -179,9 +179,9 @@ pub fn classify(family: &str, family_class: i16, panose: [u8; 10], fixed_pitch: 
     } else if has(&["slab"]) {
         Some(FontClass::SlabSerif)
     } else if has(&["sans", "grotesk", "grotesque", "gothic", "ゴシック", "ｺﾞｼｯｸ", "meiryo", "メイリオ", "黑体", "黑體", "丸ゴシック"])
-        || name.split(|c: char| !c.is_alphabetic() || is_cjk_boundary(c)).any(|w| {
-            matches!(w, "hei" | "heiti" | "maru") || w.ends_with("hei") || w.ends_with("heiti")
-        })
+        || name
+            .split(|c: char| !c.is_alphabetic() || is_cjk_boundary(c))
+            .any(|w| matches!(w, "hei" | "heiti" | "maru") || w.ends_with("hei") || w.ends_with("heiti"))
     {
         Some(FontClass::SansSerif)
     } else if has(&["serif", "roman", "garamond", "times", "bodoni", "baskerville", "caslon", "mincho", "明朝", "sung", "song", "宋体", "宋體"]) {
