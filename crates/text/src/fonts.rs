@@ -1081,10 +1081,7 @@ pub fn localized_candidates(english: &str, names: &[(String, Option<String>)]) -
         if lang.is_some() || trimmed.is_empty() || trimmed == english_trimmed {
             continue;
         }
-        if !name.chars().any(|c| (c as u32) > 0x7F)
-            || (!english_folded.is_empty() && fold(name) == english_folded)
-            || seen.contains(trimmed)
-        {
+        if !name.chars().any(|c| (c as u32) > 0x7F) || (!english_folded.is_empty() && fold(name) == english_folded) || seen.contains(trimmed) {
             continue;
         }
         seen.insert(trimmed);

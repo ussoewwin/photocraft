@@ -182,17 +182,19 @@ pub fn classify(family: &str, family_class: i16, panose: [u8; 10], fixed_pitch: 
         Some(FontClass::Monospace)
     } else if has(&["slab"]) {
         Some(FontClass::SlabSerif)
-    } else if has(&["sans", "grotesk", "grotesque", "gothic", "ゴシック", "ｺﾞｼｯｸ", "meiryo", "メイリオ", "黑体", "黑體", "丸ゴシック"]) {
+    } else if has(&["sans", "grotesk", "grotesque", "gothic", "ゴシック", "ｺﾞｼｯｸ", "meiryo", "メイリオ", "黑体", "黑體", "丸ゴシック"])
+    {
         Some(FontClass::SansSerif)
     } else if has(&["serif", "roman", "garamond", "times", "bodoni", "baskerville", "caslon", "mincho", "明朝", "宋体", "宋體"])
-        || name.split(|c: char| !c.is_alphabetic() || is_cjk_boundary(c)).any(|w| {
-            matches!(w, "sung" | "song" | "sungti" | "songti") || w.ends_with("song") || w.ends_with("sungti") || w.ends_with("songti")
-        })
+        || name
+            .split(|c: char| !c.is_alphabetic() || is_cjk_boundary(c))
+            .any(|w| matches!(w, "sung" | "song" | "sungti" | "songti") || w.ends_with("song") || w.ends_with("sungti") || w.ends_with("songti"))
     {
         Some(FontClass::Serif)
-    } else if name.split(|c: char| !c.is_alphabetic() || is_cjk_boundary(c)).any(|w| {
-        matches!(w, "hei" | "heiti" | "maru") || w.ends_with("hei") || w.ends_with("heiti")
-    }) {
+    } else if name
+        .split(|c: char| !c.is_alphabetic() || is_cjk_boundary(c))
+        .any(|w| matches!(w, "hei" | "heiti" | "maru") || w.ends_with("hei") || w.ends_with("heiti"))
+    {
         Some(FontClass::SansSerif)
     } else if has(&["hand", "marker", "brush", "chalk", "kyokasho", "教科書", "ポップ", "ﾎﾟｯﾌﾟ"])
         || name.ends_with("poptai")
