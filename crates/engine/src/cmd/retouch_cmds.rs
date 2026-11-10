@@ -320,7 +320,7 @@ pub fn specs() -> Vec<CommandSpec> {
             menu: &[],
             shortcut: None,
             params: brush_params!(
-                r#","strokes":[[[x,y,pressure?],…]|{"points":[…],"size"?,"hardness"?,"spacing"?},…]?,"closeLoops":bool=true,"sampleAllLayers":bool=false,"newLayer":bool=false → {"damage","layer"?}"#
+                r#","strokes":[[[x,y,pressure?],…]|{"points":[…],"size"?,"hardness"?,"spacing"?},…]?,"closeLoops":bool=true,"sampleAllLayers":bool=false,"newLayer":bool=false,"exe":text,"model":text (the LaMa helper and model, when they are not beside the app) → {"damage","layer"?}"#
             ),
             enabled: has_pixel_layer,
             run: lama_cleaner::lama_cleaner,
