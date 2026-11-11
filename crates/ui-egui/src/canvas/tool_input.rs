@@ -275,6 +275,31 @@ fn note_move_pick(app: &mut PhotocraftApp, active_before: Option<photocraft_doc:
     }
 }
 
+/// Record a refused press: the point, the layer under it and the window that owns the gesture.
+/// No drag object exists, so without this the gesture can neither show the lock message nor
+/// become a cross-document transfer.
+fn record_blocked_press(app: &mut PhotocraftApp, x: f64, y: f64) {
+    app.move_blocked = true;
+    app.move_blocked_start = Some([x, y]);
+    app.move_blocked_moved = false;
+    app.move_blocked_layer = blocked_press_layer(app, x, y);
+    app.move_viewport = app.current_viewport;
+}
+
+/// The layer a refused press hit: the one under the pointer, or none when the document has a
+/// pixel selection (that selection is what a move would carry).
+fn blocked_press_layer(app: &mut PhotocraftApp, x: f64, y: f64) -> Option<photocraft_doc::LayerId> {
+    if app.session.active().is_some_and(|st| st.doc.selection.is_none()) {
+        let target = app.ui.tool_options.move_target.clone();
+        app.run("layer.pickAt", json!({"x": x, "y": y, "target": target, "select": false, "includeLocked": true}))
+            .ok()
+            .and_then(|v| v["layer"].as_u64())
+            .map(photocraft_doc::LayerId)
+    } else {
+        None
+    }
+}
+
 /// Handle Move-specific pointer events and report whether the event was consumed. Auto-Select
 /// picks on press so snapping and dragging use the resulting layer selection. When a locked-only
 /// hit starts a marquee, Shift preserves the selection that the marquee adds to.
@@ -300,6 +325,8 @@ fn handle_move_pointer(app: &mut PhotocraftApp, raw: ToolEvent, ev: ToolEvent, t
             // (not when the selected pixels move: those are the active layer's).
             if !crate::move_ui::moves_selected_pixels_with(app, tool) && app.ui.tool_options.move_auto_select != mods.command {
                 let target = app.ui.tool_options.move_target.clone();
+                // A held temporary Move tool keeps the ordinary point-pick behavior; the real
+                // Move tool skips position-locked layers when it picks.
                 // A held temporary Move tool keeps the ordinary point-pick behavior.
                 let move_auto_select = app.ui.tool == Tool::Move;
                 let mode = if !mods.shift {
@@ -313,15 +340,18 @@ fn handle_move_pointer(app: &mut PhotocraftApp, raw: ToolEvent, ev: ToolEvent, t
                 if probe.as_ref().is_ok_and(|v| v["layer"].is_null()) {
                     let empty = crate::move_box::empty_at(app, [x, y]);
                     if empty || move_auto_select {
-                        let hit_id = if !empty {
+                        if !empty {
                             // Pressing locked selected pixels still uses the existing move-lock
                             // handler. Otherwise a locked-only hit can start a marquee (#4058).
                             if inside_selection(app, [x, y]) && crate::move_lock::blocked(app, tool, [x, y], mods) {
-                                record_move_blocked(app, [x, y]);
+                                record_blocked_press(app, x, y);
                                 return true;
                             }
-                            let hit = app
-                                .run("layer.pickAt", json!({"x": x, "y": y, "target": target, "select": false}))
+                            // A position-locked layer (the Background) is skipped by the Move
+                            // Auto-Select rule the probe used, so find it without that rule: a
+                            // drag that starts on it can still transfer it to another document.
+                            let locked = app
+                                .run("layer.pickAt", json!({"x": x, "y": y, "target": target, "select": false, "includeLocked": true}))
                                 .ok()
                                 .and_then(|v| v["layer"].as_u64())
                                 .map(photocraft_doc::LayerId);
@@ -329,29 +359,27 @@ fn handle_move_pointer(app: &mut PhotocraftApp, raw: ToolEvent, ev: ToolEvent, t
                             if !mods.shift {
                                 let _ = app.run("select.deselectLayers", json!({}));
                             }
-                            hit
-                        } else {
-                            None
-                        };
-                        crate::move_box::begin_full(app, [x, y], mods.shift, move_auto_select, move_auto_select && !empty, hit_id);
+                            crate::move_box::begin_with_layer(app, [x, y], mods.shift, locked, move_auto_select, move_auto_select && !empty);
+                            return true;
+                        }
+                        crate::move_box::begin(app, [x, y], mods.shift, move_auto_select, move_auto_select && !empty);
                         return true;
                     }
                 } else {
+                    let hit_layer = probe.as_ref().ok().and_then(|v| v["layer"].as_u64()).map(photocraft_doc::LayerId);
                     let locked_hit = !move_auto_select
-                        && probe.as_ref().ok().and_then(|v| v["layer"].as_u64()).is_some_and(|id| {
+                        && hit_layer.is_some_and(|id| {
                             app.session.active().is_some_and(|st| {
-                                let id = photocraft_doc::LayerId(id);
                                 let locks = st.doc.effective_locks(id);
                                 locks.position || locks.all || st.doc.is_background(id)
                             })
                         });
                     let before = app.session.active().map(|st| st.selected_layers());
                     let active_before = app.session.active().and_then(|st| st.active_layer);
-                    let picked = app.run("layer.pickAt", json!({"x": x, "y": y, "target": target, "mode": mode, "moveAutoSelect": move_auto_select}));
+                    let _ = app.run("layer.pickAt", json!({"x": x, "y": y, "target": target, "mode": mode, "moveAutoSelect": move_auto_select}));
                     note_move_pick(app, active_before);
                     if locked_hit {
-                        let hit_id = picked.ok().and_then(|v| v["layer"].as_u64()).map(photocraft_doc::LayerId);
-                        crate::move_box::begin_with_layer(app, [x, y], mods.shift, hit_id);
+                        crate::move_box::begin_with_layer(app, [x, y], mods.shift, hit_layer, false, false);
                         return true;
                     }
                     // Snapping (and the drag's box) started before the pick: point it at what moves.
@@ -362,7 +390,7 @@ fn handle_move_pointer(app: &mut PhotocraftApp, raw: ToolEvent, ev: ToolEvent, t
             }
             // A locked layer: no drag, and Photoshop's message once the pointer moves (`move_lock`).
             if crate::move_lock::blocked(app, tool, [x, y], mods) {
-                record_move_blocked(app, [x, y]);
+                record_blocked_press(app, x, y);
                 return true;
             }
             // With a selection: cut the selected pixels (⌥ copies them) and drag them as a floating
@@ -396,24 +424,6 @@ fn handle_move_pointer(app: &mut PhotocraftApp, raw: ToolEvent, ev: ToolEvent, t
         _ => {}
     }
     false
-}
-
-/// Records a blocked Move press point and pressed layer so the gesture can still trigger a
-/// cross-document transfer if dragged onto another tab or tiled canvas.
-fn record_move_blocked(app: &mut PhotocraftApp, [x, y]: [f64; 2]) {
-    let hit = if app.session.active().is_some_and(|st| st.doc.selection.is_none()) {
-        let target = app.ui.tool_options.move_target.clone();
-        app.run("layer.pickAt", json!({"x": x, "y": y, "target": target, "select": false})).ok().and_then(|v| v["layer"].as_u64()).map(photocraft_doc::LayerId)
-    } else {
-        None
-    };
-    app.move_blocked = true;
-    // The press is refused, so no drag object exists; the point and pressed layer are
-    // recorded so the gesture can still become a cross-document transfer.
-    app.move_blocked_start = Some([x, y]);
-    app.move_blocked_moved = false;
-    app.move_blocked_layer = hit;
-    app.move_viewport = app.current_viewport;
 }
 
 fn consumes_cancelled_vector_event(app: &mut PhotocraftApp, ev: ToolEvent) -> bool {
@@ -505,11 +515,13 @@ fn clear_off_on_background(app: &mut PhotocraftApp, tool: Tool) {
 }
 
 /// Handles pointer gestures on locked layers or targets where movement is disallowed.
-/// When dragging within the same document, shows the lock feedback promptly upon pointer movement
-/// (including when returning to the press point), while preserving cross-document drag transfers.
+/// When only one document is open (or no cross-document transfer is eligible), shows the lock
+/// feedback immediately on pointer movement; when a cross-document Move transfer is eligible
+/// across multiple open documents, defers the prompt until release inside the source document
+/// so dragging across the source canvas toward another tab or tile is not interrupted.
 fn handle_move_blocked_event(app: &mut PhotocraftApp, ev: ToolEvent, tool: Tool, mods: egui::Modifiers) -> bool {
-    // A locked layer (the Background without a selection, say): no drag, and the lock message
-    // once the pointer moves (a click says nothing). ⌥ with a selection tool here (#896); the Move
+    // A locked layer (the Background without a selection, say): no drag, and Photoshop's message
+    // once the pointer moves (a click says nothing). ⌘ with a selection tool here (#896); the Move
     // tool below, once Auto-Select has picked the layer.
     match ev {
         ToolEvent::Down { x, y, .. } => {
@@ -538,7 +550,9 @@ fn handle_move_blocked_event(app: &mut PhotocraftApp, ev: ToolEvent, tool: Tool,
                 }
                 // Defer the lock dialog while a cross-document Move transfer is still possible, so
                 // dragging off the source canvas onto another document or tab arms cleanly.
-                let may_transfer = tool == Tool::Move && app.session.documents().len() > 1 && app.ui.transform.is_none() && app.guide_drag.is_none();
+                let has_target = app.move_blocked_layer.is_some() || app.session.active().is_some_and(|st| st.doc.selection.is_some());
+                let may_transfer =
+                    tool == Tool::Move && app.session.documents().len() > 1 && app.ui.transform.is_none() && app.guide_drag.is_none() && has_target;
                 if !may_transfer {
                     app.clear_move_blocked();
                     crate::move_lock::prompt(app);

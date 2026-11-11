@@ -779,7 +779,7 @@ fn copying_or_cutting_a_mask_selection_transfers_the_mask_without_touching_layer
     // Moved floating mask selection: copies moved mask piece and with cut: true leaves red layer pixels untouched.
     s.set_active(0);
     s.execute("select.float", json!({"dx": 6, "dy": 4, "target": "mask"})).unwrap();
-    let r2 = s.execute("layer.copyToDocument", json!({"document": 1, "selection": true, "cut": true, "offset": [2, 3]})).unwrap();
+    let r2 = s.execute("layer.copyToDocument", json!({"document": 1, "selection": true, "cut": true, "target": "mask", "offset": [2, 3]})).unwrap();
     let dest_id2 = copied(&r2);
     assert_eq!(bounds(&s, 1, dest_id2), Rect::new(12, 13, 17, 23));
     let mut px2 = [0.0f32; 4];
@@ -788,4 +788,77 @@ fn copying_or_cutting_a_mask_selection_transfers_the_mask_without_touching_layer
     let mut src_px = [0.0f32; 4];
     doc(&s, 0).layer(paint).unwrap().surface().unwrap().read_pixel(5, 8, &mut src_px);
     assert_eq!(src_px, [1.0, 0.0, 0.0, 1.0], "source layer image pixels were not cleared or altered");
+}
+
+#[test]
+/// A floating piece must match the requested target: a floating pixel selection cannot stand in
+/// for mask content, and a floating layer mask cannot be copied as pixels.
+fn a_floating_piece_must_match_the_requested_target() {
+    let (mut s, _paint) = two_docs(40, 30, 8);
+    s.execute("layer.layerMask.revealAll", json!({})).unwrap();
+
+    // A floating pixel selection asked for as mask content is refused before copying or cutting.
+    s.execute("select.rect", json!({"x": 4, "y": 6, "width": 5, "height": 10})).unwrap();
+    s.execute("select.float", json!({"dx": 2, "dy": 0})).unwrap();
+    let before = doc(&s, 0).clone();
+    for cut in [false, true] {
+        let err = s.execute("layer.copyToDocument", json!({"document": 1, "selection": true, "cut": cut, "target": "mask"})).unwrap_err();
+        assert!(err.to_string().contains("a floating pixel selection"), "cut: {cut}: {err}");
+        assert_eq!(*doc(&s, 0), before, "cut: {cut}: the floating piece and its selection are untouched");
+        assert_eq!(doc(&s, 1).layers.len(), 1, "cut: {cut}: the destination is untouched");
+    }
+
+    // A floating layer mask asked for as pixels is refused the same way.
+    s.execute("select.drop", json!({})).unwrap();
+    s.execute("select.rect", json!({"x": 4, "y": 6, "width": 5, "height": 10})).unwrap();
+    s.execute("select.float", json!({"dx": 2, "dy": 0, "target": "mask"})).unwrap();
+    let before = doc(&s, 0).clone();
+    let err = s.execute("layer.copyToDocument", json!({"document": 1, "selection": true})).unwrap_err();
+    assert!(err.to_string().contains("a floating layer mask"), "{err}");
+    assert_eq!(*doc(&s, 0), before);
+    assert_eq!(doc(&s, 1).layers.len(), 1);
+}
+
+#[test]
+/// A destination edit failure during a cut restores the pre-cut source without rolling back an
+/// earlier coalesced edit.
+fn failed_destination_insert_during_cut_restores_source_and_preserves_coalesced_history() {
+    use photocraft_doc::{Layer, MAX_GROUP_DEPTH};
+
+    let (mut s, paint) = two_docs(40, 30, 8);
+    // An earlier coalesced edit on the source (same key `k` as the failing cut below).
+    s.execute("select.rect", json!({"x": 4, "y": 6, "width": 5, "height": 10})).unwrap();
+    s.execute("edit.fill", json!({"color": "#00ff00", "coalesce": "k"})).unwrap();
+    let filled_before_cut = doc(&s, 0).clone();
+    let history_before = s.documents()[0].history.past_len();
+    let coalesce_before = s.documents()[0].coalesce.clone();
+    assert_eq!(coalesce_before.as_deref(), Some("k"));
+
+    // Force destination `s.edit` to fail at `check_group_depth` by nesting a group past MAX_GROUP_DEPTH.
+    s.set_active(1);
+    let mut deep = Layer::new("leaf", LayerContent::Raster(Surface::new(PixelFormat::RGBA8)));
+    for _ in 0..=MAX_GROUP_DEPTH {
+        deep = Layer::group("g", vec![deep]);
+    }
+    let mut d = (*doc(&s, 1)).clone();
+    d.layers.push(deep);
+    s.active_mut().unwrap().doc = std::sync::Arc::new(d);
+    let dest_before = doc(&s, 1).clone();
+
+    s.set_active(0);
+    let err = s.execute("layer.copyToDocument", json!({"document": 1, "selection": true, "cut": true, "coalesce": "k"})).unwrap_err();
+    assert!(err.to_string().contains("deeper than"), "{err}");
+
+    assert_eq!(s.active_index(), Some(0), "source document stays active");
+    assert_eq!(*doc(&s, 0), filled_before_cut, "source pixels and selection are restored");
+    assert_eq!(s.documents()[0].history.past_len(), history_before, "no dangling cut history step");
+    assert_eq!(s.documents()[0].coalesce, coalesce_before, "coalesce key preserved");
+    assert_eq!(*doc(&s, 1), dest_before, "destination document is unchanged");
+    assert_eq!(bounds(&s, 0, paint), Rect::new(4, 6, 14, 16));
+
+    // Undoing still reverts the earlier fill rather than having been wiped by rollback.
+    assert!(s.undo());
+    let mut px = [0.0f32; 4];
+    doc(&s, 0).layer(paint).unwrap().surface().unwrap().read_pixel(5, 8, &mut px);
+    assert_eq!(px, [1.0, 0.0, 0.0, 1.0], "undo reverts the earlier coalesced fill to red");
 }
