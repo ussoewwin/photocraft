@@ -223,10 +223,13 @@ pub(crate) fn finish_stroke_with(app: &mut PhotocraftApp, tool: Tool, points: &[
             let mode = crate::canvas::tool_feedback::document_selection_mode(app, tool, mods);
             let xy: Vec<[f64; 2]> = points.iter().map(|q| [q[0], q[1]]).collect();
             let (sample_all, enhance) = (o.sample_all.quick_selection, o.enhance_edge);
+            let had_selection = app.session.active().is_some_and(|st| st.doc.selection.is_some());
             let r = app.run("select.quick", json!({"points": xy, "size": size, "mode": mode, "enhanceEdge": enhance, "sampleAllLayers": sample_all}));
             let changed = matches!(r, Ok(ref v) if v.get("changed").and_then(Value::as_bool) == Some(true));
             report_smart_result(app, r, tl!("Quick Selection found nothing there"));
-            if o.quick_selection_mode == 0 && changed {
+            // New flips to Add after its first stroke on an empty selection. A stroke with a
+            // selection there replaces it and keeps New, as in Photoshop.
+            if o.quick_selection_mode == 0 && changed && !had_selection {
                 app.ui.tool_options.quick_selection_mode = 1;
             }
             return true;
