@@ -426,9 +426,24 @@ pub fn t(s: &str) -> &str {
     tr(current(), s)
 }
 
+/// This fork's Japanese wording where the shared craft-i18n catalog is wrong or has no row. They
+/// live in the tree so the fork's Japanese UI does not depend on an out-of-tree catalog checkout:
+/// `Skew` is 歪み (the catalog says 斜体, "italic"), and the Transform menu's own command rows carry
+/// the wording this fork ships.
+const JA_TEXT_OVERRIDES: &[(&str, &str)] = &[("Skew", "歪み"), ("Set horizontal skew", "水平方向の歪みを設定"), ("Set vertical skew", "垂直方向の歪みを設定")];
+const JA_ID_OVERRIDES: &[(&str, &str)] = &[("edit.transform.skew", "歪み"), ("edit.transform.distort", "多方向に伸縮")];
+
+/// This fork's Japanese row for `lang` + `key`, if it has one.
+fn fork_override<'a>(lang: Lang, table: &'a [(&'a str, &'a str)], key: &str) -> Option<&'a str> {
+    if lang.code() != "ja" {
+        return None;
+    }
+    table.iter().find(|(k, _)| *k == key).map(|(_, v)| *v)
+}
+
 /// Translate an English UI string; unknown strings come back unchanged.
 pub fn tr(lang: Lang, s: &str) -> &str {
-    lang.i18n().t(lang.lang, s)
+    fork_override(lang, JA_TEXT_OVERRIDES, s).unwrap_or_else(|| lang.i18n().t(lang.lang, s))
 }
 
 /// Like [`tr`], for an English string that needs a disambiguating `context`.
@@ -439,6 +454,9 @@ pub fn tr_ctx<'a>(lang: Lang, context: &str, s: &'a str) -> &'a str {
 /// A string keyed by its command id, falling back to the translation of the English `label`. Only
 /// PhotoCraft's own `@id` rows count ([`own_id`]).
 pub fn tr_id<'a>(lang: Lang, id: &str, label: &'a str) -> &'a str {
+    if let Some(row) = fork_override(lang, JA_ID_OVERRIDES, id) {
+        return row;
+    }
     if own_id(lang, id, label) { lang.i18n().tid(lang.lang, id, label) } else { tr(lang, label) }
 }
 
