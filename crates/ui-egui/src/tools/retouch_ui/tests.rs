@@ -1405,6 +1405,31 @@ fn a_new_mode_stroke_flips_to_add_only_on_the_first_one() {
     assert_eq!(app.ui.tool_options.quick_selection_mode, 0, "a stroke with a selection there keeps New");
 }
 
+#[test]
+/// An empty selection (Select All followed by Inverse) is no selection for the New-to-Add
+/// transition: the stroke that makes one flips New to Add instead of keeping New.
+fn an_empty_selection_counts_as_none_for_the_new_to_add_transition() {
+    use crate::canvas::{ToolEvent, tool_event};
+    use egui::Modifiers;
+    let mut app = app();
+    app.ui.tool = Tool::QuickSelection;
+    app.run("layer.new.layer", json!({"name": "Patch"})).unwrap();
+    app.run("select.rect", json!({"x": 60, "y": 20, "width": 20, "height": 20})).unwrap();
+    app.run("edit.fill", json!({"color": "#ff0000"})).unwrap();
+    // Select All followed by Inverse leaves `Some(empty)` when the layer fills the canvas.
+    app.run("select.all", json!({})).unwrap();
+    app.run("select.inverse", json!({})).unwrap();
+    let sel_bounds = app.session.active().unwrap().doc.selection.as_ref().map(|s| s.content_bounds());
+    assert_eq!(sel_bounds, Some(photocraft_geom::Rect::EMPTY), "the inverted selection is empty");
+    assert!(app.session.active().unwrap().doc.selection.is_some(), "an empty selection is still Some");
+
+    // The stroke that makes a selection out of the empty one flips New to Add.
+    app.ui.tool_options.quick_selection_mode = 0;
+    tool_event(&mut app, ToolEvent::Down { x: 70.0, y: 30.0, pressure: 1.0 }, Modifiers::NONE);
+    tool_event(&mut app, ToolEvent::Up { x: 70.0, y: 30.0 }, Modifiers::NONE);
+    assert_eq!(app.ui.tool_options.quick_selection_mode, 1, "the stroke out of the empty selection switches to Add");
+}
+
 /// In New mode a click inside the selection deselects it (one Deselect step) and a drag inside
 /// moves the outline (one Move Selection step); the mode stays New in both cases.
 #[test]
