@@ -284,7 +284,10 @@ fn record_blocked_press(app: &mut PhotocraftApp, x: f64, y: f64) {
 fn blocked_press_layer(app: &mut PhotocraftApp, x: f64, y: f64) -> Option<photocraft_doc::LayerId> {
     if app.session.active().is_some_and(|st| st.doc.selection.is_none()) {
         let target = app.ui.tool_options.move_target.clone();
-        app.run("layer.pickAt", json!({"x": x, "y": y, "target": target, "select": false})).ok().and_then(|v| v["layer"].as_u64()).map(photocraft_doc::LayerId)
+        app.run("layer.pickAt", json!({"x": x, "y": y, "target": target, "select": false, "includeLocked": true}))
+            .ok()
+            .and_then(|v| v["layer"].as_u64())
+            .map(photocraft_doc::LayerId)
     } else {
         None
     }
@@ -341,7 +344,7 @@ fn handle_move_pointer(app: &mut PhotocraftApp, ev: ToolEvent, tool: Tool, mods:
                             // Auto-Select rule the probe used, so find it without that rule: a
                             // drag that starts on it can still transfer it to another document.
                             let locked = app
-                                .run("layer.pickAt", json!({"x": x, "y": y, "target": target, "select": false}))
+                                .run("layer.pickAt", json!({"x": x, "y": y, "target": target, "select": false, "includeLocked": true}))
                                 .ok()
                                 .and_then(|v| v["layer"].as_u64())
                                 .map(photocraft_doc::LayerId);
