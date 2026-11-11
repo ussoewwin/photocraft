@@ -24,14 +24,6 @@ pub(crate) struct LayerBox {
     pub(crate) grabbed_layer: Option<photocraft_doc::LayerId>,
 }
 
-/// Start the marquee at `p` after an empty or locked-only hit. With `move_auto_select`, the
-/// real Move tool skips effective Position as well as All locks. Set `clear_on_empty` for its
-/// locked-only press so an empty replacement marquee clears the selection.
-/// Temporary Move keeps ordinary lock filtering. Marquees clear the press's snapping and ⇧/⌥ state.
-pub(crate) fn begin(app: &mut PhotocraftApp, p: [f64; 2], add: bool, move_auto_select: bool, clear_on_empty: bool) {
-    begin_full(app, p, add, move_auto_select, clear_on_empty, None);
-}
-
 /// Starts a Move marquee drag at `p`, recording a locked or background layer under the pointer
 /// for potential cross-document transfer.
 pub(crate) fn begin_with_layer(app: &mut PhotocraftApp, p: [f64; 2], add: bool, grabbed_layer: Option<photocraft_doc::LayerId>) {
