@@ -87,7 +87,7 @@ fn move_drag(app: &PhotocraftApp) -> Option<[f64; 2]> {
         && app.ui.transform.is_none()
         && app.guide_drag.is_none()
         && st.floating.is_none()
-        && st.active_layer.is_some()
+        && (app.move_blocked_layer.is_some() || (st.doc.selection.is_some() && st.active_layer.is_some()))
     {
         return Some(start);
     }
@@ -112,7 +112,8 @@ pub fn pointer_if_armed(app: &PhotocraftApp, ctx: &egui::Context) -> Option<egui
 fn arm_move_transfer(app: &mut PhotocraftApp, ctx: &egui::Context, index: usize) -> bool {
     if get(ctx).is_none() {
         let Some(grab) = move_drag(app) else { return false };
-        let Some(active) = app.session.active().and_then(|st| st.active_layer) else { return false };
+        // A marquee that grabbed a layer transfers it even when no layer is active.
+        let active = app.session.active().and_then(|st| st.active_layer);
         if app.session.active_index() == Some(index) {
             return false;
         }
@@ -128,7 +129,9 @@ fn arm_move_transfer(app: &mut PhotocraftApp, ctx: &egui::Context, index: usize)
                 app.move_viewport = None;
                 g
             } else if app.move_blocked {
-                let hit = app.move_blocked_layer.unwrap_or(active);
+                let Some(hit) = app.move_blocked_layer.or_else(|| active.filter(|_| app.session.active().is_some_and(|st| st.doc.selection.is_some()))) else {
+                    return false;
+                };
                 app.clear_move_blocked();
                 hit
             } else {
@@ -162,7 +165,7 @@ fn arm_move_transfer(app: &mut PhotocraftApp, ctx: &egui::Context, index: usize)
         if let Some(st) = app.session.active_mut() {
             st.floating = previous.map(|f| photocraft_engine::float_cmds::Floating { revision: st.revision, ..f });
         }
-        let active = app.session.active().and_then(|st| st.active_layer).unwrap_or(active);
+        let Some(active) = app.session.active().and_then(|st| st.active_layer).or(active) else { return false };
         if !begin(app, ctx, active, Some(grab)) {
             return false;
         }
@@ -170,6 +173,8 @@ fn arm_move_transfer(app: &mut PhotocraftApp, ctx: &egui::Context, index: usize)
     true
 }
 
+/// Handles a layer transfer dragged over document tab `index`, switching the active document
+/// and completing the drop when the primary button is released.
 pub fn over_tab(app: &mut PhotocraftApp, ctx: &egui::Context, index: usize) {
     if !arm_move_transfer(app, ctx, index) {
         return;
