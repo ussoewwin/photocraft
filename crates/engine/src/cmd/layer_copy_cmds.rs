@@ -372,8 +372,10 @@ fn copy_to_document(s: &mut Session, p: &Value) -> Result<Value> {
     translate_copies(&mut copies, &ddoc, dx, dy);
     let patterns: Vec<_> = sdoc.patterns.iter().filter(|pat| !ddoc.patterns.iter().any(|d| d.id == pat.id)).cloned().collect();
     let styles = std::mem::take(&mut copies.text_styles);
-    // A cut leaves the source without the pixels that travel. The source is edited first, so a
-    // failure here leaves the copy unplaced rather than the source emptied.
+    // Snapshot the source state before cutting so any failure while cutting or inserting into
+    // the destination restores the exact pre-cut pixels, selection, active document, and coalesced
+    // history without calling rollback.
+    let prior_src = if cut && cut_parts.is_some() { s.documents().get(src).cloned() } else { None };
     if let Some((_bounds, _off, float_parts, mask_target)) = cut_parts
         && cut
     {
@@ -413,9 +415,14 @@ fn copy_to_document(s: &mut Session, p: &Value) -> Result<Value> {
         crate::layer_multi_cmds::check_group_depth(doc, "Copy Layers")?;
         Ok(new)
     });
-    // Nothing changed: the source stays the active document.
+    // Nothing succeeded: restore the pre-cut source state (and keep it active) so a destination
+    // failure never empties the source or drops an earlier coalesced edit.
     if edited.is_err() {
         s.set_active(src);
+        if let (Some(saved), Some(st)) = (prior_src, s.active_mut()) {
+            *st = saved;
+        }
+        s.sync_tools_mask_target();
     }
     let new = edited?;
     if let (Some(name), [id]) = (typed, new.as_slice()) {
