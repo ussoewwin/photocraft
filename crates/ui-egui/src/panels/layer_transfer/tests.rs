@@ -551,6 +551,27 @@ fn same_document_blocked_move_with_multiple_documents_shows_lock_message() {
 }
 
 #[test]
+/// With Auto-Select on, a press inside a locked selection is refused, and the press is recorded:
+/// the point and the window that owns the gesture, so it can still show the lock message and
+/// become a cross-document transfer with two documents open.
+fn a_refused_press_inside_a_locked_selection_records_the_press() {
+    let (mut h, paint) = harness();
+    // The painted layer is locked in place and its pixels are selected.
+    h.state_mut().session.execute("layer.select", json!({"layer": paint.0})).unwrap();
+    h.state_mut().session.execute("layer.lockLayers", json!({"position": true})).unwrap();
+    h.state_mut().session.execute("select.rect", json!({"x": 4, "y": 6, "width": 10, "height": 10})).unwrap();
+    h.state_mut().ui.tool = Tool::Move;
+    h.state_mut().ui.tool_options.move_auto_select = true;
+    assert_eq!(h.state().session.documents().len(), 2, "two documents open");
+
+    use crate::canvas::{ToolEvent, tool_event};
+    tool_event(h.state_mut(), ToolEvent::Down { x: 8.0, y: 10.0, pressure: 1.0 }, Modifiers::NONE);
+    assert!(h.state().move_blocked, "the press on the locked selection is refused");
+    assert_eq!(h.state().move_blocked_start, Some([8.0, 10.0]), "the press point is recorded");
+    assert!(h.state().move_viewport.is_some(), "the window that owns the gesture is recorded");
+}
+
+#[test]
 /// Releasing a blocked Move drag clears the blocked state.
 fn blocked_move_gesture_release_clears_blocked_state() {
     let (mut h, _) = harness();

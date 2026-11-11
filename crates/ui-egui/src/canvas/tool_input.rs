@@ -268,6 +268,28 @@ fn note_move_pick(app: &mut PhotocraftApp, active_before: Option<photocraft_doc:
     }
 }
 
+/// Record a refused press: the point, the layer under it and the window that owns the gesture.
+/// No drag object exists, so without this the gesture can neither show the lock message nor
+/// become a cross-document transfer.
+fn record_blocked_press(app: &mut PhotocraftApp, x: f64, y: f64) {
+    app.move_blocked = true;
+    app.move_blocked_start = Some([x, y]);
+    app.move_blocked_moved = false;
+    app.move_blocked_layer = blocked_press_layer(app, x, y);
+    app.move_viewport = app.current_viewport;
+}
+
+/// The layer a refused press hit: the one under the pointer, or none when the document has a
+/// pixel selection (that selection is what a move would carry).
+fn blocked_press_layer(app: &mut PhotocraftApp, x: f64, y: f64) -> Option<photocraft_doc::LayerId> {
+    if app.session.active().is_some_and(|st| st.doc.selection.is_none()) {
+        let target = app.ui.tool_options.move_target.clone();
+        app.run("layer.pickAt", json!({"x": x, "y": y, "target": target, "select": false})).ok().and_then(|v| v["layer"].as_u64()).map(photocraft_doc::LayerId)
+    } else {
+        None
+    }
+}
+
 /// Handle Move-specific pointer events and report whether the event was consumed. Auto-Select
 /// picks on press so snapping and dragging use the resulting layer selection. When a locked-only
 /// hit starts a marquee, Shift preserves the selection that the marquee adds to.
@@ -312,7 +334,7 @@ fn handle_move_pointer(app: &mut PhotocraftApp, ev: ToolEvent, tool: Tool, mods:
                             // Pressing locked selected pixels still uses the existing move-lock
                             // handler. Otherwise a locked-only hit can start a marquee (#4058).
                             if inside_selection(app, [x, y]) && crate::move_lock::blocked(app, tool, [x, y], mods) {
-                                app.move_blocked = true;
+                                record_blocked_press(app, x, y);
                                 return true;
                             }
                             // A position-locked layer (the Background) is skipped by the Move
@@ -358,22 +380,7 @@ fn handle_move_pointer(app: &mut PhotocraftApp, ev: ToolEvent, tool: Tool, mods:
             }
             // A locked layer: no drag, and Photoshop's message once the pointer moves (`move_lock`).
             if crate::move_lock::blocked(app, tool, [x, y], mods) {
-                let hit = if app.session.active().is_some_and(|st| st.doc.selection.is_none()) {
-                    let target = app.ui.tool_options.move_target.clone();
-                    app.run("layer.pickAt", json!({"x": x, "y": y, "target": target, "select": false}))
-                        .ok()
-                        .and_then(|v| v["layer"].as_u64())
-                        .map(photocraft_doc::LayerId)
-                } else {
-                    None
-                };
-                app.move_blocked = true;
-                // The press is refused, so no drag object exists; the point and pressed layer are
-                // recorded so the gesture can still become a cross-document transfer.
-                app.move_blocked_start = Some([x, y]);
-                app.move_blocked_moved = false;
-                app.move_blocked_layer = hit;
-                app.move_viewport = app.current_viewport;
+                record_blocked_press(app, x, y);
                 return true;
             }
             // With a selection: cut the selected pixels (⌥ copies them) and drag them as a floating
