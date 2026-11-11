@@ -291,7 +291,21 @@ fn copy_to_document(s: &mut Session, p: &Value) -> Result<Value> {
                 (piece.clone(), bounds, f.offset, f.parts.clone())
             });
             let (clip_surface, clip_bounds, float_off, float_parts) = match floating_parts {
-                Some((piece, bounds, off, parts)) => (piece, bounds, off, Some(parts)),
+                Some((piece, bounds, off, parts)) => {
+                    // The floating piece must carry what the caller asked for: a pixel selection
+                    // for a pixels copy, a floating layer mask for a mask copy. The other one would
+                    // copy (and cut) the wrong content. The drag passes `target: "mask"` when it
+                    // floats a mask (`layer_transfer`), so a mismatch is a caller error rather than
+                    // something to guess.
+                    if parts.is_mask() != mask_target {
+                        return Err(bad(if mask_target {
+                            "a floating pixel selection cannot be copied as mask content"
+                        } else {
+                            "a floating layer mask cannot be copied as pixels"
+                        }));
+                    }
+                    (piece, bounds, off, Some(parts))
+                }
                 None => {
                     let surf = if mask_target {
                         &src_layer.mask.as_ref().ok_or_else(|| EngineError::Other("the active layer has no layer mask".into()))?.surface
