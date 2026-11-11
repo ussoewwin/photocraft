@@ -551,6 +551,27 @@ fn same_document_blocked_move_with_multiple_documents_shows_lock_message() {
 }
 
 #[test]
+/// With Auto-Select on, a press inside a locked selection is refused, and the press is recorded:
+/// the point and the window that owns the gesture, so it can still show the lock message and
+/// become a cross-document transfer with two documents open.
+fn a_refused_press_inside_a_locked_selection_records_the_press() {
+    let (mut h, paint) = harness();
+    // The painted layer is locked in place and its pixels are selected.
+    h.state_mut().session.execute("layer.select", json!({"layer": paint.0})).unwrap();
+    h.state_mut().session.execute("layer.lockLayers", json!({"position": true})).unwrap();
+    h.state_mut().session.execute("select.rect", json!({"x": 4, "y": 6, "width": 10, "height": 10})).unwrap();
+    h.state_mut().ui.tool = Tool::Move;
+    h.state_mut().ui.tool_options.move_auto_select = true;
+    assert_eq!(h.state().session.documents().len(), 2, "two documents open");
+
+    use crate::canvas::{ToolEvent, tool_event};
+    tool_event(h.state_mut(), ToolEvent::Down { x: 8.0, y: 10.0, pressure: 1.0 }, Modifiers::NONE);
+    assert!(h.state().move_blocked, "the press on the locked selection is refused");
+    assert_eq!(h.state().move_blocked_start, Some([8.0, 10.0]), "the press point is recorded");
+    assert!(h.state().move_viewport.is_some(), "the window that owns the gesture is recorded");
+}
+
+#[test]
 /// Releasing a blocked Move drag clears the blocked state.
 fn blocked_move_gesture_release_clears_blocked_state() {
     let (mut h, _) = harness();
@@ -575,7 +596,7 @@ fn extra_window_move_gesture_preserved_when_main_window_finishes() {
     h.state_mut().ui.tool = Tool::Move;
     h.state_mut().move_blocked = true;
     h.state_mut().move_blocked_start = Some([10.0, 10.0]);
-    crate::tools::move_box::begin_with_layer(h.state_mut(), [10.0, 10.0], false, Some(photocraft_doc::LayerId(1)));
+    crate::tools::move_box::begin_with_layer(h.state_mut(), [10.0, 10.0], false, Some(photocraft_doc::LayerId(1)), false, false);
     h.state_mut().move_viewport = Some(extra_vid);
 
     // When the main window's finish runs, the extra window's gesture is preserved
@@ -645,7 +666,7 @@ fn a_secondary_button_release_keeps_the_marquee_until_the_primary_release() {
     h.state_mut().ui.tool_options.move_auto_select = false;
 
     // A marquee over a locked layer, as a blocked Move drag leaves it.
-    crate::tools::move_box::begin_with_layer(h.state_mut(), [20.0, 20.0], false, Some(paint));
+    crate::tools::move_box::begin_with_layer(h.state_mut(), [20.0, 20.0], false, Some(paint), false, false);
     h.state_mut().move_blocked = true;
     h.state_mut().move_blocked_start = Some([20.0, 20.0]);
 
@@ -810,4 +831,32 @@ fn stale_blocked_move_from_extra_window_cleans_up_before_consuming_other_viewpor
     assert!(h.state().move_blocked_layer.is_none());
     assert!(h.state().drag.is_some(), "unlocked drag starts cleanly in main viewport");
     tool_event(h.state_mut(), ToolEvent::Up { x: 8.0, y: 10.0 }, Modifiers::NONE);
+}
+
+/// #11971 review: when Auto-Select is off and the active layer is locked, pressing over empty
+/// space (no layer hit under pointer, no selection) must not transfer the locked active layer.
+#[test]
+fn a_blocked_move_over_empty_space_does_not_transfer_locked_active_layer() {
+    let (mut h, paint) = harness();
+    // Hide Background and lock `paint` in place so (25, 25) is transparent empty space.
+    let bg = h.state().session.documents()[0].doc.layers[0].id;
+    h.state_mut()
+        .session
+        .edit("hide bg and lock paint", |doc, active| {
+            doc.layer_mut(bg).unwrap().visible = false;
+            doc.layer_mut(paint).unwrap().locks.position = true;
+            *active = Some(paint);
+            Ok(())
+        })
+        .unwrap();
+    h.state_mut().ui.tool = Tool::Move;
+    h.state_mut().ui.tool_options.move_auto_select = false;
+    h.run_steps(2);
+
+    let grab = ViewXform::active(h.state()).unwrap().to_screen(25.0, 25.0);
+    let over_tab = tab(&h, "dest-doc");
+    let drop = h.state().last_canvas_rect.center();
+    drag_along(&mut h, &[grab, over_tab, drop], Modifiers::NONE);
+
+    assert_eq!(h.state().session.documents()[1].doc.layers.len(), 1, "nothing transferred from empty space");
 }
