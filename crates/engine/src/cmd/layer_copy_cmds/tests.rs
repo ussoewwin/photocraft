@@ -779,7 +779,7 @@ fn copying_or_cutting_a_mask_selection_transfers_the_mask_without_touching_layer
     // Moved floating mask selection: copies moved mask piece and with cut: true leaves red layer pixels untouched.
     s.set_active(0);
     s.execute("select.float", json!({"dx": 6, "dy": 4, "target": "mask"})).unwrap();
-    let r2 = s.execute("layer.copyToDocument", json!({"document": 1, "selection": true, "cut": true, "offset": [2, 3]})).unwrap();
+    let r2 = s.execute("layer.copyToDocument", json!({"document": 1, "selection": true, "cut": true, "target": "mask", "offset": [2, 3]})).unwrap();
     let dest_id2 = copied(&r2);
     assert_eq!(bounds(&s, 1, dest_id2), Rect::new(12, 13, 17, 23));
     let mut px2 = [0.0f32; 4];
@@ -788,6 +788,35 @@ fn copying_or_cutting_a_mask_selection_transfers_the_mask_without_touching_layer
     let mut src_px = [0.0f32; 4];
     doc(&s, 0).layer(paint).unwrap().surface().unwrap().read_pixel(5, 8, &mut src_px);
     assert_eq!(src_px, [1.0, 0.0, 0.0, 1.0], "source layer image pixels were not cleared or altered");
+}
+
+#[test]
+/// A floating piece must match the requested target: a floating pixel selection cannot stand in
+/// for mask content, and a floating layer mask cannot be copied as pixels.
+fn a_floating_piece_must_match_the_requested_target() {
+    let (mut s, _paint) = two_docs(40, 30, 8);
+    s.execute("layer.layerMask.revealAll", json!({})).unwrap();
+
+    // A floating pixel selection asked for as mask content is refused before copying or cutting.
+    s.execute("select.rect", json!({"x": 4, "y": 6, "width": 5, "height": 10})).unwrap();
+    s.execute("select.float", json!({"dx": 2, "dy": 0})).unwrap();
+    let before = doc(&s, 0).clone();
+    for cut in [false, true] {
+        let err = s.execute("layer.copyToDocument", json!({"document": 1, "selection": true, "cut": cut, "target": "mask"})).unwrap_err();
+        assert!(err.to_string().contains("a floating pixel selection"), "cut: {cut}: {err}");
+        assert_eq!(*doc(&s, 0), before, "cut: {cut}: the floating piece and its selection are untouched");
+        assert_eq!(doc(&s, 1).layers.len(), 1, "cut: {cut}: the destination is untouched");
+    }
+
+    // A floating layer mask asked for as pixels is refused the same way.
+    s.execute("select.drop", json!({})).unwrap();
+    s.execute("select.rect", json!({"x": 4, "y": 6, "width": 5, "height": 10})).unwrap();
+    s.execute("select.float", json!({"dx": 2, "dy": 0, "target": "mask"})).unwrap();
+    let before = doc(&s, 0).clone();
+    let err = s.execute("layer.copyToDocument", json!({"document": 1, "selection": true})).unwrap_err();
+    assert!(err.to_string().contains("a floating layer mask"), "{err}");
+    assert_eq!(*doc(&s, 0), before);
+    assert_eq!(doc(&s, 1).layers.len(), 1);
 }
 
 #[test]
