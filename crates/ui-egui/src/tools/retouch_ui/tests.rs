@@ -1220,7 +1220,7 @@ fn quick_selection_options_bar_has_new_add_subtract_mode_buttons() {
 
     let mut app = app();
     app.ui.tool = Tool::QuickSelection;
-    assert_eq!(app.ui.tool_options.quick_selection_mode, 1, "Quick Selection defaults to Add mode");
+    assert_eq!(app.ui.tool_options.quick_selection_mode, 0, "Quick Selection defaults to New mode");
 
     let mut h = egui_kittest::Harness::builder().with_size(vec2(1400.0, 60.0)).build_ui_state(
         |ui, app: &mut PhotocraftApp| {
@@ -1263,15 +1263,7 @@ fn quick_selection_options_bar_has_new_add_subtract_mode_buttons() {
     let alt = egui::Modifiers::ALT;
     let shift = egui::Modifiers::SHIFT;
 
-    assert_eq!(crate::canvas::tool_feedback::selection_mode(Tool::QuickSelection, 1, none), "add");
-    assert_eq!(crate::canvas::tool_feedback::selection_mode(Tool::QuickSelection, 1, alt), "subtract");
-
-    assert_eq!(crate::canvas::tool_feedback::selection_mode(Tool::QuickSelection, 2, none), "subtract");
-    assert_eq!(crate::canvas::tool_feedback::selection_mode(Tool::QuickSelection, 2, alt), "add");
-
-    assert_eq!(crate::canvas::tool_feedback::selection_mode(Tool::QuickSelection, 0, none), "replace");
-    assert_eq!(crate::canvas::tool_feedback::selection_mode(Tool::QuickSelection, 0, alt), "subtract");
-    assert_eq!(crate::canvas::tool_feedback::selection_mode(Tool::QuickSelection, 0, shift), "add");
+    the_quick_selection_mode_feedback_follows_the_mode();
 
     // After drawing a stroke in New mode (0), it automatically flips back to Add mode (1).
     let modifiers = egui::Modifiers::NONE;
@@ -1333,5 +1325,118 @@ fn quick_selection_options_bar_has_new_add_subtract_mode_buttons() {
     tool_event(h.state_mut(), ToolEvent::Down { x: 20.0, y: 20.0, pressure: 1.0 }, alt);
     tool_event(h.state_mut(), ToolEvent::Up { x: 20.0, y: 20.0 }, alt);
     assert!(h.state().session.active().unwrap().doc.selection.is_none(), "Alt on existing selection subtracts");
-    assert_eq!(h.state().ui.tool_options.quick_selection_mode, 1);
+    assert_eq!(h.state().ui.tool_options.quick_selection_mode, 0, "only a first stroke on an empty selection switches to Add");
+}
+
+/// The mode the Quick Selection sends for each of its three modes, with and without the
+/// modifier keys: Shift always adds and Alt (also Shift+Alt) always subtracts.
+fn the_quick_selection_mode_feedback_follows_the_mode() {
+    use egui::Modifiers;
+    let m = crate::canvas::tool_feedback::selection_mode;
+    let (none, shift, alt) = (Modifiers::NONE, Modifiers::SHIFT, Modifiers::ALT);
+    let both = Modifiers { shift: true, alt: true, ..Modifiers::NONE };
+    assert_eq!(m(Tool::QuickSelection, 1, none), "add");
+    assert_eq!(m(Tool::QuickSelection, 1, alt), "subtract");
+    assert_eq!(m(Tool::QuickSelection, 1, shift), "add");
+
+    assert_eq!(m(Tool::QuickSelection, 2, none), "subtract");
+    assert_eq!(m(Tool::QuickSelection, 2, shift), "add", "Shift always adds");
+    assert_eq!(m(Tool::QuickSelection, 2, alt), "subtract", "Alt always subtracts");
+    assert_eq!(m(Tool::QuickSelection, 2, both), "subtract", "Alt subtracts even with Shift");
+
+    assert_eq!(m(Tool::QuickSelection, 0, none), "replace");
+    assert_eq!(m(Tool::QuickSelection, 0, alt), "subtract");
+    assert_eq!(m(Tool::QuickSelection, 0, shift), "add");
+    assert_eq!(m(Tool::QuickSelection, 0, both), "subtract", "Alt subtracts even with Shift");
+}
+
+/// The reference application starts the Quick Selection in New and Reset Tool puts it back to
+/// New, so the tool's mode is New unless the user picks another one.
+#[test]
+fn the_quick_selection_starts_in_new_and_reset_returns_to_it() {
+    let mut app = app();
+    app.ui.tool = Tool::QuickSelection;
+    assert_eq!(app.ui.tool_options.quick_selection_mode, 0, "the tool starts in New mode");
+    app.ui.tool_options.quick_selection_mode = 1;
+    crate::menus::invoke(&mut app, &egui::Context::default(), crate::tool_reset::RESET, json!({})).unwrap();
+    assert_eq!(app.ui.tool_options.quick_selection_mode, 0, "Reset Tool returns to New mode");
+}
+
+/// Shift always adds and Alt (also Shift+Alt) always subtracts, whatever the mode.
+#[test]
+fn the_quick_selection_modifiers_follow_the_mode() {
+    use egui::Modifiers;
+    let m = crate::canvas::tool_feedback::selection_mode;
+    assert_eq!(m(Tool::QuickSelection, 2, Modifiers::NONE), "subtract");
+    assert_eq!(m(Tool::QuickSelection, 2, Modifiers::SHIFT), "add", "Shift always adds");
+    assert_eq!(m(Tool::QuickSelection, 2, Modifiers::ALT), "subtract");
+    assert_eq!(m(Tool::QuickSelection, 2, Modifiers::SHIFT | Modifiers::ALT), "subtract");
+    assert_eq!(m(Tool::QuickSelection, 1, Modifiers::SHIFT), "add");
+    assert_eq!(m(Tool::QuickSelection, 1, Modifiers::ALT), "subtract");
+    assert_eq!(m(Tool::QuickSelection, 0, Modifiers::SHIFT), "add");
+    assert_eq!(m(Tool::QuickSelection, 0, Modifiers::ALT), "subtract");
+}
+
+/// New flips to Add after its first stroke on an empty selection; with a selection there, a
+/// Shift stroke adds and keeps New, and a plain stroke replaces it and keeps New too.
+#[test]
+fn a_new_mode_stroke_flips_to_add_only_on_the_first_one() {
+    use crate::canvas::{ToolEvent, tool_event};
+    use egui::Modifiers;
+    let mut app = app();
+    app.ui.tool = Tool::QuickSelection;
+    // A filled patch gives the Quick Selection something to segment.
+    app.run("layer.new.layer", json!({"name": "Patch"})).unwrap();
+    app.run("select.rect", json!({"x": 60, "y": 20, "width": 20, "height": 20})).unwrap();
+    app.run("edit.fill", json!({"color": "#ff0000"})).unwrap();
+    app.run("select.deselect", json!({})).unwrap();
+
+    // The first stroke on an empty selection switches New to Add.
+    app.ui.tool_options.quick_selection_mode = 0;
+    tool_event(&mut app, ToolEvent::Down { x: 70.0, y: 30.0, pressure: 1.0 }, Modifiers::NONE);
+    tool_event(&mut app, ToolEvent::Up { x: 70.0, y: 30.0 }, Modifiers::NONE);
+    assert_eq!(app.ui.tool_options.quick_selection_mode, 1, "the first stroke on an empty selection switches to Add");
+
+    // With a selection there, a plain stroke replaces it and keeps New.
+    app.run("select.rect", json!({"x": 10, "y": 10, "width": 30, "height": 30})).unwrap();
+    app.ui.tool_options.quick_selection_mode = 0;
+    tool_event(&mut app, ToolEvent::Down { x: 70.0, y: 30.0, pressure: 1.0 }, Modifiers::NONE);
+    tool_event(&mut app, ToolEvent::Up { x: 70.0, y: 30.0 }, Modifiers::NONE);
+    assert_eq!(app.ui.tool_options.quick_selection_mode, 0, "a stroke with a selection there keeps New");
+}
+
+/// In New mode a click inside the selection deselects it (one Deselect step) and a drag inside
+/// moves the outline (one Move Selection step); the mode stays New in both cases.
+#[test]
+fn a_click_or_drag_inside_the_selection_in_new_mode_acts_on_the_selection() {
+    use crate::canvas::{ToolEvent, tool_event};
+    use egui::Modifiers;
+    let mut app = app();
+    app.ui.tool = Tool::QuickSelection;
+    app.run("select.rect", json!({"x": 10, "y": 10, "width": 30, "height": 30})).unwrap();
+    app.ui.tool_options.quick_selection_mode = 0;
+    let bounds = |app: &PhotocraftApp| app.session.active().unwrap().doc.selection.as_ref().map(|s| s.content_bounds());
+
+    // A click inside the selection deselects it.
+    let steps = app.session.active().unwrap().history.past_len();
+    tool_event(&mut app, ToolEvent::Down { x: 20.0, y: 20.0, pressure: 1.0 }, Modifiers::NONE);
+    tool_event(&mut app, ToolEvent::Up { x: 20.0, y: 20.0 }, Modifiers::NONE);
+    assert!(bounds(&app).is_none(), "a click inside the selection deselects it");
+    assert_eq!(app.ui.tool_options.quick_selection_mode, 0, "the mode stays New");
+    let labels: Vec<String> = app.session.active().unwrap().history.entries().into_iter().skip(steps + 1).map(|e| e.to_string()).collect();
+    assert_eq!(labels.first().map(String::as_str), Some("Deselect"), "{labels:?}");
+
+    // A drag inside the selection moves its outline.
+    app.run("select.rect", json!({"x": 10, "y": 10, "width": 30, "height": 30})).unwrap();
+    app.ui.tool_options.quick_selection_mode = 0;
+    let steps = app.session.active().unwrap().history.past_len();
+    tool_event(&mut app, ToolEvent::Down { x: 20.0, y: 20.0, pressure: 1.0 }, Modifiers::NONE);
+    tool_event(&mut app, ToolEvent::Move { x: 30.0, y: 20.0, pressure: 1.0 }, Modifiers::NONE);
+    tool_event(&mut app, ToolEvent::Up { x: 30.0, y: 20.0 }, Modifiers::NONE);
+    let moved = bounds(&app).expect("the selection is still there");
+    assert_eq!((moved.width(), moved.height()), (30, 30), "the outline kept its size");
+    assert_eq!(moved.x0, 20, "the outline moved with the pointer");
+    assert_eq!(app.ui.tool_options.quick_selection_mode, 0, "the mode stays New");
+    let labels: Vec<String> = app.session.active().unwrap().history.entries().into_iter().skip(steps + 1).map(|e| e.to_string()).collect();
+    assert_eq!(labels.first().map(String::as_str), Some("Move Selection"), "{labels:?}");
 }

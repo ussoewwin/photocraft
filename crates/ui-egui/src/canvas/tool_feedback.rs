@@ -64,7 +64,11 @@ pub fn selection_mode(tool: Tool, bar: u8, m: egui::Modifiers) -> &'static str {
             };
             match eff_bar {
                 2 => {
+                    // Photoshop: Shift always adds and Alt (also Shift+Alt) always subtracts,
+                    // whatever the mode.
                     if m.alt {
+                        "subtract"
+                    } else if m.shift {
                         "add"
                     } else {
                         "subtract"
@@ -315,7 +319,9 @@ mod tests {
         assert_eq!(badge(&app, Tool::Lasso, shift), Some(Badge::Add));
         app.ui.selection_mode = 3;
         assert_eq!(badge(&app, Tool::RectMarquee, none), Some(Badge::Intersect));
-        // Smart selection tools.
+        // Smart selection tools. The Quick Selection starts in New, so its badge follows the
+        // mode it is in.
+        app.ui.tool_options.quick_selection_mode = 1;
         assert_eq!(badge(&app, Tool::QuickSelection, none), Some(Badge::Add));
         assert_eq!(badge(&app, Tool::QuickSelection, alt), Some(Badge::Subtract));
         // Quick Selection in New mode with nothing selected falls back to a new selection (no − badge).

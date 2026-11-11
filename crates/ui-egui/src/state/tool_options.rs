@@ -323,7 +323,7 @@ fn default_pen_path_op() -> String {
 }
 
 fn default_quick_selection_mode() -> u8 {
-    1
+    0
 }
 
 fn default_curve_fit() -> f32 {
@@ -492,7 +492,7 @@ impl Default for ToolOptions {
             protect_detail: true,
             finger_painting: false,
             enhance_edge: false,
-            quick_selection_mode: 1,
+            quick_selection_mode: 0,
             vector_mode: "path".into(),
             pen_path_op: default_pen_path_op(),
             shape_mode: "shape".into(),
