@@ -41,17 +41,15 @@ pub struct CutParts {
     outline: Option<Surface>,
     /// The pieces are the layer's mask (`"target":"mask"`), not its pixels.
     mask: bool,
+    /// The piece was created with `copy: true`: the source layer still holds the original pixels.
+    pub copied: bool,
 }
 
 impl CutParts {
     /// Selected pixels in source-document coordinates, including soft coverage.
+    #[allow(dead_code)]
     pub(crate) fn selected_pixels(&self) -> &Surface {
         &self.piece
-    }
-
-    /// Whether the floating piece contains a layer mask rather than layer pixels.
-    pub(crate) fn is_mask(&self) -> bool {
-        self.mask
     }
 
     /// Split `layer` of `doc` by its selection. With `copy` the selected pixels stay in the layer
@@ -105,12 +103,34 @@ impl CutParts {
         }
         let piece_bounds = piece.content_bounds();
         let outline = outline.filter(|o| !o.content_bounds().is_empty());
-        Ok(Self { layer, rest, piece, piece_bounds, outline, mask })
+        Ok(Self { layer, rest, piece, piece_bounds, outline, mask, copied: copy })
     }
 
     /// The selection the moved pixels take, where they were cut (`None`: the selection stays).
     pub fn outline(&self) -> Option<&Surface> {
         self.outline.as_ref()
+    }
+
+    /// Whether this floating piece is a layer mask (`"target":"mask"`).
+    pub fn is_mask(&self) -> bool {
+        self.mask
+    }
+
+    /// The floating pixel or mask piece and its bounds.
+    pub fn piece(&self) -> (&Surface, photocraft_geom::Rect) {
+        (&self.piece, self.piece_bounds)
+    }
+
+    /// Replace the layer's pixels (or mask) with the cut-out remainder.
+    pub fn place_rest(&self, doc: &mut Document) -> Result<()> {
+        let l = doc.layer_mut(self.layer).ok_or(EngineError::NoLayer(self.layer))?;
+        let surf = if self.mask {
+            l.mask.as_mut().map(|m| &mut m.surface).ok_or_else(|| EngineError::Other("the layer has no mask".into()))?
+        } else {
+            l.surface_mut().ok_or_else(|| EngineError::Other("the layer has no pixels to move".into()))?
+        };
+        *surf = self.rest.clone();
+        Ok(())
     }
 
     /// `doc` with the piece moved by whole pixels (dx, dy) over the cut-out layer.
@@ -163,8 +183,22 @@ fn cut_piece(base: &Surface, sel: &Surface, b: photocraft_geom::Rect, with_alpha
     let alpha_off = dst_bpp - sb;
     let src_empty_default = same_fmt && base.default_bytes().iter().all(|&v| v == 0);
     let oom = |e| EngineError::Other(format!("not enough memory while floating selection ({e}); the document was not changed"));
-    let mut coords = crate::allocation::capacity(b.tiles().count(), "floating selection")?;
-    coords.extend(b.tiles());
+    // Only tiles that can hold a piece of the result are visited. With an empty source default,
+    // that is the source's stored tiles; with an empty selection default, the selection's. Two
+    // distant tiles make `b` a grid of millions of tiles that hold nothing, so the full grid is
+    // walked only when neither default is empty, after checking what it could produce.
+    let sel_default_empty = sel.default_pixel().first().is_none_or(|v| *v <= 0.0);
+    let stored = |s: &Surface| s.tiles().map(|(c, _)| *c).filter(|c| !c.rect().intersect(&b).is_empty()).collect::<Vec<_>>();
+    let coords: Vec<TileCoord> = if src_empty_default {
+        stored(base)
+    } else if sel_default_empty {
+        stored(sel)
+    } else {
+        crate::allocation::check_dense(b, dst_bpp as u64, "floating selection")?;
+        let mut coords = crate::allocation::capacity(usize::try_from(b.tile_count()).unwrap_or(usize::MAX), "floating selection")?;
+        coords.extend(b.tiles());
+        coords
+    };
     let tiles = coords
         .into_par_iter()
         .map(|tc| -> Result<Option<(TileCoord, Arc<Tile>)>> {
@@ -350,8 +384,16 @@ pub fn drop_floating(s: &mut Session) -> Result<Value> {
 
 /// Commands that leave a floating piece floating: its own, and ones that don't touch documents.
 fn keeps_floating(id: &str) -> bool {
-    matches!(id, "select.float" | "select.drop" | "layer.copyToDocument" | "brush.mixer.sample" | "brush.mixer.load" | "brush.mixer.clean")
-        || ["view.", "window.", "help.", "prefs."].iter().any(|p| id.starts_with(p))
+    matches!(
+        id,
+        "select.float"
+            | "select.drop"
+            | "layer.copyToDocument"
+            | "file.scripts.imageProcessor"
+            | "brush.mixer.sample"
+            | "brush.mixer.load"
+            | "brush.mixer.clean"
+    ) || ["view.", "window.", "help.", "prefs."].iter().any(|p| id.starts_with(p))
 }
 
 /// Before any command (`Session::dispatch`): Undo puts a floating piece back (and is used up:

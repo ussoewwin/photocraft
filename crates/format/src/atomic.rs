@@ -139,16 +139,7 @@ impl AtomicFs for RealFs {
         }
         #[cfg(windows)]
         {
-            use std::os::windows::fs::OpenOptionsExt;
-
-            // FILE_ADD_FILE is the directory equivalent of FILE_WRITE_DATA. Requesting only
-            // this right permits FlushFileBuffers without requiring GENERIC_WRITE's additional
-            // directory permissions. BACKUP_SEMANTICS opens a directory, not a volume: no
-            // administrative privilege or volume-wide flush is needed.
-            const FILE_ADD_FILE: u32 = 0x0002;
-            const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
-            let directory = std::fs::OpenOptions::new().access_mode(FILE_ADD_FILE).custom_flags(FILE_FLAG_BACKUP_SEMANTICS).open(dir)?;
-            directory.sync_all()
+            sync_dir_windows(dir)
         }
         #[cfg(not(any(unix, windows)))]
         {
@@ -236,7 +227,14 @@ pub fn atomic_write_with(fs: &dyn AtomicFs, retry: RenameRetry, path: &Path, byt
 
 /// [`atomic_write_with`] reporting write progress (see [`atomic_write_progress`]).
 pub fn atomic_write_with_progress(fs: &dyn AtomicFs, retry: RenameRetry, path: &Path, bytes: &[u8], progress: &dyn Fn(f32)) -> io::Result<()> {
-    replace_with(fs, retry, path, &mut |tmp| fs.write_new_progress(tmp, bytes, progress))
+    replace_with(fs, retry, path, true, &mut |tmp| fs.write_new_progress(tmp, bytes, progress))
+}
+
+/// [`atomic_write`] that never follows a symlink at `path`: a link there is replaced by the new
+/// file (the rename swaps the directory entry), so a link planted between a caller's own check
+/// and this write cannot carry it outside the folder (a store managing its own entries).
+pub fn atomic_write_no_follow(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    replace_with(&RealFs, RenameRetry::platform(), path, false, &mut |tmp| RealFs.write_new_progress(tmp, bytes, &|_| {}))
 }
 
 /// [`atomic_write`] for a file serialized as it is written (#6607): `write` fills the temporary
@@ -261,7 +259,7 @@ pub fn atomic_write_stream_progress(path: &Path, expected_len: u64, progress: &d
 
 /// [`atomic_write_stream`] through an explicit file system and retry policy.
 pub fn atomic_write_stream_with(fs: &dyn AtomicFs, retry: RenameRetry, path: &Path, write: &mut StreamWriter<'_>) -> io::Result<()> {
-    replace_with(fs, retry, path, &mut |tmp| fs.write_new_stream(tmp, write))
+    replace_with(fs, retry, path, true, &mut |tmp| fs.write_new_stream(tmp, write))
 }
 
 /// A stream reporting how far it has got (see [`atomic_write_stream_progress`]), every
@@ -304,8 +302,8 @@ impl Seek for Progress<'_, '_> {
 
 /// The steps every atomic write shares: `write_tmp` fills a fresh temporary file beside the
 /// target, which is then renamed over it.
-fn replace_with(fs: &dyn AtomicFs, retry: RenameRetry, path: &Path, write_tmp: &mut dyn FnMut(&Path) -> io::Result<()>) -> io::Result<()> {
-    let target = resolve_symlink(path).map_err(|e| context(e, format!("cannot save {}", path.display())))?;
+fn replace_with(fs: &dyn AtomicFs, retry: RenameRetry, path: &Path, follow: bool, write_tmp: &mut dyn FnMut(&Path) -> io::Result<()>) -> io::Result<()> {
+    let target = if follow { resolve_symlink(path).map_err(|e| context(e, format!("cannot save {}", path.display())))? } else { path.to_path_buf() };
     let name = target.file_name().ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, format!("{}: not a file path", path.display())))?;
     let dir = match target.parent() {
         Some(d) if !d.as_os_str().is_empty() => d.to_path_buf(),
@@ -340,7 +338,10 @@ fn replace_with(fs: &dyn AtomicFs, retry: RenameRetry, path: &Path, write_tmp: &
     // default, its extended attributes, and its ACL. Best effort, and before the swap, so the
     // file the user ends up with never passes through a more permissive state.
     let replacing = target.exists();
-    if replacing {
+    // A link that is replaced rather than followed has nothing to carry over: reading the target's
+    // attributes would open whatever it points at (a FIFO with no writer blocks there).
+    let replaced_link = !follow && std::fs::symlink_metadata(&target).is_ok_and(|m| m.file_type().is_symlink());
+    if replacing && !replaced_link {
         let _ = fs.copy_metadata(&target, &tmp);
     }
 
@@ -353,12 +354,12 @@ fn replace_with(fs: &dyn AtomicFs, retry: RenameRetry, path: &Path, write_tmp: &
         return Err(rename_error(e, path));
     }
     // The new bytes are in place, but until the directory is flushed the rename may not survive
-    // a power loss (#4968). Windows fails the save on any failed flush (#7858). Elsewhere a file
-    // system that can't flush directories at all counts as done; any other failure is reported,
-    // so the caller keeps the document unsaved and its recovery data instead of discarding them
-    // on a save that may not last.
+    // a power loss (#4968). A file system that can't flush directories at all (e.g. WebDAV,
+    // cloud-mounted drives such as AirLiveDrive / RaiDrive, FAT32) counts as done (#7858).
+    // Any real failure is reported, so the caller keeps the document unsaved and its recovery
+    // data instead of discarding them on a save that may not last.
     #[cfg(windows)]
-    fs.sync_dir(&dir).map_err(|e| publication_error(e, path))?;
+    dir_synced(fs.sync_dir(&dir)).map_err(|e| publication_error(e, path))?;
     #[cfg(not(windows))]
     dir_synced(fs.sync_dir(&dir)).map_err(|e| unconfirmed_error(e, path))?;
     Ok(())
@@ -376,12 +377,48 @@ fn open_dir_for_sync(dir: &Path) -> io::Result<Option<std::fs::File>> {
     }
 }
 
+/// Flush directory publication on Windows using `open_dir_for_sync`.
+#[cfg(windows)]
+pub(crate) fn sync_dir_windows(dir: &Path) -> io::Result<()> {
+    sync_dir_windows_with(dir, open_dir_for_sync, |d| d.sync_all())
+}
+
+/// Flush directory publication on Windows with a custom opener `open` and flusher `sync`, treating
+/// unsupported errors (such as `ERROR_NOT_SUPPORTED` on WebDAV/cloud virtual drives) as non-fatal.
+#[cfg(windows)]
+pub(crate) fn sync_dir_windows_with<F, S>(dir: &Path, open: F, sync: S) -> io::Result<()>
+where
+    F: FnOnce(&Path) -> io::Result<std::fs::File>,
+    S: FnOnce(&std::fs::File) -> io::Result<()>,
+{
+    let directory = match open(dir) {
+        Ok(d) => d,
+        Err(e) if dir_sync_unsupported(&e) => return Ok(()),
+        Err(e) => return Err(e),
+    };
+    dir_synced(sync(&directory))
+}
+
+/// Open `dir` on Windows with `FILE_ADD_FILE` and `FILE_FLAG_BACKUP_SEMANTICS` for directory flush.
+#[cfg(windows)]
+pub(crate) fn open_dir_for_sync(dir: &Path) -> io::Result<std::fs::File> {
+    use std::os::windows::fs::OpenOptionsExt;
+
+    // FILE_ADD_FILE is the directory equivalent of FILE_WRITE_DATA. Requesting only
+    // this right permits FlushFileBuffers without requiring GENERIC_WRITE's additional
+    // directory permissions. BACKUP_SEMANTICS opens a directory, not a volume: no
+    // administrative privilege or volume-wide flush is needed.
+    const FILE_ADD_FILE: u32 = 0x0002;
+    const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
+    std::fs::OpenOptions::new().access_mode(FILE_ADD_FILE).custom_flags(FILE_FLAG_BACKUP_SEMANTICS).open(dir)
+}
+
 /// `result` of flushing a directory, with "this file system can't flush directories" counted as
-/// success: `EINVAL` (Linux file systems without directory fsync), `ENOTSUP`/`EOPNOTSUPP` and,
-/// on Apple platforms, `ENOTTY`, or [`io::ErrorKind::Unsupported`]. Waiting or retrying won't
-/// change those, and failing every save there would make saving impossible. Any other error is
-/// returned: the flush was attempted and failed.
-#[cfg(not(windows))]
+/// success: on Windows `ERROR_NOT_SUPPORTED` (50, WebDAV/cloud drives), `ERROR_INVALID_FUNCTION` (1),
+/// `ERROR_CALL_NOT_IMPLEMENTED` (120); on Unix `EINVAL` (22), `ENOTSUP`/`EOPNOTSUPP` (95/45/102),
+/// `ENOTTY` (25), or [`io::ErrorKind::Unsupported`]. Waiting or retrying won't change those, and
+/// failing every save there would make saving impossible. Any other error is returned: the flush
+/// was attempted and failed.
 pub(crate) fn dir_synced(result: io::Result<()>) -> io::Result<()> {
     match result {
         Err(e) if dir_sync_unsupported(&e) => Ok(()),
@@ -389,27 +426,36 @@ pub(crate) fn dir_synced(result: io::Result<()>) -> io::Result<()> {
     }
 }
 
-#[cfg(not(windows))]
 fn dir_sync_unsupported(e: &io::Error) -> bool {
     if e.kind() == io::ErrorKind::Unsupported {
         return true;
     }
-    // errno values: EINVAL is 22 everywhere; ENOTSUP and EOPNOTSUPP are 95 on Linux and
-    // Android, 45 and 102 on Apple platforms, 45 on the BSDs; ENOTTY is 25. Elsewhere 45 means
-    // something else (illumos: EDEADLK), so only EINVAL and `Unsupported` count there.
-    const EINVAL: i32 = 22;
-    let unsupported: &[i32] = if cfg!(any(target_os = "linux", target_os = "android")) {
-        &[EINVAL, 95]
-    } else if cfg!(target_vendor = "apple") {
-        &[EINVAL, 45, 102, 25]
-    } else if cfg!(any(target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "dragonfly")) {
-        &[EINVAL, 45]
-    } else if cfg!(unix) {
-        &[EINVAL]
-    } else {
-        &[]
-    };
-    e.raw_os_error().is_some_and(|code| unsupported.contains(&code))
+    #[cfg(windows)]
+    {
+        const ERROR_INVALID_FUNCTION: i32 = 1;
+        const ERROR_NOT_SUPPORTED: i32 = 50;
+        const ERROR_CALL_NOT_IMPLEMENTED: i32 = 120;
+        e.raw_os_error().is_some_and(|code| code == ERROR_INVALID_FUNCTION || code == ERROR_NOT_SUPPORTED || code == ERROR_CALL_NOT_IMPLEMENTED)
+    }
+    #[cfg(not(windows))]
+    {
+        // errno values: EINVAL is 22 everywhere; ENOTSUP and EOPNOTSUPP are 95 on Linux and
+        // Android, 45 and 102 on Apple platforms, 45 on the BSDs; ENOTTY is 25. Elsewhere 45 means
+        // something else (illumos: EDEADLK), so only EINVAL and `Unsupported` count there.
+        const EINVAL: i32 = 22;
+        let unsupported: &[i32] = if cfg!(any(target_os = "linux", target_os = "android")) {
+            &[EINVAL, 95]
+        } else if cfg!(target_vendor = "apple") {
+            &[EINVAL, 45, 102, 25]
+        } else if cfg!(any(target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "dragonfly")) {
+            &[EINVAL, 45]
+        } else if cfg!(unix) {
+            &[EINVAL]
+        } else {
+            &[]
+        };
+        e.raw_os_error().is_some_and(|code| unsupported.contains(&code))
+    }
 }
 
 /// The error for a file that was published but whose directory flush failed: same kind, saying

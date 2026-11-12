@@ -410,7 +410,11 @@ fn save_for_web_writes_the_picked_file_when_no_folder_is_given_or_the_name_chang
 #[test]
 fn save_for_web_starts_at_the_current_document_size() {
     let (mut app, _) = app();
-    let path = std::env::temp_dir().join(format!("pc-webui-size-{}.png", std::process::id())).to_string_lossy().into_owned();
+    // A dedicated folder, not the shared temp root: Windows can refuse a directory flush there,
+    // which would make the save report that it may not survive a power loss.
+    let dir = std::env::temp_dir().join(format!("pc-webui-size-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("size.png").to_string_lossy().into_owned();
     app.run("file.export.saveForWebLegacy", json!({"path": path, "format": "png24", "width": 60, "height": 40, "percent": 50})).unwrap();
     app.run("file.new", json!({"width": 240, "height": 160, "name": "next"})).unwrap();
     let id = open_web(&mut app);
@@ -483,7 +487,11 @@ fn save_for_web_width_keeps_proportions_and_sizes_the_file() {
     }
     let f = h.state().ui.dialogs[0].fields.clone();
     assert_eq!((f["width"].as_f64(), f["height"].as_f64(), f.get("__constrain")), (Some(60.0), Some(40.0), Some(&json!(true))), "{f:?}");
-    let path = std::env::temp_dir().join(format!("pc-webui-wh-{}.png", std::process::id())).to_string_lossy().into_owned();
+    // A dedicated folder, not the shared temp root: Windows can refuse a directory flush there,
+    // which would make the save report that it may not survive a power loss.
+    let dir = std::env::temp_dir().join(format!("pc-webui-wh-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("wh.png").to_string_lossy().into_owned();
     h.state_mut().ui.dialog_mut(id).unwrap().fields.insert("path".into(), json!(path));
     let r = crate::dialogs::confirm(h.state_mut(), id).unwrap();
     assert_eq!((r["width"].as_u64(), r["height"].as_u64()), (Some(60), Some(40)), "{r}");
@@ -498,7 +506,11 @@ fn save_for_web_reopens_at_full_size_with_the_resample_method() {
     let (app, _) = app();
     let (mut h, id) = web_size_dialog(app);
     type_into_field(&mut h, 120.0, "60");
-    let path = std::env::temp_dir().join(format!("pc-webui-reopen-{}.png", std::process::id())).to_string_lossy().into_owned();
+    // A dedicated folder, not the shared temp root: Windows can refuse a directory flush there,
+    // which would make the save report that it may not survive a power loss.
+    let dir = std::env::temp_dir().join(format!("pc-webui-reopen-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("reopen.png").to_string_lossy().into_owned();
     let d = h.state_mut().ui.dialog_mut(id).unwrap();
     d.fields.insert("resample".into(), json!("nearest"));
     d.fields.insert("path".into(), json!(path));
@@ -930,6 +942,67 @@ fn web_preview_keeps_its_size_and_zoom_while_the_pointer_moves() {
     assert!(drifted.is_empty(), "the dialog or its zoom changed while the pointer moved: {drifted:#?}");
 }
 
+/// Wide settings values stay readable and do not widen the dialog during real control interaction.
+#[test]
+fn web_settings_keep_dialog_width_stable_with_large_ui_font() {
+    use egui_kittest::kittest::Queryable;
+
+    let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(2560.0, 1380.0)).with_pixels_per_point(1.0).with_max_steps(64).build_eframe(|cc| {
+        PhotocraftApp::setup_context(&cc.egui_ctx, Default::default());
+        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+        app.session.edit_prefs(|prefs| prefs.interface.ui_font_size = photocraft_engine::prefs::UiFontSize::Large);
+        app.run("file.new", json!({"width": 1080, "height": 1349, "name": "Screenshot_20260928_133405_Facebook.jpg"})).unwrap();
+        let id = open_web(&mut app);
+        let d = app.ui.dialog_mut(id).unwrap();
+        d.fields.insert("format".into(), json!("png24"));
+        d.fields.insert("resample".into(), json!("bicubic"));
+        app
+    });
+    h.run_steps(4);
+    let dialog = |h: &egui_kittest::Harness<'_, PhotocraftApp>| {
+        let rects: Vec<egui::Rect> = h.ctx.data(|m| m.get_temp(egui::Id::unique("pc-dialog-rects"))).unwrap();
+        rects[0]
+    };
+    let before = dialog(&h).width();
+    assert!(before < 2500.0, "dialog filled the window before the input baseline");
+    let check_width = |h: &egui_kittest::Harness<'_, PhotocraftApp>| {
+        let now = dialog(h).width();
+        assert!((now - before).abs() < 0.5, "input repaints widened Save for Web: {before} -> {now}");
+    };
+    let combo = h.get_by_role_and_label(egui::accesskit::Role::ComboBox, "Resample");
+    assert_eq!(combo.value().as_deref(), Some("Bicubic (smooth gradients)"));
+    let r = combo.rect();
+    assert!((r.width() - 170.0).abs() < 0.5, "the selected value stays inside its assigned width: {r:?}");
+    assert!(r.height() > 28.0, "the full selected value wraps instead of truncating: {r:?}");
+    assert!(dialog(&h).contains_rect(r), "the wrapped dropdown and its arrow remain inside the dialog");
+
+    for i in 0..8 {
+        h.event(egui::Event::PointerMoved(r.center() + egui::vec2(i as f32, 0.0)));
+        h.step();
+        check_width(&h);
+    }
+    h.get_by_role_and_label(egui::accesskit::Role::ComboBox, "Resample").click();
+    h.run_steps(2);
+    check_width(&h);
+    let option = h.get_by_label("Bicubic Smoother (enlargement)");
+    assert!(option.rect().width() > r.width(), "popup options remain fully readable instead of inheriting the button width");
+    h.key_press(egui::Key::ArrowDown);
+    h.step();
+    check_width(&h);
+    assert_eq!(h.state().ui.dialogs[0].fields["resample"], "bicubicSmoother");
+    h.key_press(egui::Key::Enter);
+    h.run_steps(2);
+    check_width(&h);
+
+    let pane = h.state().ui.dialogs[0].fields["__previewRects"][0].clone();
+    let at = egui::pos2(pane[0].as_f64().unwrap() as f32 + 20.0, pane[1].as_f64().unwrap() as f32 + 20.0);
+    for i in 0..30 {
+        h.event(egui::Event::PointerMoved(at + egui::vec2(i as f32 * 3.0, i as f32)));
+        h.step();
+        check_width(&h);
+    }
+}
+
 #[test]
 fn palette_draft_survives_navigation_and_resets_when_colors_change() {
     let (app, _) = app();
@@ -958,7 +1031,11 @@ fn print_dialog_and_toggles() {
     let (mut app, ctx) = app();
     let r = crate::menus::invoke(&mut app, &ctx, "file.print", json!({})).unwrap();
     let id = r["dialog"].as_u64().unwrap();
-    let out = std::env::temp_dir().join(format!("pc-printui-{}.pdf", std::process::id())).to_string_lossy().into_owned();
+    // A dedicated folder, not the shared temp root: Windows can refuse a directory flush there,
+    // which would make the save report that it may not survive a power loss.
+    let dir = std::env::temp_dir().join(format!("pc-printui-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let out = dir.join("print.pdf").to_string_lossy().into_owned();
     app.ui.dialog_mut(id).unwrap().fields.insert("output".into(), json!(out));
     let r = crate::dialogs::confirm(&mut app, id).unwrap();
     assert_eq!(r["sent"], false);
@@ -1063,13 +1140,17 @@ fn save_as_pdf_browse_fills_the_output_from_a_save_dialog() {
 fn print_dialog_does_not_inherit_scripted_send_override() {
     for send in [false, true] {
         let (mut app, ctx) = app();
-        let out = std::env::temp_dir().join(format!("pc-printui-state-{}-{send}.pdf", std::process::id())).to_string_lossy().into_owned();
+        // A dedicated folder, not the shared temp root: Windows can refuse a directory flush there,
+        // which would make the save report that it may not survive a power loss.
+        let dir = std::env::temp_dir().join(format!("pc-printui-state-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let out = dir.join(format!("state-{send}.pdf")).to_string_lossy().into_owned();
         app.session.execute("file.print", json!({"output": out, "send": send, "dryRun": true})).unwrap();
         assert!(app.session.file_menu.last_print.as_ref().unwrap().get("send").is_none());
         let r = crate::menus::invoke(&mut app, &ctx, "file.print", json!({})).unwrap();
         let id = r["dialog"].as_u64().unwrap();
         assert!(app.ui.dialog_mut(id).unwrap().fields.get("send").is_none());
-        std::fs::remove_file(out).unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }
 

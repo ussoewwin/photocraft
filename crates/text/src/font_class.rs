@@ -278,6 +278,11 @@ mod tests {
         assert_eq!(classify("Code Pro Sans", 0x0805, NONE, false), Some(FontClass::SansSerif), "the class beats the name");
         assert_eq!(classify("Permanent Marker", 0, NONE, false), Some(FontClass::Handwritten));
         assert_eq!(classify("Unknowable", 0, NONE, false), None);
+    }
+
+    #[test]
+    fn japanese_names_and_their_markers_are_read() {
+        // `hei` and `maru` match as standalone markers, so unrelated Latin names such as `Theia Serif` are not misclassified.
         assert_eq!(classify("Poppins", 0, [0, 0, 5, 0, 0, 0, 0, 0, 0, 0], false), None);
         assert_eq!(classify("Popüler Display", 0, NONE, false), None);
         assert_eq!(classify("HG Pop体", 0, NONE, false), Some(FontClass::Handwritten));
@@ -285,28 +290,11 @@ mod tests {
         // `poptai` must end a word, so an unrelated substring such as `Poptail` does not match.
         assert_eq!(classify("Poptail", 0, NONE, false), None);
         assert_eq!(classify("Poptail Sans", 0, NONE, false), Some(FontClass::SansSerif));
-    }
-
-    #[test]
-    fn cjk_and_localized_family_names_classify_accurately() {
-        // `hei` and `maru` match as standalone markers, so unrelated Latin names such as `Theia Serif` are not misclassified.
         assert_eq!(classify("Theia Serif", 0, NONE, false), Some(FontClass::Serif));
         assert_eq!(classify("Theia", 0, NONE, false), None);
-        assert_eq!(classify("Thei Serif", 0, NONE, false), Some(FontClass::Serif));
-        assert_eq!(classify("Maru Mincho", 0, NONE, false), Some(FontClass::Serif));
-        assert_eq!(classify("丸明朝体", 0, NONE, false), Some(FontClass::Serif));
         assert_eq!(classify("SimHei", 0, NONE, false), Some(FontClass::SansSerif));
         assert_eq!(classify("Microsoft YaHei", 0, NONE, false), Some(FontClass::SansSerif));
         assert_eq!(classify("Maru Gothic", 0, NONE, false), Some(FontClass::SansSerif));
-        // A standalone `maru` is a sans serif, but only after the handwritten and script markers.
-        assert_eq!(classify("Maru Script", 0, NONE, false), Some(FontClass::Script));
-        assert_eq!(classify("Maru Hand", 0, NONE, false), Some(FontClass::Handwritten));
-        assert_eq!(classify("Maru", 0, NONE, false), Some(FontClass::SansSerif));
-        // `sung` and `song` match as CJK markers, not as arbitrary substrings of Latin names such as `SamsungOne`.
-        assert_eq!(classify("SamsungOne", 0, NONE, false), None);
-        assert_eq!(classify("SamsungOne Sans", 0, NONE, false), Some(FontClass::SansSerif));
-        assert_eq!(classify("STSong", 0, NONE, false), Some(FontClass::Serif));
-        assert_eq!(classify("Songti SC", 0, NONE, false), Some(FontClass::Serif));
         // Japanese font classification coverage
         assert_eq!(classify("MS Mincho", 0, NONE, false), Some(FontClass::Serif));
         assert_eq!(classify("游明朝", 0, NONE, false), Some(FontClass::Serif));
@@ -318,6 +306,27 @@ mod tests {
         assert_eq!(classify("HG行書体", 0, NONE, false), Some(FontClass::Script));
         assert_eq!(classify("HG正楷書体-PRO", 0, NONE, false), Some(FontClass::Script));
         assert_eq!(classify("UD デジタル 教科書体 N", 0, NONE, false), Some(FontClass::Handwritten));
+    }
+
+    #[test]
+    fn cjk_and_localized_family_names_classify_accurately() {
+        // Serif/sans CJK markers match whole words only, so unrelated Latin names stay unclassified.
+        assert_eq!(classify("Thei Serif", 0, NONE, false), Some(FontClass::Serif));
+        assert_eq!(classify("Maru Mincho", 0, NONE, false), Some(FontClass::Serif));
+        assert_eq!(classify("丸明朝体", 0, NONE, false), Some(FontClass::Serif));
+        // A standalone `maru` is a sans serif, but only after the handwritten and script markers.
+        assert_eq!(classify("Maru Script", 0, NONE, false), Some(FontClass::Script));
+        assert_eq!(classify("Maru Hand", 0, NONE, false), Some(FontClass::Handwritten));
+        assert_eq!(classify("Maru", 0, NONE, false), Some(FontClass::SansSerif));
+        // `sung` and `song` match as CJK markers, not as arbitrary substrings of Latin names such as `SamsungOne`.
+        assert_eq!(classify("SamsungOne", 0, NONE, false), None);
+        assert_eq!(classify("SamsungOne Sans", 0, NONE, false), Some(FontClass::SansSerif));
+        assert_eq!(classify("STSong", 0, NONE, false), Some(FontClass::Serif));
+        assert_eq!(classify("Songti SC", 0, NONE, false), Some(FontClass::Serif));
+    }
+
+    #[test]
+    fn odd_tables_do_not_panic_or_misfile() {
         // Out-of-range or garbage table values don't panic or misfile.
         assert_eq!(classify("X", i16::MIN, [255; 10], false), None);
         assert_eq!(classify("X", -1, [2, 200, 0, 0, 0, 0, 0, 0, 0, 0], false), None);
