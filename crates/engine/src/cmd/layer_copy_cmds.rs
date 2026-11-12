@@ -398,8 +398,19 @@ fn copy_to_document(s: &mut Session, p: &Value) -> Result<Value> {
         s.set_active(src);
         s.edit("Cut Pixels", |doc, _| {
             if let Some(parts) = &float_parts {
-                // A floating selection: the layer gets the rest of the piece's source.
-                parts.place_rest(doc)?;
+                if parts.copied {
+                    // A copy-created float leaves the original pixels in the source layer, so
+                    // `cut` clears the selected pixels there instead of restoring a remainder
+                    // that was never cut.
+                    if mask_target {
+                        crate::cmd::edit_cmds::clear_mask(doc, cut_id, bg, &json!({"target": "mask"}))?;
+                    } else {
+                        crate::cmd::edit_cmds::clear_selected(doc, cut_id, bg)?;
+                    }
+                } else {
+                    // A floating selection: the layer gets the rest of the piece's source.
+                    parts.place_rest(doc)?;
+                }
             } else if mask_target {
                 crate::cmd::edit_cmds::clear_mask(doc, cut_id, bg, &json!({"target": "mask"}))?;
             } else {

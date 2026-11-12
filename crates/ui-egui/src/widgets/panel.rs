@@ -123,27 +123,17 @@ pub fn pill_tab(ui: &mut Ui, label: &str, selected: bool) -> Response {
 }
 
 /// Small caps section label.
-///
-/// The text is measured here rather than handed to `Ui::label` so that a script whose ink reaches
-/// past the pen position (an Urdu label's first glyph starts about a pixel left of it) is inset by
-/// that overhang: the label then starts inside the dialog, as `docs/ui-design.md` asks, instead of
-/// painting over its edge.
 pub fn section_label(ui: &mut Ui, text: &str) {
     let t = Tokens::get(ui.ctx());
-    let galley = ui.painter().layout_no_wrap(tl!(text).to_owned(), theme::medium(11.5), t.text_faint);
-    // The glyph mesh, with its antialiasing fringe, can reach past the pen position (an Urdu label's
-    // first glyph does); inset the label by that overhang so its ink stays inside the dialog instead
-    // of painting over its edge. Text whose mesh starts at the pen keeps its exact place.
-    // Only a glyph mesh that visibly reaches past the pen (an Urdu label's first glyph does, by a
-    // whole pixel) inset the label; ordinary text keeps its exact place, so reference layouts and
-    // the pixel grids the dialogs are drawn on do not move.
-    let reach = -galley.mesh_bounds.left();
-    let overhang = if reach > 0.5 { reach.ceil() } else { 0.0 };
-    let size = galley.size();
-    let (r, resp) = ui.allocate_exact_size(vec2(size.x + overhang, size.y), Sense::hover());
-    ui.painter().galley(r.min + vec2(overhang, 0.0), galley, t.text_faint);
-    // Keep the label readable to accessibility tools and the automation snapshot, as `Ui::label` does.
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, tl!(text).to_owned()));
+    let text = tl!(text);
+    let font = theme::medium(11.5);
+    let galley = ui.painter().layout(text.to_owned(), font.clone(), t.text_faint, ui.available_width());
+    // A glyph can start before its logical advance (the Urdu Stroke heading does). Reserve
+    // that bearing in the layout instead of clipping the glyph or relaxing dialog bounds.
+    let left = (galley.rect.left() - galley.mesh_bounds.left()).max(0.0).ceil() as i8;
+    egui::Frame::NONE.inner_margin(egui::Margin { left, ..Default::default() }).show(ui, |ui| {
+        ui.label(egui::RichText::new(text).font(font).color(t.text_faint));
+    });
 }
 
 /// Hairline separator.

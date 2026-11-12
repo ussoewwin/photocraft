@@ -791,6 +791,22 @@ fn copying_or_cutting_a_mask_selection_transfers_the_mask_without_touching_layer
 }
 
 #[test]
+/// Cutting with a copy-created floating piece clears the selected pixels in the source, as the
+/// `cut` parameter documents; the destination still carries the piece.
+fn cutting_with_a_copy_float_clears_the_source() {
+    let (mut s, paint) = two_docs(40, 30, 8);
+    s.execute("select.rect", json!({"x": 4, "y": 6, "width": 5, "height": 10})).unwrap();
+    s.execute("select.float", json!({"dx": 2, "dy": 0, "copy": true})).unwrap();
+    let r = s.execute("layer.copyToDocument", json!({"document": 1, "selection": true, "cut": true})).unwrap();
+    let id = copied(&r);
+    let mut px = [0.0f32; 4];
+    doc(&s, 1).layer(id).unwrap().surface().unwrap().read_pixel(7, 8, &mut px);
+    assert_eq!(px, [1.0, 0.0, 0.0, 1.0], "the destination carries the piece: {px:?}");
+    doc(&s, 0).layer(paint).unwrap().surface().unwrap().read_pixel(7, 8, &mut px);
+    assert_eq!(px[3], 0.0, "cut clears the selected pixels in the source: {px:?}");
+}
+
+#[test]
 /// A floating piece must match the requested target: a floating pixel selection cannot stand in
 /// for mask content, and a floating layer mask cannot be copied as pixels.
 fn a_floating_piece_must_match_the_requested_target() {
