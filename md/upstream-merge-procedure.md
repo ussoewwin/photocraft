@@ -328,6 +328,33 @@ branch needs its own upstream merge:
 4. **Order of operations.** Merge upstream into `main` first; then update the open branches against
    the new `main` so their diffs stay reviewable.
 
+### Iron rule: every pull-request branch's latest content is merged into `main`
+
+`main` is the integration branch. It must contain **100% of the content of every open
+pull-request branch at all times** — not "eventually", not "once the pull request is approved".
+This rule answers the 2026-11-12 incident, where the launcher exe was rebuilt from a `main` that
+did not carry the Japanese-font pull request, and the feature vanished from the app the user runs.
+
+1. **A branch that received `main` is merged back into `main` in the same session.** Order: merge
+   `main` into the pull-request branch (so the branch is current), then immediately merge the
+   branch into `main`. A branch that was updated but not merged back leaves `main` behind — that is
+   a violation, not a task to schedule later.
+2. **Verification is measured, never assumed.** For every open pull-request branch,
+   `git diff main <branch>` must print nothing (0 bytes); for a branch that is older than `main`,
+   `git diff main <branch> -- <file>` must be empty for every file the pull request touched.
+3. **A `git cherry` `+` line is not automatically a leak.** When the same change reached `main`
+   through another line of history (a formatting-only commit whose patch-id differs, for example),
+   `git cherry` still lists it. Resolve it only with the direct file comparison of point 2, and say
+   so in the report — never claim containment from `git cherry` alone, and never claim a leak from
+   it alone either.
+4. **Never rebuild a user-facing exe from a tree that misses pull-request content.** The daily exe
+   comes from `main`, so every pull-request content must be in `main` before any rebuild. When a
+   branch has to be the build source because `main` is behind, merge that branch into `main` first
+   and build from `main` — never leave the working copy parked on a feature branch as the only place
+   a feature exists.
+5. **Report the measurement at the end of every merge and build session**, one line per open
+   pull-request branch: `<branch>: 0 bytes (identical to main)`.
+
 ---
 
 ## 11. Fork release and tag discipline (only on explicit instruction)
