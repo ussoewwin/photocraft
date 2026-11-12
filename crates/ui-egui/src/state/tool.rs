@@ -26,6 +26,7 @@ pub enum Tool {
     Pencil,
     MixerBrush,
     ColorReplacement,
+    LamaCleaner,
     Eraser,
     BackgroundEraser,
     MagicEraser,
@@ -81,7 +82,7 @@ pub enum Tool {
 }
 
 impl Tool {
-    pub const ALL: [Tool; 69] = [
+    pub const ALL: [Tool; 70] = [
         Tool::Move,
         Tool::Artboard,
         Tool::RectMarquee,
@@ -103,6 +104,7 @@ impl Tool {
         Tool::Pencil,
         Tool::ColorReplacement,
         Tool::MixerBrush,
+        Tool::LamaCleaner,
         Tool::Eraser,
         Tool::BackgroundEraser,
         Tool::MagicEraser,
@@ -165,6 +167,7 @@ impl Tool {
             Tool::Pencil => "Pencil Tool",
             Tool::MixerBrush => "Mixer Brush Tool",
             Tool::ColorReplacement => "Color Replacement Tool",
+            Tool::LamaCleaner => "LaMa Cleaner Tool",
             Tool::Eraser => "Eraser Tool",
             Tool::BackgroundEraser => "Background Eraser Tool",
             Tool::MagicEraser => "Magic Eraser Tool",
@@ -246,6 +249,7 @@ impl Tool {
                 | Tool::Pencil
                 | Tool::MixerBrush
                 | Tool::ColorReplacement
+                | Tool::LamaCleaner
                 | Tool::Eraser
                 | Tool::BackgroundEraser
                 | Tool::Remove
@@ -268,7 +272,7 @@ impl Tool {
         match self {
             Tool::Move | Tool::Artboard => 'V',
             Tool::RectMarquee | Tool::EllipseMarquee => 'M',
-            Tool::Brush | Tool::Pencil | Tool::MixerBrush | Tool::ColorReplacement => 'B',
+            Tool::Brush | Tool::Pencil | Tool::MixerBrush | Tool::ColorReplacement | Tool::LamaCleaner => 'B',
             Tool::Eraser | Tool::BackgroundEraser | Tool::MagicEraser => 'E',
             Tool::Eyedropper | Tool::ColorSampler | Tool::Ruler | Tool::Note | Tool::Count => 'I',
             Tool::Lasso | Tool::PolygonLasso | Tool::MagneticLasso => 'L',

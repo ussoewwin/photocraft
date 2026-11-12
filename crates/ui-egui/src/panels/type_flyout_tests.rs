@@ -349,7 +349,7 @@ fn long_press_brush_selects_color_replacement() {
     let index = TOOL_SECTIONS.iter().flat_map(|section| section.iter()).position(|slot| slot.contains(&Tool::Brush)).unwrap();
     let slot = TOOL_SECTIONS.iter().flat_map(|section| section.iter()).nth(index).copied().unwrap();
     // Photoshop's Brush group, Color Replacement before the Mixer Brush.
-    assert_eq!(slot, &[Tool::Brush, Tool::Pencil, Tool::ColorReplacement, Tool::MixerBrush]);
+    assert_eq!(slot, &[Tool::Brush, Tool::Pencil, Tool::ColorReplacement, Tool::MixerBrush, Tool::LamaCleaner]);
     let bx = if Tokens::get(&ctx).pro { 30.0 } else { 36.0 };
     let mut buttons: Vec<Rect> = ctx.viewport(|v| {
         v.prev_pass
@@ -369,8 +369,8 @@ fn long_press_brush_selects_color_replacement() {
     frame(&mut app, &ctx, 1.45, vec![]);
     let key = egui::Id::unique(("tool-slot", index));
     let menu = ctx.memory(|m| m.area_rect(key.with("flyout"))).unwrap();
-    // The third of the four 26-point rows.
-    let row = egui::pos2(menu.left() + 65.0, menu.bottom() - 46.0);
+    // The third of the five 26-point rows.
+    let row = egui::pos2(menu.left() + 65.0, menu.bottom() - 72.0);
     frame(&mut app, &ctx, 2.0, vec![egui::Event::PointerMoved(row), pointer(row, true)]);
     frame(&mut app, &ctx, 2.05, vec![pointer(row, false)]);
     assert_eq!(app.ui.tool, Tool::ColorReplacement);

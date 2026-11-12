@@ -865,8 +865,10 @@ fn a_thread_holding_the_spooler_does_not_wait_for_itself() {
         });
         done.send(answers).unwrap();
     });
-    // Bounded, so a thread that waits for itself fails the test rather than hanging it.
-    let answers = finished.recv_timeout(std::time::Duration::from_secs(30)).expect("a thread holding the spooler waited for itself");
+    // Bounded, so a thread that waits for itself fails the test rather than hanging it. The bound
+    // covers self-deadlock only: the whole suite runs in parallel, and another test's hold can
+    // take far longer than an idle machine's, so it is sized like the child-process bound below.
+    let answers = finished.recv_timeout(std::time::Duration::from_secs(120)).expect("a thread holding the spooler waited for itself");
     assert_eq!(answers, (7, Some(Some(8)), Some(json!("Office"))));
 }
 
@@ -1560,4 +1562,9 @@ fn printed_pdf_uses_winansi_for_labels_and_descriptions() {
     assert!(content.contains(r"(Caf\351 \226 r\351sum\351.psd) Tj"), "{content}");
     assert!(content.contains(r"(Price: \20020 \(proof\)) Tj"), "{content}");
     assert!(content.is_ascii(), "encoded bytes are escaped, never UTF-8 text operands");
+}
+
+#[test]
+fn postscript_comment_text_cannot_end_its_line() {
+    assert_eq!(ps_comment_text("a\nshowpage\r%x"), "a showpage %x");
 }

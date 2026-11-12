@@ -44,6 +44,9 @@ struct Faulty {
     /// Fail the directory flush (the durability barrier after publication, #4968, #7858)
     /// with this raw OS error, or with this kind.
     fail_sync_dir: Option<Result<i32, io::ErrorKind>>,
+    #[cfg(windows)]
+    /// Fail the Windows sync_all call after opening the directory successfully.
+    fail_sync_all: Option<Result<i32, io::ErrorKind>>,
     synced: Cell<u32>,
 }
 
@@ -70,14 +73,23 @@ impl AtomicFs for Faulty {
     fn remove(&self, path: &Path) -> io::Result<()> {
         RealFs.remove(path)
     }
-    /// Count publication barriers and optionally fail before the real directory flush.
+    /// Count publication barriers and optionally fail before or during the directory flush.
     fn sync_dir(&self, dir: &Path) -> io::Result<()> {
         self.synced.set(self.synced.get() + 1);
-        match self.fail_sync_dir {
-            Some(Ok(code)) => Err(io::Error::from_raw_os_error(code)),
-            Some(Err(kind)) => Err(io::Error::new(kind, "injected directory flush failure")),
-            None => RealFs.sync_dir(dir),
+        if let Some(res) = self.fail_sync_dir {
+            return match res {
+                Ok(code) => Err(io::Error::from_raw_os_error(code)),
+                Err(kind) => Err(io::Error::new(kind, "injected directory flush failure")),
+            };
         }
+        #[cfg(windows)]
+        if let Some(res) = self.fail_sync_all {
+            return sync_dir_windows_with(dir, open_dir_for_sync, |_| match res {
+                Ok(code) => Err(io::Error::from_raw_os_error(code)),
+                Err(kind) => Err(io::Error::new(kind, "injected directory sync_all failure")),
+            });
+        }
+        RealFs.sync_dir(dir)
     }
     fn copy_metadata(&self, from: &Path, to: &Path) -> io::Result<()> {
         RealFs.copy_metadata(from, to)
@@ -117,6 +129,30 @@ fn windows_directory_flush_opens_a_directory_and_reports_open_errors() {
     let d = TempDir::new("sync-directory");
     RealFs.sync_dir(&d.0).unwrap();
     assert_eq!(RealFs.sync_dir(&d.0.join("missing")).unwrap_err().kind(), io::ErrorKind::NotFound);
+    // Unsupported open or flush errors (50: ERROR_NOT_SUPPORTED, 1: ERROR_INVALID_FUNCTION, 120: ERROR_CALL_NOT_IMPLEMENTED)
+    // are classified as non-fatal by dir_synced / dir_sync_unsupported, while fatal open errors (e.g. NotFound) remain preserved.
+    assert!(dir_synced(Err(io::Error::from_raw_os_error(50))).is_ok());
+    assert!(dir_synced(Err(io::Error::from_raw_os_error(1))).is_ok());
+    assert!(dir_synced(Err(io::Error::from_raw_os_error(120))).is_ok());
+    assert!(dir_synced(Err(io::Error::from_raw_os_error(32))).is_err());
+
+    // When the directory open itself fails with an unsupported error code (50 on WebDAV/cloud drives,
+    // 1, or 120), the directory sync guard must treat it as non-fatal and succeed.
+    for code in [50, 1, 120] {
+        let result = sync_dir_windows_with(&d.0, |_| Err(io::Error::from_raw_os_error(code)), |d| d.sync_all());
+        assert!(result.is_ok(), "directory open error code {code} must be treated as non-fatal");
+    }
+    let fatal = sync_dir_windows_with(&d.0, |_| Err(io::Error::from(io::ErrorKind::NotFound)), |d| d.sync_all()).unwrap_err();
+    assert_eq!(fatal.kind(), io::ErrorKind::NotFound);
+
+    // When the directory opens successfully, but the flush fails with a fatal error (e.g. sharing violation 32),
+    // the helper must return that fatal error.
+    let fatal_flush = sync_dir_windows_with(&d.0, open_dir_for_sync, |_| Err(io::Error::from_raw_os_error(32))).unwrap_err();
+    assert_eq!(fatal_flush.raw_os_error(), Some(32));
+
+    // When the flush fails with an unsupported error code (e.g. 50), it must be treated as non-fatal.
+    let unsupp_flush = sync_dir_windows_with(&d.0, open_dir_for_sync, |_| Err(io::Error::from_raw_os_error(50)));
+    assert!(unsupp_flush.is_ok());
 }
 
 #[test]
@@ -496,6 +532,43 @@ fn writes_through_a_symlink() {
     assert_eq!(std::fs::read(&real).unwrap(), b"new");
 }
 
+#[cfg(unix)]
+#[test]
+fn no_follow_replaces_a_symlink_and_leaves_its_target() {
+    let d = TempDir::new("nofollow");
+    let real = d.0.join("real.psd");
+    let link = d.0.join("link.psd");
+    std::fs::write(&real, ORIGINAL).unwrap();
+    std::os::unix::fs::symlink(&real, &link).unwrap();
+    crate::atomic::atomic_write_no_follow(&link, b"new").unwrap();
+    assert!(!std::fs::symlink_metadata(&link).unwrap().file_type().is_symlink());
+    assert_eq!(std::fs::read(&link).unwrap(), b"new");
+    assert_eq!(std::fs::read(&real).unwrap(), ORIGINAL);
+}
+
+/// Replacing a link that points at a FIFO with no writer must not open the FIFO to copy its attributes.
+#[cfg(unix)]
+#[test]
+fn no_follow_never_opens_the_target_of_a_replaced_link() {
+    let d = TempDir::new("nofollow-fifo");
+    let fifo = d.0.join("pipe");
+    let link = d.0.join("link.psd");
+    let Ok(made) = std::process::Command::new("mkfifo").arg(&fifo).status() else { return };
+    if !made.success() {
+        return;
+    }
+    std::os::unix::fs::symlink(&fifo, &link).unwrap();
+    // Run apart, so a regression fails the test instead of hanging it.
+    let (tx, rx) = std::sync::mpsc::channel();
+    let path = link.clone();
+    std::thread::spawn(move || {
+        let _ = tx.send(crate::atomic::atomic_write_no_follow(&path, b"new"));
+    });
+    let r = rx.recv_timeout(std::time::Duration::from_secs(20)).expect("the write does not block on the FIFO");
+    r.unwrap();
+    assert_eq!(std::fs::read(&link).unwrap(), b"new");
+}
+
 /// #6605: saving onto a dangling symlink writes through to its target instead of replacing the
 /// link with a regular file, even when a folder on the way to the target doesn't exist yet.
 #[cfg(unix)]
@@ -604,10 +677,9 @@ fn a_failed_directory_flush_is_reported_not_swallowed() {
     assert_no_temp(&d.0);
 }
 
-/// A file system that can't flush directories at all (Linux's EINVAL, ENOTSUP, or an
-/// `Unsupported` error) still saves: failing every save there would make saving impossible.
-/// Windows fails the save on any failed flush (#7858), so this is the Unix rule.
-#[cfg(not(windows))]
+/// A file system that can't flush directories at all (e.g. WebDAV, cloud drives like AirLiveDrive
+/// returning ERROR_NOT_SUPPORTED 50 / ERROR_INVALID_FUNCTION 1 on Windows, or Linux's EINVAL / ENOTSUP,
+/// or an `Unsupported` error) still saves: failing every save there would make saving impossible.
 #[test]
 fn a_directory_flush_the_file_system_cannot_do_still_saves() {
     let d = TempDir::new("syncdir-unsupported");
@@ -615,11 +687,77 @@ fn a_directory_flush_the_file_system_cannot_do_still_saves() {
     let fs = Faulty { fail_sync_dir: Some(Err(io::ErrorKind::Unsupported)), ..Default::default() };
     atomic_write_with(&fs, NO_RETRY, &p, b"new").unwrap();
     assert_eq!(std::fs::read(&p).unwrap(), b"new");
-    // EINVAL (22) means "can't flush a directory" only on Unix; EIO (5) is a real failure.
-    assert_eq!(dir_synced(Err(io::Error::from_raw_os_error(22))).is_ok(), cfg!(unix));
-    assert!(dir_synced(Err(io::Error::from_raw_os_error(5))).is_err());
+    #[cfg(windows)]
+    {
+        // 50: ERROR_NOT_SUPPORTED, 1: ERROR_INVALID_FUNCTION
+        assert!(dir_synced(Err(io::Error::from_raw_os_error(50))).is_ok());
+        assert!(dir_synced(Err(io::Error::from_raw_os_error(1))).is_ok());
+        // ERROR_SHARING_VIOLATION (32) is a real failure
+        assert!(dir_synced(Err(io::Error::from_raw_os_error(32))).is_err());
+        let fs_fatal = Faulty { fail_sync_dir: Some(Ok(32)), ..Default::default() };
+        let error = atomic_write_with(&fs_fatal, NO_RETRY, &p, b"fatal").unwrap_err();
+        assert_eq!(fs_fatal.synced.get(), 1);
+        assert!(error.to_string().contains("may not survive"), "{error}");
+        assert_eq!(std::fs::read(&p).unwrap(), b"fatal");
+
+        // Fatal flush error injected after the directory opens successfully:
+        let fs_flush_fatal = Faulty { fail_sync_all: Some(Ok(32)), ..Default::default() };
+        let error = atomic_write_with(&fs_flush_fatal, NO_RETRY, &p, b"fatal_flush").unwrap_err();
+        assert_eq!(fs_flush_fatal.synced.get(), 1);
+        assert!(error.to_string().contains("may not survive"), "{error}");
+        assert_eq!(std::fs::read(&p).unwrap(), b"fatal_flush");
+
+        let fs_webdav = Faulty { fail_sync_dir: Some(Ok(50)), ..Default::default() };
+        atomic_write_with(&fs_webdav, NO_RETRY, &p, b"webdav").unwrap();
+        assert_eq!(std::fs::read(&p).unwrap(), b"webdav");
+
+        let fs_invalid_func = Faulty { fail_sync_dir: Some(Ok(1)), ..Default::default() };
+        atomic_write_with(&fs_invalid_func, NO_RETRY, &p, b"invalid_func").unwrap();
+        assert_eq!(std::fs::read(&p).unwrap(), b"invalid_func");
+    }
+    #[cfg(not(windows))]
+    {
+        // EINVAL (22) means "can't flush a directory" only on Unix; EIO (5) is a real failure.
+        assert_eq!(dir_synced(Err(io::Error::from_raw_os_error(22))).is_ok(), cfg!(unix));
+        assert!(dir_synced(Err(io::Error::from_raw_os_error(5))).is_err());
+        let fs = Faulty { fail_sync_dir: Some(Ok(5)), ..Default::default() };
+        assert!(atomic_write_with(&fs, NO_RETRY, &p, b"newer").is_err());
+    }
+}
+
+/// #9440: network shares (SMB) refuse a directory flush with `ERROR_INVALID_FUNCTION` (1) or
+/// `ERROR_NOT_SUPPORTED` (50) on Windows; those count as flushed. Real failures still don't.
+#[test]
+fn windows_unsupported_directory_flush_codes_are_classified() {
+    let code = |c| dir_synced(Err(io::Error::from_raw_os_error(c)));
+    assert!(dir_synced(Err(io::Error::from(io::ErrorKind::Unsupported))).is_ok());
+    // Off Windows these are errno values (1 is EPERM): a real failure, never swallowed.
+    assert_eq!(code(1).is_ok(), cfg!(windows), "code 1 counts as flushed only on Windows");
+    assert_eq!(code(50).is_ok(), cfg!(windows), "code 50 counts as flushed only on Windows");
+    if cfg!(windows) {
+        assert!(code(5).is_err(), "ERROR_ACCESS_DENIED stays a failure");
+        assert!(code(1117).is_err(), "ERROR_IO_DEVICE stays a failure");
+    }
+    assert!(dir_synced(Err(io::Error::from(io::ErrorKind::Other))).is_err());
+}
+
+/// #9440: the Windows mirror of `a_directory_flush_the_file_system_cannot_do_still_saves`. A share
+/// refusing the directory flush with `ERROR_INVALID_FUNCTION` (1) or `ERROR_NOT_SUPPORTED` (50)
+/// still saves through `atomic_write_with`; `ERROR_ACCESS_DENIED` (5) still fails the save.
+#[cfg(windows)]
+#[test]
+fn a_share_that_cannot_flush_a_directory_still_saves() {
+    let d = TempDir::new("syncdir-smb");
+    let p = d.0.join("doc.pcraft");
+    for code in [1, 50] {
+        let fs = Faulty { fail_sync_dir: Some(Ok(code)), ..Default::default() };
+        atomic_write_with(&fs, NO_RETRY, &p, b"new").unwrap();
+        assert_eq!(fs.synced.get(), 1, "code {code}: the flush was attempted");
+        assert_eq!(std::fs::read(&p).unwrap(), b"new");
+    }
     let fs = Faulty { fail_sync_dir: Some(Ok(5)), ..Default::default() };
     assert!(atomic_write_with(&fs, NO_RETRY, &p, b"newer").is_err());
+    assert_no_temp(&d.0);
 }
 
 /// #9388: on macOS a save keeps the replaced file's creation time ("Created" in Finder), as

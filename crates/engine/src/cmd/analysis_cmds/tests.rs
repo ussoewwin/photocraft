@@ -334,12 +334,16 @@ fn log_delete_and_csv_export() {
     assert!(lines.next().unwrap().contains(",5.0,"), "{csv}");
     #[cfg(not(target_arch = "wasm32"))]
     {
-        let path = std::env::temp_dir().join(format!("pc-log-{}.csv", std::process::id()));
+        // A dedicated folder, not the shared temp root: Windows can refuse a directory flush there,
+        // which would make the save report that it may not survive a power loss.
+        let dir = std::env::temp_dir().join(format!("pc-log-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("log.csv");
         let r = s.execute("measurementLog.export", json!({"path": path.to_str().unwrap(), "rows": [2]})).unwrap();
         assert_eq!(r["rows"], 1);
         let text = std::fs::read_to_string(&path).unwrap();
         assert_eq!(text.lines().count(), 2);
-        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_dir_all(&dir);
     }
     s.execute("measurementLog.delete", json!({"rows": [1]})).unwrap();
     assert_eq!(s.analysis.log.len(), 1);
@@ -554,6 +558,28 @@ fn iso_from_unix_matches_the_old_cycle_conversion_including_beyond_chrono() {
     assert_eq!(iso_from_unix(-10_000_000_000_000), "-314918-08-13T06:13:20Z");
     assert_eq!(iso_from_unix(i64::MAX), "292277026596-12-04T15:30:07Z");
     assert_eq!(iso_from_unix(i64::MIN), "-292277022657-01-27T08:29:52Z");
+}
+
+#[test]
+fn csv_text_cells_that_read_as_formulas_are_neutralised() {
+    for (cell, want) in [
+        ("=1+1", "'=1+1"),
+        ("@SUM(A1)", "'@SUM(A1)"),
+        ("-2+3", "'-2+3"),
+        ("+cmd|x", "'+cmd|x"),
+        ("-5.5", "-5.5"),
+        ("px", "px"),
+        ("\n=1+1", "\"'\n=1+1\""),
+        ("\u{ff1d}1+1", "'\u{ff1d}1+1"),
+        ("\u{ff0b}1", "'\u{ff0b}1"),
+        ("\u{ff20}SUM(A1)", "'\u{ff20}SUM(A1)"),
+        (" =1+1", "' =1+1"),
+        ("  -2+3", "'  -2+3"),
+        (" -5.5", " -5.5"),
+    ] {
+        assert_eq!(csv_field(&json!(cell)), want, "{cell}");
+    }
+    assert_eq!(csv_field(&json!(-5.5)), "-5.5", "numbers are not text cells");
 }
 
 #[test]

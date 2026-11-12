@@ -4,7 +4,7 @@ use super::drag::{
     size_readout,
 };
 use super::gesture::constrained_polygon_point;
-use super::strokes::{EngineStroke, SPOT_HEALING_TRAIL, draw_smoothing_string, strokes_live};
+use super::strokes::{SPOT_HEALING_TRAIL, draw_smoothing_string, strokes_live};
 use super::textures::texture_side;
 use super::view_xform::ViewXform;
 use super::{Color32, DRect, Document, Mesh, PhotocraftApp, Pos2, Rect, Stroke, TextureOptions, Tool, json, pos2, vec2};
@@ -605,9 +605,7 @@ pub(super) fn draw_drag_preview(app: &mut PhotocraftApp, painter: &egui::Painter
         // (Sample All Layers, say) keeps the trail.
         t if strokes_live(t) && app.live_stroke.is_some() => {
             // Smoothing holds the brush back from the pointer: draw the string between them.
-            if let Some(EngineStroke::Brush(l)) = app.live_stroke.as_ref().map(|l| &l.stroke)
-                && let Some(s) = l.smoothing_string()
-            {
+            if let Some(s) = app.live_stroke.as_ref().and_then(|l| l.smoothing_string()) {
                 draw_smoothing_string(painter, xf, s);
             }
         }
@@ -616,6 +614,7 @@ pub(super) fn draw_drag_preview(app: &mut PhotocraftApp, painter: &egui::Painter
             // not a brush-wide egui polyline (which zoomed in tessellates into wedges, #189).
             let col = match t {
                 Tool::QuickSelection => Color32::from_white_alpha(40),
+                Tool::LamaCleaner => Color32::from_rgba_unmultiplied(255, 204, 0, 160),
                 // The Remove Tool tints what it will remove, like Photoshop's.
                 Tool::Remove => crate::theme::Tokens::get(painter.ctx()).danger.gamma_multiply(0.45),
                 // Photoshop paints the area to heal in half-opaque dark grey while dragging; a faint
@@ -634,7 +633,7 @@ pub(super) fn draw_drag_preview(app: &mut PhotocraftApp, painter: &egui::Painter
                 Tool::QuickSelection => trail.feed(&d.points, app.session.tools.brush.size),
                 // Remove removes every pixel a dab touches, so its whole reach is tinted: a soft
                 // tip's reaches well past the nominal radius.
-                Tool::Remove => trail.feed_reach(&d.points, brush),
+                Tool::Remove | Tool::LamaCleaner => trail.feed_reach(&d.points, brush),
                 // What the stroke covers, dab by dab: soft edges, pressure and shape dynamics
                 // (Spot Healing #2364; the Mixer Brush, and a tool whose live stroke didn't start).
                 _ => trail.feed_dabs(&d.points, brush),
@@ -743,7 +742,7 @@ mod clip_segment_tests {
             assert!(!starts.is_empty(), "the view at {left} shows dashes");
             for d in starts {
                 let off = d % (2.0 * DASH);
-                assert!(off < 0.01 || off > 2.0 * DASH - 0.01, "view at {left}: a dash starts {d} from the corner, off the pattern by {off}");
+                assert!(!(0.01..=2.0 * DASH - 0.01).contains(&off), "view at {left}: a dash starts {d} from the corner, off the pattern by {off}");
             }
         }
     }
