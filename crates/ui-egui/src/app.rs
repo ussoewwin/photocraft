@@ -60,6 +60,7 @@ impl PhotocraftApp {
             move_blocked_start: None,
             move_blocked_moved: false,
             move_blocked_layer: None,
+            move_transfer_candidate: None,
             move_viewport: None,
             current_viewport: None,
             tool_override: None,
