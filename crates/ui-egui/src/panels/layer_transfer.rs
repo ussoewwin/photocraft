@@ -56,7 +56,13 @@ fn begin(app: &PhotocraftApp, ctx: &egui::Context, id: LayerId, grab: Option<[f6
     };
     // Several selected layers move whole; the engine's selected-pixel copy intentionally accepts
     // exactly one raster layer.
-    let selection_only = grab.is_some() && layers.len() == 1 && st.doc.selection.is_some();
+    // `layer.copyToDocument`'s selectionOnly reads selected pixels from a raster layer only:
+    // a shape or text layer transfers whole instead (a Move drag can select one while a pixel
+    // selection exists, or a blocked press can arm it).
+    let selection_only = grab.is_some()
+        && layers.len() == 1
+        && st.doc.selection.is_some()
+        && st.doc.layer(layers[0]).is_some_and(|l| matches!(l.content, photocraft_doc::LayerContent::Raster(_)));
     // A mask target travels as the mask, not as the layer's pixels: the mask's own selection
     // is what the pointer grabbed.
     let mask = selection_only && st.floating.as_ref().is_some_and(|f| f.parts.is_mask()) || selection_only && app.layer_mask_targeted();
@@ -91,6 +97,13 @@ fn move_drag(app: &PhotocraftApp) -> Option<[f64; 2]> {
     {
         return Some(start);
     }
+    // An ordinary drag of the picked layer with a locked cover recorded at its press: the cover
+    // is what crossing to another document transfers (the picked layer keeps moving here).
+    if app.move_transfer_candidate.is_some()
+        && let Some(d) = app.drag.as_ref().filter(|d| d.tool == Tool::Move)
+    {
+        return Some(d.start);
+    }
     if st.doc.selection.is_some() || st.floating.is_some() {
         return None;
     }
@@ -116,6 +129,14 @@ fn arm_move_transfer(app: &mut PhotocraftApp, ctx: &egui::Context, index: usize)
         let active = app.session.active().and_then(|st| st.active_layer);
         if app.session.active_index() == Some(index) {
             return false;
+        }
+        // The press recorded a locked cover above the picked layer: entering another document
+        // transfers the cover instead of the picked layer.
+        if let Some(cover) = app.move_transfer_candidate
+            && app.drag.is_some()
+        {
+            app.move_transfer_candidate = None;
+            return begin(app, ctx, cover, Some(grab));
         }
         // A marquee that grabbed a layer or a blocked Move press has no drag object and no
         // floating piece to take back: the grabbed or hit layer is what transfers.

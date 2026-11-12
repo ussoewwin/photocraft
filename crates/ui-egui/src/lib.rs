@@ -384,6 +384,10 @@ pub struct PhotocraftApp {
     pub(crate) move_blocked_start: Option<[f64; 2]>,
     pub(crate) move_blocked_moved: bool,
     pub(crate) move_blocked_layer: Option<photocraft_doc::LayerId>,
+    /// A locked layer recorded at a Move press with Auto-Select on: entering another document
+    /// transfers it instead of the picked one (`layer_transfer`), while the ordinary drag keeps
+    /// moving the picked layer here.
+    pub(crate) move_transfer_candidate: Option<photocraft_doc::LayerId>,
     pub(crate) move_viewport: Option<egui::ViewportId>,
     pub(crate) current_viewport: Option<egui::ViewportId>,
     /// The tool pointer events go to this frame when it isn't the selected one: the Move tool
