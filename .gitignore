@@ -11,8 +11,5 @@ target/
 /craft-fonts
 *.log
 __pycache__/
-*.onnx
-*.exe
-*.wasm
 plugins/**/target/
 plugins/**/output/
