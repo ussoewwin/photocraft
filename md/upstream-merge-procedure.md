@@ -339,9 +339,10 @@ did not carry the Japanese-font pull request, and the feature vanished from the 
    `main` into the pull-request branch (so the branch is current), then immediately merge the
    branch into `main`. A branch that was updated but not merged back leaves `main` behind — that is
    a violation, not a task to schedule later.
-2. **Verification is measured, never assumed.** For every open pull-request branch,
-   `git diff main <branch>` must print nothing (0 bytes); for a branch that is older than `main`,
-   `git diff main <branch> -- <file>` must be empty for every file the pull request touched.
+2. **Verification is measured, never assumed.** For every open pull-request branch, every file
+   the pull request touches must be identical in `main` and in the branch:
+   `git diff main <branch> -- <file>` prints nothing for each of them. `git diff main <branch>`
+   as a whole must show no difference other than the fork-only documents of point 6.
 3. **A `git cherry` `+` line is not automatically a leak.** When the same change reached `main`
    through another line of history (a formatting-only commit whose patch-id differs, for example),
    `git cherry` still lists it. Resolve it only with the direct file comparison of point 2, and say
@@ -353,7 +354,15 @@ did not carry the Japanese-font pull request, and the feature vanished from the 
    and build from `main` — never leave the working copy parked on a feature branch as the only place
    a feature exists.
 5. **Report the measurement at the end of every merge and build session**, one line per open
-   pull-request branch: `<branch>: 0 bytes (identical to main)`.
+   pull-request branch: `<branch>: PR content contained in main`.
+
+6. **The fork's internal procedure documents never ride on a pull-request branch.**
+   `md/upstream-merge-procedure.md` and `md/build-procedure.md` describe this fork's own operation
+   and are not part of any change proposed upstream: they live on `main` only, and each pull-request
+   branch carries a commit that removes them. The only permitted difference between `main` and a
+   pull-request branch is therefore the absence of those documents (`git diff main <branch>` shows
+   exactly those deletions). Merging `main` into a branch re-adds them — remove them again in the
+   same session, and never push a branch that carries them.
 
 ---
 
