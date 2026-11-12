@@ -35,8 +35,9 @@ building, decide which location must change, and say so.
 Before either build, `main` must carry the content of every open pull-request branch — see the
 "Iron rule" in `upstream-merge-procedure.md`. The daily exe is built from `main`, so a pull
 request that exists only on its own branch is missing from the app the user runs; that is the
-2026-11-12 font incident, not a build detail. The end of a build session reports the 0-byte
-verification, one line per open pull-request branch.
+2026-11-12 font incident, not a build detail. The end of a build session reports, one line per
+open pull-request branch, that the branch's content is contained in `main` (the internal
+procedure documents themselves stay on `main` — see point 6 of that rule).
 
 Also know the cost of each location. Measured on 2026-11-12: the repository `target` holds
 **20.01 GB** after the catalog rebuild (`target\release\deps` alone is 8.41 GB; the release
@@ -229,7 +230,7 @@ launches from**. Rebuild per §5.1 and re-run the gates.
 |---|---|---|
 | "The version is still 0.22" | The user's launcher exe (`target\release`) was a 2026-11-11 build with `FileVersion 0.22.0`; a fresh 0.23.1 build landed in `pf_target`, which the launcher never reads. | Identify the exe the user actually launches **before** building; build into that location when refreshing it, then verify gate (c). |
 | The whole interface turned English | The launcher-location rebuild was done without `CRAFT_I18N_DIR`, silently replacing a catalog-embedded exe with an English-only one. The manual even documented the behavior ("§2.5: unset = English only") and the rebuild was still made that way. | An exe the user launches is only ever replaced by a build that passes gates (e) and (f). Knowing the trap and walking into it anyway is the same crime as not knowing. |
-| The Japanese font feature vanished from the app | The launcher exe was rebuilt from a `main` that did not carry the font pull request; the feature existed only on its branch. | Every pull-request content is merged into `main` before any rebuild, and the 0-byte verification of `upstream-merge-procedure.md` ("Iron rule") is reported with the build. |
+| The Japanese font feature vanished from the app | The launcher exe was rebuilt from a `main` that did not carry the font pull request; the feature existed only on its branch. | Every pull-request content is merged into `main` before any rebuild, and the containment check of `upstream-merge-procedure.md` ("Iron rule") is reported with the build. |
 | The English-only state persisted one build longer than necessary | The gap was reported as a fact ("the launcher does not set the variable") instead of being fixed immediately, under "changing it was not instructed". | Reporting a known regression is not a substitute for restoring the working state; restoration of what you broke is always in scope of the instruction that caused it. |
 | Build-wait noise | Repeated manual sleep-and-poll loops while a registered completion monitor was already watching the log. | Trust the registered monitor; do one completion check instead of polling loops. |
 
