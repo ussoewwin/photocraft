@@ -367,19 +367,39 @@ fn handle_move_pointer(app: &mut PhotocraftApp, raw: ToolEvent, ev: ToolEvent, t
                     }
                 } else {
                     let hit_layer = probe.as_ref().ok().and_then(|v| v["layer"].as_u64()).map(photocraft_doc::LayerId);
-                    let locked_hit = !move_auto_select
-                        && hit_layer.is_some_and(|id| {
-                            app.session.active().is_some_and(|st| {
-                                let locks = st.doc.effective_locks(id);
-                                locks.position || locks.all || st.doc.is_background(id)
+                    // The transfer candidate is probed independently of the ordinary pick: an
+                    // All-locked layer above the picked one is what a drag toward another
+                    // document transfers (`Auto-Select` skips locked layers, the transfer does
+                    // not), while the ordinary pick keeps the same-document selection. Only a
+                    // document other than this one makes the transfer possible.
+                    let transfer_candidate = if app.session.documents().len() > 1 {
+                        app.run("layer.pickAt", json!({"x": x, "y": y, "target": target, "select": false, "includeLocked": true}))
+                            .ok()
+                            .and_then(|v| v["layer"].as_u64())
+                            .map(photocraft_doc::LayerId)
+                            .filter(|id| {
+                                app.session.active().is_some_and(|st| {
+                                    let locks = st.doc.effective_locks(*id);
+                                    locks.position || locks.all || st.doc.is_background(*id)
+                                })
                             })
-                        });
+                    } else {
+                        None
+                    };
+                    let locked_hit = transfer_candidate.is_some()
+                        || (!move_auto_select
+                            && hit_layer.is_some_and(|id| {
+                                app.session.active().is_some_and(|st| {
+                                    let locks = st.doc.effective_locks(id);
+                                    locks.position || locks.all || st.doc.is_background(id)
+                                })
+                            }));
                     let before = app.session.active().map(|st| st.selected_layers());
                     let active_before = app.session.active().and_then(|st| st.active_layer);
                     let _ = app.run("layer.pickAt", json!({"x": x, "y": y, "target": target, "mode": mode, "moveAutoSelect": move_auto_select}));
                     note_move_pick(app, active_before);
                     if locked_hit {
-                        crate::move_box::begin_with_layer(app, [x, y], mods.shift, hit_layer, false, false);
+                        crate::move_box::begin_with_layer(app, [x, y], mods.shift, transfer_candidate.or(hit_layer), false, false);
                         return true;
                     }
                     // Snapping (and the drag's box) started before the pick: point it at what moves.
@@ -489,6 +509,25 @@ fn red_eye_click(app: &mut PhotocraftApp, x: f64, y: f64) {
         app.ui.status.clear();
         app.ui.status_error = false;
         let message = tl!(MODE_REFUSAL);
+        let kind = crate::state::DialogKind::Error;
+        if !app.ui.dialogs.iter().any(|d| d.kind == kind && d.fields.get("message").and_then(|m| m.as_str()) == Some(message)) {
+            app.ui.open_dialog(kind, json!({ "message": message }).as_object().cloned().unwrap_or_default());
+        }
+    }
+}
+
+/// A Paint Bucket click. A Bitmap document gets the reference's alert (#12536), once even if
+/// more clicks arrive while it is open (`ui.pointer` can send them).
+fn bucket_click(app: &mut PhotocraftApp, x: f64, y: f64) {
+    use photocraft_engine::paint_cmds::BITMAP_REFUSAL;
+    let o = app.ui.tool_options.clone();
+    let contents = if o.bucket_fill_pattern { "pattern" } else { "foreground" };
+    let mode = if o.bucket_clear { "clear" } else { o.bucket_blend_mode.label() };
+    let r = app.run("paint.bucket", json!({"x": x.floor(), "y": y.floor(), "tolerance": o.tolerance, "contiguous": o.contiguous, "antiAlias": o.anti_alias, "sampleAllLayers": o.sample_all.paint_bucket, "opacity": o.fill_opacity, "contents": contents, "mode": mode, "target": paint_target(app)}));
+    if r.is_err_and(|e| e == BITMAP_REFUSAL) {
+        app.ui.status.clear();
+        app.ui.status_error = false;
+        let message = tl!(BITMAP_REFUSAL);
         let kind = crate::state::DialogKind::Error;
         if !app.ui.dialogs.iter().any(|d| d.kind == kind && d.fields.get("message").and_then(|m| m.as_str()) == Some(message)) {
             app.ui.open_dialog(kind, json!({ "message": message }).as_object().cloned().unwrap_or_default());
@@ -609,7 +648,12 @@ pub(super) fn tool_event_with_view(app: &mut PhotocraftApp, ev: ToolEvent, mods:
             if !sets_source && press_refused(app, tool) {
                 return;
             }
-            if !sets_source && (crate::rasterize_prompt::intercept(app, tool, x, y, pressure) || refuse_group(app, tool)) {
+            // The Clone Stamp's no-source alert opens at the press, after any rasterize prompt.
+            if !sets_source
+                && (crate::rasterize_prompt::intercept(app, tool, x, y, pressure)
+                    || refuse_group(app, tool)
+                    || crate::retouch_ui::clone_stamp_without_source(app, tool))
+            {
                 return;
             }
             // ⌘ with a selection tool is the Move tool for the drag: outside the selection (or
@@ -695,10 +739,7 @@ pub(super) fn tool_event_with_view(app: &mut PhotocraftApp, ev: ToolEvent, mods:
                     return;
                 }
                 Tool::PaintBucket => {
-                    let o = app.ui.tool_options.clone();
-                    let contents = if o.bucket_fill_pattern { "pattern" } else { "foreground" };
-                    let mode = if o.bucket_clear { "clear" } else { o.bucket_blend_mode.label() };
-                    let _ = app.run("paint.bucket", json!({"x": x.floor(), "y": y.floor(), "tolerance": o.tolerance, "contiguous": o.contiguous, "antiAlias": o.anti_alias, "sampleAllLayers": o.sample_all.paint_bucket, "opacity": o.fill_opacity, "contents": contents, "mode": mode, "target": paint_target(app)}));
+                    bucket_click(app, x, y);
                     return;
                 }
                 Tool::RedEye => {
@@ -884,9 +925,10 @@ fn hidden_target(app: &PhotocraftApp, tool: Tool) -> Option<&'static str> {
     photocraft_engine::hidden_target::refusal(&app.session, cmd, &json!({}))
 }
 
-/// The press-time refusals: a hidden target layer (#571), and for the Brush a locked layer or a
-/// group's pixels. The Brush says why in an alert, as in Photoshop (#11898); the other tools say
-/// a hidden target in the status bar. True when the press is refused.
+/// The press-time refusals: a hidden target layer (#571), and for the tools with an alert in
+/// `brush_refusal` (the Brush, #11898, and others) a locked layer or a group's pixels. Those tools
+/// say why in an alert, as in Photoshop; the other tools say a hidden target in the status bar.
+/// True when the press is refused.
 fn press_refused(app: &mut PhotocraftApp, tool: Tool) -> bool {
     let hidden = hidden_target(app, tool);
     if let Some(message) = crate::brush_refusal::alert(app, tool, hidden.is_some()) {

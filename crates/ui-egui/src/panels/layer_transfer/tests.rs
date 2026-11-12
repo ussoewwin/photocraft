@@ -572,6 +572,28 @@ fn a_refused_press_inside_a_locked_selection_records_the_press() {
 }
 
 #[test]
+/// With Auto-Select on, an All-locked layer above an unlocked one is the transfer candidate:
+/// the ordinary pick keeps the same-document selection, and the marquee grabs the locked layer.
+fn an_all_locked_layer_above_the_pick_is_the_transfer_candidate() {
+    let (mut h, paint) = harness();
+    // A locked layer sits above the painted one and covers the press point (an empty raster
+    // cannot be hit, so the cover carries its own pixels).
+    h.state_mut().session.execute("layer.new.layer", json!({"name": "cover"})).unwrap();
+    let cover = LayerId(h.state().session.active().unwrap().doc.layers.last().unwrap().id.0);
+    h.state_mut().session.execute("select.rect", json!({"x": 4, "y": 6, "width": 10, "height": 10})).unwrap();
+    h.state_mut().session.execute("edit.fill", json!({"color": "#00ff00"})).unwrap();
+    h.state_mut().session.execute("layer.lockLayers", json!({"all": true})).unwrap();
+    h.state_mut().ui.tool = Tool::Move;
+    h.state_mut().ui.tool_options.move_auto_select = true;
+
+    use crate::canvas::{ToolEvent, tool_event};
+    tool_event(h.state_mut(), ToolEvent::Down { x: 8.0, y: 10.0, pressure: 1.0 }, Modifiers::NONE);
+    let grabbed = h.state().layer_box.as_ref().and_then(|b| b.grabbed_layer);
+    assert_eq!(grabbed, Some(cover), "the locked layer under the pointer is the transfer candidate");
+    assert!(h.state().session.active().unwrap().is_layer_selected(paint), "the ordinary pick keeps the same-document selection");
+}
+
+#[test]
 /// Releasing a blocked Move drag clears the blocked state.
 fn blocked_move_gesture_release_clears_blocked_state() {
     let (mut h, _) = harness();
