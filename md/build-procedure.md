@@ -32,12 +32,13 @@ They are **independent caches**. A perfect build in one does not update the othe
 0.22.0** — measured, not guessed, via `(Get-Item <exe>).VersionInfo.FileVersion`. Before
 building, decide which location must change, and say so.
 
-Before either build, `main` must carry the content of every open pull-request branch — see the
+Before either build, `main` must carry the content of every open pull request — see the
 "Iron rule" in `upstream-merge-procedure.md`. The daily exe is built from `main`, so a pull
 request that exists only on its own branch is missing from the app the user runs; that is the
-2026-11-12 font incident, not a build detail. The end of a build session reports, one line per
-open pull-request branch, that the branch's content is contained in `main` (the internal
-procedure documents themselves stay on `main` — see point 6 of that rule).
+2026-11-12 font incident, not a build detail. The same rule keeps each open branch pure: it
+carries only its own changes, and the fork's internal documents stay on `main`. The end of a
+build session reports, one line per open branch, the branch's upstream-diff file count and that
+its content is contained in `main`.
 
 Also know the cost of each location. Measured on 2026-11-12: the repository `target` holds
 **20.01 GB** after the catalog rebuild (`target\release\deps` alone is 8.41 GB; the release

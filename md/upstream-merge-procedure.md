@@ -328,41 +328,45 @@ branch needs its own upstream merge:
 4. **Order of operations.** Merge upstream into `main` first; then update the open branches against
    the new `main` so their diffs stay reviewable.
 
-### Iron rule: every pull-request branch's latest content is merged into `main`
+### Iron rule: every pull request's content is merged into `main`, and each branch stays pure
 
-`main` is the integration branch. It must contain **100% of the content of every open
-pull-request branch at all times** — not "eventually", not "once the pull request is approved".
-This rule answers the 2026-11-12 incident, where the launcher exe was rebuilt from a `main` that
-did not carry the Japanese-font pull request, and the feature vanished from the app the user runs.
+Two halves, both mandatory:
 
-1. **A branch that received `main` is merged back into `main` in the same session.** Order: merge
-   `main` into the pull-request branch (so the branch is current), then immediately merge the
-   branch into `main`. A branch that was updated but not merged back leaves `main` behind — that is
-   a violation, not a task to schedule later.
-2. **Verification is measured, never assumed.** For every open pull-request branch, every file
-   the pull request touches must be identical in `main` and in the branch:
-   `git diff main <branch> -- <file>` prints nothing for each of them. `git diff main <branch>`
-   as a whole must show no difference other than the fork-only documents of point 6.
-3. **A `git cherry` `+` line is not automatically a leak.** When the same change reached `main`
+* `main` is the integration branch: it carries **100% of the content of every open pull request**
+  at all times — the pull request is merged into `main` in the same session it is updated.
+* A pull-request branch carries **only that pull request's own changes**: upstream base plus the
+  request's files. Nothing else — no fork-only feature, no other pull request's work, no internal
+  procedure document.
+
+This rule answers the 2026-11-12 incidents: the launcher exe was rebuilt from a `main` that did not
+carry the Japanese-font pull request (the feature vanished from the app the user runs), and the fork
+`main` had been merged into the open branches, so their upstream diffs carried 55–65 files of other
+people's work instead of the 14 / 14 / 2 / 4 files each request actually proposes.
+
+1. **Pull request → `main`, one direction, every session.** Merge the branch into `main` right after
+   the branch is brought up to date. A branch that was updated but not merged back leaves `main`
+   behind — that is a violation, not a task to schedule later.
+2. **Never merge the fork's `main` into a pull-request branch.** Merging `main` drags fork-only
+   features, other pull requests and the internal procedure documents into the request's diff.
+   The only thing a branch may take is `upstream/main` (`git merge upstream/main`), and only to
+   resolve an upstream conflict.
+3. **Verification of purity, measured.** For every open branch,
+   `git diff --name-only upstream/main...<branch>` must equal the file set the request proposes
+   (measured when the request was opened). A file outside that set is contamination: restore it to
+   `upstream/main`'s version, or delete it when upstream has no such file, and commit that cleanup.
+4. **Verification of integration, measured.** For every file the request proposes,
+   `git diff main <branch> -- <file>` must print nothing.
+5. **A `git cherry` `+` line is not automatically a leak.** When the same change reached `main`
    through another line of history (a formatting-only commit whose patch-id differs, for example),
-   `git cherry` still lists it. Resolve it only with the direct file comparison of point 2, and say
-   so in the report — never claim containment from `git cherry` alone, and never claim a leak from
-   it alone either.
-4. **Never rebuild a user-facing exe from a tree that misses pull-request content.** The daily exe
-   comes from `main`, so every pull-request content must be in `main` before any rebuild. When a
-   branch has to be the build source because `main` is behind, merge that branch into `main` first
-   and build from `main` — never leave the working copy parked on a feature branch as the only place
-   a feature exists.
-5. **Report the measurement at the end of every merge and build session**, one line per open
-   pull-request branch: `<branch>: PR content contained in main`.
-
-6. **The fork's internal procedure documents never ride on a pull-request branch.**
-   `md/upstream-merge-procedure.md` and `md/build-procedure.md` describe this fork's own operation
-   and are not part of any change proposed upstream: they live on `main` only, and each pull-request
-   branch carries a commit that removes them. The only permitted difference between `main` and a
-   pull-request branch is therefore the absence of those documents (`git diff main <branch>` shows
-   exactly those deletions). Merging `main` into a branch re-adds them — remove them again in the
-   same session, and never push a branch that carries them.
+   `git cherry` still lists it. Resolve it only with the direct file comparison of point 4.
+6. **Never rebuild a user-facing exe from a tree that misses pull-request content.** The daily exe
+   comes from `main`; every pull-request content must be in `main` before any rebuild.
+7. **The fork's internal procedure documents never ride on a pull-request branch.**
+   `md/upstream-merge-procedure.md` and `md/build-procedure.md` describe this fork's own operation:
+   they live on `main` only, and each open branch carries a commit that removes them. Never push a
+   branch that carries them.
+8. **Report at the end of every merge and build session**, one line per open branch:
+   `<branch>: <n> files upstream diff (pure) / contained in main`.
 
 ---
 
