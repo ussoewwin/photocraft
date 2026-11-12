@@ -219,6 +219,13 @@ fn copy_to_document(s: &mut Session, p: &Value) -> Result<Value> {
     if src == dest {
         return Err(bad("the destination is the source document (use layer.duplicate)"));
     }
+    // Admission checks the active document's job only, but a cross-document copy or cut edits
+    // both documents: refuse while either one has a running job, before anything changes.
+    for (index, role) in [(src, "source"), (dest, "destination")] {
+        if let Some(job) = s.job_on(s.documents()[index].doc.id) {
+            return Err(EngineError::Other(format!("“{}” is still running on the {role} document; wait for it to finish or cancel it (Esc)", job.label)));
+        }
+    }
     let (from, to) = (&s.documents()[src], &s.documents()[dest]);
     let (sdoc, ddoc) = (from.doc.clone(), to.doc.clone());
     let floating = crate::float_cmds::floating(from).cloned();

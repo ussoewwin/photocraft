@@ -386,19 +386,27 @@ fn handle_move_pointer(app: &mut PhotocraftApp, raw: ToolEvent, ev: ToolEvent, t
                     } else {
                         None
                     };
-                    let locked_hit = transfer_candidate.is_some()
-                        || (!move_auto_select
-                            && hit_layer.is_some_and(|id| {
+                    let locked_hit = !move_auto_select
+                        && (transfer_candidate.is_some()
+                            || hit_layer.is_some_and(|id| {
                                 app.session.active().is_some_and(|st| {
                                     let locks = st.doc.effective_locks(id);
                                     locks.position || locks.all || st.doc.is_background(id)
                                 })
                             }));
+                    // With Auto-Select on, an All-locked cover above the picked layer stays a
+                    // transfer candidate without replacing the ordinary drag: the drag keeps
+                    // moving the picked layer here, and crossing to another document transfers
+                    // the cover instead (`layer_transfer` reads the candidate then).
+                    if !locked_hit {
+                        app.move_transfer_candidate = transfer_candidate;
+                    }
                     let before = app.session.active().map(|st| st.selected_layers());
                     let active_before = app.session.active().and_then(|st| st.active_layer);
                     let _ = app.run("layer.pickAt", json!({"x": x, "y": y, "target": target, "mode": mode, "moveAutoSelect": move_auto_select}));
                     note_move_pick(app, active_before);
                     if locked_hit {
+                        app.move_transfer_candidate = None;
                         crate::move_box::begin_with_layer(app, [x, y], mods.shift, transfer_candidate.or(hit_layer), false, false);
                         return true;
                     }
