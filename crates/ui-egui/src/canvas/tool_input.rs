@@ -367,19 +367,39 @@ fn handle_move_pointer(app: &mut PhotocraftApp, raw: ToolEvent, ev: ToolEvent, t
                     }
                 } else {
                     let hit_layer = probe.as_ref().ok().and_then(|v| v["layer"].as_u64()).map(photocraft_doc::LayerId);
-                    let locked_hit = !move_auto_select
-                        && hit_layer.is_some_and(|id| {
-                            app.session.active().is_some_and(|st| {
-                                let locks = st.doc.effective_locks(id);
-                                locks.position || locks.all || st.doc.is_background(id)
+                    // The transfer candidate is probed independently of the ordinary pick: an
+                    // All-locked layer above the picked one is what a drag toward another
+                    // document transfers (`Auto-Select` skips locked layers, the transfer does
+                    // not), while the ordinary pick keeps the same-document selection. Only a
+                    // document other than this one makes the transfer possible.
+                    let transfer_candidate = if app.session.documents().len() > 1 {
+                        app.run("layer.pickAt", json!({"x": x, "y": y, "target": target, "select": false, "includeLocked": true}))
+                            .ok()
+                            .and_then(|v| v["layer"].as_u64())
+                            .map(photocraft_doc::LayerId)
+                            .filter(|id| {
+                                app.session.active().is_some_and(|st| {
+                                    let locks = st.doc.effective_locks(*id);
+                                    locks.position || locks.all || st.doc.is_background(*id)
+                                })
                             })
-                        });
+                    } else {
+                        None
+                    };
+                    let locked_hit = transfer_candidate.is_some()
+                        || (!move_auto_select
+                            && hit_layer.is_some_and(|id| {
+                                app.session.active().is_some_and(|st| {
+                                    let locks = st.doc.effective_locks(id);
+                                    locks.position || locks.all || st.doc.is_background(id)
+                                })
+                            }));
                     let before = app.session.active().map(|st| st.selected_layers());
                     let active_before = app.session.active().and_then(|st| st.active_layer);
                     let _ = app.run("layer.pickAt", json!({"x": x, "y": y, "target": target, "mode": mode, "moveAutoSelect": move_auto_select}));
                     note_move_pick(app, active_before);
                     if locked_hit {
-                        crate::move_box::begin_with_layer(app, [x, y], mods.shift, hit_layer, false, false);
+                        crate::move_box::begin_with_layer(app, [x, y], mods.shift, transfer_candidate.or(hit_layer), false, false);
                         return true;
                     }
                     // Snapping (and the drag's box) started before the pick: point it at what moves.

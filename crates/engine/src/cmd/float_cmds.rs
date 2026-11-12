@@ -41,6 +41,8 @@ pub struct CutParts {
     outline: Option<Surface>,
     /// The pieces are the layer's mask (`"target":"mask"`), not its pixels.
     mask: bool,
+    /// The piece was created with `copy: true`: the source layer still holds the original pixels.
+    pub copied: bool,
 }
 
 impl CutParts {
@@ -101,7 +103,7 @@ impl CutParts {
         }
         let piece_bounds = piece.content_bounds();
         let outline = outline.filter(|o| !o.content_bounds().is_empty());
-        Ok(Self { layer, rest, piece, piece_bounds, outline, mask })
+        Ok(Self { layer, rest, piece, piece_bounds, outline, mask, copied: copy })
     }
 
     /// The selection the moved pixels take, where they were cut (`None`: the selection stays).
