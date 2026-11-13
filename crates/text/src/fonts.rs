@@ -1036,6 +1036,67 @@ pub(crate) fn system_font_dirs() -> Vec<std::path::PathBuf> {
 /// followed by untagged non-ASCII names. The result is deduplicated and excludes the English
 /// family name itself as well as folded accented spellings of the English name. Returns an empty
 /// vector when the font only names itself in English.
+/// A Latin letter with a diacritic (`é`, `ü`, `ñ`, `ç`, `ß` …): an accented spelling of a Latin
+/// name, not another script.
+fn is_latin_accent(c: char) -> bool {
+    matches!(
+        c,
+        'à' | 'á'
+            | 'â'
+            | 'ã'
+            | 'ä'
+            | 'å'
+            | 'À'
+            | 'Á'
+            | 'Â'
+            | 'Ã'
+            | 'Ä'
+            | 'Å'
+            | 'è'
+            | 'é'
+            | 'ê'
+            | 'ë'
+            | 'È'
+            | 'É'
+            | 'Ê'
+            | 'Ë'
+            | 'ì'
+            | 'í'
+            | 'î'
+            | 'ï'
+            | 'Ì'
+            | 'Í'
+            | 'Î'
+            | 'Ï'
+            | 'ò'
+            | 'ó'
+            | 'ô'
+            | 'õ'
+            | 'ö'
+            | 'Ò'
+            | 'Ó'
+            | 'Ô'
+            | 'Õ'
+            | 'Ö'
+            | 'ù'
+            | 'ú'
+            | 'û'
+            | 'ü'
+            | 'Ù'
+            | 'Ú'
+            | 'Û'
+            | 'Ü'
+            | 'ñ'
+            | 'Ñ'
+            | 'ç'
+            | 'Ç'
+            | 'ý'
+            | 'ÿ'
+            | 'Ý'
+            | 'ß'
+    )
+}
+
 pub fn localized_candidates(english: &str, names: &[(String, Option<String>)]) -> Vec<String> {
     let is_english = |lang: &str| {
         let primary = lang.split(['-', '_']).next().unwrap_or(lang);
@@ -1085,7 +1146,10 @@ pub fn localized_candidates(english: &str, names: &[(String, Option<String>)]) -
         if lang.is_some() || trimmed.is_empty() || trimmed == english_trimmed {
             continue;
         }
-        if !name.chars().any(|c| (c as u32) > 0x7F) || (!english_folded.is_empty() && fold(name) == english_folded) || seen.contains(trimmed) {
+        // An accented spelling is the same Latin name; a name that also carries another script
+        // (`Example明朝`) is a localization and must survive the fold.
+        let latin_only = name.chars().all(|c| c.is_ascii() || is_latin_accent(c));
+        if !name.chars().any(|c| (c as u32) > 0x7F) || (!english_folded.is_empty() && latin_only && fold(name) == english_folded) || seen.contains(trimmed) {
             continue;
         }
         seen.insert(trimmed);
@@ -1190,6 +1254,8 @@ mod tests {
         assert_eq!(super::localized_name("MyFamily", &names(&[("MyFamily", Some("en")), ("MyFämily", Some("en"))])), None);
         // An untagged accented spelling of the English name is not a localization either
         assert_eq!(super::localized_name("MyFamily", &names(&[("MyFamily", None), ("MyFämily", None)])), None);
+        // A name that mixes Latin with another script is a localization, not an accent
+        assert_eq!(super::localized_name("Example", &names(&[("Example", None), ("Example明朝", None)])).as_deref(), Some("Example明朝"));
         // An untagged non-ASCII name is preserved when the base family name folds to empty
         let cjk_base = names(&[("日本語", None), ("明朝", None)]);
         assert_eq!(super::localized_candidates("日本語", &cjk_base), vec!["明朝".to_string()]);
