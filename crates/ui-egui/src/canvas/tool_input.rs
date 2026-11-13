@@ -714,6 +714,7 @@ pub(super) fn tool_event_with_view(app: &mut PhotocraftApp, ev: ToolEvent, mods:
                     if let Some(st) = app.session.active()
                         && let Some(id) = crate::vector_ui::pick_shape_at(&st.doc, [x, y], tol)
                     {
+                        crate::path_components::untarget_saved_path_off(app, [x, y], tol);
                         let _ = app.run("layer.select", json!({"layer": id.0}));
                     }
                     // The component pressed is selected, so the drag moves it (and the others selected).
@@ -1006,7 +1007,22 @@ pub fn selection_drag_kind(app: &PhotocraftApp, tool: Tool, p: [f64; 2], mods: e
     // The Quick Selection in New mode replaces the selection, so a press inside it moves the
     // outline (or cuts it with ⌘) like a marquee's, and the mode stays New.
     let quick_new = tool == Tool::QuickSelection && app.ui.tool_options.quick_selection_mode == 0;
-    let marquee = matches!(tool, Tool::RectMarquee | Tool::EllipseMarquee | Tool::SingleRowMarquee | Tool::SingleColumnMarquee) || quick_new;
+    // Object Selection with Object Finder on drags the outline like a marquee in New mode (#12853).
+    // With Object Finder off a press stays a Quick Selection dab or a rectangle, as before (the
+    // issue measured only Finder on). Unlike the marquees, ⌘ with it is the Move tool
+    // (`hold_keys::cmd_moves`), which moves the pixels itself: a ⌘ press must not start a cut here
+    // first.
+    let marquee = matches!(tool, Tool::RectMarquee | Tool::EllipseMarquee | Tool::SingleRowMarquee | Tool::SingleColumnMarquee)
+        || quick_new
+        || (tool == Tool::ObjectSelection && app.ui.tool_options.object_finder);
+    if tool == Tool::ObjectSelection && mods.command {
+        return None;
+    }
+    // In Indexed Color and Bitmap the press must reach `finish_object_selection` for the tool's
+    // alert (#12867) rather than deselect or move the outline.
+    if tool == Tool::ObjectSelection && app.session.active().is_some_and(|st| photocraft_engine::smartselect_cmds::object_mode_refusal(st.doc.mode).is_some()) {
+        return None;
+    }
     if !(clicky || marquee || tool == Tool::Lasso) || (clicky && !app.ui.polygon.is_empty()) {
         return None;
     }
