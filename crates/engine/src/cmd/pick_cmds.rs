@@ -106,6 +106,12 @@ fn pick_target(doc: &Document, x: i32, y: i32, group: bool, move_auto_select: bo
         let all_locked = locks.all;
         (include_locked || !all_locked) && (all_locked || !move_auto_select || !locks.position)
     })?;
+    // With Move Target Group a layer with an effective Lock All keeps its own identity: it is what
+    // a cross-document drag transfers, and resolving its group first would hide the lock from the
+    // caller's transfer check (the group around it is not locked).
+    if include_locked && doc.effective_locks(hit).all {
+        return Some(hit);
+    }
     Some(if group { top_group(doc, hit) } else { hit })
 }
 
@@ -316,6 +322,26 @@ mod tests {
         s.execute("layer.setProps", json!({"layer": outer, "visible": false})).unwrap();
         let bg = s.active().unwrap().doc.layers[0].id;
         assert_eq!(s.execute("layer.pickAt", json!({"x": 5, "y": 5, "select": false})).unwrap()["layer"], bg.0);
+    }
+
+    /// Move Target Group keeps a locked child's identity: the group around it is not locked, so
+    /// resolving the group first would let a cross-document drag transfer the layer beneath.
+    #[test]
+    fn a_group_target_keeps_the_identity_of_an_all_locked_child() {
+        let (mut s, a, _) = two_squares();
+        s.execute("layer.select", json!({"layer": a.0})).unwrap();
+        let group = s.execute("layer.new.groupFromLayers", json!({"name": "Group"})).unwrap()["layer"].as_u64().unwrap();
+        s.execute("layer.select", json!({"layer": a.0})).unwrap();
+        s.execute("layer.lockLayers", json!({"all": true})).unwrap();
+        s.execute("select.deselectLayers", json!({})).unwrap();
+
+        // The probe names the locked child, not the unlocked group that contains it.
+        let r = s.execute("layer.pickAt", json!({"x": 5, "y": 5, "select": false, "target": "group", "includeLocked": true})).unwrap();
+        assert_eq!(r["layer"], a.0, "the locked child keeps its identity");
+        // Without the flag the lock is honoured: neither the child nor its unlocked group.
+        let plain = s.execute("layer.pickAt", json!({"x": 5, "y": 5, "select": false, "target": "group"})).unwrap();
+        assert_ne!(plain["layer"], a.0);
+        assert_ne!(plain["layer"], group, "an unlocked group over a locked child is not the hit");
     }
 
     #[test]
