@@ -108,8 +108,11 @@ fn pick_target(doc: &Document, x: i32, y: i32, group: bool, move_auto_select: bo
     })?;
     // With Move Target Group a layer with an effective Lock All keeps its own identity: it is what
     // a cross-document drag transfers, and resolving its group first would hide the lock from the
-    // caller's transfer check (the group around it is not locked).
-    if include_locked && doc.effective_locks(hit).all {
+    // caller's transfer check (the group around it is not locked). A Position lock is the same
+    // case: the transfer probe skips those layers, so the group around one is not the target
+    // either, and the caller's check on the returned layer is what reports the lock.
+    let locks = doc.effective_locks(hit);
+    if include_locked && (locks.all || locks.position) {
         return Some(hit);
     }
     Some(if group { top_group(doc, hit) } else { hit })
