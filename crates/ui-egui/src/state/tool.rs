@@ -79,10 +79,12 @@ pub enum Tool {
     Slice,
     SliceSelect,
     Frame,
+    /// SAM 3.1 selection: an open-vocabulary prompt, a click, or a box (joins the `W` group).
+    Sam3Select,
 }
 
 impl Tool {
-    pub const ALL: [Tool; 70] = [
+    pub const ALL: [Tool; 71] = [
         Tool::Move,
         Tool::Artboard,
         Tool::RectMarquee,
@@ -153,6 +155,7 @@ impl Tool {
         Tool::Slice,
         Tool::SliceSelect,
         Tool::Frame,
+        Tool::Sam3Select,
     ];
 
     pub fn label(self) -> &'static str {
@@ -212,6 +215,7 @@ impl Tool {
             Tool::Sponge => "Sponge Tool",
             Tool::QuickSelection => "Quick Selection Tool",
             Tool::ObjectSelection => "Object Selection Tool",
+            Tool::Sam3Select => "SAM Selection Tool",
             Tool::Pen => "Pen Tool",
             Tool::FreeformPen => "Freeform Pen Tool",
             Tool::CurvaturePen => "Curvature Pen Tool",
@@ -291,7 +295,7 @@ impl Tool {
             // In the Marquee flyout, but M cycles only the Rectangular and Elliptical Marquee.
             Tool::SingleRowMarquee | Tool::SingleColumnMarquee => '\0',
             Tool::Dodge | Tool::Burn | Tool::Sponge => 'O',
-            Tool::QuickSelection | Tool::ObjectSelection => 'W',
+            Tool::QuickSelection | Tool::ObjectSelection | Tool::Sam3Select => 'W',
             Tool::Pen | Tool::FreeformPen | Tool::CurvaturePen => 'P',
             // In the Pen flyout, but P never reaches them.
             Tool::AddAnchorPoint | Tool::DeleteAnchorPoint | Tool::ConvertPoint => ' ',
@@ -312,6 +316,7 @@ impl Tool {
             Tool::ColorSampler => "◎",
             Tool::Lasso | Tool::PolygonLasso | Tool::MagneticLasso => "L",
             Tool::MagicWand => "W",
+            Tool::Sam3Select => "✳",
             Tool::Crop => "C",
             Tool::Gradient | Tool::PaintBucket => "G",
             Tool::Type | Tool::VerticalType | Tool::HorizontalTypeMask | Tool::VerticalTypeMask => "T",

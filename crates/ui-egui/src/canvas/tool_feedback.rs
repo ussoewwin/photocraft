@@ -49,6 +49,7 @@ pub fn is_selection_tool(tool: Tool) -> bool {
             | Tool::MagicWand
             | Tool::QuickSelection
             | Tool::ObjectSelection
+            | Tool::Sam3Select
     )
 }
 

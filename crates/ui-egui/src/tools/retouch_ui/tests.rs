@@ -1479,3 +1479,117 @@ fn an_empty_clone_source_slot_refuses_to_paint() {
     assert!(app.ui.clone_source.is_some(), "the old ⌥-click point is still remembered");
     assert!(crate::retouch_ui::clone_params(&app).is_none());
 }
+
+/// SAM Selection sends a click as a point prompt and a drag as a box prompt, with the options
+/// bar's prompt-independent settings (threshold, refine, Individual Masks, Sample All Layers) and
+/// the effective selection mode.
+#[test]
+fn sam_selection_sends_a_point_for_a_click_and_a_box_for_a_drag() {
+    let mut app = app();
+    app.ui.tool = Tool::Sam3Select;
+    app.ui.tool_options.sam3_threshold = 0.35;
+    app.ui.tool_options.sam3_refine = 4;
+    app.ui.tool_options.sam3_individual = true;
+    let m = egui::Modifiers::NONE;
+    let click = sam3_select_params(&app, [10.0, 20.0], [11.0, 20.0], m);
+    assert_eq!(click["point"], json!([11.0, 20.0]), "{click}");
+    assert!(click.get("box").is_none(), "{click}");
+    assert_eq!(click["threshold"], json!(0.35_f32), "{click}");
+    assert_eq!(click["refine"], json!(4_u8), "{click}");
+    assert_eq!(click["individual"], json!(true), "{click}");
+    let drag = sam3_select_params(&app, [60.0, 55.0], [5.0, 5.0], m);
+    assert_eq!(drag["box"], json!([5.0, 5.0, 55.0, 50.0]), "{drag}");
+    assert!(drag.get("point").is_none(), "{drag}");
+    // ⇧⌥ intersects whatever the options-bar mode, exactly as the other selection tools do.
+    let both = sam3_select_params(&app, [0.0, 0.0], [40.0, 40.0], egui::Modifiers { shift: true, alt: true, ..egui::Modifiers::NONE });
+    assert_eq!(both["mode"], json!("intersect"), "{both}");
+}
+/// The tool end to end through the canvas gesture: a box around the disc runs `select.sam3` and
+/// leaves a selection on the canvas. Needs the built helper and its pack
+/// (`CRAFT_SAM3_HELPER` / `CRAFT_SAM3_PACK`).
+#[test]
+#[ignore = "needs the built SAM 3.1 helper and its HSWQ pack (CRAFT_SAM3_HELPER / CRAFT_SAM3_PACK)"]
+fn sam_selection_box_selects_the_disc_end_to_end() {
+    let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+    app.session.execute("file.new", json!({"width": 256, "height": 256, "depth": 8})).unwrap();
+    app.sync_views();
+    app.session
+        .edit("paint", |doc, _| {
+            let bg = doc.layers[0].surface_mut().unwrap();
+            let n = bg.channels();
+            let mut data = Vec::with_capacity(256 * 256 * n);
+            for y in 0..256i32 {
+                for x in 0..256i32 {
+                    let inside = (x - 128).pow(2) + (y - 128).pow(2) <= 40 * 40;
+                    let c = if inside { [0.1f32, 0.7, 0.2] } else { [1.0, 1.0, 1.0] };
+                    data.extend_from_slice(&c[..n.min(3)]);
+                    if n == 4 {
+                        data.push(1.0);
+                    }
+                }
+            }
+            bg.write_region(photocraft_geom::Rect::new(0, 0, 256, 256), &data);
+            Ok(())
+        })
+        .unwrap();
+    app.ui.tool = Tool::Sam3Select;
+    app.ui.tool_options.sam3_prompt.clear();
+    app.ui.tool_options.sam3_refine = 1;
+    let m = egui::Modifiers::NONE;
+    tool_event(&mut app, ToolEvent::Down { x: 128.0, y: 128.0, pressure: 1.0 }, m);
+    tool_event(&mut app, ToolEvent::Up { x: 128.0, y: 128.0 }, m);
+    assert!(!app.ui.status_error, "{}", app.ui.status);
+    assert_eq!(app.session.journal.last().map(|(id, _)| id.as_str()), Some("select.sam3"));
+    let bounds = app.session.active().expect("document").doc.selection.as_ref().expect("a selection").content_bounds();
+    assert!(bounds.width() > 40 && bounds.width() < 160, "bounds {bounds:?}");
+    // A drag is the box prompt: it runs too (the box path's region is the helper's, not the UI's).
+    tool_event(&mut app, ToolEvent::Down { x: 70.0, y: 70.0, pressure: 1.0 }, m);
+    tool_event(&mut app, ToolEvent::Move { x: 185.0, y: 185.0, pressure: 1.0 }, m);
+    tool_event(&mut app, ToolEvent::Up { x: 185.0, y: 185.0 }, m);
+    assert!(!app.ui.status_error, "{}", app.ui.status);
+    assert_eq!(app.session.journal.last().map(|(id, _)| id.as_str()), Some("select.sam3"));
+}
+/// The SAM Selection strings resolve in Japanese once craft-i18n has the rows: the label, the
+/// options bar and both status messages.
+#[test]
+fn sam_selection_strings_are_translated_in_japanese() {
+    use crate::i18n::{Lang, tr};
+    // Nothing to look up without a craft-i18n checkout; with one the catalog must be embedded.
+    if std::env::var_os("CRAFT_I18N_DIR").is_none_or(|d| d.is_empty()) {
+        return;
+    }
+    assert!(crate::i18n::catalogs_embedded(), "craft-i18n is configured but no catalog is embedded");
+    let ja = Lang::from_code("ja").expect("a Japanese catalog");
+    for (en, want) in [
+        ("SAM Selection Tool", "SAM選択ツール"),
+        ("Prompt", "プロンプト"),
+        ("Detect", "検出"),
+        ("Individual Masks", "個別マスク"),
+        ("SAM found nothing there — try a tighter box", "SAM はそこに何も見つけられませんでした — より狭いボックスで試してください"),
+        // Shared words come from craft-i18n's `common.tsv`, not this app's catalog.
+        ("Threshold", "しきい値"),
+        ("Refine", "調整"),
+    ] {
+        assert_eq!(tr(ja, en), want, "{en}");
+    }
+}
+/// A text prompt typed in the options bar wins over the gesture: the engine's text path covers
+/// the whole document, so a click does not send a point prompt beside it, and neither does a drag
+/// send a box the engine would ignore.
+#[test]
+fn a_typed_prompt_wins_over_the_gesture() {
+    let mut app = app();
+    app.ui.tool = Tool::Sam3Select;
+    app.ui.tool_options.sam3_prompt = "face".into();
+    let m = egui::Modifiers::NONE;
+    let click = sam3_select_params(&app, [10.0, 20.0], [10.0, 20.0], m);
+    assert_eq!(click["prompt"], json!("face"), "{click}");
+    assert!(click.get("point").is_none(), "{click}");
+    let drag = sam3_select_params(&app, [5.0, 5.0], [60.0, 55.0], m);
+    assert_eq!(drag["prompt"], json!("face"), "{drag}");
+    assert!(drag.get("box").is_none(), "{drag}");
+    // Clearing the prompt gives the gestures back.
+    app.ui.tool_options.sam3_prompt.clear();
+    let click = sam3_select_params(&app, [10.0, 20.0], [10.0, 20.0], m);
+    assert_eq!(click["point"], json!([10.0, 20.0]), "{click}");
+}

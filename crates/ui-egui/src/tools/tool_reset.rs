@@ -130,6 +130,7 @@ fn is_selection_tool(tool: Tool) -> bool {
             | Tool::MagicWand
             | Tool::QuickSelection
             | Tool::ObjectSelection
+            | Tool::Sam3Select
     )
 }
 
@@ -212,6 +213,7 @@ pub fn option_keys(tool: Tool) -> &'static [&'static str] {
         Tool::MagicWand => reset!(tolerance, anti_alias, contiguous),
         Tool::QuickSelection => reset!(enhance_edge, quick_selection_mode),
         Tool::ObjectSelection => reset!(enhance_edge, object_finder),
+        Tool::Sam3Select => reset!(sam3_prompt, sam3_threshold, sam3_refine, sam3_individual),
         Tool::Crop => reset!(
             crop_ratio,
             crop_delete,
@@ -429,7 +431,7 @@ mod tests {
         assert_eq!(sample_all_key(Tool::Brush), None);
         let keys: Vec<String> = Tool::ALL.iter().filter_map(|t| sample_all_key(*t)).collect();
         let distinct: std::collections::BTreeSet<&String> = keys.iter().collect();
-        assert_eq!((keys.len(), distinct.len()), (12, 12), "one key per tool with the option");
+        assert_eq!((keys.len(), distinct.len()), (13, 13), "one key per tool with the option");
     }
 }
 

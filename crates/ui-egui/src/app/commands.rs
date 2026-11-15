@@ -296,6 +296,7 @@ impl PhotocraftApp {
                     | "select.magicWand"
                     | "select.quick"
                     | "select.object"
+                    | "select.sam3"
                     | "select.loadSelection"
                     | "select.loadLuminosity"
                     | "path.toSelection"

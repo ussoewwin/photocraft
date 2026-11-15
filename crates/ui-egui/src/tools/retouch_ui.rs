@@ -679,6 +679,45 @@ pub fn finish_object_selection(app: &mut PhotocraftApp, start: [f64; 2], end: [f
     report_smart_result(app, r, tl!("Object Selection found nothing there — try a tighter rectangle"));
 }
 
+/// The `select.sam3` params for the gesture from `start` to `end`. With a text prompt typed the
+/// prompt wins (the engine's text path covers the whole document, as the Detect button's does);
+/// otherwise a click (or a sub-2 px nudge) is a point prompt and a drag a box prompt.
+pub fn sam3_select_params(app: &PhotocraftApp, start: [f64; 2], end: [f64; 2], mods: egui::Modifiers) -> Value {
+    let o = &app.ui.tool_options;
+    let mode = crate::tool_feedback::selection_mode(Tool::Sam3Select, app.ui.selection_mode, mods);
+    let (x, y) = (start[0].min(end[0]), start[1].min(end[1]));
+    let (w, h) = ((end[0] - start[0]).abs(), (end[1] - start[1]).abs());
+    let mut params = if w < 2.0 && h < 2.0 && !o.sam3_prompt.trim().is_empty() {
+        // A press that never moved with a prompt typed: the text prompt, as Detect sends it.
+        json!({"prompt": o.sam3_prompt.trim()})
+    } else if !o.sam3_prompt.trim().is_empty() {
+        // A drag with a prompt typed is the text prompt; the engine's text path covers the whole
+        // document, so the box is not sent beside it (it would be ignored).
+        json!({"prompt": o.sam3_prompt.trim()})
+    } else if w < 2.0 || h < 2.0 {
+        json!({"point": [end[0], end[1]]})
+    } else {
+        json!({"box": [x.round(), y.round(), w.round(), h.round()]})
+    };
+    let map = params.as_object_mut().expect("an object");
+    map.insert("mode".into(), json!(mode));
+    map.insert("sampleAllLayers".into(), json!(o.sample_all.sam3_select));
+    map.insert("threshold".into(), json!(o.sam3_threshold));
+    map.insert("refine".into(), json!(o.sam3_refine));
+    map.insert("individual".into(), json!(o.sam3_individual));
+    params
+}
+
+/// SAM Selection: a click segments the object under the pointer, a drag segments inside the box
+/// (`SAM3_Detect`'s point and box prompts). The options bar holds the text prompt instead; the
+/// preview is the same marching-ants rectangle Object Selection drags. Modes follow the other
+/// selection tools (⇧⌥ intersects, ⇧ adds, ⌥ subtracts, otherwise the options-bar mode).
+pub fn finish_sam3_selection(app: &mut PhotocraftApp, start: [f64; 2], end: [f64; 2], mods: egui::Modifiers) {
+    let params = sam3_select_params(app, start, end, mods);
+    let r = app.run("select.sam3", params);
+    report_smart_result(app, r, tl!("SAM found nothing there — try a tighter box"));
+}
+
 /// Reports a smart-selection command result in the status bar. Engine errors are already
 /// reported by [`PhotocraftApp::run`], but an empty result (`changed: false`) is a silent
 /// success that looks like a dead button (Select Subject finding nothing on a busy photo,
@@ -917,7 +956,7 @@ fn clone_sample_dropdown(ui: &mut egui::Ui, stored: &mut String, indexed: bool) 
 
 /// Options bar for the retouching and smart-selection tools. Returns false for other tools.
 pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui, tool: Tool) -> bool {
-    if !tool.is_brushlike() && !matches!(tool, Tool::QuickSelection | Tool::ObjectSelection | Tool::Patch | Tool::ContentAwareMove | Tool::RedEye)
+    if !tool.is_brushlike() && !matches!(tool, Tool::QuickSelection | Tool::ObjectSelection | Tool::Sam3Select | Tool::Patch | Tool::ContentAwareMove | Tool::RedEye)
         || matches!(tool, Tool::Brush | Tool::Pencil | Tool::MixerBrush | Tool::Eraser)
     {
         return false;
@@ -1200,6 +1239,45 @@ pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui, tool: Tool) -> bo
                 let r = app.run("select.subject", json!({}));
                 report_smart_result(app, r, tl!("No subject found — try a rectangle around the object"));
             }
+        }
+        Tool::Sam3Select => {
+            crate::panels::selection_mode_buttons(&mut app.ui.selection_mode, ui);
+            crate::widgets::vline(ui, 22.0);
+            crate::widgets::checkbox(ui, &mut o.sample_all.sam3_select, tl!("Sample All Layers"));
+            crate::widgets::vline(ui, 22.0);
+            opt(ui, tl!("Prompt"));
+            let id = ui.scope_id().with("sam3-prompt");
+            crate::widgets::text_field(ui, id, &mut o.sam3_prompt, tl!("e.g. face"), 150.0, false)
+                .accessible_name(tl!("SAM 3.1 prompt"));
+            opt(ui, tl!("Threshold"));
+            crate::widgets::value_field_named(ui, tl!("Threshold"), &mut o.sam3_threshold, 0.0..=1.0, "", 46.0);
+            opt(ui, tl!("Refine"));
+            let mut refine = o.sam3_refine as f32;
+            if crate::widgets::value_field_named(ui, tl!("Refine"), &mut refine, 0.0..=5.0, "", 42.0).changed() {
+                o.sam3_refine = refine.round().clamp(0.0, 5.0) as u8;
+            }
+            crate::widgets::checkbox(ui, &mut o.sam3_individual, tl!("Individual Masks"));
+            crate::widgets::vline(ui, 22.0);
+            let can_detect = !o.sam3_prompt.trim().is_empty();
+            if crate::widgets::secondary_button(ui, tl!("Detect"), 0.0).clicked() && can_detect {
+                let prompt = o.sam3_prompt.clone();
+                let threshold = o.sam3_threshold;
+                let refine = o.sam3_refine;
+                let individual = o.sam3_individual;
+                let sample_all = o.sample_all.sam3_select;
+                let mode = crate::tool_feedback::selection_mode(Tool::Sam3Select, app.ui.selection_mode, egui::Modifiers::NONE);
+                let params = json!({
+                    "prompt": prompt,
+                    "threshold": threshold,
+                    "refine": refine,
+                    "individual": individual,
+                    "sampleAllLayers": sample_all,
+                    "mode": mode,
+                });
+                let r = app.run("select.sam3", params);
+                report_smart_result(app, r, tl!("Nothing matched the prompt"));
+            }
+            opt(ui, tl!("or click, or drag a box"));
         }
         Tool::RedEye => {
             opt(ui, tl!("Pupil Size"));
