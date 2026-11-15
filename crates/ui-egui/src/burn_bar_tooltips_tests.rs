@@ -89,8 +89,15 @@ fn both_tools_show_exact_tooltips_on_the_controls_and_hide_them_on_leave() {
 fn hover_uses_the_active_catalog_or_english_fallback() {
     for code in ["en", "de", "fr", "ja", "ar"] {
         // The catalogs live in the pinned craft-i18n crate: a build without them is English only,
-        // so a language whose catalog is not embedded is skipped here.
-        let Some(lang) = Lang::from_code(code) else { continue };
+        // so a language whose catalog is not embedded is skipped here. English always works —
+        // `Lang::EN` carries no catalog, so the fallback wording is what gets exercised in an
+        // English-only build too.
+        let lang = if code == "en" {
+            Lang::EN
+        } else {
+            let Some(lang) = Lang::from_code(code) else { continue };
+            lang
+        };
         for tool in [Tool::Burn, Tool::Dodge] {
             for (role, label, tip) in CONTROLS {
                 let mut h = bar(tool, lang, 1600.0, 1.0, false);
