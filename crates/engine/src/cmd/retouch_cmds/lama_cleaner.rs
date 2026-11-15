@@ -224,6 +224,216 @@ impl LamaTool {
     }
 }
 
+/// A resident `lama-cleaner --serve` helper: the model stays loaded between strokes, so only
+/// the inference time is paid. One process serves every request of the session; a helper that
+/// cannot serve (an older build, an unexpected reply) or a process that died is dropped, and the
+/// caller runs the helper once instead.
+#[cfg(not(target_arch = "wasm32"))]
+mod resident {
+    use std::io::{BufRead, BufReader, Write};
+    use std::path::{Path, PathBuf};
+    use std::process::{Child, Command, Stdio};
+    use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
+    use std::sync::{Mutex, OnceLock};
+    use std::time::Duration;
+
+    /// How long one request may take before the helper counts as hung; the first request also
+    /// waits for the model load.
+    const REPLY_TIMEOUT: Duration = Duration::from_secs(120);
+
+    struct Worker {
+        child: Child,
+        stdin: std::process::ChildStdin,
+        replies: Receiver<String>,
+        exe: PathBuf,
+        model: PathBuf,
+    }
+
+    impl Worker {
+        fn start(exe: &Path, model: &Path) -> Result<Self, String> {
+            let mut child = Command::new(exe)
+                .arg("--serve")
+                .arg("--model")
+                .arg(model)
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::inherit())
+                .spawn()
+                .map_err(|e| format!("could not start {}: {e}", exe.display()))?;
+            let stdin = match child.stdin.take() {
+                Some(stdin) => stdin,
+                None => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err("the helper has no stdin".into());
+                }
+            };
+            let stdout = match child.stdout.take() {
+                Some(stdout) => stdout,
+                None => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err("the helper has no stdout".into());
+                }
+            };
+            let (send, replies) = mpsc::channel();
+            // The reader thread frees the request path from a pipe that a hung helper would block:
+            // every request waits with a timeout on the channel instead of on `read_line`.
+            std::thread::spawn(move || {
+                let mut reader = BufReader::new(stdout);
+                loop {
+                    let mut line = String::new();
+                    match reader.read_line(&mut line) {
+                        Ok(0) | Err(_) => break,
+                        Ok(_) => {
+                            if send.send(line).is_err() {
+                                break;
+                            }
+                        }
+                    }
+                }
+            });
+            Ok(Self { child, stdin, replies, exe: exe.to_path_buf(), model: model.to_path_buf() })
+        }
+
+        fn matches(&self, exe: &Path, model: &Path) -> bool {
+            self.exe == exe && self.model == model
+        }
+
+        fn request(&mut self, image: &Path, mask: &Path, output: &Path) -> Result<String, String> {
+            let line = request_line(image, mask, output);
+            writeln!(self.stdin, "{line}").and_then(|_| self.stdin.flush()).map_err(|e| format!("the LaMa helper stopped reading: {e}"))?;
+            let reply = match self.replies.recv_timeout(REPLY_TIMEOUT) {
+                Ok(reply) => reply,
+                Err(RecvTimeoutError::Timeout) => {
+                    return Err(format!("the LaMa helper did not answer within {} s", REPLY_TIMEOUT.as_secs()));
+                }
+                Err(RecvTimeoutError::Disconnected) => return Err("the LaMa helper exited".into()),
+            };
+            parse_reply(&reply)
+        }
+    }
+
+    impl Drop for Worker {
+        fn drop(&mut self) {
+            let _ = self.child.kill();
+            let _ = self.child.wait();
+        }
+    }
+
+    fn slot() -> &'static Mutex<Option<Worker>> {
+        static WORKER: OnceLock<Mutex<Option<Worker>>> = OnceLock::new();
+        WORKER.get_or_init(|| Mutex::new(None))
+    }
+
+    /// The JSON line one request sends.
+    fn request_line(image: &Path, mask: &Path, output: &Path) -> String {
+        serde_json::json!({
+            "image": image.to_string_lossy(),
+            "mask": mask.to_string_lossy(),
+            "output": output.to_string_lossy(),
+        })
+        .to_string()
+    }
+
+    /// The provider from a helper reply. Anything else — an older helper printing its self-test,
+    /// a truncated line — is a reason to use the one-shot run, never a value to trust.
+    fn parse_reply(reply: &str) -> Result<String, String> {
+        let value: serde_json::Value =
+            serde_json::from_str(reply.trim()).map_err(|_| format!("the LaMa helper answered something that is not JSON: {}", one_line(reply)))?;
+        if value.get("ok").and_then(serde_json::Value::as_bool) == Some(true) {
+            Ok(value.get("provider").and_then(serde_json::Value::as_str).unwrap_or("unknown").to_string())
+        } else {
+            Err(value.get("error").and_then(serde_json::Value::as_str).map_or_else(|| "the LaMa helper reported an error".to_string(), |e| e.to_string()))
+        }
+    }
+
+    fn one_line(text: &str) -> String {
+        text.trim().chars().take(120).collect()
+    }
+
+    /// One request through the resident helper, starting or restarting it as needed. An error
+    /// means the caller should run the helper once instead.
+    pub(super) fn apply(exe: &Path, model: &Path, image: &Path, mask: &Path, output: &Path) -> Result<String, String> {
+        let mut guard = slot().lock().unwrap_or_else(|e| e.into_inner());
+        if guard.as_ref().is_some_and(|worker| !worker.matches(exe, model)) {
+            *guard = None;
+        }
+        if guard.is_none() {
+            *guard = Some(Worker::start(exe, model)?);
+        }
+        let result = guard.as_mut().ok_or("the resident LaMa helper is gone")?.request(image, mask, output);
+        if result.is_err() {
+            *guard = None;
+        }
+        result
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn the_request_line_is_one_json_object_with_the_three_paths() {
+            let line = request_line(Path::new("in.png"), Path::new("mask.png"), Path::new("out.png"));
+            let value: serde_json::Value = serde_json::from_str(&line).unwrap();
+            assert_eq!(value["image"], "in.png");
+            assert_eq!(value["mask"], "mask.png");
+            assert_eq!(value["output"], "out.png");
+            assert!(!line.contains('\n'), "one request is one line");
+        }
+
+        #[test]
+        fn a_reply_names_the_provider() {
+            assert_eq!(parse_reply("{\"ok\":true,\"infer_ms\":42.1,\"provider\":\"CUDA\"}\n").unwrap(), "CUDA");
+            assert_eq!(parse_reply("{\"ok\":true}").unwrap(), "unknown");
+        }
+
+        #[test]
+        fn an_error_reply_carries_its_message() {
+            let error = parse_reply("{\"ok\":false,\"error\":\"mask is empty\"}").unwrap_err();
+            assert_eq!(error, "mask is empty");
+            let bare = parse_reply("{\"ok\":false}").unwrap_err();
+            assert!(bare.contains("reported an error"), "{bare}");
+        }
+
+        /// An older helper prints its self-test instead of JSON: that is a reason to fall back.
+        #[test]
+        fn a_helper_that_prints_prose_is_not_a_worker() {
+            let error = parse_reply("=== Testing Native Rust LaMa Cleaner ===\n").unwrap_err();
+            assert!(error.contains("not JSON"), "{error}");
+            assert!(error.contains("=== Testing"), "the first line is quoted: {error}");
+        }
+
+        /// A helper that cannot start is an error the caller turns into the one-shot run.
+        #[test]
+        fn a_missing_helper_cannot_start() {
+            let error = apply(Path::new("no-such-lama-helper"), Path::new("m.onnx"), Path::new("a"), Path::new("b"), Path::new("c")).unwrap_err();
+            assert!(error.contains("could not start"), "{error}");
+        }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn run_helper_once(exe: &std::path::Path, model: &std::path::Path, image: &std::path::Path, mask: &std::path::Path, output: &std::path::Path) -> Result<()> {
+    let result = std::process::Command::new(exe)
+        .arg("-i")
+        .arg(image)
+        .arg("-m")
+        .arg(mask)
+        .arg("-o")
+        .arg(output)
+        .arg("--model")
+        .arg(model)
+        .output()
+        .map_err(|e| EngineError::Other(format!("lama-cleaner failed: {e}")))?;
+    if !result.status.success() {
+        let err_msg = String::from_utf8_lossy(&result.stderr);
+        return Err(EngineError::Other(format!("LaMa inpainting failed: {err_msg}")));
+    }
+    Ok(())
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 fn execute_lama(w: usize, h: usize, ch: usize, fmt: &PixelFormat, img_data: &[f32], hole: &[bool], tool: &LamaTool) -> Result<Vec<f32>> {
     let mut rgb_bytes = Vec::with_capacity(w * h * 3);
@@ -253,21 +463,10 @@ fn execute_lama(w: usize, h: usize, ch: usize, fmt: &PixelFormat, img_data: &[f3
     std::fs::write(&in_p, img_png).map_err(|e| EngineError::Other(e.to_string()))?;
     std::fs::write(&mask_p, mask_png).map_err(|e| EngineError::Other(e.to_string()))?;
 
-    let output = std::process::Command::new(&tool.exe)
-        .arg("-i")
-        .arg(&in_p)
-        .arg("-m")
-        .arg(&mask_p)
-        .arg("-o")
-        .arg(&out_p)
-        .arg("--model")
-        .arg(&tool.model)
-        .output()
-        .map_err(|e| EngineError::Other(format!("lama-cleaner failed: {e}")))?;
-
-    if !output.status.success() {
-        let err_msg = String::from_utf8_lossy(&output.stderr);
-        return Err(EngineError::Other(format!("LaMa inpainting failed: {err_msg}")));
+    // The resident helper keeps the model loaded between strokes. A helper that cannot serve (an
+    // older build) or a resident process that died falls back to the ordinary single run.
+    if resident::apply(&tool.exe, &tool.model, &in_p, &mask_p, &out_p).is_err() {
+        run_helper_once(&tool.exe, &tool.model, &in_p, &mask_p, &out_p)?;
     }
 
     let out_bytes = std::fs::read(&out_p).map_err(|e| EngineError::Other(e.to_string()))?;
