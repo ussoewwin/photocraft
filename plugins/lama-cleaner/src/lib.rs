@@ -9,13 +9,13 @@
 //! Arbitrary image sizes are handled by ROI cropping, scaling and seamless alpha blending
 //! (`inpaint`); the model itself always runs on 512x512 patches (`inpaint_512`).
 
-use std::path::{Path, PathBuf};
-use std::sync::Mutex;
-use image::{imageops, GrayImage, Rgb, RgbImage};
+use image::{GrayImage, Rgb, RgbImage, imageops};
 use ndarray::Array4;
 use ort::ep::{self, ExecutionProviderDispatch};
 use ort::session::Session;
 use ort::value::Value;
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use thiserror::Error;
 
 /// The side length the model runs at.
@@ -30,12 +30,7 @@ pub enum LamaError {
     #[error("no execution provider could open the model ({0})")]
     NoProvider(String),
     #[error("Dimension mismatch: image is {img_w}x{img_h}, mask is {mask_w}x{mask_h}")]
-    DimensionMismatch {
-        img_w: u32,
-        img_h: u32,
-        mask_w: u32,
-        mask_h: u32,
-    },
+    DimensionMismatch { img_w: u32, img_h: u32, mask_w: u32, mask_h: u32 },
 }
 
 /// The execution provider a session ended up on.
@@ -60,13 +55,9 @@ impl Provider {
         match self {
             // The heuristic search skips cuDNN's exhaustive benchmark (seconds on the first
             // run); TF32 uses the tensor cores on Ampere and later.
-            Provider::Cuda => Some(
-                ep::cuda::CUDA::default()
-                    .with_conv_algorithm_search(ep::cuda::ConvAlgorithmSearch::Heuristic)
-                    .with_tf32(true)
-                    .build()
-                    .error_on_failure(),
-            ),
+            Provider::Cuda => {
+                Some(ep::cuda::CUDA::default().with_conv_algorithm_search(ep::cuda::ConvAlgorithmSearch::Heuristic).with_tf32(true).build().error_on_failure())
+            }
             Provider::DirectMl => Some(ep::DirectML::default().build().error_on_failure()),
             Provider::Cpu => None,
         }
@@ -116,12 +107,7 @@ impl LamaModel {
         let (w, h) = image.dimensions();
         let (mw, mh) = mask.dimensions();
         if w != 512 || h != 512 || mw != 512 || mh != 512 {
-            return Err(LamaError::DimensionMismatch {
-                img_w: w,
-                img_h: h,
-                mask_w: mw,
-                mask_h: mh,
-            });
+            return Err(LamaError::DimensionMismatch { img_w: w, img_h: h, mask_w: mw, mask_h: mh });
         }
 
         // Image tensor [1, 3, 512, 512], 0.0..1.0. Packed from the image's own bytes: no bounds
@@ -183,10 +169,7 @@ impl LamaModel {
         for y in 0..SIDE {
             for x in 0..SIDE {
                 let i = y * SIDE + x;
-                let sample = |offset: usize| {
-                    data.get(offset + i)
-                        .map_or(0, |v| (*v * scale).clamp(0.0, 255.0).round() as u8)
-                };
+                let sample = |offset: usize| data.get(offset + i).map_or(0, |v| (*v * scale).clamp(0.0, 255.0).round() as u8);
                 result.put_pixel(x as u32, y as u32, Rgb([sample(0), sample(plane), sample(2 * plane)]));
             }
         }
@@ -204,12 +187,7 @@ impl LamaModel {
         let (w, h) = image.dimensions();
         let (mw, mh) = mask.dimensions();
         if w != mw || h != mh {
-            return Err(LamaError::DimensionMismatch {
-                img_w: w,
-                img_h: h,
-                mask_w: mw,
-                mask_h: mh,
-            });
+            return Err(LamaError::DimensionMismatch { img_w: w, img_h: h, mask_w: mw, mask_h: mh });
         }
 
         // 1. Find mask bounding box
@@ -353,16 +331,10 @@ impl LamaModel {
                 }
                 let alpha = (mask_val as f32 / 255.0) * feather(min_dist_sq);
                 let i = (y * cw + x) * 3;
-                let blend = |orig: u8, inpaint: u8| {
-                    ((1.0 - alpha) * orig as f32 + alpha * inpaint as f32).round().clamp(0.0, 255.0) as u8
-                };
+                let blend = |orig: u8, inpaint: u8| ((1.0 - alpha) * orig as f32 + alpha * inpaint as f32).round().clamp(0.0, 255.0) as u8;
                 let (o, p) = (img_raw.get(i..i + 3), inp_raw.get(i..i + 3));
                 if let (Some(o), Some(p)) = (o, p) {
-                    result.put_pixel(
-                        final_min_x + x as u32,
-                        final_min_y + y as u32,
-                        Rgb([blend(o[0], p[0]), blend(o[1], p[1]), blend(o[2], p[2])]),
-                    );
+                    result.put_pixel(final_min_x + x as u32, final_min_y + y as u32, Rgb([blend(o[0], p[0]), blend(o[1], p[1]), blend(o[2], p[2])]));
                 }
             }
         }
@@ -415,16 +387,34 @@ fn prepare_cuda(notes: &mut Vec<String>) -> bool {
     }
 }
 
+/// Append the runtime binary directories a CUDA or cuDNN installation root may use on Windows and
+/// Unix: `bin\x64` (CUDA 13+ and cuDNN 9+), `bin\<cuda_ver>\x64` (versioned cuDNN 9 layouts such
+/// as `bin\13.0\x64` or `bin\12.9\x64`), `bin`, and the root itself.
+fn push_toolkit_dirs(candidates: &mut Vec<PathBuf>, root: &Path) {
+    let bin = root.join("bin");
+    candidates.push(bin.join("x64"));
+    if let Ok(entries) = std::fs::read_dir(&bin) {
+        let mut subdirs: Vec<PathBuf> = entries.flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect();
+        subdirs.sort_by(|a, b| b.cmp(a));
+        for sub in subdirs {
+            if sub.file_name().and_then(|n| n.to_str()) != Some("x64") {
+                candidates.push(sub.join("x64"));
+                candidates.push(sub);
+            }
+        }
+    }
+    candidates.push(bin);
+    candidates.push(root.to_path_buf());
+}
+
 /// The first directory holding `name`, searched in this order: CUDA_PATH / CUDNN_PATH (and their
-/// `bin`), the helper's own folder and its parent (the `plugins` folder), the NVIDIA toolkit
-/// folders, then PATH. Nothing here names a particular machine's drive.
+/// `bin\x64`, `bin\<ver>\x64`, and `bin`), the helper's own folder and its parent (the `plugins`
+/// folder), the NVIDIA toolkit folders, then PATH. Nothing here names a particular machine's drive.
 fn find_runtime_dir(name: &str) -> Option<PathBuf> {
     let mut candidates: Vec<PathBuf> = Vec::new();
     for key in ["CUDA_PATH", "CUDNN_PATH", "CUDA_HOME", "CUDNN_HOME"] {
         if let Ok(root) = std::env::var(key) {
-            let root = PathBuf::from(root);
-            candidates.push(root.join("bin"));
-            candidates.push(root.clone());
+            push_toolkit_dirs(&mut candidates, Path::new(&root));
         }
     }
     if let Ok(exe) = std::env::current_exe() {
@@ -439,10 +429,10 @@ fn find_runtime_dir(name: &str) -> Option<PathBuf> {
         let program_files = std::env::var("ProgramFiles").unwrap_or_else(|_| r"C:\Program Files".into());
         for root in [format!(r"{program_files}\NVIDIA GPU Computing Toolkit\CUDA"), format!(r"{program_files}\NVIDIA\CUDNN")] {
             if let Ok(entries) = std::fs::read_dir(root) {
-                for entry in entries.flatten() {
-                    let dir = entry.path();
-                    candidates.push(dir.join("bin"));
-                    candidates.push(dir);
+                let mut versions: Vec<PathBuf> = entries.flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect();
+                versions.sort_by(|a, b| b.cmp(a));
+                for dir in versions {
+                    push_toolkit_dirs(&mut candidates, &dir);
                 }
             }
         }
@@ -469,8 +459,6 @@ mod tests {
         assert_eq!(feather(16), 1.0);
     }
 
-    /// One cache file per provider: a CUDA-optimized graph is not reused for DirectML.
-    /// A model path without a parent has no cache location, so the session opens without one.
     #[test]
     fn provider_names_are_what_a_user_reads() {
         assert_eq!(Provider::Cuda.name(), "CUDA");
@@ -487,6 +475,26 @@ mod tests {
         }
         assert!(Provider::Cpu.dispatch().is_none());
     }
+
+    /// CUDA 13 puts its DLLs in `bin\x64` and cuDNN 9 puts them in `bin\<cuda_ver>\x64` (or
+    /// `bin\x64`). Both layouts must be searched before `bin`.
+    #[test]
+    fn toolkit_dirs_include_cuda13_and_cudnn9_bin_x64_layouts() {
+        let root = std::env::temp_dir().join(format!("photocraft-lama-toolkit-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let cuda_x64 = root.join("cuda").join("bin").join("x64");
+        let cudnn_ver_x64 = root.join("cudnn").join("bin").join("13.0").join("x64");
+        std::fs::create_dir_all(&cuda_x64).unwrap();
+        std::fs::create_dir_all(&cudnn_ver_x64).unwrap();
+
+        let mut cuda_dirs = Vec::new();
+        push_toolkit_dirs(&mut cuda_dirs, &root.join("cuda"));
+        assert_eq!(cuda_dirs.first(), Some(&cuda_x64));
+
+        let mut cudnn_dirs = Vec::new();
+        push_toolkit_dirs(&mut cudnn_dirs, &root.join("cudnn"));
+        assert!(cudnn_dirs.contains(&cudnn_ver_x64), "expected {cudnn_ver_x64:?} in {cudnn_dirs:?}");
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }
-
-

@@ -241,6 +241,17 @@ mod resident {
     /// waits for the model load.
     const REPLY_TIMEOUT: Duration = Duration::from_secs(120);
 
+    #[derive(Debug, PartialEq, Eq)]
+    pub(super) enum ResidentError {
+        /// The helper could not serve as a resident process (failed to spawn, exited, timed out,
+        /// or printed non-JSON prose as an older build does): drop the worker and fall back to a
+        /// single run.
+        Unavailable(String),
+        /// The resident helper is alive and answered with `{"ok": false, "error": "..."}`: keep
+        /// the loaded worker and report the error directly without re-running from scratch.
+        Failed(String),
+    }
+
     struct Worker {
         child: Child,
         stdin: std::process::ChildStdin,
@@ -250,7 +261,7 @@ mod resident {
     }
 
     impl Worker {
-        fn start(exe: &Path, model: &Path) -> Result<Self, String> {
+        fn start(exe: &Path, model: &Path) -> Result<Self, ResidentError> {
             let mut child = Command::new(exe)
                 .arg("--serve")
                 .arg("--model")
@@ -259,13 +270,13 @@ mod resident {
                 .stdout(Stdio::piped())
                 .stderr(Stdio::inherit())
                 .spawn()
-                .map_err(|e| format!("could not start {}: {e}", exe.display()))?;
+                .map_err(|e| ResidentError::Unavailable(format!("could not start {}: {e}", exe.display())))?;
             let stdin = match child.stdin.take() {
                 Some(stdin) => stdin,
                 None => {
                     let _ = child.kill();
                     let _ = child.wait();
-                    return Err("the helper has no stdin".into());
+                    return Err(ResidentError::Unavailable("the helper has no stdin".into()));
                 }
             };
             let stdout = match child.stdout.take() {
@@ -273,7 +284,7 @@ mod resident {
                 None => {
                     let _ = child.kill();
                     let _ = child.wait();
-                    return Err("the helper has no stdout".into());
+                    return Err(ResidentError::Unavailable("the helper has no stdout".into()));
                 }
             };
             let (send, replies) = mpsc::channel();
@@ -300,15 +311,17 @@ mod resident {
             self.exe == exe && self.model == model
         }
 
-        fn request(&mut self, image: &Path, mask: &Path, output: &Path) -> Result<String, String> {
+        fn request(&mut self, image: &Path, mask: &Path, output: &Path) -> Result<String, ResidentError> {
             let line = request_line(image, mask, output);
-            writeln!(self.stdin, "{line}").and_then(|_| self.stdin.flush()).map_err(|e| format!("the LaMa helper stopped reading: {e}"))?;
+            writeln!(self.stdin, "{line}")
+                .and_then(|_| self.stdin.flush())
+                .map_err(|e| ResidentError::Unavailable(format!("the LaMa helper stopped reading: {e}")))?;
             let reply = match self.replies.recv_timeout(REPLY_TIMEOUT) {
                 Ok(reply) => reply,
                 Err(RecvTimeoutError::Timeout) => {
-                    return Err(format!("the LaMa helper did not answer within {} s", REPLY_TIMEOUT.as_secs()));
+                    return Err(ResidentError::Unavailable(format!("the LaMa helper did not answer within {} s", REPLY_TIMEOUT.as_secs())));
                 }
-                Err(RecvTimeoutError::Disconnected) => return Err("the LaMa helper exited".into()),
+                Err(RecvTimeoutError::Disconnected) => return Err(ResidentError::Unavailable("the LaMa helper exited".into())),
             };
             parse_reply(&reply)
         }
@@ -336,15 +349,19 @@ mod resident {
         .to_string()
     }
 
-    /// The provider from a helper reply. Anything else — an older helper printing its self-test,
-    /// a truncated line — is a reason to use the one-shot run, never a value to trust.
-    fn parse_reply(reply: &str) -> Result<String, String> {
-        let value: serde_json::Value =
-            serde_json::from_str(reply.trim()).map_err(|_| format!("the LaMa helper answered something that is not JSON: {}", one_line(reply)))?;
+    /// The provider from a helper reply. Non-JSON output (an older helper printing its self-test,
+    /// a truncated line) is [`ResidentError::Unavailable`] so the caller falls back to a one-shot
+    /// run; a structured `{"ok": false, "error": "..."}` reply is [`ResidentError::Failed`] so the
+    /// resident worker stays loaded and the error is reported directly.
+    fn parse_reply(reply: &str) -> Result<String, ResidentError> {
+        let value: serde_json::Value = serde_json::from_str(reply.trim())
+            .map_err(|_| ResidentError::Unavailable(format!("the LaMa helper answered something that is not JSON: {}", one_line(reply))))?;
         if value.get("ok").and_then(serde_json::Value::as_bool) == Some(true) {
             Ok(value.get("provider").and_then(serde_json::Value::as_str).unwrap_or("unknown").to_string())
         } else {
-            Err(value.get("error").and_then(serde_json::Value::as_str).map_or_else(|| "the LaMa helper reported an error".to_string(), |e| e.to_string()))
+            Err(ResidentError::Failed(
+                value.get("error").and_then(serde_json::Value::as_str).map_or_else(|| "the LaMa helper reported an error".to_string(), |e| e.to_string()),
+            ))
         }
     }
 
@@ -352,21 +369,37 @@ mod resident {
         text.trim().chars().take(120).collect()
     }
 
-    /// One request through the resident helper, starting or restarting it as needed. An error
-    /// means the caller should run the helper once instead.
-    pub(super) fn apply(exe: &Path, model: &Path, image: &Path, mask: &Path, output: &Path) -> Result<String, String> {
+    /// One request through the resident helper, starting or restarting it as needed.
+    ///
+    /// If an already-running worker died between strokes, it is replaced once with a fresh
+    /// resident worker before giving up. A structured [`ResidentError::Failed`] reply keeps the
+    /// resident worker alive in its slot.
+    pub(super) fn apply(exe: &Path, model: &Path, image: &Path, mask: &Path, output: &Path) -> Result<String, ResidentError> {
         let mut guard = slot().lock().unwrap_or_else(|e| e.into_inner());
         if guard.as_ref().is_some_and(|worker| !worker.matches(exe, model)) {
             *guard = None;
         }
+        let reused = guard.is_some();
         if guard.is_none() {
             *guard = Some(Worker::start(exe, model)?);
         }
-        let result = guard.as_mut().ok_or("the resident LaMa helper is gone")?.request(image, mask, output);
-        if result.is_err() {
-            *guard = None;
+        let first = guard.as_mut().ok_or_else(|| ResidentError::Unavailable("the resident LaMa helper is gone".into()))?.request(image, mask, output);
+        match first {
+            Ok(provider) => Ok(provider),
+            Err(ResidentError::Failed(msg)) => Err(ResidentError::Failed(msg)),
+            Err(ResidentError::Unavailable(reason)) => {
+                *guard = None;
+                if !reused {
+                    return Err(ResidentError::Unavailable(reason));
+                }
+                *guard = Some(Worker::start(exe, model)?);
+                let retry = guard.as_mut().ok_or_else(|| ResidentError::Unavailable("the resident LaMa helper is gone".into()))?.request(image, mask, output);
+                if matches!(retry, Err(ResidentError::Unavailable(_))) {
+                    *guard = None;
+                }
+                retry
+            }
         }
-        result
     }
 
     #[cfg(test)]
@@ -390,26 +423,25 @@ mod resident {
         }
 
         #[test]
-        fn an_error_reply_carries_its_message() {
+        fn an_error_reply_carries_its_message_without_marking_the_worker_unavailable() {
             let error = parse_reply("{\"ok\":false,\"error\":\"mask is empty\"}").unwrap_err();
-            assert_eq!(error, "mask is empty");
+            assert_eq!(error, ResidentError::Failed("mask is empty".into()));
             let bare = parse_reply("{\"ok\":false}").unwrap_err();
-            assert!(bare.contains("reported an error"), "{bare}");
+            assert!(matches!(bare, ResidentError::Failed(ref msg) if msg.contains("reported an error")), "{bare:?}");
         }
 
         /// An older helper prints its self-test instead of JSON: that is a reason to fall back.
         #[test]
         fn a_helper_that_prints_prose_is_not_a_worker() {
             let error = parse_reply("=== Testing Native Rust LaMa Cleaner ===\n").unwrap_err();
-            assert!(error.contains("not JSON"), "{error}");
-            assert!(error.contains("=== Testing"), "the first line is quoted: {error}");
+            assert!(matches!(error, ResidentError::Unavailable(ref msg) if msg.contains("not JSON") && msg.contains("=== Testing")), "{error:?}");
         }
 
         /// A helper that cannot start is an error the caller turns into the one-shot run.
         #[test]
         fn a_missing_helper_cannot_start() {
             let error = apply(Path::new("no-such-lama-helper"), Path::new("m.onnx"), Path::new("a"), Path::new("b"), Path::new("c")).unwrap_err();
-            assert!(error.contains("could not start"), "{error}");
+            assert!(matches!(error, ResidentError::Unavailable(ref msg) if msg.contains("could not start")), "{error:?}");
         }
     }
 }
@@ -464,9 +496,16 @@ fn execute_lama(w: usize, h: usize, ch: usize, fmt: &PixelFormat, img_data: &[f3
     std::fs::write(&mask_p, mask_png).map_err(|e| EngineError::Other(e.to_string()))?;
 
     // The resident helper keeps the model loaded between strokes. A helper that cannot serve (an
-    // older build) or a resident process that died falls back to the ordinary single run.
-    if resident::apply(&tool.exe, &tool.model, &in_p, &mask_p, &out_p).is_err() {
-        run_helper_once(&tool.exe, &tool.model, &in_p, &mask_p, &out_p)?;
+    // older build) or a resident process that could not be restarted falls back to the ordinary
+    // single run; a structured error from a healthy resident worker is reported directly.
+    match resident::apply(&tool.exe, &tool.model, &in_p, &mask_p, &out_p) {
+        Ok(_) => {}
+        Err(resident::ResidentError::Failed(msg)) => {
+            return Err(EngineError::Other(format!("LaMa inpainting failed: {msg}")));
+        }
+        Err(resident::ResidentError::Unavailable(_)) => {
+            run_helper_once(&tool.exe, &tool.model, &in_p, &mask_p, &out_p)?;
+        }
     }
 
     let out_bytes = std::fs::read(&out_p).map_err(|e| EngineError::Other(e.to_string()))?;

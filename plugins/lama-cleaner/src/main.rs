@@ -15,12 +15,12 @@
 //! loudly, because the engine treats a helper that answers something other than JSON as one that
 //! cannot serve and falls back to a single run.
 
+use image::{GrayImage, Rgb, RgbImage, open};
+use lama_cleaner::LamaModel;
+use serde::Deserialize;
 use std::io::{BufRead, BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-use image::{open, GrayImage, Rgb, RgbImage};
-use lama_cleaner::LamaModel;
-use serde::Deserialize;
 
 const USAGE: &str = "\
 Native Rust LaMa Inpaint Cleaner
@@ -32,8 +32,13 @@ Usage:
 /// One request line in `--serve` mode.
 #[derive(Deserialize)]
 struct Request {
+    #[serde(default)]
+    warmup: bool,
+    #[serde(default)]
     image: String,
+    #[serde(default)]
     mask: String,
+    #[serde(default)]
     output: String,
 }
 
@@ -117,11 +122,7 @@ fn load(model: &Path) -> Result<LamaModel, String> {
     for note in lama.notes() {
         eprintln!("lama-cleaner: {note}");
     }
-    eprintln!(
-        "lama-cleaner: {} provider, model loaded in {:.2?}",
-        lama.provider().name(),
-        started.elapsed()
-    );
+    eprintln!("lama-cleaner: {} provider, model loaded in {:.2?}", lama.provider().name(), started.elapsed());
     Ok(lama)
 }
 
@@ -141,23 +142,23 @@ fn run_one(lama: &LamaModel, image: &str, mask: &str, output: &str) -> Result<f6
     Ok(seconds)
 }
 
+/// Warm up the session with a single 512x512 pass so cuDNN initializes its kernels once.
+fn warmup_once(lama: &LamaModel) -> Result<f64, String> {
+    let image = RgbImage::new(512, 512);
+    let mask = GrayImage::new(512, 512);
+    let started = Instant::now();
+    lama.inpaint_512(&image, &mask).map_err(|e| e.to_string())?;
+    Ok(started.elapsed().as_secs_f64())
+}
+
 /// The resident loop: one JSON request per line in, one JSON reply per line out.
+///
+/// No background warm-up thread is spawned blindly here: when the engine starts `--serve` on a
+/// stroke, the first line on stdin is already waiting, and a background thread would grab the
+/// session lock while `run_one` decodes the PNGs and force the first stroke to run `inpaint_512`
+/// twice. Callers that pre-launch the worker while idle can send `{"warmup": true}` explicitly.
 fn serve(model: &Path) -> Result<(), String> {
-    let lama = std::sync::Arc::new(load(model)?);
-    // The first CUDA inference pays for cuDNN's kernel setup (about five seconds). Run it now, in
-    // the background, so a stroke drawn a few seconds later already gets the fast path.
-    {
-        let warm = std::sync::Arc::clone(&lama);
-        std::thread::spawn(move || {
-            let image = RgbImage::new(512, 512);
-            let mask = GrayImage::new(512, 512);
-            let started = Instant::now();
-            match warm.inpaint_512(&image, &mask) {
-                Ok(_) => eprintln!("lama-cleaner: warm-up done in {:.2?}", started.elapsed()),
-                Err(e) => eprintln!("lama-cleaner: warm-up failed: {e}"),
-            }
-        });
-    }
+    let lama = load(model)?;
     let stdin = std::io::stdin();
     let mut out = BufWriter::new(std::io::stdout());
     for line in stdin.lock().lines() {
@@ -167,15 +168,24 @@ fn serve(model: &Path) -> Result<(), String> {
             continue;
         }
         let reply = match serde_json::from_str::<Request>(line) {
-            Ok(request) => match run_one(&lama, &request.image, &request.mask, &request.output) {
-                Ok(seconds) => serde_json::json!({
-                    "ok": true,
-                    "infer_ms": seconds * 1000.0,
-                    "provider": lama.provider().name(),
-                })
-                .to_string(),
-                Err(error) => serde_json::json!({ "ok": false, "error": error }).to_string(),
-            },
+            Ok(request) => {
+                let outcome = if request.warmup {
+                    warmup_once(&lama)
+                } else if request.image.is_empty() || request.mask.is_empty() || request.output.is_empty() {
+                    Err("missing image, mask or output path".into())
+                } else {
+                    run_one(&lama, &request.image, &request.mask, &request.output)
+                };
+                match outcome {
+                    Ok(seconds) => serde_json::json!({
+                        "ok": true,
+                        "infer_ms": seconds * 1000.0,
+                        "provider": lama.provider().name(),
+                    })
+                    .to_string(),
+                    Err(error) => serde_json::json!({ "ok": false, "error": error }).to_string(),
+                }
+            }
             Err(e) => serde_json::json!({ "ok": false, "error": format!("bad request: {e}") }).to_string(),
         };
         writeln!(out, "{reply}").map_err(|e| format!("stdout: {e}"))?;
@@ -185,12 +195,7 @@ fn serve(model: &Path) -> Result<(), String> {
 }
 
 fn one_shot(lama: &LamaModel, image: &Path, mask: &Path, output: &Path) -> Result<(), String> {
-    let seconds = run_one(
-        lama,
-        &image.to_string_lossy(),
-        &mask.to_string_lossy(),
-        &output.to_string_lossy(),
-    )?;
+    let seconds = run_one(lama, &image.to_string_lossy(), &mask.to_string_lossy(), &output.to_string_lossy())?;
     println!(
         "SUCCESS: Inpainted image saved to {} (Inference: {:.2?}, Provider: {})",
         output.display(),
@@ -286,10 +291,7 @@ mod tests {
     #[test]
     fn the_single_shot_form_takes_all_three_paths() {
         let parsed = parse_args(&args(&["-i", "in.png", "-m", "mask.png", "-o", "out.png", "--model", "m.onnx"])).unwrap();
-        assert_eq!(
-            parsed.mode,
-            Mode::OneShot { image: "in.png".into(), mask: "mask.png".into(), output: "out.png".into() }
-        );
+        assert_eq!(parsed.mode, Mode::OneShot { image: "in.png".into(), mask: "mask.png".into(), output: "out.png".into() });
         assert_eq!(parsed.model, Some(PathBuf::from("m.onnx")));
     }
 
@@ -319,4 +321,3 @@ mod tests {
         assert!(error.contains("together"), "{error}");
     }
 }
-
