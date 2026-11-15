@@ -807,6 +807,31 @@ fn cutting_with_a_copy_float_clears_the_source() {
 }
 
 #[test]
+/// Cutting a copy-created float from a non-Background layer lifts coverage so partial alpha
+/// leaves no residual alpha in the source, matching the cut-created path.
+fn cutting_copy_created_float_lifts_coverage_without_residual_alpha() {
+    let (mut s, paint) = two_docs(40, 30, 8);
+    s.edit("set half alpha", |doc, _| {
+        doc.layer_mut(paint).unwrap().surface_mut().unwrap().fill_rect(
+            photocraft_geom::Rect::new(4, 6, 14, 16),
+            &[1.0, 0.0, 0.0, 0.5],
+        );
+        Ok(())
+    })
+    .unwrap();
+    s.execute("select.rect", json!({"x": 4, "y": 6, "width": 5, "height": 10})).unwrap();
+    s.execute("select.float", json!({"dx": 2, "dy": 0, "copy": true})).unwrap();
+
+    let r = s.execute("layer.copyToDocument", json!({"document": 1, "selection": true, "cut": true})).unwrap();
+    let id = copied(&r);
+    let mut px = [0.0f32; 4];
+    doc(&s, 1).layer(id).unwrap().surface().unwrap().read_pixel(7, 8, &mut px);
+    assert!((px[3] - 0.5).abs() < 0.01, "destination has the piece alpha: {px:?}");
+    doc(&s, 0).layer(paint).unwrap().surface().unwrap().read_pixel(7, 8, &mut px);
+    assert_eq!(px[3], 0.0, "source has 0 residual alpha after lifting coverage: {px:?}");
+}
+
+#[test]
 /// A floating piece must match the requested target: a floating pixel selection cannot stand in
 /// for mask content, and a floating layer mask cannot be copied as pixels.
 fn a_floating_piece_must_match_the_requested_target() {
@@ -833,6 +858,30 @@ fn a_floating_piece_must_match_the_requested_target() {
     assert!(err.to_string().contains("a floating layer mask"), "{err}");
     assert_eq!(*doc(&s, 0), before);
     assert_eq!(doc(&s, 1).layers.len(), 1);
+}
+
+#[test]
+/// Cutting a selection from another layer while a layer has a floating selection is rejected,
+/// so it cannot discard or corrupt the floating move.
+fn cutting_another_layer_while_floating_selection_exists_is_rejected() {
+    let (mut s, paint) = two_docs(40, 30, 8);
+    let _other = LayerId(s.execute("layer.new.layer", json!({"name": "other"})).unwrap()["layer"].as_u64().unwrap());
+    s.execute("select.rect", json!({"x": 4, "y": 6, "width": 5, "height": 10})).unwrap();
+    s.execute("edit.fill", json!({"color": "#0000ff"})).unwrap();
+    s.execute("select.float", json!({"dx": 2, "dy": 0})).unwrap();
+    assert!(s.documents()[0].floating.is_some());
+
+    let before = doc(&s, 0).clone();
+    let err = s.execute("layer.copyToDocument", json!({
+        "document": 1,
+        "layers": [paint.0],
+        "selection": true,
+        "cut": true,
+    })).unwrap_err();
+    assert!(err.to_string().contains("floating selection"), "{err}");
+    assert_eq!(*doc(&s, 0), before, "source document and selection remain untouched");
+    assert!(s.documents()[0].floating.is_some(), "floating selection remains intact");
+    assert_eq!(doc(&s, 1).layers.len(), 1, "destination remains untouched");
 }
 
 #[test]

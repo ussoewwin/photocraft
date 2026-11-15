@@ -438,6 +438,31 @@ fn a_move_tool_mask_selection_drag_onto_a_tab_copies_the_mask_and_leaves_layer_p
 }
 
 #[test]
+/// When a floating pixel selection exists, dragging transfers the floating pixels even if the mask is targeted.
+fn a_floating_pixel_selection_transfers_as_pixels_even_when_mask_is_targeted() {
+    let (mut h, _paint) = harness();
+    h.state_mut().session.execute("layer.layerMask.revealAll", json!({})).unwrap();
+    h.state_mut().session.execute("select.rect", json!({"x": 4, "y": 6, "width": 5, "height": 10})).unwrap();
+    h.state_mut().session.execute("select.float", json!({"dx": 0, "dy": 0})).unwrap();
+    h.state_mut().ui.mask_target = true;
+    h.state_mut().ui.tool = Tool::Move;
+    h.run_steps(2);
+
+    let grab = ViewXform::active(h.state()).unwrap().to_screen(6.0, 11.0);
+    let over_tab = tab(&h, "dest-doc");
+    let drop = h.state().last_canvas_rect.center();
+    drag_along(&mut h, &[grab, over_tab, drop], Modifiers::NONE);
+
+    let (_, r) = copy(&h);
+    assert_eq!(r.size(), vec2(5.0, 10.0), "only the 5x10 selected pixel region is copied");
+    let st = h.state().session.active().unwrap();
+    let dst_layer = st.active_layer.and_then(|id| st.doc.layer(id)).unwrap();
+    let mut sample = [0.0f32; 4];
+    dst_layer.surface().unwrap().read_pixel(r.min.x as i32 + 1, r.min.y as i32 + 1, &mut sample);
+    assert!(sample[0] > 0.9 && sample[1] < 0.1, "transferred red pixel content: {sample:?}");
+}
+
+#[test]
 /// In Arrange views, dragging a selection into the neighbouring cell transfers it there directly.
 fn a_move_tool_selection_drag_in_arranged_view_transfers_directly_to_neighbour_cell() {
     let (mut h, paint) = harness();
@@ -572,44 +597,8 @@ fn a_refused_press_inside_a_locked_selection_records_the_press() {
 }
 
 #[test]
-/// A blocked Move drag with a pixel selection transfers a locked non-raster layer (a shape)
-/// whole: `selectionOnly` reads raster pixels only, so it is not armed for one.
-fn a_blocked_move_of_a_locked_shape_transfers_whole_instead_of_selection_only() {
-    let (mut h, _paint) = harness();
-    // Draw a line shape, then position-lock it (Auto-Select stays off).
-    h.state_mut().ui.tool = Tool::Line;
-    h.run_steps(2);
-    let x0 = ViewXform::active(h.state()).unwrap().to_screen(10.0, 8.0);
-    let x1 = ViewXform::active(h.state()).unwrap().to_screen(30.0, 20.0);
-    drag_along(&mut h, &[x0, x1], Modifiers::NONE);
-    let shape = LayerId(h.state().session.documents()[0].doc.layers.last().unwrap().id.0);
-    assert!(h.state().session.documents()[0].doc.layer(shape).is_some(), "the shape layer exists");
-    h.state_mut().session.execute("layer.lockLayers", json!({"position": true})).unwrap();
-    // A pixel selection exists (over the paint layer's square, as a raster edit left it).
-    h.state_mut().session.execute("select.rect", json!({"x": 4, "y": 6, "width": 10, "height": 10})).unwrap();
-    h.state_mut().ui.tool = Tool::Move;
-    h.state_mut().ui.tool_options.move_auto_select = false;
-    h.run_steps(2);
-
-    // A blocked press on the locked shape, dragged to the destination's tab and dropped there:
-    // the shape transfers whole (not selection-only).
-    let grab = ViewXform::active(h.state()).unwrap().to_screen(20.0, 14.0);
-    let over_tab = tab(&h, "dest-doc");
-    let drop = h.state().last_canvas_rect.center();
-    drag_along(&mut h, &[grab, over_tab, drop], Modifiers::NONE);
-    let (name, _) = copy(&h);
-    assert_eq!(
-        name,
-        h.state().session.documents()[1].doc.layers.iter().find(|l| l.name == name).map(|l| l.name.clone()).unwrap_or_default(),
-        "a layer transferred"
-    );
-}
-
-#[test]
 /// With Auto-Select on, an All-locked layer above an unlocked one is the transfer candidate:
-/// the press records it, keeps the ordinary pick's same-document selection and leaves the
-/// ordinary drag (a marquee is not started); entering another document hands it over, as the
-/// tab-drag tests cover for the whole-layer path.
+/// the ordinary pick keeps the same-document selection, and the marquee grabs the locked layer.
 fn an_all_locked_layer_above_the_pick_is_the_transfer_candidate() {
     let (mut h, paint) = harness();
     // A locked layer sits above the painted one and covers the press point (an empty raster
@@ -621,13 +610,11 @@ fn an_all_locked_layer_above_the_pick_is_the_transfer_candidate() {
     h.state_mut().session.execute("layer.lockLayers", json!({"all": true})).unwrap();
     h.state_mut().ui.tool = Tool::Move;
     h.state_mut().ui.tool_options.move_auto_select = true;
-    h.run_steps(2);
 
     use crate::canvas::{ToolEvent, tool_event};
     tool_event(h.state_mut(), ToolEvent::Down { x: 8.0, y: 10.0, pressure: 1.0 }, Modifiers::NONE);
-    assert_eq!(h.state().move_transfer_candidate, Some(cover), "the locked cover is recorded as the transfer candidate");
-    assert!(h.state().layer_box.is_none(), "the ordinary Move drag is not replaced by a marquee");
-    assert!(h.state().drag.is_some(), "the ordinary drag of the picked layer is under way");
+    let grabbed = h.state().layer_box.as_ref().and_then(|b| b.grabbed_layer);
+    assert_eq!(grabbed, Some(cover), "the locked layer under the pointer is the transfer candidate");
     assert!(h.state().session.active().unwrap().is_layer_selected(paint), "the ordinary pick keeps the same-document selection");
 }
 

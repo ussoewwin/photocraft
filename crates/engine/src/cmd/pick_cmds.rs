@@ -99,7 +99,9 @@ pub fn move_auto_select_target(doc: &Document, x: i32, y: i32, group: bool) -> O
 /// Choose the topmost hit eligible for selection before resolving its group. An effective Lock
 /// All excludes a layer from selection here. Move Auto-Select also skips effective Position locks.
 /// `include_locked` names a layer with an effective Lock All as well, in either Auto-Select mode,
-/// so a probe can report it as a transfer candidate; such a layer is never selected.
+/// so a probe can report it as a transfer candidate; such a layer is never selected. A layer with
+/// an effective Position lock is named the same way: this probe skips those layers, so the group
+/// around one is not the target either.
 fn pick_target(doc: &Document, x: i32, y: i32, group: bool, move_auto_select: bool, include_locked: bool) -> Option<LayerId> {
     let hit = layers_hit(doc, x, y, true).into_iter().find(|id| {
         let locks = doc.effective_locks(*id);
