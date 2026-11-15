@@ -8,10 +8,10 @@
 //!
 //! The MLP activation is ReLU (`comfy/ldm/sam3/sam.py:24`), not GELU: only the ViTDet FFN uses GELU.
 
-use candle_core::{DType, Device, Result, Tensor, D};
+use candle_core::{D, DType, Device, Result, Tensor};
 
 use crate::loader::{LoadError, Pack};
-use crate::nn::{Conv2d, LayerNorm, Linear, interpolate_bilinear, multi_head_attention};
+use crate::nn::{Conv2d, LayerNorm, Linear, interpolate_nearest, multi_head_attention};
 
 const D_MODEL: usize = 256;
 const HEADS: usize = 8;
@@ -449,7 +449,14 @@ impl Detector {
         }
         if limit == 0 {
             // Layer 0 comparison needs the pre-encoder states.
-            return Ok(Detection { boxes: img_flat.clone(), scores: prompt_mask_f.clone(), masks: img_flat.clone(), queries: img_flat, memory: memory.clone(), prompt: prompt.clone() });
+            return Ok(Detection {
+                boxes: img_flat.clone(),
+                scores: prompt_mask_f.clone(),
+                masks: img_flat.clone(),
+                queries: img_flat,
+                memory: memory.clone(),
+                prompt: prompt.clone(),
+            });
         }
 
         // Decoder.
@@ -607,7 +614,7 @@ impl Detector {
         for (index, stage) in self.pixel_stages.iter().take(levels.len() - 1).enumerate() {
             let level = &levels[levels.len() - 2 - index];
             let (_, _, lh, lw) = level.dims4()?;
-            let upsampled = interpolate_bilinear(&prev, lh, lw)?;
+            let upsampled = interpolate_nearest(&prev, lh, lw)?;
             let summed = (level + upsampled)?;
             let convolved = stage.conv.forward(&summed)?;
             let normed = group_norm(&convolved, stage.norm_weight.as_ref(), stage.norm_bias.as_ref(), 8, EPS)?;

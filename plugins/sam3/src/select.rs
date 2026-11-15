@@ -68,9 +68,9 @@ pub fn refine_mask(
     }
     let mut mask_logit = coarse.narrow(0, my1, my2 - my1)?.narrow(1, mx1, mx2 - mx1)?.unsqueeze(0)?.unsqueeze(0)?;
 
+    let features = backbone.forward(&crop_frame)?;
     for _ in 0..iterations {
         let coarse_input = interpolate_bilinear(&mask_logit, SIZE, SIZE)?;
-        let features = backbone.forward(&crop_frame)?;
         let result = segmenter.segment_mask(&features.interactive_convs, &coarse_input)?;
         mask_logit = result.mask;
     }
@@ -105,11 +105,7 @@ fn place_crop(crop: &Tensor, h: usize, w: usize, top: usize, left: usize) -> Res
     if h > top + crop_h {
         parts.push(Tensor::zeros((h - top - crop_h, w), dtype, crop.device())?);
     }
-    if parts.len() == 1 {
-        Ok(parts.remove(0))
-    } else {
-        Tensor::cat(&parts, 0)
-    }
+    if parts.len() == 1 { Ok(parts.remove(0)) } else { Tensor::cat(&parts, 0) }
 }
 
 /// `individual_masks = false`: `(combined > 0).any(dim=0)` (`nodes_sam3.py:244`).

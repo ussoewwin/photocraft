@@ -124,17 +124,12 @@ impl VitBlock {
         } else {
             // 72 = 3 * 24, so the window partition needs no padding for SAM 3.1's geometry.
             if h % WINDOW != 0 || w % WINDOW != 0 {
-                return Err(candle_core::Error::Msg(format!(
-                    "windowed attention expects a multiple of {WINDOW}, got {h}x{w}"
-                )));
+                return Err(candle_core::Error::Msg(format!("windowed attention expects a multiple of {WINDOW}, got {h}x{w}")));
             }
             let gh = h / WINDOW;
             let gw = w / WINDOW;
-            let windows = normed
-                .reshape((b, gh, WINDOW, gw, WINDOW, c))?
-                .permute((0, 1, 3, 2, 4, 5))?
-                .contiguous()?
-                .reshape((b * gh * gw, WINDOW * WINDOW, c))?;
+            let windows =
+                normed.reshape((b, gh, WINDOW, gw, WINDOW, c))?.permute((0, 1, 3, 2, 4, 5))?.contiguous()?.reshape((b * gh * gw, WINDOW * WINDOW, c))?;
             let attended = self.attend(&windows, rope)?;
             let back = attended.reshape((b, gh, gw, WINDOW, WINDOW, c))?.permute((0, 1, 3, 2, 4, 5))?.contiguous()?;
             back.reshape((b, h, w, c))?
@@ -234,6 +229,7 @@ pub struct VisionBackbone {
 }
 
 /// Trunk features plus the two FPN pyramids.
+#[derive(Clone)]
 pub struct BackboneOutput {
     /// `[1, 1024, 72, 72]`, the raw trunk output.
     pub trunk: Tensor,
@@ -331,7 +327,6 @@ impl VisionBackbone {
         tiled.permute((0, 2, 3, 1))?.contiguous()?.reshape((1, hp * wp, dim))
     }
 }
-
 
 #[cfg(test)]
 mod tests {

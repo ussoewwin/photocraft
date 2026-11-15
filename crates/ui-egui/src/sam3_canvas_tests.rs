@@ -7,7 +7,7 @@ use egui_kittest::Harness;
 use serde_json::json;
 
 use crate::PhotocraftApp;
-use crate::canvas::{ViewXform, tool_feedback::Badge};
+use crate::canvas::ViewXform;
 use crate::state::Tool;
 
 fn harness(app: PhotocraftApp) -> Harness<'static, PhotocraftApp> {
@@ -83,13 +83,7 @@ fn mods(h: &mut Harness<'static, PhotocraftApp>, m: Modifiers) {
 
 /// A press at `(x, y)` with `m`, a move to `to` and the release. `release_with` changes the
 /// modifiers between the press and the release, as a user letting Shift go before the button.
-fn press_move_release(
-    h: &mut Harness<'static, PhotocraftApp>,
-    press: (f32, f32),
-    to: (f32, f32),
-    m: Modifiers,
-    release_with: Option<Modifiers>,
-) {
+fn press_move_release(h: &mut Harness<'static, PhotocraftApp>, press: (f32, f32), to: (f32, f32), m: Modifiers, release_with: Option<Modifiers>) {
     let from = screen(h, press.0, press.1);
     let end = screen(h, to.0, to.1);
     mods(h, m);
@@ -102,12 +96,7 @@ fn press_move_release(
     }
     h.event(egui::Event::PointerMoved(end));
     h.run_steps(1);
-    h.event(egui::Event::PointerButton {
-        pos: end,
-        button: PointerButton::Primary,
-        pressed: false,
-        modifiers: release_with.unwrap_or(m),
-    });
+    h.event(egui::Event::PointerButton { pos: end, button: PointerButton::Primary, pressed: false, modifiers: release_with.unwrap_or(m) });
     h.run_steps(2);
 }
 

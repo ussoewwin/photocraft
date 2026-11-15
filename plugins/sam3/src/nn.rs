@@ -4,7 +4,7 @@
 //! small helpers the reference implementation composes. The weights come from [`crate::loader::Pack`]
 //! by logical name, so the ConvRot dequantisation and the key remaps stay in one place.
 
-use candle_core::{DType, Device, Result, Tensor, D};
+use candle_core::{D, DType, Device, Result, Tensor};
 use candle_nn::ops::softmax_last_dim;
 
 use crate::loader::{LoadError, Pack};
@@ -241,14 +241,17 @@ pub fn interpolate_bilinear(x: &Tensor, out_h: usize, out_w: usize) -> Result<Te
     out.to_dtype(x.dtype())
 }
 
+/// 2D nearest-neighbour resize (`F.interpolate(..., mode="nearest")`).
+pub fn interpolate_nearest(x: &Tensor, out_h: usize, out_w: usize) -> Result<Tensor> {
+    let (_, _, in_h, in_w) = x.dims4()?;
+    if in_h == out_h && in_w == out_w {
+        return Ok(x.clone());
+    }
+    x.upsample_nearest2d(out_h, out_w)
+}
+
 /// Multi-head attention over `[B, N, C]` with an optional additive mask.
-pub fn multi_head_attention(
-    q: &Tensor,
-    k: &Tensor,
-    v: &Tensor,
-    heads: usize,
-    mask: Option<&Tensor>,
-) -> Result<Tensor> {
+pub fn multi_head_attention(q: &Tensor, k: &Tensor, v: &Tensor, heads: usize, mask: Option<&Tensor>) -> Result<Tensor> {
     let (batch, n_q, dim) = q.dims3()?;
     let n_k = k.dim(1)?;
     let head_dim = dim / heads;
@@ -326,14 +329,22 @@ mod tests {
     }
 
     #[test]
+    fn interpolate_nearest_replicates_each_cell() {
+        let x = Tensor::from_vec(vec![1.0f32, 2.0, 3.0, 4.0], (1, 1, 2, 2), &Device::Cpu).expect("tensor");
+        let out = interpolate_nearest(&x, 4, 4).expect("nearest");
+        assert_eq!(out.dims(), &[1, 1, 4, 4]);
+        let values = out.flatten_all().expect("flat").to_vec1::<f32>().expect("values");
+        assert_eq!(values, vec![1.0, 1.0, 2.0, 2.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0, 3.0, 3.0, 4.0, 4.0,]);
+    }
+
+    #[test]
     fn antialias_weights_match_pytorch() {
         // Measured with `F.interpolate(torch.eye(8)[p].view(1,1,1,8), size=(1,3),
         // mode="bilinear", align_corners=False, antialias=True)` for p in 0..8.
         let w = antialias_weights(8, 3);
         let expected = [
-            0.289474, 0.394737, 0.236842, 0.078947, 0.0, 0.0, 0.0, 0.0,
-            0.0, 0.023810, 0.166667, 0.309524, 0.309524, 0.166667, 0.023810, 0.0,
-            0.0, 0.0, 0.0, 0.0, 0.078947, 0.236842, 0.394737, 0.289474,
+            0.289474, 0.394737, 0.236842, 0.078947, 0.0, 0.0, 0.0, 0.0, 0.0, 0.023810, 0.166667, 0.309524, 0.309524, 0.166667, 0.023810, 0.0, 0.0, 0.0, 0.0,
+            0.0, 0.078947, 0.236842, 0.394737, 0.289474,
         ];
         for (index, want) in expected.iter().enumerate() {
             assert!((w[index] - want).abs() < 1e-5, "w[{index}] = {}, expected {want}", w[index]);

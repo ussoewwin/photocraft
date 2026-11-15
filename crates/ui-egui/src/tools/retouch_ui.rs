@@ -699,12 +699,13 @@ pub fn sam3_select_params(app: &PhotocraftApp, start: [f64; 2], end: [f64; 2], m
     } else {
         json!({"box": [x.round(), y.round(), w.round(), h.round()]})
     };
-    let map = params.as_object_mut().expect("an object");
-    map.insert("mode".into(), json!(mode));
-    map.insert("sampleAllLayers".into(), json!(o.sample_all.sam3_select));
-    map.insert("threshold".into(), json!(o.sam3_threshold));
-    map.insert("refine".into(), json!(o.sam3_refine));
-    map.insert("individual".into(), json!(o.sam3_individual));
+    if let Some(map) = params.as_object_mut() {
+        map.insert("mode".into(), json!(mode));
+        map.insert("sampleAllLayers".into(), json!(o.sample_all.sam3_select));
+        map.insert("threshold".into(), json!(o.sam3_threshold));
+        map.insert("refine".into(), json!(o.sam3_refine));
+        map.insert("individual".into(), json!(o.sam3_individual));
+    }
     params
 }
 
@@ -956,7 +957,8 @@ fn clone_sample_dropdown(ui: &mut egui::Ui, stored: &mut String, indexed: bool) 
 
 /// Options bar for the retouching and smart-selection tools. Returns false for other tools.
 pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui, tool: Tool) -> bool {
-    if !tool.is_brushlike() && !matches!(tool, Tool::QuickSelection | Tool::ObjectSelection | Tool::Sam3Select | Tool::Patch | Tool::ContentAwareMove | Tool::RedEye)
+    if !tool.is_brushlike()
+        && !matches!(tool, Tool::QuickSelection | Tool::ObjectSelection | Tool::Sam3Select | Tool::Patch | Tool::ContentAwareMove | Tool::RedEye)
         || matches!(tool, Tool::Brush | Tool::Pencil | Tool::MixerBrush | Tool::Eraser)
     {
         return false;
@@ -1241,43 +1243,7 @@ pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui, tool: Tool) -> bo
             }
         }
         Tool::Sam3Select => {
-            crate::panels::selection_mode_buttons(&mut app.ui.selection_mode, ui);
-            crate::widgets::vline(ui, 22.0);
-            crate::widgets::checkbox(ui, &mut o.sample_all.sam3_select, tl!("Sample All Layers"));
-            crate::widgets::vline(ui, 22.0);
-            opt(ui, tl!("Prompt"));
-            let id = ui.scope_id().with("sam3-prompt");
-            crate::widgets::text_field(ui, id, &mut o.sam3_prompt, tl!("e.g. face"), 150.0, false)
-                .accessible_name(tl!("SAM 3.1 prompt"));
-            opt(ui, tl!("Threshold"));
-            crate::widgets::value_field_named(ui, tl!("Threshold"), &mut o.sam3_threshold, 0.0..=1.0, "", 46.0);
-            opt(ui, tl!("Refine"));
-            let mut refine = o.sam3_refine as f32;
-            if crate::widgets::value_field_named(ui, tl!("Refine"), &mut refine, 0.0..=5.0, "", 42.0).changed() {
-                o.sam3_refine = refine.round().clamp(0.0, 5.0) as u8;
-            }
-            crate::widgets::checkbox(ui, &mut o.sam3_individual, tl!("Individual Masks"));
-            crate::widgets::vline(ui, 22.0);
-            let can_detect = !o.sam3_prompt.trim().is_empty();
-            if crate::widgets::secondary_button(ui, tl!("Detect"), 0.0).clicked() && can_detect {
-                let prompt = o.sam3_prompt.clone();
-                let threshold = o.sam3_threshold;
-                let refine = o.sam3_refine;
-                let individual = o.sam3_individual;
-                let sample_all = o.sample_all.sam3_select;
-                let mode = crate::tool_feedback::selection_mode(Tool::Sam3Select, app.ui.selection_mode, egui::Modifiers::NONE);
-                let params = json!({
-                    "prompt": prompt,
-                    "threshold": threshold,
-                    "refine": refine,
-                    "individual": individual,
-                    "sampleAllLayers": sample_all,
-                    "mode": mode,
-                });
-                let r = app.run("select.sam3", params);
-                report_smart_result(app, r, tl!("Nothing matched the prompt"));
-            }
-            opt(ui, tl!("or click, or drag a box"));
+            sam3_select_options_bar(app, ui);
         }
         Tool::RedEye => {
             opt(ui, tl!("Pupil Size"));
@@ -1350,3 +1316,43 @@ mod clone_stamp_no_source_alert_tests;
 #[cfg(test)]
 #[path = "remove_options_bar_labels_tests.rs"]
 mod remove_options_bar_labels_tests;
+
+fn sam3_select_options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
+    let o = &mut app.ui.tool_options;
+    crate::panels::selection_mode_buttons(&mut app.ui.selection_mode, ui);
+    crate::widgets::vline(ui, 22.0);
+    crate::widgets::checkbox(ui, &mut o.sample_all.sam3_select, tl!("Sample All Layers"));
+    crate::widgets::vline(ui, 22.0);
+    opt(ui, tl!("Prompt"));
+    let id = ui.scope_id().with("sam3-prompt");
+    crate::widgets::text_field(ui, id, &mut o.sam3_prompt, tl!("e.g. face"), 150.0, false).accessible_name(tl!("SAM 3.1 prompt"));
+    opt(ui, tl!("Threshold"));
+    crate::widgets::value_field_named(ui, tl!("Threshold"), &mut o.sam3_threshold, 0.0..=1.0, "", 46.0);
+    opt(ui, tl!("Refine"));
+    let mut refine = o.sam3_refine as f32;
+    if crate::widgets::value_field_named(ui, tl!("Refine"), &mut refine, 0.0..=5.0, "", 42.0).changed() {
+        o.sam3_refine = refine.round().clamp(0.0, 5.0) as u8;
+    }
+    crate::widgets::checkbox(ui, &mut o.sam3_individual, tl!("Individual Masks"));
+    crate::widgets::vline(ui, 22.0);
+    let can_detect = !o.sam3_prompt.trim().is_empty();
+    if crate::widgets::secondary_button(ui, tl!("Detect"), 0.0).clicked() && can_detect {
+        let prompt = o.sam3_prompt.clone();
+        let threshold = o.sam3_threshold;
+        let refine = o.sam3_refine;
+        let individual = o.sam3_individual;
+        let sample_all = o.sample_all.sam3_select;
+        let mode = crate::tool_feedback::selection_mode(Tool::Sam3Select, app.ui.selection_mode, egui::Modifiers::NONE);
+        let params = json!({
+            "prompt": prompt,
+            "threshold": threshold,
+            "refine": refine,
+            "individual": individual,
+            "sampleAllLayers": sample_all,
+            "mode": mode,
+        });
+        let r = app.run("select.sam3", params);
+        report_smart_result(app, r, tl!("Nothing matched the prompt"));
+    }
+    opt(ui, tl!("or click, or drag a box"));
+}

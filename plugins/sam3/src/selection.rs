@@ -8,13 +8,13 @@ use std::path::{Path, PathBuf};
 use candle_core::{DType, Device, Result, Tensor};
 
 use crate::clip::ClipTextEncoder;
-use crate::detector::{cxcywh_to_xyxy, Detector};
+use crate::detector::{Detector, cxcywh_to_xyxy};
 use crate::loader::Pack;
 use crate::nn::interpolate_bilinear;
 use crate::select::{refine_mask, union_masks};
 use crate::tokenizer::ClipBpe;
 use crate::tracker::Segmenter;
-use crate::vitdet::VisionBackbone;
+use crate::vitdet::{BackboneOutput, VisionBackbone};
 
 /// The node defaults (`nodes_sam3.py:105-107`).
 pub const DEFAULT_THRESHOLD: f32 = 0.5;
@@ -28,6 +28,7 @@ pub struct SelectionStack {
     pub clip: ClipTextEncoder,
     pub bpe: ClipBpe,
     pub device: Device,
+    cached_backbone: Option<(u64, BackboneOutput)>,
 }
 
 impl SelectionStack {
@@ -39,7 +40,25 @@ impl SelectionStack {
             clip: ClipTextEncoder::load(pack)?,
             bpe: ClipBpe::load(data_dir).map_err(|err| crate::loader::LoadError::Missing(format!("vocab/merges: {err:?}")))?,
             device: device.clone(),
+            cached_backbone: None,
         })
+    }
+
+    /// Returns the full-frame backbone features for `frame`, reusing the cached features when
+    /// `cache_key` matches the previous call.
+    pub fn backbone_features(&mut self, frame: &Tensor, cache_key: Option<u64>) -> Result<BackboneOutput> {
+        if let Some(key) = cache_key {
+            if let Some((cached_key, cached)) = &self.cached_backbone {
+                if *cached_key == key {
+                    return Ok(cached.clone());
+                }
+            }
+        }
+        let out = self.backbone.forward(frame)?;
+        if let Some(key) = cache_key {
+            self.cached_backbone = Some((key, out.clone()));
+        }
+        Ok(out)
     }
 }
 
@@ -62,14 +81,21 @@ impl Selection {
 
 /// The point/box path: one `forward_segment` call plus `refine_iterations - 1` mask re-feeds
 /// (`nodes_sam3.py:187-205`), then the mask is brought back to the original resolution.
-pub fn segment_prompt(
-    stack: &SelectionStack,
+pub fn segment_prompt(stack: &mut SelectionStack, frame: &Tensor, prompt: Prompt, refine_iterations: usize, image_hw: (usize, usize)) -> Result<Tensor> {
+    segment_prompt_cached(stack, frame, None, prompt, refine_iterations, image_hw)
+}
+
+/// Same as [`segment_prompt`], with an optional `cache_key` to reuse full-frame ViTDet features
+/// across repeated interactive clicks/boxes on the same document image.
+pub fn segment_prompt_cached(
+    stack: &mut SelectionStack,
     frame: &Tensor,
+    cache_key: Option<u64>,
     prompt: Prompt,
     refine_iterations: usize,
     image_hw: (usize, usize),
 ) -> Result<Tensor> {
-    let features = stack.backbone.forward(frame)?;
+    let features = stack.backbone_features(frame, cache_key)?;
     let interactive = &features.interactive_convs;
     let mut mask = match prompt {
         Prompt::Box(corners) => {
@@ -82,12 +108,10 @@ pub fn segment_prompt(
             stack.segmenter.segment_points(interactive, &coords, &labels)?.mask
         }
     };
-    // The backbone features belong to `frame`, so each re-feed only reruns the decoder - but the
-    // reference calls `forward_segment` again, which recomputes the interactive necks. Doing the
-    // same keeps the two paths identical.
+    // The backbone features depend only on `frame`; each refinement iteration re-feeds the new mask
+    // logits through the lightweight mask decoder against the same `interactive_convs`.
     for _ in 1..refine_iterations {
-        let features = stack.backbone.forward(frame)?;
-        mask = stack.segmenter.segment_mask(&features.interactive_convs, &mask)?.mask;
+        mask = stack.segmenter.segment_mask(interactive, &mask)?.mask;
     }
     let (h, w) = image_hw;
     let out = interpolate_bilinear(&mask, h, w)?.squeeze(0)?.squeeze(0)?;
@@ -113,7 +137,21 @@ pub fn detect_and_refine(
     refine_iterations: usize,
     image_hw: (usize, usize),
 ) -> Result<Selection> {
-    let features = stack.backbone.forward(frame)?;
+    detect_and_refine_cached(stack, frame, None, native, prompt, threshold, refine_iterations, image_hw)
+}
+
+/// Same as [`detect_and_refine`], with an optional `cache_key` to reuse full-frame ViTDet features.
+pub fn detect_and_refine_cached(
+    stack: &mut SelectionStack,
+    frame: &Tensor,
+    cache_key: Option<u64>,
+    native: &Tensor,
+    prompt: &str,
+    threshold: f32,
+    refine_iterations: usize,
+    image_hw: (usize, usize),
+) -> Result<Selection> {
+    let features = stack.backbone_features(frame, cache_key)?;
     let (h, w) = image_hw;
     let mut out = Selection { masks: Vec::new(), boxes: Vec::new(), scores: Vec::new() };
 
@@ -136,12 +174,7 @@ pub fn detect_and_refine(
 
         let coarse = interpolate_bilinear(&det.masks, h, w)?;
 
-        let mut ranked: Vec<(usize, f32)> = probs
-            .iter()
-            .enumerate()
-            .filter(|(_, score)| **score > threshold)
-            .map(|(index, score)| (index, *score))
-            .collect();
+        let mut ranked: Vec<(usize, f32)> = probs.iter().enumerate().filter(|(_, score)| **score > threshold).map(|(index, score)| (index, *score)).collect();
         ranked.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
         ranked.truncate(category.max_detections.max(1));
 
@@ -199,11 +232,8 @@ pub fn refine_from_dump(
         boxes_px.push([b[0] * w as f32, b[1] * h as f32, b[2] * w as f32, b[3] * h as f32]);
     }
 
-    let mask_file = entries
-        .iter()
-        .find(|entry| entry["name"] == "masks")
-        .and_then(|entry| entry["file"].as_str())
-        .ok_or("detector dump mask entry has no file")?;
+    let mask_file =
+        entries.iter().find(|entry| entry["name"] == "masks").and_then(|entry| entry["file"].as_str()).ok_or("detector dump mask entry has no file")?;
     let mask_path: PathBuf = dump.parent().unwrap_or(Path::new(".")).join(mask_file);
     let raw = std::fs::read(&mask_path)?;
     let mask_shape = masks_entry.2.clone();
@@ -216,12 +246,7 @@ pub fn refine_from_dump(
     for value in &scores_raw {
         probs.push(1.0 / (1.0 + (-value).exp()));
     }
-    let mut ranked: Vec<(usize, f32)> = probs
-        .iter()
-        .enumerate()
-        .filter(|(_, score)| **score > threshold)
-        .map(|(index, score)| (index, *score))
-        .collect();
+    let mut ranked: Vec<(usize, f32)> = probs.iter().enumerate().filter(|(_, score)| **score > threshold).map(|(index, score)| (index, *score)).collect();
     ranked.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
     let mut out = Selection { masks: Vec::new(), boxes: Vec::new(), scores: Vec::new() };

@@ -4,11 +4,13 @@
 //! quantised linears, apply the four key remaps, and report what resolved. The forward pass is
 //! added in M2; the command-line surface keeps the shape the engine will call.
 
-use std::path::PathBuf;
+use std::io::{BufRead, BufWriter, Write};
+use std::path::{Path, PathBuf};
 
 use candle_core::Tensor;
 use sam3_select::loader::{Pack, default_device};
 use sam3_select::tokenizer::{ClipBpe, parse_prompts};
+use serde::Deserialize;
 
 fn usage() {
     println!("sam3-select (native SAM 3.1 helper for PhotoCraft)");
@@ -24,16 +26,65 @@ fn usage() {
     println!("  --segment-image <png> --segment-box x1,y1,x2,y2 --segment-out <bin>");
     println!("                       --segment-point x,y    (one point, multimask on)");
     println!("                       --segment-mask <f32>   (1008x1008 coarse logits, refinement)");
-    println!();
-    println!("  --image <in.png> --output <out.png> --prompt <text>   (available from M2)");
-    println!("  --serve                                              (available from M2)");
+    println!("  --serve                  resident JSON-lines worker mode on stdin/stdout");
 }
 
+const PACK_FILENAME: &str = "sam3.1_multiplex_hswq_convrot_int8.safetensors";
+
 fn model_path(arg: Option<PathBuf>) -> Option<PathBuf> {
-    arg.or_else(|| {
-        let exe = std::env::current_exe().ok()?;
-        Some(exe.parent()?.join("sam3.1_multiplex_hswq_convrot_int8.safetensors"))
-    })
+    if let Some(explicit) = arg {
+        return Some(explicit);
+    }
+    let exe = std::env::current_exe().ok()?;
+    let dir = exe.parent()?;
+    for candidate in
+        [dir.join(PACK_FILENAME), dir.join("sam3").join(PACK_FILENAME), dir.join("..").join(PACK_FILENAME), dir.join("..").join("sam3").join(PACK_FILENAME)]
+    {
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+    for ancestor in dir.ancestors() {
+        let candidate = ancestor.join("plugins").join("sam3").join(PACK_FILENAME);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+        let direct = ancestor.join(PACK_FILENAME);
+        if direct.is_file() {
+            return Some(direct);
+        }
+    }
+    Some(dir.join(PACK_FILENAME))
+}
+
+fn resolve_data_dir(explicit: Option<PathBuf>, model: Option<&Path>) -> PathBuf {
+    if let Some(dir) = explicit {
+        return dir;
+    }
+    if let Some(model_dir) = model.and_then(Path::parent) {
+        for candidate in [model_dir.join("data"), model_dir.join("sam3").join("data")] {
+            if candidate.join("vocab.json").is_file() {
+                return candidate;
+            }
+        }
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            for candidate in [dir.join("data"), dir.join("sam3").join("data"), dir.join("..").join("data"), dir.join("..").join("sam3").join("data")] {
+                if candidate.join("vocab.json").is_file() {
+                    return candidate;
+                }
+            }
+            for ancestor in dir.ancestors() {
+                let candidate = ancestor.join("plugins").join("sam3").join("data");
+                if candidate.join("vocab.json").is_file() {
+                    return candidate;
+                }
+            }
+            return dir.join("data");
+        }
+    }
+    PathBuf::from("data")
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -73,6 +124,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut select_refine: Option<usize> = None;
     let mut select_individual = false;
     let mut select_out: Option<PathBuf> = None;
+    let mut serve_mode = false;
 
     let mut i = 0;
     while i < args.len() {
@@ -226,18 +278,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 i += 1;
             }
             "--verify-weights" => verify = true,
+            "--serve" => serve_mode = true,
             "--help" | "-h" => {
                 usage();
                 return Ok(());
             }
             other => {
-                if other.starts_with("--") {
-                    eprintln!("sam3-select: {other} is not implemented yet");
-                    return Ok(());
-                }
+                return Err(format!("unknown argument `{other}`").into());
             }
         }
         i += 1;
+    }
+
+    if serve_mode {
+        return serve(model, data_dir, device_pref);
     }
 
     if let Some(text) = parse {
@@ -248,16 +302,44 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     if verify {
-        return verify_weights(model, dump, dump_layer, dump_layer_out, device_pref, dump_hadamard, dump_deq_raw, clip_check, clip_out, data_dir, trunk_check, trunk_out, trunk_blocks, detect_image, detect_prompt, detect_out, segment_image, segment_box, segment_point, segment_mask, segment_out, select_image, select_raw, select_raw_size, select_prompt, select_box, select_point, select_coarse, select_threshold, select_refine, select_individual, select_out);
+        return verify_weights(
+            model,
+            dump,
+            dump_layer,
+            dump_layer_out,
+            device_pref,
+            dump_hadamard,
+            dump_deq_raw,
+            clip_check,
+            clip_out,
+            data_dir,
+            trunk_check,
+            trunk_out,
+            trunk_blocks,
+            detect_image,
+            detect_prompt,
+            detect_out,
+            segment_image,
+            segment_box,
+            segment_point,
+            segment_mask,
+            segment_out,
+            select_image,
+            select_raw,
+            select_raw_size,
+            select_prompt,
+            select_box,
+            select_point,
+            select_coarse,
+            select_threshold,
+            select_refine,
+            select_individual,
+            select_out,
+        );
     }
 
     if let Some(text) = tokens {
-        let data_dir = data_dir.unwrap_or_else(|| {
-            std::env::current_exe()
-                .ok()
-                .and_then(|exe| exe.parent().map(|p| p.join("data")))
-                .unwrap_or_else(|| PathBuf::from("data"))
-        });
+        let data_dir = resolve_data_dir(data_dir, model.as_deref());
         let mut bpe = ClipBpe::load(&data_dir)?;
         let encoded = bpe.encode(&text);
         println!("{:?}", encoded.ids);
@@ -325,11 +407,7 @@ fn verify_weights(
             _ => default_device(),
         };
         let pack = Pack::open(&path, device)?;
-        let values = if std::env::var("SAM3_DUMP_STAGE").as_deref() == Ok("pre-f16") {
-            pack.debug_unrotated_f32(&layer)?
-        } else {
-            pack.debug_scaled(&layer)?
-        };
+        let values = if std::env::var("SAM3_DUMP_STAGE").as_deref() == Ok("pre-f16") { pack.debug_unrotated_f32(&layer)? } else { pack.debug_scaled(&layer)? };
         let mut bytes = Vec::with_capacity(values.len() * 4);
         for value in &values {
             bytes.extend_from_slice(&value.to_le_bytes());
@@ -352,12 +430,7 @@ fn verify_weights(
     if let Some(prompt) = clip_check {
         use sam3_select::clip::ClipTextEncoder;
         use sam3_select::tokenizer::ClipBpe;
-        let dir = data_dir.unwrap_or_else(|| {
-            std::env::current_exe()
-                .ok()
-                .and_then(|exe| exe.parent().map(|p| p.join("data")))
-                .unwrap_or_else(|| PathBuf::from("data"))
-        });
+        let dir = resolve_data_dir(data_dir, Some(&path));
         let mut bpe = ClipBpe::load(&dir)?;
         let encoded = bpe.tokens_for_prompt(&prompt);
         println!("prompt {prompt:?} -> {} ids, {} active", encoded.ids.len(), encoded.attention_mask.iter().filter(|m| **m == 1).count());
@@ -367,12 +440,7 @@ fn verify_weights(
         let hidden_cpu = hidden.to_dtype(candle_core::DType::F32)?.flatten_all()?.to_vec1::<f32>()?;
         let features = encoder.forward(&encoded.ids, &encoded.attention_mask)?;
         let projected_cpu = features.projected.to_dtype(candle_core::DType::F32)?.flatten_all()?.to_vec1::<f32>()?;
-        println!(
-            "clip forward: hidden {:?} projected {:?} in {:.2?}",
-            hidden.dims(),
-            features.projected.dims(),
-            t0.elapsed()
-        );
+        println!("clip forward: hidden {:?} projected {:?} in {:.2?}", hidden.dims(), features.projected.dims(), t0.elapsed());
         if let Some(out) = clip_out {
             let mut bytes = Vec::with_capacity(hidden_cpu.len() * 4 + projected_cpu.len() * 4);
             for v in &hidden_cpu {
@@ -402,9 +470,7 @@ fn verify_weights(
         use sam3_select::detector::{Detector, cxcywh_to_xyxy};
         use sam3_select::tokenizer::ClipBpe;
         use sam3_select::vitdet::VisionBackbone;
-        let dir = data_dir.clone().unwrap_or_else(|| {
-            std::env::current_exe().ok().and_then(|e| e.parent().map(|p| p.join("data"))).unwrap_or_else(|| PathBuf::from("data"))
-        });
+        let dir = resolve_data_dir(data_dir.clone(), Some(&path));
         let mut bpe = ClipBpe::load(&dir)?;
         let encoded = bpe.tokens_for_prompt(&prompt);
         println!("prompt {prompt:?} -> {} active tokens", encoded.attention_mask.iter().filter(|m| **m == 1).count());
@@ -443,7 +509,13 @@ fn verify_weights(
         if let Some(out) = detect_out {
             let mut bytes = Vec::new();
             let mut meta = Vec::new();
-            for (name, tensor) in [("boxes", boxes_xyxy.clone()), ("scores_raw", det.scores.clone()), ("queries", det.queries.clone()), ("memory", det.memory.clone()), ("prompt", det.prompt.clone())] {
+            for (name, tensor) in [
+                ("boxes", boxes_xyxy.clone()),
+                ("scores_raw", det.scores.clone()),
+                ("queries", det.queries.clone()),
+                ("memory", det.memory.clone()),
+                ("prompt", det.prompt.clone()),
+            ] {
                 let values = tensor.flatten_all()?.to_dtype(candle_core::DType::F32)?.to_vec1::<f32>()?;
                 meta.push(serde_json::json!({"name": name, "shape": tensor.dims(), "offset": bytes.len() / 4, "count": values.len()}));
                 for v in &values {
@@ -467,7 +539,7 @@ fn verify_weights(
     }
 
     if let Some(image_path) = select_image.or_else(|| select_raw.clone()) {
-        use sam3_select::selection::{detect_and_refine, refine_from_dump, segment_prompt, Prompt, SelectionStack, DEFAULT_REFINE, DEFAULT_THRESHOLD};
+        use sam3_select::selection::{DEFAULT_REFINE, DEFAULT_THRESHOLD, Prompt, SelectionStack, detect_and_refine, refine_from_dump, segment_prompt};
 
         // `--select-raw` takes interleaved 8-bit RGB, which is what the PhotoCraft engine hands over;
         // `--select-image` is the PNG path used by the reference comparisons.
@@ -482,9 +554,7 @@ fn verify_weights(
         let (h, w) = (native.dim(2)?, native.dim(3)?);
         println!("image {image_path:?} -> {w}x{h} native");
 
-        let dir = data_dir.clone().unwrap_or_else(|| {
-            std::env::current_exe().ok().and_then(|e| e.parent().map(|p| p.join("data"))).unwrap_or_else(|| PathBuf::from("data"))
-        });
+        let dir = resolve_data_dir(data_dir.clone(), Some(&path));
         let t0 = std::time::Instant::now();
         let mut stack = SelectionStack::load(&pack, &dir, &device)?;
         println!("stack loaded in {:.2?}", t0.elapsed());
@@ -501,24 +571,18 @@ fn verify_weights(
             println!("prompt {text:?}");
             detect_and_refine(&mut stack, &frame, &native, &text, threshold, refine, (h, w))?
         } else if let Some(box_arg) = select_box {
-            let values: Vec<f32> = box_arg
-                .split(',')
-                .map(|part| part.trim().parse::<f32>())
-                .collect::<std::result::Result<Vec<f32>, _>>()?;
+            let values: Vec<f32> = box_arg.split(',').map(|part| part.trim().parse::<f32>()).collect::<std::result::Result<Vec<f32>, _>>()?;
             if values.len() != 4 {
                 return Err("--select-box needs x1,y1,x2,y2 in 1008 space".into());
             }
-            let mask = segment_prompt(&stack, &frame, Prompt::Box([values[0], values[1], values[2], values[3]]), refine, (h, w))?;
+            let mask = segment_prompt(&mut stack, &frame, Prompt::Box([values[0], values[1], values[2], values[3]]), refine, (h, w))?;
             sam3_select::selection::Selection { masks: vec![mask], boxes: vec![values[0..4].try_into()?], scores: vec![1.0] }
         } else if let Some(point_arg) = select_point {
-            let values: Vec<f32> = point_arg
-                .split(',')
-                .map(|part| part.trim().parse::<f32>())
-                .collect::<std::result::Result<Vec<f32>, _>>()?;
+            let values: Vec<f32> = point_arg.split(',').map(|part| part.trim().parse::<f32>()).collect::<std::result::Result<Vec<f32>, _>>()?;
             if values.len() != 2 {
                 return Err("--select-point needs x,y in 1008 space".into());
             }
-            let mask = segment_prompt(&stack, &frame, Prompt::Point([values[0], values[1]]), refine, (h, w))?;
+            let mask = segment_prompt(&mut stack, &frame, Prompt::Point([values[0], values[1]]), refine, (h, w))?;
             sam3_select::selection::Selection { masks: vec![mask], boxes: vec![[0.0; 4]], scores: vec![1.0] }
         } else {
             return Err("one of --select-prompt / --select-box / --select-point / --select-coarse is required".into());
@@ -573,10 +637,7 @@ fn verify_weights(
         let segmenter = Segmenter::load(&pack)?;
         let t1 = std::time::Instant::now();
         let result = if let Some(box_arg) = segment_box {
-            let values: Vec<f32> = box_arg
-                .split(',')
-                .map(|part| part.trim().parse::<f32>())
-                .collect::<std::result::Result<Vec<f32>, _>>()?;
+            let values: Vec<f32> = box_arg.split(',').map(|part| part.trim().parse::<f32>()).collect::<std::result::Result<Vec<f32>, _>>()?;
             if values.len() != 4 {
                 return Err("--segment-box needs x1,y1,x2,y2".into());
             }
@@ -584,10 +645,7 @@ fn verify_weights(
             println!("box prompt {box_arg:?}");
             segmenter.segment_box(&feats.interactive_convs, &corners)?
         } else if let Some(point) = segment_point {
-            let values: Vec<f32> = point
-                .split(',')
-                .map(|part| part.trim().parse::<f32>())
-                .collect::<std::result::Result<Vec<f32>, _>>()?;
+            let values: Vec<f32> = point.split(',').map(|part| part.trim().parse::<f32>()).collect::<std::result::Result<Vec<f32>, _>>()?;
             if values.len() != 2 {
                 return Err("--segment-point needs x,y".into());
             }
@@ -646,8 +704,13 @@ fn verify_weights(
                 println!("trunk (first {limit} blocks) {:?}", trunk.dims());
                 let mut bytes = Vec::new();
                 let values = trunk.to_dtype(candle_core::DType::F32)?.flatten_all()?.to_vec1::<f32>()?;
-                for v in &values { bytes.extend_from_slice(&v.to_le_bytes()); }
-                if let Some(path) = &trunk_out { std::fs::write(path, &bytes)?; println!("wrote {}", path.display()); }
+                for v in &values {
+                    bytes.extend_from_slice(&v.to_le_bytes());
+                }
+                if let Some(path) = &trunk_out {
+                    std::fs::write(path, &bytes)?;
+                    println!("wrote {}", path.display());
+                }
                 return Ok(());
             }
             None => backbone.forward(&image)?,
@@ -689,12 +752,7 @@ fn verify_weights(
     println!("fused qkv tensors split: {}", pack.split);
 
     // Every quantised linear must resolve, and the count must be the 41 the plan measured.
-    let dequant_names: Vec<String> = pack
-        .names()
-        .iter()
-        .filter(|name| name.contains("detector."))
-        .map(|name| name.to_string())
-        .collect();
+    let dequant_names: Vec<String> = pack.names().iter().filter(|name| name.contains("detector.")).map(|name| name.to_string()).collect();
     println!("detector modules: {}", dequant_names.len());
 
     let mut stats: Vec<(String, Vec<f64>)> = Vec::new();
@@ -741,7 +799,14 @@ fn verify_weights(
             }
         }
         std::fs::write(out, &bytes)?;
-        println!("wrote {} ({} {}, {:.1} MB) for {}", out.display(), values.len(), if f16_form { "f16 values" } else { "f32 values" }, bytes.len() as f64 / 1e6, layer);
+        println!(
+            "wrote {} ({} {}, {:.1} MB) for {}",
+            out.display(),
+            values.len(),
+            if f16_form { "f16 values" } else { "f32 values" },
+            bytes.len() as f64 / 1e6,
+            layer
+        );
     }
 
     if let Some(out) = dump {
@@ -836,4 +901,236 @@ fn load_image_1008(path: &std::path::Path) -> Result<Tensor, Box<dyn std::error:
         }
     }
     Ok(Tensor::from_vec(data, (1, 3, dst_h, dst_w), &candle_core::Device::Cpu)?.to_dtype(candle_core::DType::F16)?)
+}
+
+fn default_serve_threshold() -> f32 {
+    sam3_select::selection::DEFAULT_THRESHOLD
+}
+
+fn default_serve_refine() -> usize {
+    sam3_select::selection::DEFAULT_REFINE
+}
+
+/// One JSON request line in `--serve` mode.
+#[derive(Debug, Deserialize)]
+struct ServeRequest {
+    #[serde(default)]
+    warmup: bool,
+    #[serde(default)]
+    raw: String,
+    #[serde(default)]
+    width: usize,
+    #[serde(default)]
+    height: usize,
+    #[serde(default)]
+    prompt: Option<String>,
+    #[serde(default)]
+    box_xyxy: Option<[f32; 4]>,
+    #[serde(default)]
+    point_xy: Option<[f32; 2]>,
+    #[serde(default = "default_serve_threshold")]
+    threshold: f32,
+    #[serde(default = "default_serve_refine")]
+    refine: usize,
+    #[serde(default)]
+    individual: bool,
+    #[serde(default)]
+    out: String,
+}
+
+/// 64-bit FNV-1a digest of the raw interleaved RGB image and its dimensions.
+fn fnv1a_hash(bytes: &[u8], width: usize, height: usize) -> u64 {
+    let mut hash: u64 = 0xcbf29ce484222325;
+    for b in (width as u64).to_le_bytes().into_iter().chain((height as u64).to_le_bytes()) {
+        hash ^= b as u64;
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    for &b in bytes {
+        hash ^= b as u64;
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    hash
+}
+
+struct CachedFrame {
+    hash: u64,
+    width: usize,
+    height: usize,
+    native: Tensor,
+    frame: Tensor,
+}
+
+fn serve_one(
+    stack: &mut sam3_select::selection::SelectionStack,
+    cached_frame: &mut Option<CachedFrame>,
+    req: &ServeRequest,
+) -> Result<(usize, f64), Box<dyn std::error::Error>> {
+    use sam3_select::selection::{Prompt, Selection, detect_and_refine_cached, segment_prompt_cached};
+
+    if req.warmup {
+        return Ok((0, 0.0));
+    }
+    if req.raw.is_empty() || req.out.is_empty() || req.width == 0 || req.height == 0 {
+        return Err("missing raw, out, width or height in --serve request".into());
+    }
+    let started = std::time::Instant::now();
+    let raw_bytes = std::fs::read(&req.raw)?;
+    let expected = req.width * req.height * 3;
+    if raw_bytes.len() != expected {
+        return Err(format!("raw image must hold {expected} bytes ({}x{}), got {}", req.width, req.height, raw_bytes.len()).into());
+    }
+    let hash = fnv1a_hash(&raw_bytes, req.width, req.height);
+    let reuse = cached_frame.as_ref().is_some_and(|c| c.hash == hash && c.width == req.width && c.height == req.height);
+    if !reuse {
+        let (width, height) = (req.width, req.height);
+        let mut data = vec![0.0f32; 3 * height * width];
+        for index in 0..width * height {
+            for c in 0..3 {
+                data[c * height * width + index] = raw_bytes[index * 3 + c] as f32 / 255.0;
+            }
+        }
+        let native = Tensor::from_vec(data, (1, 3, height, width), &stack.device)?;
+        let frame = sam3_select::nn::interpolate_bilinear(&native, 1008, 1008)?.to_dtype(candle_core::DType::F16)?;
+        *cached_frame = Some(CachedFrame { hash, width, height, native, frame });
+    }
+    let cached = cached_frame.as_ref().ok_or("cached frame missing")?;
+    let (h, w) = (cached.height, cached.width);
+
+    let selection = if let Some(text) = req.prompt.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        detect_and_refine_cached(stack, &cached.frame, Some(hash), &cached.native, text, req.threshold, req.refine, (h, w))?
+    } else if let Some(corners) = req.box_xyxy {
+        let mask = segment_prompt_cached(stack, &cached.frame, Some(hash), Prompt::Box(corners), req.refine, (h, w))?;
+        Selection { masks: vec![mask], boxes: vec![corners], scores: vec![1.0] }
+    } else if let Some(point) = req.point_xy {
+        let mask = segment_prompt_cached(stack, &cached.frame, Some(hash), Prompt::Point(point), req.refine, (h, w))?;
+        Selection { masks: vec![mask], boxes: vec![[0.0; 4]], scores: vec![1.0] }
+    } else {
+        return Err("request needs one of prompt, box_xyxy or point_xy".into());
+    };
+
+    let masks = selection.finish(req.individual)?;
+    let out_path = Path::new(&req.out);
+    if let Some(parent) = out_path.parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent)?;
+        }
+    }
+    let mut bytes: Vec<u8> = Vec::new();
+    let mut shapes: Vec<serde_json::Value> = Vec::new();
+    let mut coverage: Vec<f64> = Vec::new();
+    for mask in &masks {
+        let values = mask.to_dtype(candle_core::DType::F32)?.flatten_all()?.to_vec1::<f32>()?;
+        let positive = values.iter().filter(|v| **v > 0.0).count() as f64;
+        coverage.push(positive / values.len() as f64);
+        shapes.push(serde_json::json!(mask.dims()));
+        for value in &values {
+            bytes.extend_from_slice(&value.to_le_bytes());
+        }
+    }
+    std::fs::write(out_path, &bytes)?;
+    let meta = serde_json::json!({
+        "masks": shapes,
+        "coverage": coverage,
+        "boxes": selection.boxes,
+        "scores": selection.scores,
+        "threshold": req.threshold,
+        "refine_iterations": req.refine,
+        "individual": req.individual,
+    });
+    std::fs::write(out_path.with_extension("json"), serde_json::to_vec_pretty(&meta)?)?;
+    Ok((masks.len(), started.elapsed().as_secs_f64()))
+}
+
+/// Resident JSON-lines worker mode: loads the pack and selection stack once on the target device,
+/// then answers one JSON line on `stdin` with one JSON line on `stdout`. All diagnostics go to
+/// `stderr`.
+fn serve(model: Option<PathBuf>, data_dir: Option<PathBuf>, device_pref: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
+    use sam3_select::selection::SelectionStack;
+
+    let path = model_path(model).ok_or("--model is required (or place the pack beside the executable)")?;
+    if !path.exists() {
+        return Err(format!("pack not found: {}", path.display()).into());
+    }
+    let dir = resolve_data_dir(data_dir, Some(&path));
+    let (device, is_cuda) = match device_pref.as_deref() {
+        Some("cpu") => (candle_core::Device::Cpu, false),
+        Some("cuda") => (candle_core::Device::new_cuda(0)?, true),
+        _ => default_device(),
+    };
+    let t0 = std::time::Instant::now();
+    let pack = Pack::open(&path, device.clone())?;
+    let mut stack = SelectionStack::load(&pack, &dir, &device)?;
+    eprintln!("sam3-select: resident worker ready on {:?} (cuda: {is_cuda}) in {:.2?}", device, t0.elapsed());
+
+    let mut cached_frame: Option<CachedFrame> = None;
+    let stdin = std::io::stdin();
+    let mut out = BufWriter::new(std::io::stdout());
+    for line in stdin.lock().lines() {
+        let line = line?;
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let reply = match serde_json::from_str::<ServeRequest>(trimmed) {
+            Ok(req) => match serve_one(&mut stack, &mut cached_frame, &req) {
+                Ok((objects, seconds)) => serde_json::json!({
+                    "ok": true,
+                    "objects": objects,
+                    "infer_ms": seconds * 1000.0,
+                    "cuda": is_cuda,
+                })
+                .to_string(),
+                Err(err) => serde_json::json!({
+                    "ok": false,
+                    "error": err.to_string(),
+                })
+                .to_string(),
+            },
+            Err(err) => serde_json::json!({
+                "ok": false,
+                "error": format!("bad request: {err}"),
+            })
+            .to_string(),
+        };
+        writeln!(out, "{reply}")?;
+        out.flush()?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn serve_request_parses_point_box_and_prompt() {
+        let pt: ServeRequest =
+            serde_json::from_str(r#"{"raw":"in.rgb","width":64,"height":48,"point_xy":[32.0,24.0],"out":"out.bin"}"#).expect("point request");
+        assert_eq!(pt.width, 64);
+        assert_eq!(pt.height, 48);
+        assert_eq!(pt.point_xy, Some([32.0, 24.0]));
+        assert_eq!(pt.refine, sam3_select::selection::DEFAULT_REFINE);
+        assert!((pt.threshold - sam3_select::selection::DEFAULT_THRESHOLD).abs() < 1e-6);
+
+        let bx: ServeRequest =
+            serde_json::from_str(r#"{"raw":"in.rgb","width":64,"height":48,"box_xyxy":[1.0,2.0,30.0,40.0],"refine":1,"out":"out.bin"}"#).expect("box request");
+        assert_eq!(bx.box_xyxy, Some([1.0, 2.0, 30.0, 40.0]));
+        assert_eq!(bx.refine, 1);
+
+        let pr: ServeRequest =
+            serde_json::from_str(r#"{"raw":"in.rgb","width":64,"height":48,"prompt":"person","threshold":0.35,"individual":true,"out":"out.bin"}"#)
+                .expect("prompt request");
+        assert_eq!(pr.prompt.as_deref(), Some("person"));
+        assert!((pr.threshold - 0.35).abs() < 1e-6);
+        assert!(pr.individual);
+    }
+
+    #[test]
+    fn fnv1a_hash_distinguishes_dimensions_and_pixels() {
+        let a = fnv1a_hash(&[1, 2, 3, 4, 5, 6], 2, 1);
+        let b = fnv1a_hash(&[1, 2, 3, 4, 5, 6], 1, 2);
+        let c = fnv1a_hash(&[1, 2, 3, 4, 5, 7], 2, 1);
+        assert_ne!(a, b);
+        assert_ne!(a, c);
+    }
 }

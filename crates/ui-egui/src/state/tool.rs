@@ -298,7 +298,7 @@ impl Tool {
             Tool::QuickSelection | Tool::ObjectSelection | Tool::Sam3Select => 'W',
             Tool::Pen | Tool::FreeformPen | Tool::CurvaturePen => 'P',
             // In the Pen flyout, but P never reaches them.
-            Tool::AddAnchorPoint | Tool::DeleteAnchorPoint | Tool::ConvertPoint => ' ',
+            Tool::AddAnchorPoint | Tool::DeleteAnchorPoint | Tool::ConvertPoint => '\0',
             Tool::PathSelection | Tool::DirectSelection => 'A',
             Tool::Rectangle | Tool::EllipseShape | Tool::Triangle | Tool::Polygon | Tool::Star | Tool::Line | Tool::CustomShape => 'U',
         }
@@ -328,6 +328,9 @@ impl Tool {
     }
     pub fn from_name(s: &str) -> Option<Tool> {
         let n = s.to_ascii_lowercase().replace([' ', '_', '-'], "");
+        if matches!(n.as_str(), "samselection" | "sam3selection" | "sam3") {
+            return Some(Tool::Sam3Select);
+        }
         Tool::ALL.into_iter().find(|t| {
             let a = format!("{t:?}").to_ascii_lowercase();
             n == a || n == a.replace("marquee", "") || n == t.label().to_ascii_lowercase().replace(' ', "")

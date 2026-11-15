@@ -3,7 +3,7 @@
 
 use egui::{PointerButton, vec2};
 use egui_kittest::Harness;
-use egui_kittest::kittest::{NodeT, Queryable};
+use egui_kittest::kittest::Queryable;
 use serde_json::json;
 
 use crate::PhotocraftApp;
@@ -26,10 +26,7 @@ fn toolbar(tool: Tool) -> Harness<'static, PhotocraftApp> {
 }
 
 fn slot_rect(h: &Harness<'static, PhotocraftApp>, tool: Tool) -> egui::Rect {
-    h.query_all(egui_kittest::kittest::by().label_contains(tool.label()))
-        .next()
-        .unwrap_or_else(|| panic!("no toolbar button for {}", tool.label()))
-        .rect()
+    h.query_all(egui_kittest::kittest::by().label_contains(tool.label())).next().unwrap_or_else(|| panic!("no toolbar button for {}", tool.label())).rect()
 }
 
 fn click(h: &mut Harness<'static, PhotocraftApp>, at: egui::Pos2, button: PointerButton) {
@@ -45,16 +42,8 @@ fn click(h: &mut Harness<'static, PhotocraftApp>, at: egui::Pos2, button: Pointe
 /// The slot's tools, in the order the flyout draws them.
 #[test]
 fn the_w_slot_lists_sam_selection_last() {
-    let slot = TOOL_SECTIONS
-        .iter()
-        .flat_map(|section| section.iter())
-        .find(|slot| slot.contains(&Tool::MagicWand))
-        .expect("the W slot");
-    assert_eq!(
-        slot,
-        &[Tool::ObjectSelection, Tool::QuickSelection, Tool::MagicWand, Tool::Sam3Select],
-        "the W slot's tools"
-    );
+    let slot = TOOL_SECTIONS.iter().flat_map(|section| section.iter()).find(|slot| slot.contains(&Tool::MagicWand)).expect("the W slot");
+    assert_eq!(slot, &[Tool::ObjectSelection, Tool::QuickSelection, Tool::MagicWand, Tool::Sam3Select], "the W slot's tools");
 }
 
 /// Right-clicking the slot opens its flyout anchored on that same button — the flyout the render
@@ -76,10 +65,7 @@ fn a_click_on_a_flyout_row_picks_it() {
     let mut h = toolbar(Tool::MagicWand);
     let slot = slot_rect(&h, Tool::MagicWand);
     click(&mut h, slot.center(), PointerButton::Secondary);
-    let (_key, anchor) = h
-        .ctx
-        .data(|d| d.get_temp::<(egui::Id, egui::Rect)>(egui::Id::unique("tool-flyout")))
-        .expect("the flyout is open");
+    let (_key, anchor) = h.ctx.data(|d| d.get_temp::<(egui::Id, egui::Rect)>(egui::Id::unique("tool-flyout"))).expect("the flyout is open");
     // The rows are 26 px apart, the first centred 21 px below the button's top (measured on the
     // rendered flyout).
     let first_row = egui::pos2(anchor.right() + 100.0, anchor.top() + 21.0);
@@ -99,8 +85,5 @@ fn the_tool_has_its_shortcut_row() {
     assert_eq!(Tool::Sam3Select.key(), 'W');
     let app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
     let items = crate::prefs_ui::shortcut_items(&app);
-    assert!(
-        items.iter().any(|(id, label, _, _)| id == "tools.select.sam3Select" && label.contains("SAM")),
-        "the shortcut editor has no SAM Selection row"
-    );
+    assert!(items.iter().any(|(id, label, _, _)| id == "tools.select.sam3Select" && label.contains("SAM")), "the shortcut editor has no SAM Selection row");
 }
