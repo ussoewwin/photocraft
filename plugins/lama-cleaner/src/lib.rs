@@ -29,6 +29,9 @@ pub enum LamaError {
     Image(#[from] image::ImageError),
     #[error("no execution provider could open the model ({0})")]
     NoProvider(String),
+
+    #[error("the model could not run: {0}")]
+    RunFailed(String),
     #[error("Dimension mismatch: image is {img_w}x{img_h}, mask is {mask_w}x{mask_h}")]
     DimensionMismatch { img_w: u32, img_h: u32, mask_w: u32, mask_h: u32 },
 }
@@ -64,16 +67,29 @@ impl Provider {
     }
 }
 
-pub struct LamaModel {
-    session: Mutex<Session>,
+/// What the model needs to open another session, and what it has learned about the providers.
+struct State {
     provider: Provider,
     notes: Vec<String>,
+    /// The environment and the model, so a provider that cannot run the model is replaced by the
+    /// next one without restarting the helper.
+    env: ort::environment::Environment,
+    model: PathBuf,
+    /// The providers that already failed, so they are not tried again.
+    failed: Vec<Provider>,
+}
+
+pub struct LamaModel {
+    /// The session, taken out for a run and put back afterwards: a provider that cannot run the
+    /// model is replaced while no inference borrows it.
+    session: Mutex<Option<Session>>,
+    state: Mutex<State>,
 }
 
 impl LamaModel {
     /// Load the model, choosing the best execution provider this machine can run.
     pub fn load(model_path: impl AsRef<Path>) -> Result<Self, LamaError> {
-        let model = model_path.as_ref();
+        let model = model_path.as_ref().to_path_buf();
         let env = ort::init().with_name("lama-cleaner").build()?;
         let mut notes = Vec::new();
         let cuda_ready = prepare_cuda(&mut notes);
@@ -82,9 +98,9 @@ impl LamaModel {
             if provider == Provider::Cuda && !cuda_ready {
                 continue;
             }
-            match open_session(&env, model, provider) {
+            match open_session(&env, &model, provider) {
                 Ok(session) => {
-                    return Ok(Self { session: Mutex::new(session), provider, notes });
+                    return Ok(Self { session: Mutex::new(Some(session)), state: Mutex::new(State { provider, notes, env, model, failed: Vec::new() }) });
                 }
                 Err(e) => failures.push(format!("{}: {e}", provider.name())),
             }
@@ -94,12 +110,12 @@ impl LamaModel {
 
     /// The provider the session runs on.
     pub fn provider(&self) -> Provider {
-        self.provider
+        self.state.lock().unwrap_or_else(|e| e.into_inner()).provider
     }
 
-    /// What stopped a faster provider from being used (empty when CUDA was used).
-    pub fn notes(&self) -> &[String] {
-        &self.notes
+    /// What stopped a faster provider from being used (empty when CUDA was used.
+    pub fn notes(&self) -> Vec<String> {
+        self.state.lock().unwrap_or_else(|e| e.into_inner()).notes.clone()
     }
 
     /// Inpaint a 512x512 RGB patch with a 512x512 binary mask (1.0 = mask to remove).
@@ -110,55 +126,14 @@ impl LamaModel {
             return Err(LamaError::DimensionMismatch { img_w: w, img_h: h, mask_w: mw, mask_h: mh });
         }
 
-        // Image tensor [1, 3, 512, 512], 0.0..1.0. Packed from the image's own bytes: no bounds
-        // checks per pixel, and the row order matches the model's CHW layout directly.
-        let mut img_tensor = Array4::<f32>::zeros((1, 3, SIDE, SIDE));
-        {
-            let src = image.as_raw();
-            let Some(dst) = img_tensor.as_slice_mut() else {
-                return Err(LamaError::Ort(ort::Error::new("the image tensor is not contiguous")));
-            };
-            let plane = SIDE * SIDE;
-            for y in 0..SIDE {
-                let row = &src[y * SIDE * 3..(y + 1) * SIDE * 3];
-                for (x, px) in row.chunks_exact(3).enumerate() {
-                    let i = y * SIDE + x;
-                    if let Some(cell) = dst.get_mut(i) {
-                        *cell = px[0] as f32 / 255.0;
-                    }
-                    if let Some(cell) = dst.get_mut(plane + i) {
-                        *cell = px[1] as f32 / 255.0;
-                    }
-                    if let Some(cell) = dst.get_mut(2 * plane + i) {
-                        *cell = px[2] as f32 / 255.0;
-                    }
-                }
-            }
-        }
-
-        // Mask tensor [1, 1, 512, 512], binary.
-        let mut mask_tensor = Array4::<f32>::zeros((1, 1, SIDE, SIDE));
-        {
-            let src = mask.as_raw();
-            let Some(dst) = mask_tensor.as_slice_mut() else {
-                return Err(LamaError::Ort(ort::Error::new("the mask tensor is not contiguous")));
-            };
-            for (i, m) in src.iter().take(dst.len()).enumerate() {
-                if let Some(cell) = dst.get_mut(i) {
-                    *cell = if *m > 127 { 1.0 } else { 0.0 };
-                }
-            }
-        }
-
-        let img_val = Value::from_array(img_tensor)?;
-        let mask_val = Value::from_array(mask_tensor)?;
-
-        let mut session = self.session.lock().unwrap_or_else(|e| e.into_inner());
-        let outputs = session.run(ort::inputs![
-            "image" => img_val,
-            "mask" => mask_val
-        ])?;
-        let (_shape, data) = outputs[0].try_extract_tensor::<f32>()?;
+        let mut guard = self.session.lock().unwrap_or_else(|e| e.into_inner());
+        let Some(mut session) = guard.take() else {
+            return Err(LamaError::RunFailed("the LaMa session is not available".into()));
+        };
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let data = run_patch(&mut session, &mut state, image, mask);
+        *guard = Some(session);
+        let data = data?;
 
         // big-lama.onnx writes 0..255; a variant writing 0..1 is detected and scaled.
         let max_val = data.iter().copied().fold(0.0f32, f32::max);
@@ -354,6 +329,96 @@ fn feather(min_dist_sq: i32) -> f32 {
     }
 }
 
+/// The model's two inputs: the image [1, 3, 512, 512] in 0.0..1.0 and the binary mask
+/// [1, 1, 512, 512]. Packed from the images' own bytes: no bounds checks per pixel, and the row
+/// order matches the model's CHW layout directly.
+fn build_inputs(image: &RgbImage, mask: &GrayImage) -> Result<(ort::value::Tensor<f32>, ort::value::Tensor<f32>), LamaError> {
+    let mut img_tensor = Array4::<f32>::zeros((1, 3, SIDE, SIDE));
+    {
+        let src = image.as_raw();
+        let Some(dst) = img_tensor.as_slice_mut() else {
+            return Err(LamaError::Ort(ort::Error::new("the image tensor is not contiguous")));
+        };
+        let plane = SIDE * SIDE;
+        for y in 0..SIDE {
+            let row = &src[y * SIDE * 3..(y + 1) * SIDE * 3];
+            for (x, px) in row.chunks_exact(3).enumerate() {
+                let i = y * SIDE + x;
+                if let Some(cell) = dst.get_mut(i) {
+                    *cell = px[0] as f32 / 255.0;
+                }
+                if let Some(cell) = dst.get_mut(plane + i) {
+                    *cell = px[1] as f32 / 255.0;
+                }
+                if let Some(cell) = dst.get_mut(2 * plane + i) {
+                    *cell = px[2] as f32 / 255.0;
+                }
+            }
+        }
+    }
+
+    let mut mask_tensor = Array4::<f32>::zeros((1, 1, SIDE, SIDE));
+    {
+        let src = mask.as_raw();
+        let Some(dst) = mask_tensor.as_slice_mut() else {
+            return Err(LamaError::Ort(ort::Error::new("the mask tensor is not contiguous")));
+        };
+        for (i, m) in src.iter().take(dst.len()).enumerate() {
+            if let Some(cell) = dst.get_mut(i) {
+                *cell = if *m > 127 { 1.0 } else { 0.0 };
+            }
+        }
+    }
+
+    Ok((Value::from_array(img_tensor)?, Value::from_array(mask_tensor)?))
+}
+
+/// Run one patch through the session. A provider that cannot run the model is replaced by the next
+/// one (CUDA → DirectML → CPU) and the patch is tried again, so a stroke still works — slower —
+/// instead of failing outright.
+fn run_patch(session: &mut Session, state: &mut State, image: &RgbImage, mask: &GrayImage) -> Result<Vec<f32>, LamaError> {
+    let (img_val, mask_val) = build_inputs(image, mask)?;
+    let first = match session.run(ort::inputs![
+        "image" => img_val,
+        "mask" => mask_val
+    ]) {
+        Ok(outputs) => {
+            let (_shape, data) = outputs[0].try_extract_tensor::<f32>()?;
+            return Ok(data.to_vec());
+        }
+        Err(e) => e,
+    };
+    if state.provider == Provider::Cpu {
+        return Err(LamaError::Ort(first));
+    }
+    let failed = state.provider;
+    let Some(next) = next_provider(&state.failed, failed) else {
+        return Err(LamaError::Ort(first));
+    };
+    let replacement = match open_session(&state.env, &state.model, next) {
+        Ok(session) => session,
+        Err(e) => return Err(LamaError::RunFailed(format!("{}: {first}; {}: {e}", failed.name(), next.name()))),
+    };
+    state.failed.push(failed);
+    state.provider = next;
+    let note = format!("{} could not run the model ({first}); using {}", failed.name(), next.name());
+    eprintln!("lama-cleaner: {note}");
+    state.notes.push(note);
+    *session = replacement;
+    let (img_val, mask_val) = build_inputs(image, mask)?;
+    let outputs = session.run(ort::inputs![
+        "image" => img_val,
+        "mask" => mask_val
+    ])?;
+    let (_shape, data) = outputs[0].try_extract_tensor::<f32>()?;
+    Ok(data.to_vec())
+}
+
+/// The provider to try after `current` failed: the next in the chain that has not failed yet.
+fn next_provider(failed: &[Provider], current: Provider) -> Option<Provider> {
+    [Provider::Cuda, Provider::DirectMl, Provider::Cpu].into_iter().find(|p| *p != current && !failed.contains(p))
+}
+
 fn open_session(env: &ort::environment::Environment, model: &Path, provider: Provider) -> Result<Session, ort::Error> {
     let mut builder = Session::builder(env)?;
     if let Some(ep) = provider.dispatch() {
@@ -369,7 +434,15 @@ fn prepare_cuda(notes: &mut Vec<String>) -> bool {
     let cudnn = find_runtime_dir(ep::cuda::CUDNN_DYLIBS.first().copied().unwrap_or("cudnn64_9.dll"));
     match (cuda, cudnn) {
         (Some(cuda), Some(cudnn)) => match ep::cuda::preload_dylibs(Some(&cuda), Some(&cudnn)) {
-            Ok(()) => true,
+            Ok(()) => {
+                // The CUDA provider loads its dependencies by name later, and Windows only finds
+                // a library that is already loaded or on PATH. cuDNN 9.26 for instance needs
+                // `cudnn_engines_tensor_ir64_9.dll`, which is not in ONNX Runtime's own list, so
+                // without this the first convolution fails with "Could not locate ...".
+                preload_folder(&cuda);
+                preload_folder(&cudnn);
+                true
+            }
             Err(e) => {
                 notes.push(format!("CUDA libraries could not be preloaded ({e}); using DirectML"));
                 false
@@ -384,6 +457,18 @@ fn prepare_cuda(notes: &mut Vec<String>) -> bool {
             notes.push(format!("{missing} was not found; using DirectML"));
             false
         }
+    }
+}
+
+/// Load every library in `dir` by its full path, so a later load by plain name finds it. A
+/// library that cannot be loaded (another version, another architecture) is skipped.
+fn preload_folder(dir: &Path) {
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    let mut files: Vec<PathBuf> =
+        entries.flatten().map(|entry| entry.path()).filter(|path| path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("dll"))).collect();
+    files.sort();
+    for file in files {
+        let _ = ort::util::preload_dylib(&file);
     }
 }
 
@@ -464,6 +549,14 @@ mod tests {
         assert_eq!(Provider::Cuda.name(), "CUDA");
         assert_eq!(Provider::DirectMl.name(), "DirectML");
         assert_eq!(Provider::Cpu.name(), "CPU");
+    }
+
+    /// The fallback chain after a provider fails: the next one that has not failed yet.
+    #[test]
+    fn a_failed_provider_is_replaced_by_the_next_one() {
+        assert_eq!(next_provider(&[], Provider::Cuda), Some(Provider::DirectMl));
+        assert_eq!(next_provider(&[Provider::Cuda], Provider::DirectMl), Some(Provider::Cpu));
+        assert_eq!(next_provider(&[Provider::Cuda, Provider::DirectMl], Provider::Cpu), None);
     }
 
     /// DirectML and CUDA ask to fail loudly, so a missing runtime cannot silently fall back to
