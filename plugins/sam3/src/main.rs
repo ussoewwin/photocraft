@@ -4,7 +4,7 @@
 //! quantised linears, apply the four key remaps, and report what resolved. The forward pass is
 //! added in M2; the command-line surface keeps the shape the engine will call.
 
-use std::io::{BufRead, BufWriter, Write};
+use std::io::{BufRead, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
 
 use candle_core::Tensor;
@@ -27,6 +27,7 @@ fn usage() {
     println!("                       --segment-point x,y    (one point, multimask on)");
     println!("                       --segment-mask <f32>   (1008x1008 coarse logits, refinement)");
     println!("  --serve                  resident JSON-lines worker mode on stdin/stdout");
+    println!("  --download <url> --download-out <path>   download a file over HTTPS");
 }
 
 const PACK_FILENAME: &str = "sam3.1_multiplex_hswq_convrot_int8.safetensors";
@@ -125,6 +126,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut select_individual = false;
     let mut select_out: Option<PathBuf> = None;
     let mut serve_mode = false;
+    let mut download_url: Option<String> = None;
+    let mut download_out: Option<PathBuf> = None;
 
     let mut i = 0;
     while i < args.len() {
@@ -278,6 +281,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 i += 1;
             }
             "--verify-weights" => verify = true,
+            "--download" if i + 1 < args.len() => {
+                download_url = Some(args[i + 1].clone());
+                i += 1;
+            }
+            "--download-out" if i + 1 < args.len() => {
+                download_out = Some(PathBuf::from(&args[i + 1]));
+                i += 1;
+            }
             "--serve" => serve_mode = true,
             "--help" | "-h" => {
                 usage();
@@ -292,6 +303,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if serve_mode {
         return serve(model, data_dir, device_pref);
+    }
+
+    if let Some(url) = download_url {
+        let out = download_out.ok_or("--download needs --download-out <path>")?;
+        return download_pack(&url, &out);
     }
 
     if let Some(text) = parse {
@@ -1041,6 +1057,53 @@ fn serve_one(
     Ok((masks.len(), started.elapsed().as_secs_f64()))
 }
 
+/// Download a file over HTTPS into `out`, streaming with a `.part` temp file so a partial
+/// download is never mistaken for the real one. Progress goes to stderr every 10 seconds.
+fn download_pack(url: &str, out: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    if out.exists() {
+        return Err(format!("{} already exists; delete it first if you want to re-download", out.display()).into());
+    }
+    eprintln!("sam3-select: downloading {} -> {}", url, out.display());
+    let response = ureq::get(url).call()?;
+    let total: Option<u64> = response.header("Content-Length").and_then(|v| v.parse().ok());
+    let mut reader = response.into_reader();
+    if let Some(parent) = out.parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent)?;
+        }
+    }
+    let partial = out.with_extension("part");
+    let mut file = std::io::BufWriter::new(std::fs::File::create(&partial)?);
+    let mut buffer = vec![0u8; 256 * 1024];
+    let mut downloaded: u64 = 0;
+    let mut last_report = std::time::Instant::now();
+    loop {
+        let read = reader.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        file.write_all(&buffer[..read])?;
+        downloaded += read as u64;
+        if last_report.elapsed().as_secs() >= 10 {
+            match total {
+                Some(total) => eprintln!("sam3-select: {:.1}% ({:.2} / {:.2} GiB)", downloaded as f64 / total as f64 * 100.0, downloaded as f64 / (1024.0 * 1024.0 * 1024.0), total as f64 / (1024.0 * 1024.0 * 1024.0)),
+                None => eprintln!("sam3-select: {:.2} GiB downloaded", downloaded as f64 / (1024.0 * 1024.0 * 1024.0)),
+            }
+            last_report = std::time::Instant::now();
+        }
+    }
+    file.flush()?;
+    drop(file);
+    if let Some(total) = total {
+        if downloaded != total {
+            std::fs::remove_file(&partial).ok();
+            return Err(format!("download incomplete: got {} of {} bytes", downloaded, total).into());
+        }
+    }
+    std::fs::rename(&partial, out)?;
+    eprintln!("sam3-select: downloaded {} ({:.2} GiB)", out.display(), downloaded as f64 / (1024.0 * 1024.0 * 1024.0));
+    Ok(())
+}
 /// Resident JSON-lines worker mode: loads the pack and selection stack once on the target device,
 /// then answers one JSON line on `stdin` with one JSON line on `stdout`. All diagnostics go to
 /// `stderr`.

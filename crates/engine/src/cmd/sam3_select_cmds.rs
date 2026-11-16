@@ -8,7 +8,7 @@
 //! the box, a point segments from the click.
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 use photocraft_algo::selection::{Region, SelectionMode, combine_region};
 use photocraft_geom::Rect;
@@ -24,6 +24,8 @@ const HELPER_ENV: &str = "CRAFT_SAM3_HELPER";
 const PACK_ENV: &str = "CRAFT_SAM3_PACK";
 /// The pack the helper ships with.
 const PACK_NAME: &str = "sam3.1_multiplex_hswq_convrot_int8.safetensors";
+/// Where the pack is downloaded from when it is not on this machine.
+const PACK_URL: &str = "https://huggingface.co/ussoewwin/SAM3.1-HSWQ-ConvRot-INT8/resolve/main/sam3.1_multiplex_hswq_convrot_int8.safetensors";
 /// The image the model is fed.
 const SAM_SIZE: f32 = 1008.0;
 
@@ -456,7 +458,34 @@ mod resident {
 /// Runs the helper and returns the masks it wrote.
 fn run_helper(s: &Session, p: &Value, bounds: Rect, pixels: &[[f32; 4]], prompt: &SamPrompt) -> Result<Vec<HelperMask>> {
     let helper = resolve_helper(Some(s))?;
-    let pack = resolve_pack(Some(s), &helper)?;
+    let pack = match resolve_pack(Some(s), &helper) {
+        Ok(pack) => pack,
+        Err(_) if std::env::var_os(PACK_ENV).is_none() => {
+            // Not on this machine: download from the release page so the first selection
+            // works without a manual setup step. The pack lands beside the helper, where
+            // `resolve_pack` finds it next time.
+            let target = helper.parent().unwrap_or(Path::new(".")).join(PACK_NAME);
+            eprintln!("PhotoCraft: the SAM 3.1 pack was not found locally; downloading from Hugging Face...");
+            let status = Command::new(&helper)
+                .arg("--download")
+                .arg(PACK_URL)
+                .arg("--download-out")
+                .arg(&target)
+                .stderr(Stdio::inherit())
+                .output()
+                .map_err(|e| bad("select.sam3", &format!("cannot start {} for the pack download: {e}", helper.display())))?;
+            if !status.status.success() || !target.is_file() {
+                let message =
+                    String::from_utf8_lossy(&status.stderr).lines().rev().take(3).collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join(" | ");
+                return Err(bad(
+                    "select.sam3",
+                    &format!("the SAM 3.1 pack download failed: {message}. Get it manually from {PACK_URL} and put it beside the helper."),
+                ));
+            }
+            target
+        }
+        Err(error) => return Err(error),
+    };
     let (w, h) = (bounds.width() as usize, bounds.height() as usize);
     if w == 0 || h == 0 {
         return Err(bad("select.sam3", "the document has no pixels"));
