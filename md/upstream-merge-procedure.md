@@ -31,7 +31,8 @@ merge these tests are the definition of "not broken".
 
 | Fork feature | Lives in | Guarding tests |
 |---|---|---|
-| LaMa Cleaner tool | `crates/engine/src/cmd/retouch_cmds/lama_cleaner.rs`, `crates/ui-egui/src/tools/retouch_ui.rs`, `crates/engine/src/cmd/retouch_cmds.rs` | `retouch_ui` (90 tests), engine lib suite |
+| LaMa Cleaner tool | `crates/engine/src/cmd/retouch_cmds/lama_cleaner.rs`, `crates/ui-egui/src/tools/retouch_ui.rs`, `crates/engine/src/cmd/retouch_cmds.rs` | `retouch_ui` (90 tests), engine lib suite, `the_default_toolbar_lists_every_tool` |
+| SAM Selection tool (SAM 3.1 on CUDA) | `crates/ui-egui/src/tools/sam3*`, `plugins/sam3-select.exe` | `sam3_toolbar`, `sam3_canvas`, `sam3_options_bar`, `every_selectable_tool_has_a_toolbar_slot` |
 | Japanese typography / CJK font engine | `crates/text/src/cjk.rs`, `crates/text/src/fonts.rs`, `crates/text/src/font_class.rs`, `crates/ui-egui/src/text/font_preview.rs` | `cjk_fonts` (55 tests) |
 | Japanese transform-menu labels (`Skew` / `Distort` wording) | `crates/ui-egui/src/i18n.rs` (`JA_TEXT_OVERRIDES` at line 433, `JA_ID_OVERRIDES` at line 434, applied in `tr()` / `tr_id()`) | `i18n::tests::japanese_transform_labels_keep_skew_and_distinct` |
 | Move tool cross-document transfer (incl. background-layer drag) | `crates/ui-egui/src/panels/layer_transfer.rs` (`move_drag()` line 74, `arm_move_transfer()` line 112), `crates/ui-egui/src/tools/move_box.rs`, `crates/ui-egui/src/canvas/tool_input.rs` (`record_move_blocked()` line 403) | `layer_transfer` (26 tests) |
@@ -46,6 +47,38 @@ Note on scope: some fork work still lives only on an open pull-request branch (f
 `pickAt` `includeLocked` probe support is **not** in `main` — `git grep includeLocked -- crates`
 returns nothing on `main`). Treat such items as branch-local: check the branch before assuming a
 symbol exists in `main`, and never copy a whole PR-branch file into `main` (§7.3).
+
+### 1.1 Upstream's data-driven defaults are registries: a name they omit is gone
+
+Upstream increasingly ships features whose behaviour is a *default table of names* — a stored
+toolbar layout, a command table, a menu catalogue, an extension list. Taking such a table in a
+merge without adding the fork's entries removes the fork feature from the running app **while
+every upstream test stays green**, because the feature still exists, still compiles, and is simply
+not reachable.
+
+Measured failure, 2026-11-16: the merge brought `DEFAULT_TOOLBAR` (`Edit › Toolbar`'s default
+layout, `crates/engine/src/prefs.rs`), which lists tools by name. It named neither `LamaCleaner`
+nor `Sam3Select`; `ToolbarCustomization::layout()` moves a tool named nowhere into Extra Tools, so
+both left the toolbar's brush and object-selection flyouts. Nothing failed until the daily exe was
+rebuilt five hours later, which is when the user lost the tools.
+
+Rule: when a merge adds or renames a default table, layout constant, name list or id registry,
+diff it against the fork's registrations **in the same commit** and add the fork entries. The
+check is mechanical, so run it rather than eyeballing it:
+
+```powershell
+# every tool the engine can select has a slot in the toolbar's own sections ...
+cargo test -p photocraft-ui-egui --lib every_selectable_tool_has_a_toolbar_slot
+# ... and in the stored layout's default, not pushed into Extra Tools
+cargo test -p photocraft-engine  --lib the_default_toolbar_lists_every_tool
+# the fork tools' own behaviour, so a "restored" entry is not an empty icon
+cargo test -p photocraft-ui-egui --lib sam3_toolbar
+cargo test -p photocraft-ui-egui --lib toolbar_group_order
+```
+
+A merge that leaves any of these red is not finished. A guard test is never weakened, skipped or
+deleted to make a merge pass: if a guard is wrong, change it only with a test that proves the
+weaker claim still protects the feature.
 
 ---
 
@@ -286,7 +319,17 @@ cargo test -p photocraft-ui-egui --lib         # ~6.7k tests, includes cjk_fonts
                                                # layer_transfer / retouch_ui / label_column
 cargo test -p photocraft-engine --lib
 cargo test -p photocraft-codecs
+
+# Fork features stay reachable. A new upstream default table is where they vanish (§1.1);
+# a stored layout can name every tool upstream knows and none of the fork's.
+cargo test -p photocraft-ui-egui --lib every_selectable_tool_has_a_toolbar_slot
+cargo test -p photocraft-engine  --lib the_default_toolbar_lists_every_tool
 ```
+
+A crate whose **tests do not compile** is a blocking finding, not a "known failure": the suite
+that would have caught the regression never ran. Measured 2026-11-16: `assign_shortcut` gained an
+`index` argument upstream and a test in `prefs/prefs_ui/shortcut_set_switch_tests.rs` still passed
+a name, so `cargo test -p photocraft-ui-egui --lib` failed to build while the merge looked green.
 
 Expected baseline (measured on the `6d99175b1` merge): ui-egui 6734 passed / 0 failed,
 engine 3561 / 0, codecs 1053 / 0, clippy exit 0, fmt exit 0, workspace check exit 0.
@@ -426,7 +469,10 @@ space and list what remains and why.
 ## 14. Final checklist
 
 - [ ] `git status --short` clean; `origin/main` == local `main` after the instructed push
-- [ ] All §1 fork-feature suites green
+- [ ] All §1 fork-feature suites green, including the §1.1 default-table guards
+- [ ] Every upstream default table / name list / id registry the merge touched lists the fork's
+      entries (not merely compiles)
+- [ ] Every touched crate's tests compile (`cargo test --lib` builds, not just `cargo check`)
 - [ ] fmt / clippy (`-D warnings`) / workspace `cargo check --all-targets` exit 0
 - [ ] ui-egui, engine, codecs: 0 failed, counts at or above the §9 baseline
 - [ ] Fork wording lives in the repository (override table), not in a local catalog checkout

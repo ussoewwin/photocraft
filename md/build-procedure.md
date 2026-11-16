@@ -217,6 +217,12 @@ python -X utf8 -c "
 data = open(r'<exe>', 'rb').read()
 print('Shippori Mincho:', b'Shippori Mincho' in data)
 print('BIZ UDPGothic:', b'BIZ UDPGothic' in data)"
+
+# (g) The fork's own tools are still reachable. A rebuild is the moment a merge defect reaches
+#     the user: on 2026-11-16 a rebuild shipped an upstream toolbar default that had lost the
+#     LaMa Cleaner and SAM Selection tools, and nobody noticed until the user reported it.
+cargo test -p photocraft-engine  --lib the_default_toolbar_lists_every_tool
+cargo test -p photocraft-ui-egui --lib every_selectable_tool_has_a_toolbar_slot
 ```
 
 Gate (e) failing with a partial count, or (f) printing `False`, means the build silently
@@ -234,6 +240,7 @@ launches from**. Rebuild per §5.1 and re-run the gates.
 | The Japanese font feature vanished from the app | The launcher exe was rebuilt from a `main` that did not carry the font pull request; the feature existed only on its branch. | Every pull-request content is merged into `main` before any rebuild, and the containment check of `upstream-merge-procedure.md` ("Iron rule") is reported with the build. |
 | The English-only state persisted one build longer than necessary | The gap was reported as a fact ("the launcher does not set the variable") instead of being fixed immediately, under "changing it was not instructed". | Reporting a known regression is not a substitute for restoring the working state; restoration of what you broke is always in scope of the instruction that caused it. |
 | Build-wait noise | Repeated manual sleep-and-poll loops while a registered completion monitor was already watching the log. | Trust the registered monitor; do one completion check instead of polling loops. |
+| The LaMa Cleaner and SAM Selection tools vanished from the toolbar | A rebuild was made from a `main` that had just merged upstream's new data-driven toolbar default, which named neither fork tool; `layout()` moved both into Extra Tools. Every gate passed because none of them looked at the toolbar. | A rebuild runs gate (g): the fork tools must be on the toolbar before the daily-use exe is replaced. The merge itself carries the fix and the guard (`upstream-merge-procedure.md` §1.1). |
 
 ---
 
@@ -263,6 +270,7 @@ launches from**. Rebuild per §5.1 and re-run the gates.
 - [ ] `FileVersion` = expected version
 - [ ] CLI smoke test passed (`--version`)
 - [ ] Catalog gate: `3377/3377`-style full byte match
+- [ ] Fork tools present: gate (g) green (LaMa Cleaner, SAM Selection on the toolbar)
 - [ ] Fonts gate: `Shippori Mincho` / `BIZ UDPGothic` found
 - [ ] Scratch logs deleted; caches and checkouts kept; nothing of unknown ownership touched
 - [ ] Nothing pushed, tagged, or published without an explicit instruction

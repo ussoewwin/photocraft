@@ -1014,12 +1014,17 @@ fn clone_sample_dropdown(ui: &mut egui::Ui, stored: &mut String, indexed: bool) 
     }
 }
 
+/// Whether the retouching options bar has anything to show for `tool`. Plain brushes keep the
+/// brush bar, and an unrelated tool shows no retouching options.
+fn has_retouch_options(tool: Tool) -> bool {
+    let selected = matches!(tool, Tool::QuickSelection | Tool::ObjectSelection | Tool::Sam3Select | Tool::Patch | Tool::ContentAwareMove | Tool::RedEye);
+    let plain_brush = matches!(tool, Tool::Brush | Tool::Pencil | Tool::MixerBrush | Tool::Eraser);
+    (tool.is_brushlike() || selected) && !plain_brush
+}
+
 /// Options bar for the retouching and smart-selection tools. Returns false for other tools.
 pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui, tool: Tool) -> bool {
-    if !tool.is_brushlike()
-        && !matches!(tool, Tool::QuickSelection | Tool::ObjectSelection | Tool::Sam3Select | Tool::Patch | Tool::ContentAwareMove | Tool::RedEye)
-        || matches!(tool, Tool::Brush | Tool::Pencil | Tool::MixerBrush | Tool::Eraser)
-    {
+    if !has_retouch_options(tool) {
         return false;
     }
     if tool == Tool::ContentAwareMove {
