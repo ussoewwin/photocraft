@@ -223,7 +223,19 @@ print('BIZ UDPGothic:', b'BIZ UDPGothic' in data)"
 #     LaMa Cleaner and SAM Selection tools, and nobody noticed until the user reported it.
 cargo test -p photocraft-engine  --lib the_default_toolbar_lists_every_tool
 cargo test -p photocraft-ui-egui --lib every_selectable_tool_has_a_toolbar_slot
+
+# (h) The fork's own Japanese UI resolves from the tree, with the catalogs this build embeds.
+#     Gate (e) proves the catalog is embedded; it does not prove the fork's strings are in it.
+#     Measured 2026-11-16: the SAM Selection labels existed only in a stale cached catalog, so
+#     this suite passed locally and the shipped build showed English.
+cargo test -p photocraft-ui-egui --lib sam_selection_strings_are_translated_in_japanese
+cargo test -p photocraft-ui-egui --lib retouch_ui
 ```
+
+Run (g) and (h) with `CRAFT_I18N_DIR` set to the pinned checkout (gate (e)'s variable) and
+`CRAFT_FONTS_DIR` set: without them `retouch_ui`, `cjk_fonts`, `i18n` and `type_tool` fail for
+reasons that are the run's fault (no CJK faces, `from_pref` falling back to the system language),
+and a **green** run can be reading a catalog compiled from an older checkout.
 
 Gate (e) failing with a partial count, or (f) printing `False`, means the build silently
 dropped catalogs or faces — **do not deliver it, do not leave it in a location the user
@@ -241,6 +253,7 @@ launches from**. Rebuild per §5.1 and re-run the gates.
 | The English-only state persisted one build longer than necessary | The gap was reported as a fact ("the launcher does not set the variable") instead of being fixed immediately, under "changing it was not instructed". | Reporting a known regression is not a substitute for restoring the working state; restoration of what you broke is always in scope of the instruction that caused it. |
 | Build-wait noise | Repeated manual sleep-and-poll loops while a registered completion monitor was already watching the log. | Trust the registered monitor; do one completion check instead of polling loops. |
 | The LaMa Cleaner and SAM Selection tools vanished from the toolbar | A rebuild was made from a `main` that had just merged upstream's new data-driven toolbar default, which named neither fork tool; `layout()` moved both into Extra Tools. Every gate passed because none of them looked at the toolbar. | A rebuild runs gate (g): the fork tools must be on the toolbar before the daily-use exe is replaced. The merge itself carries the fix and the guard (`upstream-merge-procedure.md` §1.1). |
+| The SAM Selection options bar was English in the shipped build | Its Japanese rows lived only in `craft-i18n`; the pin (`e56d2624`) has none of them, so a test passed on a stale cached catalog while a clean catalog build rendered English. | A fork string is Japanese because the tree carries it: anything the pinned catalog lacks goes into `JA_TEXT_OVERRIDES`, and gate (h) is the test that proves it. |
 
 ---
 
@@ -271,6 +284,7 @@ launches from**. Rebuild per §5.1 and re-run the gates.
 - [ ] CLI smoke test passed (`--version`)
 - [ ] Catalog gate: `3377/3377`-style full byte match
 - [ ] Fork tools present: gate (g) green (LaMa Cleaner, SAM Selection on the toolbar)
+- [ ] Fork Japanese UI present: gate (h) green (SAM labels from the pinned catalog or the tree)
 - [ ] Fonts gate: `Shippori Mincho` / `BIZ UDPGothic` found
 - [ ] Scratch logs deleted; caches and checkouts kept; nothing of unknown ownership touched
 - [ ] Nothing pushed, tagged, or published without an explicit instruction
