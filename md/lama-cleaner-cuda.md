@@ -1,51 +1,50 @@
-# LaMa Cleaner CUDA 対応 技術解説
+# LaMa Cleaner CUDA Support — Technical Reference
 
-LaMa Cleaner(`paint.lamaCleaner`)の GPU(CUDA)対応について、実装の全体を解説する。
-すべて Rust 実装であり、推論はヘルパープロセス `plugins/lama-cleaner` が ONNX Runtime(`ort` 2.0.0-rc.9)で行う。エンジン本体は `ort` にリンクせず、ヘルパーを `std::process::Command` で起動するだけである。
+This document explains the LaMa Cleaner GPU (CUDA) support end to end: `paint.lamaCleaner`. Everything is Rust: inference runs in the helper process `plugins/lama-cleaner` through ONNX Runtime (`ort` 2.0.0-rc.9). The engine itself does not link `ort`; it only starts the helper with `std::process::Command`.
 
-- 対象コミット: `049063b90` → `85c1b5a1c` → `b14e2651a`(main には `5810f9063`・`72827c369` 経由で取り込み済み)
-- 主要ファイル: `plugins/lama-cleaner/src/lib.rs`(推論と EP 選択)、`plugins/lama-cleaner/src/main.rs`(CLI と常駐ループ)、`crates/engine/src/cmd/retouch_cmds/lama_cleaner.rs`(コマンドと常駐ワーカー管理)
-- 記載の数値は 2026-11-16 の実測値(Windows / CUDA 13 + cuDNN 9.26 ランタイム / RTX GPU / `big-lama.onnx` 198.4 MiB)
+- Commits: `049063b90` → `85c1b5a1c` → `b14e2651a` (landed on main through `5810f9063` and `72827c369`)
+- Main files: `plugins/lama-cleaner/src/lib.rs` (inference and provider selection), `plugins/lama-cleaner/src/main.rs` (CLI and the resident loop), `crates/engine/src/cmd/retouch_cmds/lama_cleaner.rs` (the command and resident-worker management)
+- All numbers below were measured on 2026-11-16 (Windows / CUDA 13 + cuDNN 9.26 runtimes / RTX GPU / `big-lama.onnx` at 198.4 MiB)
 
 ---
 
-## 1. 概要
+## 1. Overview
 
-CUDA 対応の本体は次の 3 点。
+The CUDA support consists of three parts:
 
-1. **実行プロバイダ(EP)チェーン**: ロード時に CUDA → DirectML → CPU の順で選択し、実行中にプロバイダが壊れた場合は縮退する(`plugins/lama-cleaner/src/lib.rs:91`、`lib.rs:379`)。
-2. **CUDA/cuDNN DLL の探索とフォルダ全件プリロード**: PATH 未設定でも CUDA が動く(`lib.rs:432`、`lib.rs:465`)。
-3. **常駐ワーカー(`--serve`)**: モデルをプロセス内に保持し、ストロークごとのモデルロード(6.7〜8.6 秒)を不要にする(`plugins/lama-cleaner/src/main.rs:160`、`crates/engine/src/cmd/retouch_cmds/lama_cleaner.rs:232`)。
+1. **The execution-provider (EP) chain**: CUDA → DirectML → CPU is chosen when the model loads and degraded at run time when a provider stops working (`plugins/lama-cleaner/src/lib.rs:91`, `lib.rs:379`).
+2. **CUDA/cuDNN DLL discovery and folder-wide preloading**: CUDA works without any PATH setup (`lib.rs:432`, `lib.rs:465`).
+3. **The resident worker (`--serve`)**: the model stays loaded in one process, so a stroke no longer pays the 6.7–8.6 s model load (`plugins/lama-cleaner/src/main.rs:160`, `crates/engine/src/cmd/retouch_cmds/lama_cleaner.rs:232`).
 
-実測性能は §9。CUDA 定常状態でストローク 1 回あたり 87〜95 ms。
+Measured performance is in §9: 87–95 ms per stroke in the CUDA steady state.
 
-## 2. 構成要素とデータフロー
+## 2. Components and data flow
 
 ```text
-UI (LaMa Cleaner ツール, オプションバー)
-  └─ engine コマンド paint.lamaCleaner        crates/engine/src/cmd/retouch_cmds.rs:336
+UI (the LaMa Cleaner tool, its options bar)
+  └─ engine command paint.lamaCleaner          crates/engine/src/cmd/retouch_cmds.rs:336
        └─ lama_cleaner.rs
-            ├─ plan(): ストローク → 修復ウィンドウ (§7.1)
-            ├─ hole(): 穴マスク生成 (§7.1)
+            ├─ plan(): strokes → the inpainting window (§7.1)
+            ├─ hole(): build the hole mask (§7.1)
             └─ jobs::run → execute_lama()
-                 ├─ ウィンドウを RGB8 / Gray8 PNG で一時ファイルへ
+                 ├─ encode the window as RGB8 / Gray8 PNGs into temp files
                  ├─ resident::apply() → lama-cleaner --serve (§6)
-                 │     └─ 失敗時は run_helper_once() の 1 回きり実行へフォールバック
-                 ├─ 結果 PNG をデコード
-                 └─ hole のみピクセル置換 → 1 undo ステップで合成
+                 │     └─ on failure, fall back to the one-shot run_helper_once()
+                 ├─ decode the result PNG
+                 └─ replace only the hole's pixels → one undo step
 ```
 
-ヘルパーには 3 つの起動形態がある(`plugins/lama-cleaner/src/main.rs` の USAGE)。
+The helper has three launch modes (see USAGE in `plugins/lama-cleaner/src/main.rs`):
 
-| 形態 | 引数 | 用途 |
+| Mode | Arguments | Purpose |
 |---|---|---|
-| OneShot | `-i <in.png> -m <mask.png> -o <out.png> [--model <m>]` | 1 画像 1 プロセス。エンジンのフォールバック経路 |
-| Serve | `--serve [--model <m>]` | モデルをロードし続け、stdin の 1 行を 1 JSON リクエストとして処理 |
-| セルフテスト | (引数なし) | 合成画像で 1 回推論し `%TEMP%\photocraft-lama-selftest\test_inpainted.png` に保存 |
+| OneShot | `-i <in.png> -m <mask.png> -o <out.png> [--model <m>]` | One image, one process. The engine's fallback path |
+| Serve | `--serve [--model <m>]` | Load the model once, then answer one JSON request per stdin line |
+| Self-test | (no arguments) | Run one inference on a synthetic image and save `%TEMP%\photocraft-lama-selftest\test_inpainted.png` |
 
-wasm ビルドはヘルパーを起動できないため、コマンドは "LaMa Cleaner is only available in the desktop app" を返す(`lama_cleaner.rs:531`)。
+The wasm build cannot start a helper process, so the command returns "LaMa Cleaner is only available in the desktop app" (`lama_cleaner.rs:531`).
 
-## 3. ビルド構成
+## 3. Build configuration
 
 `plugins/lama-cleaner/Cargo.toml:10-14`:
 
@@ -53,188 +52,188 @@ wasm ビルドはヘルパーを起動できないため、コマンドは "LaMa
 ort = { version = "2.0.0-rc.9", features = ["cuda", "directml", "preload-dylibs", "lax-feature-matching"] }
 ```
 
-- Windows x86_64 の配布テーブルには CUDA ビルドが 1 種のみ(`cuda13,tensorrt,nvrtx,directml`)があり、`cuda` だけでは一致しない。`lax-feature-matching` がこの単一ビルドを選ぶ。
-- `preload-dylibs` は `ep::cuda::preload_dylibs()` と `ort::util::preload_dylib()` を有効化し、PATH に依存せず任意のフォルダから CUDA/cuDNN をロードできるようにする(§5)。
-- その他の依存: `ndarray 0.17`(テンソル)、`image 0.25`(png/jpeg のみ)、`serde` / `serde_json`(プロトコル)、`thiserror`。
+- The Windows x86_64 distribution table has exactly one CUDA prebuilt (`cuda13,tensorrt,nvrtx,directml`), and `cuda` alone never matches it. `lax-feature-matching` selects that single build.
+- `preload-dylibs` enables `ep::cuda::preload_dylibs()` and `ort::util::preload_dylib()`, which is what lets the helper load CUDA/cuDNN from a folder of its choosing instead of depending on PATH (§5).
+- Other dependencies: `ndarray 0.17` (tensors), `image 0.25` (png/jpeg only), `serde` / `serde_json` (the protocol), `thiserror`.
 
-## 4. 実行プロバイダチェーン
+## 4. The execution-provider chain
 
-### 4.1 順序と設定
+### 4.1 Order and settings
 
-`Provider::dispatch()`(`plugins/lama-cleaner/src/lib.rs:57`):
+`Provider::dispatch()` (`plugins/lama-cleaner/src/lib.rs:57`):
 
-| EP | 設定 | 理由 |
+| EP | Settings | Why |
 |---|---|---|
-| CUDA | `ConvAlgorithmSearch::Heuristic` + `with_tf32(true)` + `error_on_failure()` | ヒューリスティック探索は cuDNN の網羅ベンチマーク(初回に数秒)を省く。TF32 は Ampere 以降のテンソルコアを使う。`error_on_failure()` で、登録失敗を黙って CPU に落とさない |
-| DirectML | `ep::DirectML::default().build().error_on_failure()` | DirectX 12 対応 GPU 全般(NVIDIA 以外も含む) |
-| CPU | EP なし(ORT 既定) | 最後の手段 |
+| CUDA | `ConvAlgorithmSearch::Heuristic` + `with_tf32(true)` + `error_on_failure()` | The heuristic search skips cuDNN's exhaustive benchmark (seconds on the first run). TF32 uses the tensor cores on Ampere and later. `error_on_failure()` keeps a missing runtime from silently downgrading |
+| DirectML | `ep::DirectML::default().build().error_on_failure()` | Any DirectX 12 GPU, including non-NVIDIA ones |
+| CPU | No EP (ONNX Runtime's default) | The last resort |
 
-### 4.2 ロード時の選択
+### 4.2 Selection at load time
 
-`LamaModel::load()`(`lib.rs:91`)。まず `prepare_cuda()`(§5)が CUDA ランタイムの所在を確認し、見つからなければ CUDA をスキップする。残りを CUDA → DirectML → CPU の順で `open_session()`(`lib.rs:422`)して、最初に開けたものを採用する。開かなかった EP の名前とエラーはすべて `notes` に積まれ、`NoProvider` エラーに連結される。
+`LamaModel::load()` (`lib.rs:91`). `prepare_cuda()` (§5) first locates the CUDA runtimes; when it fails, CUDA is skipped. The remaining providers are tried CUDA → DirectML → CPU through `open_session()` (`lib.rs:422`), and the first one that opens wins. Every provider that fails to open contributes its name and error to `notes`, and they are joined into the `NoProvider` error.
 
-### 4.3 実行時の縮退(遅延フォールバック)
+### 4.3 Degradation at run time (the lazy fallback)
 
-セッションは開いたのにモデルの実行が失敗するケース(DLL は見つかったが別バージョン、等)がある。`run_patch()`(`lib.rs:379`)は最初の `session.run()` が失敗すると:
+A session can open and the model can still fail to run (DLLs found but of another version, for instance). When the first `session.run()` fails, `run_patch()` (`lib.rs:379`):
 
-1. 現在のプロバイダを `state.failed` に記録し、`next_provider()`(`lib.rs:418`)で未失敗の次の EP を選ぶ。
-2. `open_session()` で置換セッションを作り、**同じパッチを再実行**する。ストロークは失敗ではなく「遅い経路」で完走する。
-3. 置換の旨は stderr と `notes` に記録される。
+1. Records the current provider in `state.failed` and picks the next unfailed EP with `next_provider()` (`lib.rs:418`).
+2. Builds a replacement session with `open_session()` and **re-runs the same patch** — the stroke completes on a slower path instead of failing outright.
+3. Writes a note about the replacement to stderr and to `notes`.
 
-CPU で失敗したらそれ以上の縮退先がなく、そのエラーを返す。
+When CPU itself fails there is nothing left to degrade to, and the error is returned as is.
 
-`LamaModel` は `session: Mutex<Option<Session>>` でセッションを保持し、実行中だけ `take()` して返却する(`inpaint_512`、`lib.rs:122`)。これは置換中に他の推論がセッションを借用しないための構造である。Mutex の毒は `unwrap_or_else(PoisonError::into_inner)` で回復する。
+`LamaModel` keeps the session in `session: Mutex<Option<Session>>`: `inpaint_512` (`lib.rs:122`) takes it out for a run and puts it back afterwards, so the replacement happens while no inference borrows the session. Mutex poisoning is recovered with `unwrap_or_else(PoisonError::into_inner)`.
 
-## 5. CUDA / cuDNN DLL の探索と全件プリロード
+## 5. CUDA / cuDNN DLL discovery and folder-wide preloading
 
-### 5.1 判定と探索順序
+### 5.1 The probe and the search order
 
-`prepare_cuda()`(`lib.rs:432`)は `cudart64_13.dll` と `cudnn64_9.dll`(それぞれ `ort` の `CUDA_DYLIBS` / `CUDNN_DYLIBS` の先頭名、取れなければ固定名)を `find_runtime_dir()`(`lib.rs:498`)で探す。探索順:
+`prepare_cuda()` (`lib.rs:432`) looks for `cudart64_13.dll` and `cudnn64_9.dll` (the first entries of `ort`'s `CUDA_DYLIBS` / `CUDNN_DYLIBS`, with fixed names as the fallback) through `find_runtime_dir()` (`lib.rs:498`). The search order:
 
-1. 環境変数 `CUDA_PATH` / `CUDNN_PATH` / `CUDA_HOME` / `CUDNN_HOME` の各ルートに、`push_toolkit_dirs()`(`lib.rs:478`)が候補を追加する: `bin\x64`(CUDA 13+ と cuDNN 9+ の新レイアウト)→ `bin\<バージョン>\x64` と `bin\<バージョン>`(ディレクトリ名の降順。`bin\13.0\x64` など cuDNN 9 のバージョン付きレイアウト)→ `bin` → ルート自身。
-2. ヘルパー実行ファイル自身のフォルダと、その親(`plugins` フォルダ)。
-3. `Program Files\NVIDIA GPU Computing Toolkit\CUDA\*` と `Program Files\NVIDIA\CUDNN\*`(バージョン ディレクトリを降順で全部)。
-4. `PATH`。
+1. The environment variables `CUDA_PATH` / `CUDNN_PATH` / `CUDA_HOME` / `CUDNN_HOME`; each root gets candidates appended by `push_toolkit_dirs()` (`lib.rs:478`): `bin\x64` (the CUDA 13+ and cuDNN 9+ layout) → `bin\<version>\x64` and `bin\<version>` (directory names in descending order — the versioned cuDNN 9 layouts such as `bin\13.0\x64`) → `bin` → the root itself.
+2. The helper executable's own folder and its parent (the `plugins` folder).
+3. `Program Files\NVIDIA GPU Computing Toolkit\CUDA\*` and `Program Files\NVIDIA\CUDNN\*` (every version directory, descending).
+4. `PATH`.
 
-最初に目的の DLL が見つかったディレクトリを採用する。どちらか片方でも欠けたら、欠けている方の名前を明記した note を出して CUDA を諦める。
+The first directory that actually holds the DLL wins. When either runtime is missing, a note names the missing side and CUDA is given up.
 
-### 5.2 フォルダ全件プリロード — なぜ 1 個ずつでは足りないのか
+### 5.2 Why every DLL in the folder is preloaded
 
-見つかった CUDA / cuDNN の両ディレクトリに対し:
+For both discovered directories:
 
-1. `ep::cuda::preload_dylibs(Some(&cuda), Some(&cudnn))` で ORT の既知リストを読み込む。
-2. その後 `preload_folder()`(`lib.rs:465`)で、**両フォルダ内の `.dll` を名前順に全件** `ort::util::preload_dylib()` でロードする。ロードできない DLL(別バージョン、別アーキテクチャ)は黙ってスキップする。
+1. `ep::cuda::preload_dylibs(Some(&cuda), Some(&cudnn))` loads ORT's own known list.
+2. `preload_folder()` (`lib.rs:465`) then loads **every `.dll` in both folders, in name order**, through `ort::util::preload_dylib()`. A library that cannot be loaded (another version, another architecture) is skipped silently.
 
-理由: CUDA EP は実行時に依存 DLL を「名前」で読みに行く。Windows のローダによる名前解決は「すでにプロセスにロード済み」か「PATH 上」しか見ない。ところが cuDNN 9.26 は `cudnn_engines_tensor_ir64_9.dll` のような追加プロバイダ DLL を同梱しており、これは ONNX Runtime 側の固定リストに存在しない。フォルダ全件を先にロードしておかないと、**最初の畳み込みで "Could not locate ..." が出て CUDA が落ちる**(実測)。この修正が `b14e2651a` である。
+Why: the CUDA EP loads its dependencies **by name** later, and Windows' loader only resolves a name that is already loaded in the process or is on PATH. cuDNN 9.26 ships extra provider DLLs such as `cudnn_engines_tensor_ir64_9.dll`, which are not in ONNX Runtime's own list. Without the folder-wide preload, **the first convolution fails with "Could not locate ..."** (measured). The fix is commit `b14e2651a`.
 
-効果: CUDA 13 と cuDNN 9.26 がインストールされていれば、**PATH に何も追加しなくても** CUDA で動く。
+Effect: with CUDA 13 and cuDNN 9.26 installed, **CUDA works with nothing added to PATH**.
 
-### 5.3 失敗時の診断(note 文面)
+### 5.3 Failure notes (the exact wording)
 
 - `the CUDA 13 runtime (cudart64_13.dll) was not found; using DirectML`
 - `cuDNN 9 (cudnn64_9.dll) was not found; using DirectML`
-- `CUDA libraries could not be preloaded (<エラー>); using DirectML`
+- `CUDA libraries could not be preloaded (<error>); using DirectML`
 
-これらは `LamaModel::notes()` として返り、ヘルパーの stderr に `lama-cleaner: <note>` の形で出る。
+These come back through `LamaModel::notes()` and reach stderr as `lama-cleaner: <note>`.
 
-## 6. 常駐ワーカー(`--serve`)
+## 6. The resident worker (`--serve`)
 
-### 6.1 モチベーションとプロトコル
+### 6.1 Motivation and protocol
 
-モデルロードは 6.7〜8.6 秒かかる。`--serve`(`main.rs:160`)はモデルを 1 回だけロードし、stdin から 1 行 = 1 JSON リクエスト、stdout へ 1 行 = 1 JSON リプライで答える。
+The model load costs 6.7–8.6 s. `--serve` (`main.rs:160`) loads it once and then answers one JSON request per stdin line with one JSON reply per stdout line:
 
 ```text
-要求: {"image":"<png>","mask":"<png>","output":"<png>"}   または {"warmup":true}
-応答: {"ok":true,"infer_ms":42.1,"provider":"CUDA"}
-      {"ok":false,"error":"..."}
+request: {"image":"<png>","mask":"<png>","output":"<png>"}   or {"warmup":true}
+reply:   {"ok":true,"infer_ms":42.1,"provider":"CUDA"}
+         {"ok":false,"error":"..."}
 ```
 
-診断はすべて stderr。stdout はリプライ専用である。未知のオプションはエラーになる(`main.rs` の `parse_args`): 旧ビルドのヘルパーが prose を出した場合に、エンジン側がそれを「serve できないヘルパー」と正しく判定して one-shot へ落とす設計と噛み合う。
+Diagnostics go to stderr only; stdout carries replies only. An unknown option is an error (`parse_args` in `main.rs`): when an older helper prints prose, the engine correctly judges it as one that cannot serve and falls back to a one-shot run.
 
-### 6.2 ウォームアップの設計 — 背景スレッドを勝手に起こさない
+### 6.2 Warm-up design — no background thread is spawned blindly
 
-`warmup_once()`(`main.rs:146`)は 512×512 の空画像を 1 パスして cuDNN のカーネルを初期化する(実測 約 206 ms)。ただし `serve()` は**自発的な背景ウォームアップを起こさない**。ストロークをきっかけに `--serve` が起動された場合、最初の stdin 行はすでに待っており、背景スレッドがセッションロックを掴んで `run_one` の PNG デコードと競合し、初回ストロークが `inpaint_512` を 2 回実行してしまう(実測された競合、`85c1b5a1c` で修正)。アイドル中にワーカーを先行起動する呼び出し側だけが、`{"warmup":true}` を明示送信してよい。
+`warmup_once()` (`main.rs:146`) runs one 512×512 pass so cuDNN initializes its kernels once (measured ~206 ms). But `serve()` does **not** spawn a background warm-up on its own: when the engine starts `--serve` because of a stroke, the first stdin line is already waiting, and a background thread would grab the session lock while `run_one` decodes the PNGs, forcing the first stroke to run `inpaint_512` twice (a measured contention, fixed in `85c1b5a1c`). Only a caller that pre-launches the worker while idle may send `{"warmup":true}` explicitly.
 
-### 6.3 エンジン側のワーカー管理
+### 6.3 Engine-side worker management
 
-`lama_cleaner.rs:232` の `resident` モジュール。
+The `resident` module (`lama_cleaner.rs:232`):
 
-- **スロット**: `OnceLock<Mutex<Option<Worker>>>`(`lama_cleaner.rs:337`)。プロセス全体で 1 ワーカー。`matches()` で exe / model が不一致なら即破棄して作り直す。
-- **起動**(`Worker::start`): `lama-cleaner --serve --model <model>` を stdin/stdout piped・stderr inherit で起動。stdout は専用スレッドが `read_line` して mpsc チャンネルへ流す。要求側は `read_line` でではなく `recv_timeout` で待つため、ヘルパーが固でも要求スレッドがパイプで詰まない。
-- **タイムアウト**: `REPLY_TIMEOUT = 120 秒`(`lama_cleaner.rs:242`)。初回要求はモデルロードを含む。タイムアウト・プロセス終了は `Unavailable`。
-- **エラーの二分**(`parse_reply`、`lama_cleaner.rs:356`):
-  - `Unavailable`: 起動失敗・プロセス死・タイムアウト・非 JSON の出力(旧ヘルパーの prose など)。ワーカーを破棄する対象。
-  - `Failed`: 健全なワーカーからの `{"ok":false,"error":...}`。ワーカーは保持し、エラーメッセージをそのまま報告する。
-- **再起動ポリシー**(`apply`、`lama_cleaner.rs:377`): 既存ワーカーが死んでいた場合は新ワーカーで 1 回だけ再試行する。起動直後の失敗は即 `Unavailable`。`Unavailable` で終わった場合はスロットを空にして呼び出し側へ返す。
-- **フォールバック**(`execute_lama`、`lama_cleaner.rs:470`): `apply()` が `Unavailable` なら `run_helper_once()`(`lama_cleaner.rs:450`、`-i -m -o --model` の 1 回きりプロセス)を実行する。`Failed` はそのままコマンドのエラーになる。
+- **The slot**: `OnceLock<Mutex<Option<Worker>>>` (`lama_cleaner.rs:337`). One worker for the whole process. When `matches()` reports an exe / model mismatch, the worker is dropped immediately and replaced.
+- **Starting** (`Worker::start`): `lama-cleaner --serve --model <model>` with piped stdin/stdout and inherited stderr. A dedicated thread reads stdout into an mpsc channel, so a hung helper cannot block the request path: the requester waits on `recv_timeout` instead of `read_line`.
+- **Timeout**: `REPLY_TIMEOUT = 120 s` (`lama_cleaner.rs:242`). The first request includes the model load. A timeout or an exited process is `Unavailable`.
+- **The two error kinds** (`parse_reply`, `lama_cleaner.rs:356`):
+  - `Unavailable`: failed to start, exited, timed out, or printed something that is not JSON (an older helper's prose). The worker is dropped.
+  - `Failed`: a healthy worker's `{"ok":false,"error":...}`. The worker stays loaded and the message is reported directly.
+- **The restart policy** (`apply`, `lama_cleaner.rs:377`): a worker that died between strokes is replaced once with a fresh worker before giving up; a failure right after starting is `Unavailable` immediately. Any `Unavailable` outcome empties the slot.
+- **Fallback** (`execute_lama`, `lama_cleaner.rs:470`): when `apply()` returns `Unavailable`, `run_helper_once()` (`lama_cleaner.rs:450`, the one-shot `-i -m -o --model` process) runs instead. A `Failed` becomes the command's error as is.
 
-## 7. 推論パイプライン
+## 7. The inference pipeline
 
-### 7.1 エンジン側
+### 7.1 Engine side
 
-コマンド仕様(`retouch_cmds.rs:336`): `paint.lamaCleaner`、パラメータは `strokes`(複数ストローク可)、`closeLoops`=true、`sampleAllLayers`=false、`newLayer`=false、`exe`、`model`(ヘルパーとモデルがアプリの隣にない場合の明示指定)。
+The command spec (`retouch_cmds.rs:336`): `paint.lamaCleaner`, with `strokes` (several strokes together), `closeLoops`=true, `sampleAllLayers`=false, `newLayer`=false, `exe`, `model` (to name the helper and model outright when they are not beside the app).
 
-1. **ウィンドウ計画**(`plan()`、`lama_cleaner.rs:82`): ストローク群の境界に、余白 `margin = clamp(長辺の 1/2, 128..512)` を足し、幅・高さが 512 未満なら 512 以上まで拡張する。キャンバスからはみ出す分はシフトで吸収し、最後にキャンバスと交差させる。`MAX_MARGIN = 512`(`lama_cleaner.rs:19`)。これは LaMa の FFC が局所・大域の両構造を見るための文脈確保である。
-2. **穴マスク**(`hole()`、`lama_cleaner.rs:126`): ブラシカバレッジを重ね、`closeLoops` で閉曲線の内部化(`close_loops`)、`dilate` で 5 px 膨張(`GROW`、`lama_cleaner.rs:22`。アンチエイリアスのフリンジを吸収)、選択範囲があれば AND を取る。
-3. **実行と合成**(`run_lama_cleaner` → `execute_lama`、`lama_cleaner.rs:535` / `:470`): 対象ウィンドウのピクセルを RGB8 に、穴を Gray8 にエンコードして一時 PNG へ。ヘルパー実行後、結果 PNG をデコードし、**穴のピクセルだけ**元データへ書き戻す(アルファは元の値を保持、`clamp_samples` でレンジ保証)。`jobs::run` の 1 ジョブ・1 undo ステップで、`newLayer` 指定時は `fill_to_new_layer()`(`lama_cleaner.rs:564`)が結果を新規レイヤーに置く。
+1. **Window planning** (`plan()`, `lama_cleaner.rs:82`): the strokes' bounds inflate by `margin = clamp(the longer side / 2, 128..512)`, widths and heights below 512 grow to at least 512, the overshoot beyond the canvas is absorbed by shifting, and the window is intersected with the canvas last. `MAX_MARGIN = 512` (`lama_cleaner.rs:19`). The context is what lets LaMa's FFC see both local and global structure.
+2. **The hole mask** (`hole()`, `lama_cleaner.rs:126`): brush coverage is unioned, `closeLoops` closes a stroke around an object (`close_loops`), `dilate` grows the hole by 5 px (`GROW`, `lama_cleaner.rs:22` — it covers anti-aliased fringes), and a selection is AND-ed in when present.
+3. **Running and compositing** (`run_lama_cleaner` → `execute_lama`, `lama_cleaner.rs:535` / `:470`): the target window is encoded as RGB8 and the hole as Gray8 into temp PNGs. After the helper returns, the result PNG is decoded and **only the hole's pixels** are written back (the original alpha is kept; `clamp_samples` guarantees the range). The whole thing is one `jobs::run` job and one undo step; with `newLayer`, `fill_to_new_layer()` (`lama_cleaner.rs:564`) puts the result on a new layer instead.
 
-### 7.2 ヘルパー側
+### 7.2 Helper side
 
-**任意解像度の処理**(`inpaint()`、`lib.rs:161`、IOPaint 互換の crop & pad 戦略):
+**Arbitrary resolutions** (`inpaint()`, `lib.rs:161`, the IOPaint-compatible crop-and-pad strategy):
 
-1. マスクの bounding box を求める(マスクなしなら元画像のクローンを返す)。
-2. コンテキスト余白 `context_margin = max(bbox 長辺の 1/2, 128)`、目標辺 `desired = max(512, bbox + 2 × margin)` のクロップを画像中心寄りで切る。
-3. クロップが 512 未満の辺を含むなら、反射パディングで `pad_side = max(512, 辺の最大値)` の正方形にしてから 512 に縮小する(Lanczos3。マスクは Nearest で 2 値性を保つ)。512 を超えるクロップは 512 に縮小 → 推論 → 元サイズへ Lanczos3 で拡大。
-4. 推論結果をクロップ領域へ戻す。
+1. Find the mask's bounding box (an empty mask returns a clone of the input).
+2. Crop a region of `desired = max(512, bbox + 2 × margin)` centred on the mask, where `context_margin = max(half the bbox's longer side, 128)`.
+3. When a cropped side is below 512, reflection-pad to a square of `pad_side = max(512, the longer side)` and scale to 512 (Lanczos3; the mask uses Nearest to stay binary). A crop above 512 is scaled down to 512 → inference → scaled back with Lanczos3.
+4. Write the inpainted region back over the crop.
 
-**512 パッチの推論**(`inpaint_512()`、`lib.rs:122`):
+**The 512 patch** (`inpaint_512()`, `lib.rs:122`):
 
-- 入力テンソル(`build_inputs()`、`lib.rs:335`): `image` = `[1, 3, 512, 512]` の 0.0..1.0(CHW、255 で除算)、`mask` = `[1, 1, 512, 512]` の 0/1(閾値 127)。
-- 出力は平面配置 RGB(plane = 262144)。`big-lama.onnx` は 0..255 で出力するが、0..1 を出す変種も検出できるように `max > 1.5` で判定してスケールする。
-- ブレンド: マスク境界ピクセルは、7×7 近傍内の最短「非マスク」距離の二乗からフェザー係数を取る(`feather()`、`lib.rs:322`): `d² ≤ 1 → 0.6`、`≤ 4 → 0.85`、それ以上 `1.0`。`alpha = マスク値/255 × 係数` で元画像と線形混合する。マスク外は 1 ピクセルも変わらない。
+- Input tensors (`build_inputs()`, `lib.rs:335`): `image` = `[1, 3, 512, 512]` in 0.0..1.0 (CHW, divided by 255), `mask` = `[1, 1, 512, 512]` binary (threshold 127).
+- The output is planar RGB (plane = 262144). `big-lama.onnx` writes 0..255, but a variant writing 0..1 is detected by `max > 1.5` and scaled.
+- Blending: a boundary pixel looks up the nearest unmasked pixel within its 7×7 neighbourhood and takes the feather factor from the squared distance (`feather()`, `lib.rs:322`): `d² ≤ 1 → 0.6`, `≤ 4 → 0.85`, otherwise `1.0`. `alpha = mask value / 255 × factor`, and the pixel blends linearly with the original. Not one pixel outside the mask changes.
 
-## 8. ファイル解決
+## 8. File resolution
 
-- **モデル**(`resolve_model()`、`main.rs:99`): `--model` → 環境変数 `PHOTOCRAFT_LAMA_MODEL` → ヘルパー実行ファイルの隣、次にその親フォルダの `big-lama.onnx`。実寸 **208,044,816 バイト(198.4 MiB)**。
-- **ヘルパーとモデル(エンジン側)**(`LamaTool`、`lama_cleaner.rs:184-230`): パラメータの `exe` / `model` が最優先。なければ (1) Preferences › Plug-ins の追加プラグインフォルダ(有効な場合のみ)、(2) 実行ファイル隣の `plugins`、(3) 実行ファイル自身のフォルダ、の順で探す。見つからないエラーは**探索した全候補を列挙**する。ワーキングディレクトリは起動のされ方に依存するため探索しない。リポジトリのコードにマシン固有の絶対パスを書かないことはテストで保証されている(`no_machine_absolute_path_is_written_in_this_file`)。
+- **The model** (`resolve_model()`, `main.rs:99`): `--model` → the `PHOTOCRAFT_LAMA_MODEL` environment variable → `big-lama.onnx` beside the helper or in its parent folder. Measured size: **208,044,816 bytes (198.4 MiB)**.
+- **Helper and model on the engine side** (`LamaTool`, `lama_cleaner.rs:184-230`): the parameters' `exe` / `model` win outright. Otherwise, in order: (1) Preferences › Plug-ins' additional folder (only when enabled), (2) the `plugins` folder beside the running executable, (3) the executable's own folder. The not-found error **lists every place searched**. The working directory is never searched (it depends on how the app was started). That the repository code carries no machine's absolute path is guaranteed by a test (`no_machine_absolute_path_is_written_in_this_file`).
 
-## 9. 実測性能
+## 9. Measured performance
 
-計測環境: Windows、CUDA 13 + cuDNN 9.26 ランタイム、RTX GPU、`big-lama.onnx` 198.4 MiB(2026-11-16)。
+Environment: Windows, CUDA 13 + cuDNN 9.26 runtimes, RTX GPU, `big-lama.onnx` 198.4 MiB (2026-11-16).
 
-| 項目 | 値 |
+| Item | Value |
 |---|---|
-| モデルロード | 6.7〜8.6 秒 |
-| CUDA 定常状態(`--serve` 経由の推論) | 87〜95 ms / ストローク |
-| `paint.lamaCleaner` 経由の全体 | 約 120 ms |
-| 起動直後の初回ストローク(ロードを含む) | 約 11.6 秒 |
-| ウォームアップ 1 パス(512×512) | 約 206 ms |
+| Model load | 6.7–8.6 s |
+| CUDA steady state (inference through `--serve`) | 87–95 ms / stroke |
+| Whole `paint.lamaCleaner` command | ~120 ms |
+| First stroke after a fresh worker (load included) | ~11.6 s |
+| One warm-up pass (512×512) | ~206 ms |
 
-- DirectML / CPU 経路の定数は未計測である(チェーンが存在し、縮退は動作確認済み)。
-- **グラフ最適化 ONNX キャッシュは廃止した**: あり = 6.90 秒、なし = 6.67 秒で効果がなく、プロバイダごとに約 197 MB を消費するため。
+- The DirectML / CPU paths are not measured (the chain exists and the degradation is test-verified).
+- **The graph-optimized ONNX cache was dropped**: 6.90 s with vs 6.67 s without, at ~197 MB per provider — no effect, real cost.
 
-## 10. 実機デプロイ
+## 10. Deployment on a machine
 
-1. ヘルパー `lama-cleaner.exe` と `big-lama.onnx` を `plugins` フォルダに置く。
-2. Preferences › Plug-ins で「Additional Plug-ins Folder」を有効にし、そのフォルダを指定する。設定ファイルのキーは camelCase で `"plugIns": {"useAdditionalPluginsFolder": true, "additionalPluginsFolder": "<plugins フォルダ>"}`。
-3. 開発ビルドでは `target\release\plugins\` 側にも同名ファイルが必要な場合がある(ハードリンクで実体の二重化を避けられる)。
-4. **旧ビルドのヘルパー(`--serve` 非対応)が残っていると、常駐は毎回 one-shot へフォールバックする**。入れ替えを確認すること。これはエラーではなく設計どおりの挙動である。
-5. CUDA 13 と cuDNN 9 がインストールされていれば、PATH の設定は不要(§5.2)。
+1. Put `lama-cleaner.exe` and `big-lama.onnx` in the `plugins` folder.
+2. In Preferences › Plug-ins, enable "Additional Plug-ins Folder" and point it there. The settings keys are camelCase: `"plugIns": {"useAdditionalPluginsFolder": true, "additionalPluginsFolder": "<the plugins folder>"}`.
+3. A development build may also need the same files in `target\release\plugins\` (a hard link avoids keeping two copies).
+4. **A stale helper build without `--serve` makes every stroke fall back to a one-shot run.** Make sure the helper is current; this is designed behaviour, not an error.
+5. With CUDA 13 and cuDNN 9 installed, no PATH setup is needed (§5.2).
 
-## 11. 診断とトラブルシューティング
+## 11. Diagnostics and troubleshooting
 
-- **どの EP で動いたか**: `--serve` リプライの `provider` フィールド、起動時 stderr の `lama-cleaner: <EP> provider, model loaded in ...`、one-shot の `SUCCESS: ... (Provider: ...)` 行。なおエンジンはヘルパーの provider 文字列を現在 UI へは表示していない(`execute_lama` が破棄している) — UI 表示は今後の課題として残す。
-- **CUDA にならないときの確認順**:
-  1. `cudart64_13.dll` と `cudnn64_9.dll` が §5.1 の探索順のどこかにあるか(`CUDA_PATH`、`CUDNN_PATH`、`Program Files\NVIDIA\CUDNN\<版>\bin\<版>\x64` など)。
-  2. ヘルパー stderr の note を読む(§5.3 の 3 文面)。
-  3. cuDNN のバージョン付きレイアウト `bin\<cuda_ver>\x64` は対応済み。
-  4. PATH への追加は不要。追加しても壊れないが、設計上は不要。
-- **ハング**: 120 秒で `Unavailable` 判定となり、one-shot で再実行される。
-- **ヘルパー単体の動作確認**: 引数なしで起動するとセルフテストが走る(合成画像を修復し `%TEMP%\photocraft-lama-selftest\test_inpainted.png` に保存、中心ピクセルの Before/After を表示)。
+- **Which EP actually ran**: the `provider` field of a `--serve` reply, the startup stderr line `lama-cleaner: <EP> provider, model loaded in ...`, or the one-shot `SUCCESS: ... (Provider: ...)` line. The engine itself does not surface the provider string in the UI today (`execute_lama` discards it) — showing it is a possible future improvement.
+- **When CUDA is not used, check in this order**:
+  1. Whether `cudart64_13.dll` and `cudnn64_9.dll` exist somewhere in §5.1's search order (`CUDA_PATH`, `CUDNN_PATH`, `Program Files\NVIDIA\CUDNN\<ver>\bin\<ver>\x64`, and so on).
+  2. The helper's stderr notes (the three wordings in §5.3).
+  3. The versioned cuDNN layout `bin\<cuda_ver>\x64` is already supported.
+  4. PATH additions are unnecessary; harmless, but the design does not need them.
+- **A hung helper**: judged `Unavailable` after 120 s and the request re-runs one-shot.
+- **Checking the helper alone**: start it with no arguments to run the self-test (it inpaints a synthetic image into `%TEMP%\photocraft-lama-selftest\test_inpainted.png` and prints the centre pixel before and after).
 
-## 12. テスト
+## 12. Tests
 
-| 場所 | 内容 |
+| Location | What they pin |
 |---|---|
-| `plugins/lama-cleaner/src/lib.rs`(5 件) | feather ランプの固定、provider 名、`next_provider` のチェーン規則、GPU EP の登録主張、CUDA13/cuDNN9 の `bin\x64`・`bin\<ver>\x64` レイアウト探索 |
-| `plugins/lama-cleaner/src/main.rs`(6 件) | 引数パース(セルフテスト/one-shot/serve/未知オプション/パス欠落/部分セット) |
-| `crates/engine/src/cmd/retouch_cmds/lama_cleaner.rs` | フォルダ優先順、prefs 有効時のみ探索、params のパス指定、欠落時の全候補列挙、マシン絶対パス禁止、resident の要求行・応答パース・prose 拒否・起動失敗 |
+| `plugins/lama-cleaner/src/lib.rs` (5) | the feather ramp, provider names, the `next_provider` chain, GPU providers insisting on registration, the CUDA13/cuDNN9 `bin\x64` and `bin\<ver>\x64` search layouts |
+| `plugins/lama-cleaner/src/main.rs` (6) | argument parsing (self-test / one-shot / serve / unknown option / missing path / partial set) |
+| `crates/engine/src/cmd/retouch_cmds/lama_cleaner.rs` | folder order, the prefs folder searched only when enabled, params-given paths, the enumeration in not-found errors, the no-machine-paths guarantee, the resident request line / reply parsing / prose rejection / failed start |
 
-実測: plugin テスト lib 5 件 + bin 6 件、すべて合格(2026-11-16)。
+Measured: the plugin tests pass (5 lib + 6 bin), all of them (2026-11-16).
 
-## 13. 制限と設計判断の記録
+## 13. Limits and recorded design decisions
 
-- モデルの入力辺は 512 固定(`SIDE`、`lib.rs` 先頭部)。任意解像度は §7.2 の ROI 戦略で対応する。
-- wasm は非対応。コマンドが明示的なエラーを返す。
-- ワーカースロットはプロセス全体で 1 個。ドキュメントごとの分離はしていない。
-- エンジンは自動ウォームアップを送らない(§6.2 の競合回避)。先行起動する呼び出し側のみ `{"warmup":true}` を送れる。結果、最初のストロークはモデルロードを支払う。
-- グラフ最適化キャッシュは実測に基づき廃止(§9)。
-- `REPLY_TIMEOUT` は 120 秒。初回要求のモデルロードもこの中に含まれる。
+- The model's side is fixed at 512 (`SIDE`, near the top of `lib.rs`). Arbitrary resolutions go through §7.2's crop-and-pad strategy.
+- wasm is not supported; the command returns an explicit error.
+- One worker slot for the whole process; it is not per document.
+- The engine does not send a warm-up automatically (the contention in §6.2); only a caller that pre-launches may send `{"warmup":true}`. The first stroke therefore pays the model load.
+- The graph-optimization cache is gone, with the measurement in §9.
+- `REPLY_TIMEOUT` is 120 s; the first request's model load is inside it.
 
-## 14. 変更履歴
+## 14. Change history
 
-| コミット | 内容 |
+| Commit | What it did |
 |---|---|
-| `049063b90` | LaMa Cleaner runs on the GPU and keeps its model loaded — EP チェーン(CUDA→DirectML→CPU)と `--serve` 常駐の導入 |
-| `85c1b5a1c` | Fix LaMa cleaner warm-up contention, bin\x64 toolkit paths and resident error handling — ウォームアップ競合の除去、`bin\<ver>\x64` レイアウト対応、`Unavailable` / `Failed` の分離 |
-| `b14e2651a` | Make the LaMa CUDA path work without the toolkit on PATH — DLL フォルダ全件プリロードと実行時の遅延プロバイダ縮退 |
+| `049063b90` | LaMa Cleaner runs on the GPU and keeps its model loaded — the EP chain (CUDA→DirectML→CPU) and the `--serve` resident worker |
+| `85c1b5a1c` | Fix LaMa cleaner warm-up contention, bin\x64 toolkit paths and resident error handling — the warm-up contention, the `bin\<ver>\x64` layouts, and the `Unavailable` / `Failed` split |
+| `b14e2651a` | Make the LaMa CUDA path work without the toolkit on PATH — the folder-wide DLL preload and the run-time lazy provider degradation |
