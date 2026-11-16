@@ -96,7 +96,11 @@ fn resolve_helper(s: Option<&Session>) -> Result<PathBuf> {
     ))
 }
 
-/// The HSWQ pack: `CRAFT_SAM3_PACK`, else beside the helper, else `plugins/sam3/` or `plugins/`.
+/// The subfolder of `plugins/sam3` the pack lives in, so `plugins/` itself stays clean.
+const MODELS: &str = "models";
+
+/// The HSWQ pack: `CRAFT_SAM3_PACK`, else `plugins/sam3/models/`, else beside the helper, else
+/// `plugins/sam3/` or `plugins/`.
 fn resolve_pack(s: Option<&Session>, helper: &Path) -> Result<PathBuf> {
     if let Some(path) = std::env::var_os(PACK_ENV) {
         let path = PathBuf::from(path);
@@ -108,23 +112,29 @@ fn resolve_pack(s: Option<&Session>, helper: &Path) -> Result<PathBuf> {
         let chosen = plug_ins.additional_plugins_folder.trim();
         if plug_ins.use_additional_plugins_folder && !chosen.is_empty() {
             let folder = PathBuf::from(chosen);
-            searched.push(folder.join(PACK_NAME));
+            searched.push(folder.join("sam3").join(MODELS).join(PACK_NAME));
             searched.push(folder.join("sam3").join(PACK_NAME));
+            searched.push(folder.join(PACK_NAME));
         }
     }
     if let Some(dir) = helper.parent() {
+        searched.push(dir.join(MODELS).join(PACK_NAME));
         searched.push(dir.join(PACK_NAME));
+        searched.push(dir.join("sam3").join(MODELS).join(PACK_NAME));
         searched.push(dir.join("sam3").join(PACK_NAME));
     }
     for root in helper.ancestors() {
         if root.file_name().is_some_and(|n| n == "sam3") {
+            searched.push(root.join(MODELS).join(PACK_NAME));
             searched.push(root.join(PACK_NAME));
         }
+        searched.push(root.join("plugins").join("sam3").join(MODELS).join(PACK_NAME));
         searched.push(root.join("plugins").join("sam3").join(PACK_NAME));
         searched.push(root.join("plugins").join(PACK_NAME));
     }
     if let Ok(cwd) = std::env::current_dir() {
         for root in cwd.ancestors() {
+            searched.push(root.join("plugins").join("sam3").join(MODELS).join(PACK_NAME));
             searched.push(root.join("plugins").join("sam3").join(PACK_NAME));
             searched.push(root.join("plugins").join(PACK_NAME));
         }
@@ -141,8 +151,29 @@ fn resolve_pack(s: Option<&Session>, helper: &Path) -> Result<PathBuf> {
     let listed: Vec<String> = deduped.iter().map(|p| p.display().to_string()).collect();
     Err(bad(
         "select.sam3",
-        &format!("{PACK_NAME} was not found. Put it beside the helper or in plugins/sam3, or set {PACK_ENV}. Searched: {}", listed.join(", ")),
+        &format!(
+            "{PACK_NAME} was not found. Put it in plugins/sam3/models, beside the helper, in plugins/sam3, or set {PACK_ENV}. Looked in: {}",
+            listed.join(", ")
+        ),
     ))
+}
+
+/// Where a missing pack is downloaded to: `<plugins>/sam3/models`, derived from the preferences
+/// folder or from the helper's own location. No machine's absolute path is written here.
+fn download_folder(s: Option<&Session>, helper: &Path) -> PathBuf {
+    if let Some(session) = s {
+        let plug_ins = &session.prefs().plug_ins;
+        let chosen = plug_ins.additional_plugins_folder.trim();
+        if plug_ins.use_additional_plugins_folder && !chosen.is_empty() {
+            return PathBuf::from(chosen).join("sam3").join(MODELS);
+        }
+    }
+    let parent = helper.parent().unwrap_or_else(|| Path::new("."));
+    match parent.file_name().and_then(|n| n.to_str()) {
+        Some("sam3") => parent.join(MODELS),
+        Some(n) if n == MODELS => parent.to_path_buf(),
+        _ => parent.join("sam3").join(MODELS),
+    }
 }
 
 fn resolve_data_dir(helper: &Path, pack: &Path) -> Option<PathBuf> {
@@ -464,7 +495,9 @@ fn run_helper(s: &Session, p: &Value, bounds: Rect, pixels: &[[f32; 4]], prompt:
             // Not on this machine: download from the release page so the first selection
             // works without a manual setup step. The pack lands beside the helper, where
             // `resolve_pack` finds it next time.
-            let target = helper.parent().unwrap_or(Path::new(".")).join(PACK_NAME);
+            let folder = download_folder(Some(s), &helper);
+            std::fs::create_dir_all(&folder).map_err(|e| bad("select.sam3", &format!("cannot create {}: {e}", folder.display())))?;
+            let target = folder.join(PACK_NAME);
             eprintln!("PhotoCraft: the SAM 3.1 pack was not found locally; downloading from Hugging Face...");
             let status = Command::new(&helper)
                 .arg("--download")
@@ -479,7 +512,7 @@ fn run_helper(s: &Session, p: &Value, bounds: Rect, pixels: &[[f32; 4]], prompt:
                     String::from_utf8_lossy(&status.stderr).lines().rev().take(3).collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join(" | ");
                 return Err(bad(
                     "select.sam3",
-                    &format!("the SAM 3.1 pack download failed: {message}. Get it manually from {PACK_URL} and put it beside the helper."),
+                    &format!("the SAM 3.1 pack download failed: {message}. Get it manually from {PACK_URL} and put it in plugins/sam3/models."),
                 ));
             }
             target
@@ -715,6 +748,35 @@ mod tests {
         assert!(list.iter().any(|p| p.ends_with(Path::new("plugins").join("sam3").join(helper_name()))));
     }
 
+    /// The pack lives in `plugins/sam3/models`, not in `plugins/` itself: the download folder and
+    /// the search order must agree on that, or a downloaded pack is never used.
+    #[test]
+    fn the_models_folder_is_searched_and_is_where_a_download_lands() {
+        let d = tempfile::tempdir().unwrap();
+        let plugins = d.path().join("plugins");
+        let models = plugins.join("sam3").join("models");
+        std::fs::create_dir_all(&models).unwrap();
+        let helper = plugins.join(helper_name());
+        std::fs::write(&helper, b"helper").unwrap();
+        let pack = models.join(PACK_NAME);
+        std::fs::write(&pack, b"pack").unwrap();
+
+        let mut s = Session::new();
+        let chosen = plugins.to_string_lossy().into_owned();
+        s.edit_prefs(|p| {
+            p.plug_ins.use_additional_plugins_folder = true;
+            p.plug_ins.additional_plugins_folder = chosen;
+        });
+        assert_eq!(resolve_pack(Some(&s), &helper).unwrap(), pack);
+        assert_eq!(download_folder(Some(&s), &helper), models);
+
+        // Without the preferences folder the helper's own layout decides, and never `plugins/`.
+        let mut bare = Session::new();
+        bare.edit_prefs(|p| p.plug_ins.use_additional_plugins_folder = false);
+        assert_eq!(download_folder(Some(&bare), &helper), plugins.join("sam3").join("models"));
+        let inside = models.join(helper_name());
+        assert_eq!(download_folder(Some(&bare), &inside), models);
+    }
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn resident_request_line_and_reply_parsing_cover_success_failure_and_prose() {

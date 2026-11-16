@@ -38,15 +38,30 @@ fn model_path(arg: Option<PathBuf>) -> Option<PathBuf> {
     }
     let exe = std::env::current_exe().ok()?;
     let dir = exe.parent()?;
-    for candidate in
-        [dir.join(PACK_FILENAME), dir.join("sam3").join(PACK_FILENAME), dir.join("..").join(PACK_FILENAME), dir.join("..").join("sam3").join(PACK_FILENAME)]
+    for candidate in [
+        dir.join("models").join(PACK_FILENAME),
+        dir.join(PACK_FILENAME),
+        dir.join("sam3").join("models").join(PACK_FILENAME),
+        dir.join("sam3").join(PACK_FILENAME),
+        dir.join("..").join("sam3").join("models").join(PACK_FILENAME),
+        dir.join("..").join(PACK_FILENAME),
+        dir.join("..").join("sam3").join(PACK_FILENAME),
+    ]
     {
         if candidate.is_file() {
             return Some(candidate);
         }
     }
     for ancestor in dir.ancestors() {
-        let candidate = ancestor.join("plugins").join("sam3").join(PACK_FILENAME);
+        let candidate = ancestor.join("plugins").join("sam3").join("models").join(PACK_FILENAME);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+        let flat = ancestor.join("plugins").join("sam3").join(PACK_FILENAME);
+        if flat.is_file() {
+            return Some(flat);
+        }
+        let candidate = ancestor.join("plugins").join("models").join(PACK_FILENAME);
         if candidate.is_file() {
             return Some(candidate);
         }
