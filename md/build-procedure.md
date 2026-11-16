@@ -254,6 +254,7 @@ launches from**. Rebuild per §5.1 and re-run the gates.
 | Build-wait noise | Repeated manual sleep-and-poll loops while a registered completion monitor was already watching the log. | Trust the registered monitor; do one completion check instead of polling loops. |
 | The LaMa Cleaner and SAM Selection tools vanished from the toolbar | A rebuild was made from a `main` that had just merged upstream's new data-driven toolbar default, which named neither fork tool; `layout()` moved both into Extra Tools. Every gate passed because none of them looked at the toolbar. | A rebuild runs gate (g): the fork tools must be on the toolbar before the daily-use exe is replaced. The merge itself carries the fix and the guard (`upstream-merge-procedure.md` §1.1). |
 | The SAM Selection options bar was English in the shipped build | Its Japanese rows lived only in `craft-i18n`; the pin (`e56d2624`) has none of them, so a test passed on a stale cached catalog while a clean catalog build rendered English. | A fork string is Japanese because the tree carries it: anything the pinned catalog lacks goes into `JA_TEXT_OVERRIDES`, and gate (h) is the test that proves it. |
+| The daily-use exe was swept together with the build caches | Told to "delete all junk files", the agent invented a keep-rule out of a half-quoted §8, was corrected, then answered with `Remove-Item target -Recurse` — sweeping `target\release\photocraft.exe` and the CLI away with the caches. Only the running process's file lock left the exe on disk. | Caches are deleted by named subdirectory, never by sweeping a parent that contains (or may contain) a §8.1 keep-listed path; the keep list holds under every general deletion instruction. |
 
 ---
 
@@ -262,12 +263,52 @@ launches from**. Rebuild per §5.1 and re-run the gates.
 - Scratch logs are deleted in the same session (`build_*.log` on the drive root, temp
   scripts in `%TEMP%`). Measured debris from one session: 77 log files and 259 temp
   scripts — all removable, all removed.
-- Build caches are regenerable but large. Keep `target\release` (the current deliverable or
-  the launcher exe) unless the instruction is explicitly to delete it; a deleted cache costs
-  ~10–12 minutes to rebuild.
+- Build caches are regenerable but large (a deleted cache costs ~10–12 minutes to rebuild).
+  What may be deleted, what may never be deleted, and how the deletion is executed are fixed
+  below (§8.1, §8.2) — the instruction chooses *whether*, never *what counts as junk*.
 - A "cleanup" that deletes something of unknown ownership is forbidden. Measure first
   (`Get-ChildItem`, sizes, mtimes), name every item, delete only what is provably this
   session's debris, and report what was deliberately left alone.
+
+### 8.1 The absolute keep list — a general deletion instruction never covers these
+
+"Delete the junk files", "delete all unnecessary files", "delete the caches" cover **only**
+regenerable intermediates (§8.2). The following are never swept by such an instruction. Deleting
+one of them requires an instruction that names that exact file, and even then the deletion is
+reported first with the full path and size:
+
+- **The source code itself — the first and highest-priority item.** Every tracked file in the
+  working tree and every uncommitted change in it, staged or unstaged, this session's or another
+  session's. A cleanup never touches the working tree's sources; after any cleanup
+  `git status --porcelain` must show zero `D` entries and exactly the same modified files as
+  before it. Losing one byte of source is worse than losing every cache and every binary —
+  caches rebuild, history does not.
+- `target\release\photocraft.exe` — the daily-use build. It sits **inside** a cache directory
+  and is still the deliverable; the directory it lives in never makes it junk.
+- The shipped helpers: `plugins\sam3-select.exe`, `plugins\sam3\sam3-select.exe`.
+- Models and other hard-to-replace assets: `plugins\big-lama.onnx`,
+  `plugins\sam3\models\*.safetensors`. A re-download is not restoration — before any cleanup,
+  record size and SHA256 of every asset in this class so byte-exactness can be proven afterwards.
+- Anything of unknown or another session's ownership: unstaged working-tree changes this session
+  did not author, `.zwork\`, `plan\`, `log\devlog.md`, active `.part` downloads, the
+  `craft-fonts\` checkout, `corpus\` (pinned; expensive to re-fetch), `.git`.
+
+### 8.2 What a cache delete may delete, and how it is executed
+
+Deletable when instructed: everything under a `target\` directory **except** §8.1 paths
+(`target\debug` and all build intermediates, `plugins\sam3\target`, scratch targets such as
+`D:\pf_target`, wasm plugin targets), TEMP test debris (`photocraft-*`), and `build_*.log`.
+Method, in order:
+
+1. Measure (`Get-ChildItem`, sizes, mtimes) and name every item in the report before deleting.
+2. Check what is running (`Get-Process`): a process locks its exe, so a locked file is left in
+   place and named in the report — never force-deleted through the lock.
+3. Delete **named subdirectories**, never a parent wholesale. `Remove-Item <dir> -Recurse` on a
+   directory that contains or may contain a keep-listed path is forbidden; iterate the children
+   and skip the keep list instead.
+4. Verify and report: re-measure, state the freed bytes, prove the source tree is untouched
+   (`git status --porcelain`: zero `D`, the same modified set as before), and prove the rest of
+   the §8.1 list survived (existence + exact size, hashes for the model assets).
 
 ---
 
@@ -286,5 +327,5 @@ launches from**. Rebuild per §5.1 and re-run the gates.
 - [ ] Fork tools present: gate (g) green (LaMa Cleaner, SAM Selection on the toolbar)
 - [ ] Fork Japanese UI present: gate (h) green (SAM labels from the pinned catalog or the tree)
 - [ ] Fonts gate: `Shippori Mincho` / `BIZ UDPGothic` found
-- [ ] Scratch logs deleted; caches and checkouts kept; nothing of unknown ownership touched
+- [ ] Scratch logs deleted; caches deleted by named subdirectory (§8.2); the §8.1 keep list verified intact (existence + exact size) with the freed bytes reported; nothing of unknown ownership touched
 - [ ] Nothing pushed, tagged, or published without an explicit instruction
