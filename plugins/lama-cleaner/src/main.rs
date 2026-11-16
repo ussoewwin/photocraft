@@ -27,6 +27,7 @@ Native Rust LaMa Inpaint Cleaner
 Usage:
   lama-cleaner --image <path> --mask <path> --output <path> [--model <path>]
   lama-cleaner --serve [--model <path>]
+  lama-cleaner --download <url> --download-out <path>   download a model file over HTTPS
   lama-cleaner (no arguments: runs the built-in synthetic test)";
 
 /// One request line in `--serve` mode.
@@ -50,6 +51,8 @@ enum Mode {
     OneShot { image: PathBuf, mask: PathBuf, output: PathBuf },
     /// The resident JSON-lines loop.
     Serve,
+    /// Download a file over HTTPS (the model auto-download path).
+    Download { url: String, out: PathBuf },
 }
 
 #[derive(Debug, PartialEq)]
@@ -64,6 +67,8 @@ fn parse_args(args: &[String]) -> Result<Parsed, String> {
     let mut output = None;
     let mut model = None;
     let mut serve = false;
+    let mut download_url: Option<String> = None;
+    let mut download_out: Option<PathBuf> = None;
     let mut i = 0;
     while i < args.len() {
         let arg = args[i].as_str();
@@ -77,9 +82,21 @@ fn parse_args(args: &[String]) -> Result<Parsed, String> {
             "-o" | "--output" => output = Some(value("--output")?),
             "--model" => model = Some(value("--model")?),
             "--serve" => serve = true,
+            "--download" if i + 1 < args.len() => {
+                download_url = Some(args[i + 1].clone());
+                i += 1;
+            }
+            "--download-out" if i + 1 < args.len() => {
+                download_out = Some(PathBuf::from(&args[i + 1]));
+                i += 1;
+            }
             other => return Err(format!("unknown argument `{other}`")),
         }
         i += 1;
+    }
+    if let Some(url) = download_url {
+        let out = download_out.ok_or("--download needs --download-out <path>")?;
+        return Ok(Parsed { mode: Mode::Download { url, out }, model: None });
     }
     if serve {
         if image.is_some() || mask.is_some() || output.is_some() {
@@ -94,8 +111,11 @@ fn parse_args(args: &[String]) -> Result<Parsed, String> {
     }
 }
 
-/// The model to use: `--model`, then `PHOTOCRAFT_LAMA_MODEL`, then `big-lama.onnx` next to the
-/// helper or in the folder above it (the `plugins` folder). No machine's path is written here.
+/// The model to use: `--model`, then `PHOTOCRAFT_LAMA_MODEL`, then `big-lama.onnx` in the
+/// helper's `models` folder, beside the helper, or in the parent's `models` folder (the
+/// `plugins/lama-cleaner` layout). No machine's path is written here.
+const MODEL_NAME: &str = "big-lama.onnx";
+
 fn resolve_model(explicit: Option<PathBuf>) -> Result<PathBuf, String> {
     if let Some(path) = explicit {
         return Ok(path);
@@ -108,12 +128,61 @@ fn resolve_model(explicit: Option<PathBuf>) -> Result<PathBuf, String> {
     }
     let exe = std::env::current_exe().map_err(|e| format!("cannot find the helper's own path: {e}"))?;
     let dir = exe.parent().ok_or("the helper has no folder")?;
-    for candidate in [dir.join("big-lama.onnx"), dir.join("..").join("big-lama.onnx")] {
+    for candidate in [
+        dir.join("models").join(MODEL_NAME),
+        dir.join(MODEL_NAME),
+        dir.join("..").join("models").join(MODEL_NAME),
+        dir.join("..").join(MODEL_NAME),
+    ] {
         if candidate.is_file() {
             return Ok(candidate);
         }
     }
-    Err(format!("big-lama.onnx was not found beside {}; pass --model <path>", exe.display()))
+    Err(format!("{MODEL_NAME} was not found in the helper's models folder or beside {}; pass --model <path>", exe.display()))
+}
+
+/// Download a file over HTTPS into `out`, streaming with a `.part` temp file so a partial
+/// download is never mistaken for the real one. Progress goes to stderr every 10 seconds.
+fn download_model(url: &str, out: &Path) -> Result<(), String> {
+    if out.exists() {
+        return Err(format!("{} already exists; delete it first if you want to re-download", out.display()));
+    }
+    eprintln!("lama-cleaner: downloading {} -> {}", url, out.display());
+    let response = ureq::get(url).call().map_err(|e| format!("the download failed: {e}"))?;
+    let total: Option<u64> = response.header("Content-Length").and_then(|v| v.parse().ok());
+    let mut reader = response.into_reader();
+    if let Some(parent) = out.parent().filter(|p| !p.as_os_str().is_empty()) {
+        std::fs::create_dir_all(parent).map_err(|e| format!("cannot create {}: {e}", parent.display()))?;
+    }
+    let partial = out.with_extension("part");
+    let mut file = std::io::BufWriter::new(std::fs::File::create(&partial).map_err(|e| format!("{}: {e}", partial.display()))?);
+    let mut buffer = vec![0u8; 256 * 1024];
+    let mut downloaded: u64 = 0;
+    let mut last_report = std::time::Instant::now();
+    loop {
+        let read = reader.read(&mut buffer).map_err(|e| format!("the download failed: {e}"))?;
+        if read == 0 {
+            break;
+        }
+        file.write_all(&buffer[..read]).map_err(|e| format!("{}: {e}", partial.display()))?;
+        downloaded += read as u64;
+        if last_report.elapsed().as_secs() >= 10 {
+            match total {
+                Some(total) => eprintln!("lama-cleaner: {:.1}% ({:.1} / {:.1} MiB)", downloaded as f64 / total as f64 * 100.0, downloaded as f64 / (1024.0 * 1024.0), total as f64 / (1024.0 * 1024.0)),
+                None => eprintln!("lama-cleaner: {:.1} MiB downloaded", downloaded as f64 / (1024.0 * 1024.0)),
+            }
+            last_report = std::time::Instant::now();
+        }
+    }
+    file.flush().map_err(|e| format!("{}: {e}", partial.display()))?;
+    drop(file);
+    if let Some(total) = total.filter(|t| downloaded != *t) {
+        std::fs::remove_file(&partial).ok();
+        return Err(format!("download incomplete: got {} of {} bytes", downloaded, total));
+    }
+    std::fs::rename(&partial, out).map_err(|e| format!("{} -> {}: {e}", partial.display(), out.display()))?;
+    eprintln!("lama-cleaner: downloaded {} ({:.1} MiB)", out.display(), downloaded as f64 / (1024.0 * 1024.0));
+    Ok(())
 }
 
 fn load(model: &Path) -> Result<LamaModel, String> {
@@ -133,10 +202,8 @@ fn run_one(lama: &LamaModel, image: &str, mask: &str, output: &str) -> Result<f6
     let started = Instant::now();
     let result = lama.inpaint(&img, &msk).map_err(|e| e.to_string())?;
     let seconds = started.elapsed().as_secs_f64();
-    if let Some(parent) = Path::new(output).parent() {
-        if !parent.as_os_str().is_empty() {
-            std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
-        }
+    if let Some(parent) = Path::new(output).parent().filter(|p| !p.as_os_str().is_empty()) {
+        std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
     }
     result.save(output).map_err(|e| format!("{output}: {e}"))?;
     Ok(seconds)
@@ -254,6 +321,18 @@ fn main() -> std::process::ExitCode {
             return std::process::ExitCode::from(2);
         }
     };
+    if matches!(parsed.mode, Mode::Download { .. }) {
+        return match parsed.mode {
+            Mode::Download { url, out } => match download_model(&url, &out) {
+                Ok(()) => std::process::ExitCode::SUCCESS,
+                Err(error) => {
+                    eprintln!("lama-cleaner: {error}");
+                    std::process::ExitCode::FAILURE
+                }
+            },
+            _ => unreachable!("the Download mode is checked above"),
+        };
+    }
     let model = match resolve_model(parsed.model) {
         Ok(model) => model,
         Err(error) => {
@@ -265,6 +344,7 @@ fn main() -> std::process::ExitCode {
         Mode::Test => self_test(&model),
         Mode::OneShot { image, mask, output } => load(&model).and_then(|lama| one_shot(&lama, &image, &mask, &output)),
         Mode::Serve => serve(&model),
+        Mode::Download { url, out } => download_model(&url, &out),
     };
     match result {
         Ok(()) => std::process::ExitCode::SUCCESS,
@@ -319,5 +399,14 @@ mod tests {
     fn a_partial_set_of_paths_is_an_error() {
         let error = parse_args(&args(&["-i", "in.png", "-m", "mask.png"])).unwrap_err();
         assert!(error.contains("together"), "{error}");
+    }
+
+    /// The download mode takes both of its arguments and is its own mode, like in the SAM helper.
+    #[test]
+    fn the_download_mode_takes_a_url_and_an_output_path() {
+        let parsed = parse_args(&args(&["--download", "https://example.invalid/big-lama.onnx", "--download-out", "m.onnx"])).unwrap();
+        assert_eq!(parsed.mode, Mode::Download { url: "https://example.invalid/big-lama.onnx".into(), out: PathBuf::from("m.onnx") });
+        let error = parse_args(&args(&["--download", "https://example.invalid/big-lama.onnx"])).unwrap_err();
+        assert!(error.contains("--download-out"), "{error}");
     }
 }

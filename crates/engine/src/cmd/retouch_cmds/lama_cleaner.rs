@@ -152,12 +152,14 @@ fn hole(plan: &Plan, sel: Option<&Surface>) -> Result<Vec<bool>> {
     Ok(m)
 }
 
-/// The LaMa helper program and its model, resolved before any work starts.
+/// The LaMa helper program and its model, resolved before any work starts. Both are optional:
+/// the command reports what is missing, and a missing model is downloaded from the PhotoCraft
+/// model collection before the helper runs.
 #[cfg(not(target_arch = "wasm32"))]
 #[derive(Debug)]
 struct LamaTool {
-    exe: std::path::PathBuf,
-    model: std::path::PathBuf,
+    exe: Option<std::path::PathBuf>,
+    model: Option<std::path::PathBuf>,
 }
 
 /// The wasm build cannot run a helper process: the command reports that it needs the desktop app.
@@ -174,6 +176,16 @@ impl LamaTool {
 /// The helper's file name on this platform.
 #[cfg(not(target_arch = "wasm32"))]
 const HELPER: &str = if cfg!(windows) { "lama-cleaner.exe" } else { "lama-cleaner" };
+
+/// The model file and the subfolder of `plugins/lama-cleaner` it lives in, so `plugins/` itself
+/// stays clean — the same layout as the SAM 3.1 pack.
+#[cfg(not(target_arch = "wasm32"))]
+const MODEL_NAME: &str = "big-lama.onnx";
+#[cfg(not(target_arch = "wasm32"))]
+const MODELS: &str = "models";
+/// Where a missing model is downloaded from (the PhotoCraft model collection on Hugging Face).
+#[cfg(not(target_arch = "wasm32"))]
+const MODEL_URL: &str = "https://huggingface.co/ussoewwin/For_my_PhotoCraft/resolve/main/big-lama.onnx";
 
 #[cfg(not(target_arch = "wasm32"))]
 impl LamaTool {
@@ -218,9 +230,104 @@ impl LamaTool {
         )))
     }
 
+    /// Where the model is looked for, most specific first: every helper folder's `models`
+    /// subfolder before the folder itself (the same layout as the SAM 3.1 pack), then the flat
+    /// copies kept working for older setups. `Ok(None)` means it was found nowhere and the
+    /// download path in `execute_lama` fetches it; `Err` is a path the caller named that is not
+    /// there, which a download must never hide.
+    fn model(s: &Session, p: &Value) -> Result<Option<std::path::PathBuf>> {
+        if let Some(given) = p.get("model") {
+            let given = given.as_str().ok_or_else(|| bad(CMD, "`model` must be a file path"))?;
+            let path = std::path::PathBuf::from(given);
+            return if path.exists() { Ok(Some(path)) } else { Err(EngineError::Other(format!("`model` names {given}, which does not exist"))) };
+        }
+        if let Some(path) = std::env::var_os("PHOTOCRAFT_LAMA_MODEL").filter(|p| !p.is_empty()) {
+            let path = std::path::PathBuf::from(path);
+            return if path.is_file() {
+                Ok(Some(path))
+            } else {
+                Err(EngineError::Other(format!("PHOTOCRAFT_LAMA_MODEL points at {}, which is not a file", path.display())))
+            };
+        }
+        let folders = Self::folders(s);
+        let mut searched: Vec<std::path::PathBuf> = Vec::new();
+        for folder in &folders {
+            searched.push(folder.join("lama-cleaner").join(MODELS).join(MODEL_NAME));
+            searched.push(folder.join(MODELS).join(MODEL_NAME));
+            searched.push(folder.join(MODEL_NAME));
+        }
+        // The helper's own `models` folder is searched even when no `folders` entry covers it
+        // (the helper lives where the params or the environment name it).
+        if let Some(dir) = p.get("exe").and_then(|e| e.as_str()).map(std::path::PathBuf::from).and_then(|p| p.parent().map(std::path::Path::to_path_buf)) {
+            for candidate in [dir.join(MODELS).join(MODEL_NAME), dir.join(MODEL_NAME)] {
+                if !searched.contains(&candidate) {
+                    searched.push(candidate);
+                }
+            }
+        }
+        // The repository's own `plugins/lama-cleaner/models`, found from the app's ancestors the
+        // same way the SAM 3.1 pack is: a development build lives in `target\release`, which is
+        // below the checkout's `plugins` folder.
+        if let Some(dir) = std::env::current_exe().ok().and_then(|e| e.parent().map(std::path::Path::to_path_buf)) {
+            for root in dir.ancestors() {
+                for candidate in [
+                    root.join("plugins").join("lama-cleaner").join(MODELS).join(MODEL_NAME),
+                    root.join("plugins").join(MODELS).join(MODEL_NAME),
+                    root.join("plugins").join(MODEL_NAME),
+                ] {
+                    if !searched.contains(&candidate) {
+                        searched.push(candidate);
+                    }
+                }
+            }
+        }
+        if let Some(found) = searched.iter().find(|path| path.is_file()) {
+            return Ok(Some(found.clone()));
+        }
+        Ok(None)
+    }
+
+    /// Where a missing model is downloaded to: `<plugins>/lama-cleaner/models`, derived from the
+    /// preferences folder or from the helper's own location. No machine's absolute path is
+    /// written here.
+    #[cfg(test)]
+    fn download_folder(s: &Session, helper: &std::path::Path) -> std::path::PathBuf {
+        let plug_ins = &s.prefs().plug_ins;
+        let chosen = plug_ins.additional_plugins_folder.trim();
+        let prefs = (plug_ins.use_additional_plugins_folder && !chosen.is_empty(), chosen.to_string());
+        Self::download_folder_for(prefs, helper)
+    }
+
+    /// The same folder derived from the preferences values that a job closure carries, so the
+    /// download lands where [`Self::model`] looks next time.
+    fn download_folder_for(prefs_plugins: (bool, String), helper: &std::path::Path) -> std::path::PathBuf {
+        let (use_additional, chosen) = prefs_plugins;
+        if use_additional && !chosen.is_empty() {
+            return std::path::PathBuf::from(chosen).join("lama-cleaner").join(MODELS);
+        }
+        let parent = helper.parent().unwrap_or_else(|| std::path::Path::new("."));
+        match parent.file_name().and_then(|n| n.to_str()) {
+            Some("lama-cleaner") => parent.join(MODELS),
+            Some(n) if n == MODELS => parent.to_path_buf(),
+            _ => parent.join("lama-cleaner").join(MODELS),
+        }
+    }
+
+    /// The helper is missing: the error names every place searched, so the fix is in the
+    /// message. The model is not part of this check: a missing model is downloaded.
+    fn missing_helper_message(s: &Session, p: &Value) -> String {
+        match Self::file(s, p, "exe", HELPER) {
+            Ok(_) => "the LaMa helper is not available".into(),
+            Err(EngineError::Other(message)) => message,
+            Err(error) => error.to_string(),
+        }
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     fn resolve(s: &Session, p: &Value) -> Result<Self> {
-        Ok(Self { exe: Self::file(s, p, "exe", HELPER)?, model: Self::file(s, p, "model", "big-lama.onnx")? })
+        let exe = Self::file(s, p, "exe", HELPER).ok();
+        let model = Self::model(s, p)?;
+        Ok(Self { exe, model })
     }
 }
 
@@ -467,7 +574,51 @@ fn run_helper_once(exe: &std::path::Path, model: &std::path::Path, image: &std::
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn execute_lama(w: usize, h: usize, ch: usize, fmt: &PixelFormat, img_data: &[f32], hole: &[bool], tool: &LamaTool) -> Result<Vec<f32>> {
+/// What one LaMa run needs besides the pixels: the helper exe, the resolved model (already
+/// downloaded by the time this runs), and the preferences folder used by the download.
+struct LamaRun<'a> {
+    tool: &'a LamaTool,
+    helper: &'a std::path::Path,
+    prefs_plugins: (bool, String),
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn execute_lama(w: usize, h: usize, ch: usize, fmt: &PixelFormat, img_data: &[f32], hole: &[bool], run: &LamaRun<'_>) -> Result<Vec<f32>> {
+    let tool = run.tool;
+    let helper = run.helper;
+    let prefs_plugins = (run.prefs_plugins.0, run.prefs_plugins.1.clone());
+    // The model must be on this machine before the helper can run. When it is not (and neither
+    // `model` nor `PHOTOCRAFT_LAMA_MODEL` named one), download it from the PhotoCraft model
+    // collection on Hugging Face so the first stroke works without a manual setup step. The file
+    // lands in the `models` folder beside the helper, where the search above finds it next time.
+    let model: std::path::PathBuf = (|| {
+        if let Some(path) = std::env::var_os("PHOTOCRAFT_LAMA_MODEL").filter(|p| !p.is_empty()) {
+            return Ok(std::path::PathBuf::from(path));
+        }
+        if let Some(model) = tool.model.as_ref().filter(|m| m.is_file()) {
+            return Ok(model.clone());
+        }
+        let folder = LamaTool::download_folder_for(prefs_plugins, helper);
+        std::fs::create_dir_all(&folder).map_err(|e| format!("cannot create {}: {e}", folder.display()))?;
+        let target = folder.join(MODEL_NAME);
+        eprintln!("PhotoCraft: the LaMa Cleaner model was not found locally; downloading from Hugging Face...");
+        let status = std::process::Command::new(helper)
+            .arg("--download")
+            .arg(MODEL_URL)
+            .arg("--download-out")
+            .arg(&target)
+            .stderr(std::process::Stdio::inherit())
+            .output()
+            .map_err(|e| format!("cannot start {} for the model download: {e}", helper.display()))?;
+        if !status.status.success() || !target.is_file() {
+            let message = String::from_utf8_lossy(&status.stderr).lines().rev().take(3).collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join(" | ");
+            return Err(format!(
+                "the LaMa Cleaner model download failed: {message}. Get it manually from {MODEL_URL} and put it in a `models` folder beside the helper."
+            ));
+        }
+        Ok(target)
+    })()
+    .map_err(EngineError::Other)?;
     let mut rgb_bytes = Vec::with_capacity(w * h * 3);
     for i in 0..(w * h) {
         let rgba = to_rgba(fmt, &img_data[i * ch..(i + 1) * ch]);
@@ -498,13 +649,13 @@ fn execute_lama(w: usize, h: usize, ch: usize, fmt: &PixelFormat, img_data: &[f3
     // The resident helper keeps the model loaded between strokes. A helper that cannot serve (an
     // older build) or a resident process that could not be restarted falls back to the ordinary
     // single run; a structured error from a healthy resident worker is reported directly.
-    match resident::apply(&tool.exe, &tool.model, &in_p, &mask_p, &out_p) {
+    match resident::apply(helper, &model, &in_p, &mask_p, &out_p) {
         Ok(_) => {}
         Err(resident::ResidentError::Failed(msg)) => {
             return Err(EngineError::Other(format!("LaMa inpainting failed: {msg}")));
         }
         Err(resident::ResidentError::Unavailable(_)) => {
-            run_helper_once(&tool.exe, &tool.model, &in_p, &mask_p, &out_p)?;
+            run_helper_once(helper, &model, &in_p, &mask_p, &out_p)?;
         }
     }
 
@@ -538,7 +689,7 @@ fn run_lama_cleaner(
     p: &Value,
     ctx: &crate::jobs::JobCtx,
     label: &str,
-    tool: &LamaTool,
+    run: &LamaRun<'_>,
 ) -> Result<Option<(Region, Vec<bool>)>> {
     let hole = hole(plan, doc.selection.as_ref())?;
     if !hole.iter().any(|m| *m) {
@@ -556,7 +707,7 @@ fn run_lama_cleaner(
         return Ok(None);
     }
     let (w, h) = (win.width() as usize, win.height() as usize);
-    let mut data = ctx.stage(0.0, 1.0, label, |_| execute_lama(w, h, img.ch, &fmt, &img.data, &hole, tool)).map_err(|_| EngineError::Cancelled)?;
+    let mut data = ctx.stage(0.0, 1.0, label, |_| execute_lama(w, h, img.ch, &fmt, &img.data, &hole, run)).map_err(|_| EngineError::Cancelled)?;
     clamp_samples(&fmt, &mut data);
     Ok(Some((Region { rect: win, ch: img.ch, data }, hole)))
 }
@@ -590,12 +741,19 @@ fn fill_to_new_layer(doc: &mut Document, id: Option<LayerId>, out: &Region, hole
 pub(super) fn lama_cleaner(s: &mut Session, p: &Value) -> Result<Value> {
     let plan = plan(s, p)?;
     let tool = LamaTool::resolve(s, p)?;
+    let Some(exe) = tool.exe.clone() else {
+        return Err(EngineError::Other(LamaTool::missing_helper_message(s, p)));
+    };
     let label = "LaMa Cleaner";
     let d = s.active().ok_or(EngineError::NoDocument)?;
     let doc = d.doc.clone();
     let p = p.clone();
     let id = plan.id;
     let new_layer = plan.new_layer;
+    let prefs_plugins = {
+        let plug_ins = &s.prefs().plug_ins;
+        (plug_ins.use_additional_plugins_folder, plug_ins.additional_plugins_folder.trim().to_string())
+    };
     crate::jobs::run(
         s,
         label,
@@ -605,7 +763,8 @@ pub(super) fn lama_cleaner(s: &mut Session, p: &Value) -> Result<Value> {
             move |ctx| {
                 ctx.progress(0.0, label);
                 let mut work = (*doc).clone();
-                run_lama_cleaner(&mut work, &plan, &p, ctx, label, &tool)
+                let run = LamaRun { tool: &tool, helper: &exe, prefs_plugins };
+                run_lama_cleaner(&mut work, &plan, &p, ctx, label, &run)
             }
         },
         move |s, filled| {
@@ -671,14 +830,24 @@ mod tests {
         std::fs::write(&exe, b"helper").unwrap();
         std::fs::write(&model, b"model").unwrap();
         let tool = LamaTool::resolve(&session(), &serde_json::json!({"exe": exe, "model": model})).unwrap();
-        assert_eq!((tool.exe, tool.model), (exe, model));
+        assert_eq!((tool.exe, tool.model), (Some(exe), Some(model)));
+    }
+
+    /// An explicit model path that is not there is an error, never a silent download: a mistyped
+    /// path must say so.
+    #[test]
+    fn an_explicit_model_path_that_is_absent_is_an_error() {
+        let d = tempfile::tempdir().unwrap();
+        let missing = d.path().join("absent.onnx");
+        let error = LamaTool::resolve(&session(), &serde_json::json!({"model": missing})).unwrap_err().to_string();
+        assert!(error.contains("absent.onnx"), "{error}");
     }
 
     #[test]
     fn a_path_given_in_the_params_that_is_not_there_says_so() {
         let d = tempfile::tempdir().unwrap();
         let exe = d.path().join("absent-helper");
-        let error = LamaTool::resolve(&session(), &serde_json::json!({"exe": exe})).unwrap_err().to_string();
+        let error = LamaTool::missing_helper_message(&session(), &serde_json::json!({"exe": exe}));
         assert!(error.contains("absent-helper"), "{error}");
     }
 
@@ -693,10 +862,44 @@ mod tests {
             p.plug_ins.use_additional_plugins_folder = true;
             p.plug_ins.additional_plugins_folder = chosen;
         });
-        let error = LamaTool::resolve(&s, &serde_json::json!({})).unwrap_err().to_string();
+        let error = LamaTool::missing_helper_message(&s, &serde_json::json!({}));
         for folder in LamaTool::folders(&s) {
             assert!(error.contains(&folder.join(HELPER).display().to_string()), "{error}");
         }
+    }
+
+    /// The model lives in a `models` subfolder beside the helper (the same layout as the SAM 3.1
+    /// pack), and a missing model is downloaded into exactly that folder.
+    #[test]
+    fn the_models_folder_is_searched_and_is_where_a_download_lands() {
+        let d = tempfile::tempdir().unwrap();
+        let plugins = d.path().join("plugins");
+        let helper_dir = plugins.join("lama-cleaner");
+        let models = helper_dir.join(MODELS);
+        std::fs::create_dir_all(&models).unwrap();
+        let helper = helper_dir.join(HELPER);
+        std::fs::write(&helper, b"helper").unwrap();
+        let s = session();
+        let pack = models.join(MODEL_NAME);
+        std::fs::write(&pack, b"model").unwrap();
+        let tool = LamaTool::resolve(&s, &serde_json::json!({"exe": helper})).unwrap();
+        assert_eq!(tool.model, Some(pack.clone()));
+        assert_eq!(LamaTool::download_folder_for((false, String::new()), &helper), models);
+        assert_eq!(LamaTool::download_folder(&s, &helper), models);
+    }
+
+    /// A missing model resolves to `None` (the download path picks it up) instead of failing the
+    /// whole command: the download is what makes the first stroke work.
+    #[test]
+    fn a_missing_model_resolves_to_none_and_the_download_folder_is_still_derived() {
+        let d = tempfile::tempdir().unwrap();
+        let plugins = d.path().join("plugins");
+        let helper = plugins.join("lama-cleaner").join(HELPER);
+        std::fs::create_dir_all(helper.parent().unwrap()).unwrap();
+        std::fs::write(&helper, b"helper").unwrap();
+        let tool = LamaTool::resolve(&session(), &serde_json::json!({"exe": helper})).unwrap();
+        assert!(tool.model.is_none(), "{tool:?}");
+        assert_eq!(LamaTool::download_folder_for((false, String::new()), &helper), helper.parent().unwrap().join(MODELS));
     }
 
     /// Guards the rule that repository code carries no machine's absolute path: every path this

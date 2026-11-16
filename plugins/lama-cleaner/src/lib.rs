@@ -342,16 +342,16 @@ fn build_inputs(image: &RgbImage, mask: &GrayImage) -> Result<(ort::value::Tenso
         let plane = SIDE * SIDE;
         for y in 0..SIDE {
             let row = &src[y * SIDE * 3..(y + 1) * SIDE * 3];
-            for (x, px) in row.chunks_exact(3).enumerate() {
+            for (x, rgb) in row.as_chunks::<3>().0.iter().enumerate() {
                 let i = y * SIDE + x;
                 if let Some(cell) = dst.get_mut(i) {
-                    *cell = px[0] as f32 / 255.0;
+                    *cell = f32::from(rgb[0]) / 255.0;
                 }
                 if let Some(cell) = dst.get_mut(plane + i) {
-                    *cell = px[1] as f32 / 255.0;
+                    *cell = f32::from(rgb[1]) / 255.0;
                 }
                 if let Some(cell) = dst.get_mut(2 * plane + i) {
-                    *cell = px[2] as f32 / 255.0;
+                    *cell = f32::from(rgb[2]) / 255.0;
                 }
             }
         }
@@ -502,12 +502,10 @@ fn find_runtime_dir(name: &str) -> Option<PathBuf> {
             push_toolkit_dirs(&mut candidates, Path::new(&root));
         }
     }
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(dir) = exe.parent() {
-            candidates.push(dir.to_path_buf());
-            if let Some(parent) = dir.parent() {
-                candidates.push(parent.to_path_buf());
-            }
+    if let Some(dir) = std::env::current_exe().ok().and_then(|exe| exe.parent().map(std::path::Path::to_path_buf)) {
+        candidates.push(dir.clone());
+        if let Some(parent) = dir.parent() {
+            candidates.push(parent.to_path_buf());
         }
     }
     if cfg!(windows) {
