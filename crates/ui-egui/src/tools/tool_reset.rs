@@ -130,6 +130,7 @@ fn is_selection_tool(tool: Tool) -> bool {
             | Tool::MagicWand
             | Tool::QuickSelection
             | Tool::ObjectSelection
+            | Tool::Sam3Select
     )
 }
 
@@ -210,8 +211,9 @@ pub fn option_keys(tool: Tool) -> &'static [&'static str] {
         Tool::Lasso | Tool::PolygonLasso => reset!(feather, anti_alias),
         Tool::MagneticLasso => reset!(feather, anti_alias, magnetic_width, magnetic_contrast, magnetic_frequency, magnetic_pressure),
         Tool::MagicWand => reset!(tolerance, anti_alias, contiguous),
-        Tool::QuickSelection => reset!(enhance_edge),
+        Tool::QuickSelection => reset!(enhance_edge, quick_selection_mode),
         Tool::ObjectSelection => reset!(enhance_edge, object_finder, object_hard_edge),
+        Tool::Sam3Select => reset!(sam3_prompt, sam3_threshold, sam3_refine, sam3_individual),
         Tool::Crop => reset!(
             crop_ratio,
             crop_delete,
@@ -318,6 +320,7 @@ pub fn option_keys(tool: Tool) -> &'static [&'static str] {
         | Tool::Count
         | Tool::RotateView
         | Tool::HistoryBrush
+        | Tool::LamaCleaner
         | Tool::PathSelection
         | Tool::DirectSelection
         | Tool::SliceSelect
@@ -457,7 +460,7 @@ mod tests {
         assert_eq!(sample_all_key(Tool::Brush), None);
         let keys: Vec<String> = Tool::ALL.iter().filter_map(|t| sample_all_key(*t)).collect();
         let distinct: std::collections::BTreeSet<&String> = keys.iter().collect();
-        assert_eq!((keys.len(), distinct.len()), (12, 12), "one key per tool with the option");
+        assert_eq!((keys.len(), distinct.len()), (13, 13), "one key per tool with the option");
     }
 }
 

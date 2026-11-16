@@ -26,6 +26,7 @@ pub enum Tool {
     Pencil,
     MixerBrush,
     ColorReplacement,
+    LamaCleaner,
     Eraser,
     BackgroundEraser,
     MagicEraser,
@@ -78,10 +79,12 @@ pub enum Tool {
     Slice,
     SliceSelect,
     Frame,
+    /// SAM 3.1 selection: an open-vocabulary prompt, a click, or a box (joins the `W` group).
+    Sam3Select,
 }
 
 impl Tool {
-    pub const ALL: [Tool; 69] = [
+    pub const ALL: [Tool; 71] = [
         Tool::Move,
         Tool::Artboard,
         Tool::RectMarquee,
@@ -103,6 +106,7 @@ impl Tool {
         Tool::Pencil,
         Tool::ColorReplacement,
         Tool::MixerBrush,
+        Tool::LamaCleaner,
         Tool::Eraser,
         Tool::BackgroundEraser,
         Tool::MagicEraser,
@@ -151,6 +155,7 @@ impl Tool {
         Tool::Slice,
         Tool::SliceSelect,
         Tool::Frame,
+        Tool::Sam3Select,
     ];
 
     pub fn label(self) -> &'static str {
@@ -165,6 +170,7 @@ impl Tool {
             Tool::Pencil => "Pencil Tool",
             Tool::MixerBrush => "Mixer Brush Tool",
             Tool::ColorReplacement => "Color Replacement Tool",
+            Tool::LamaCleaner => "LaMa Cleaner Tool",
             Tool::Eraser => "Eraser Tool",
             Tool::BackgroundEraser => "Background Eraser Tool",
             Tool::MagicEraser => "Magic Eraser Tool",
@@ -209,6 +215,7 @@ impl Tool {
             Tool::Sponge => "Sponge Tool",
             Tool::QuickSelection => "Quick Selection Tool",
             Tool::ObjectSelection => "Object Selection Tool",
+            Tool::Sam3Select => "SAM Selection Tool",
             Tool::Pen => "Pen Tool",
             Tool::FreeformPen => "Freeform Pen Tool",
             Tool::CurvaturePen => "Curvature Pen Tool",
@@ -246,6 +253,7 @@ impl Tool {
                 | Tool::Pencil
                 | Tool::MixerBrush
                 | Tool::ColorReplacement
+                | Tool::LamaCleaner
                 | Tool::Eraser
                 | Tool::BackgroundEraser
                 | Tool::Remove
@@ -268,7 +276,7 @@ impl Tool {
         match self {
             Tool::Move | Tool::Artboard => 'V',
             Tool::RectMarquee | Tool::EllipseMarquee => 'M',
-            Tool::Brush | Tool::Pencil | Tool::MixerBrush | Tool::ColorReplacement => 'B',
+            Tool::Brush | Tool::Pencil | Tool::MixerBrush | Tool::ColorReplacement | Tool::LamaCleaner => 'B',
             Tool::Eraser | Tool::BackgroundEraser | Tool::MagicEraser => 'E',
             Tool::Eyedropper | Tool::ColorSampler | Tool::Ruler | Tool::Note | Tool::Count => 'I',
             Tool::Lasso | Tool::PolygonLasso | Tool::MagneticLasso => 'L',
@@ -287,10 +295,10 @@ impl Tool {
             // In the Marquee flyout, but M cycles only the Rectangular and Elliptical Marquee.
             Tool::SingleRowMarquee | Tool::SingleColumnMarquee => '\0',
             Tool::Dodge | Tool::Burn | Tool::Sponge => 'O',
-            Tool::QuickSelection | Tool::ObjectSelection => 'W',
+            Tool::QuickSelection | Tool::ObjectSelection | Tool::Sam3Select => 'W',
             Tool::Pen | Tool::FreeformPen | Tool::CurvaturePen => 'P',
             // In the Pen flyout, but P never reaches them.
-            Tool::AddAnchorPoint | Tool::DeleteAnchorPoint | Tool::ConvertPoint => ' ',
+            Tool::AddAnchorPoint | Tool::DeleteAnchorPoint | Tool::ConvertPoint => '\0',
             Tool::PathSelection | Tool::DirectSelection => 'A',
             Tool::Rectangle | Tool::EllipseShape | Tool::Triangle | Tool::Polygon | Tool::Star | Tool::Line | Tool::CustomShape => 'U',
         }
@@ -308,6 +316,7 @@ impl Tool {
             Tool::ColorSampler => "◎",
             Tool::Lasso | Tool::PolygonLasso | Tool::MagneticLasso => "L",
             Tool::MagicWand => "W",
+            Tool::Sam3Select => "✳",
             Tool::Crop => "C",
             Tool::Gradient | Tool::PaintBucket => "G",
             Tool::Type | Tool::VerticalType | Tool::HorizontalTypeMask | Tool::VerticalTypeMask => "T",
@@ -319,6 +328,9 @@ impl Tool {
     }
     pub fn from_name(s: &str) -> Option<Tool> {
         let n = s.to_ascii_lowercase().replace([' ', '_', '-'], "");
+        if matches!(n.as_str(), "samselection" | "sam3selection" | "sam3") {
+            return Some(Tool::Sam3Select);
+        }
         Tool::ALL.into_iter().find(|t| {
             let a = format!("{t:?}").to_ascii_lowercase();
             n == a || n == a.replace("marquee", "") || n == t.label().to_ascii_lowercase().replace(' ', "")

@@ -1,0 +1,15 @@
+# The helper's build output, and the weights it loads: the HSWQ pack is 1.7 GB and belongs beside
+# the helper, not in the repository (`CRAFT_SAM3_PACK`).
+target/
+*.safetensors
+
+# Everything a measurement run writes stays local; the inputs the helper and its reference scripts
+# read are kept.
+data/*
+!data/*.py
+!data/vocab.json
+!data/merges.txt
+!data/tokenizer_reference.json
+
+# Console logs of a build or a test run.
+*.log

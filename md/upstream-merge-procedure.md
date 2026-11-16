@@ -1,0 +1,553 @@
+# Merging Upstream Latest Into This Fork — Complete Procedure
+
+This document is the full, repeatable procedure for merging `upstream/main` into this fork's `main`
+while (a) preserving every fork-only feature, (b) leaving zero failing tests, and (c) never trusting
+an unverified claim: every step below ends in a measured result. It was written from a completed
+merge of `6d99175b1` (675 files changed, +52,228 / −151,198, including the i18n catalog externaliza-
+tion and the HEIF crate swap) and reflects the conflicts and repairs that merge actually required.
+Every identifier, path, command and number in this document was checked against the tree it
+describes.
+
+Placeholders used in the commands below: `<repo>` — this checkout; `<drive>` — a large data drive;
+`<craft-i18n checkout>` and `<craft-fonts checkout>` — the external checkouts described in §7.1 and
+§2.5; `<merge-base>` — the output of `git merge-base main upstream/main`; `<pre-merge main>` — the
+commit `main` pointed at before the merge; `<branch>` — an open pull-request branch; `<crate-path>`
+— a workspace member path; `<target>` — the value of `CARGO_TARGET_DIR`.
+
+Two invariants govern everything:
+
+1. **Fork features survive.** Each fork feature is listed in §1 together with the test that proves
+   it. A merge is not done until all of those tests pass.
+2. **No failures left behind.** A red test is never explained away ("environment", "upstream's
+   fault") without a measurement that proves it. Find the root cause, fix it in code, and show the
+   green run. Never weaken an assertion or a tolerance to make a test pass.
+
+---
+
+## 1. Fork feature inventory and its guarding tests
+
+Before merging, know exactly what must survive. Each feature maps to at least one test; after the
+merge these tests are the definition of "not broken".
+
+| Fork feature | Lives in | Guarding tests |
+|---|---|---|
+| LaMa Cleaner tool | `crates/engine/src/cmd/retouch_cmds/lama_cleaner.rs`, `crates/ui-egui/src/tools/retouch_ui.rs`, `crates/engine/src/cmd/retouch_cmds.rs` | `retouch_ui` (90 tests), engine lib suite, `the_default_toolbar_lists_every_tool` |
+| SAM Selection tool (SAM 3.1 on CUDA) | `crates/ui-egui/src/tools/sam3*`, `plugins/sam3-select.exe` | `sam3_toolbar`, `sam3_canvas`, `sam3_options_bar`, `every_selectable_tool_has_a_toolbar_slot` |
+| SAM Selection Japanese labels (tool name, options bar, both status lines) | `crates/ui-egui/src/i18n.rs` (`JA_TEXT_OVERRIDES`, read by `tr()` before the catalog) | `retouch_ui::tests::sam_selection_strings_are_translated_in_japanese` (in a catalog build, §9) |
+| Japanese typography / CJK font engine | `crates/text/src/cjk.rs`, `crates/text/src/fonts.rs`, `crates/text/src/font_class.rs`, `crates/ui-egui/src/text/font_preview.rs` | `cjk_fonts` (55 tests) |
+| Japanese transform-menu labels (`Skew` / `Distort` wording) | `crates/ui-egui/src/i18n.rs` (`JA_TEXT_OVERRIDES` at line 433, `JA_ID_OVERRIDES` at line 434, applied in `tr()` / `tr_id()`) | `i18n::tests::japanese_transform_labels_keep_skew_and_distinct` |
+| Move tool cross-document transfer (incl. background-layer drag) | `crates/ui-egui/src/panels/layer_transfer.rs` (`move_drag()` line 74, `arm_move_transfer()` line 112), `crates/ui-egui/src/tools/move_box.rs`, `crates/ui-egui/src/canvas/tool_input.rs` (`record_move_blocked()` line 403) | `layer_transfer` (26 tests) |
+| Windows directory-flush fix (dir sync: 1 / 50 / 120 are non-fatal) | `crates/format/src/atomic.rs` | `crates/format/src/atomic/tests.rs` |
+| HEIF/HEIC support | upstream-owned since the `craft-heif` (craft-libs) swap; the fork carries no private copy | `crates/codecs` HEIF tests |
+| Craft-fonts script coverage at runtime | `crates/text/src/craft_fonts.rs`, `crates/text/build.rs` (compiled in only when `CRAFT_FONTS_DIR` is set) | `cjk_fonts`, `text` suite |
+
+Rule: when upstream refactors an area a fork feature lives in, the feature is **ported**, not
+sacrificed, and the port is proven by the tests in this table.
+
+Note on scope: some fork work still lives only on an open pull-request branch (for example the
+`pickAt` `includeLocked` probe support is **not** in `main` — `git grep includeLocked -- crates`
+returns nothing on `main`). Treat such items as branch-local: check the branch before assuming a
+symbol exists in `main`, and never copy a whole PR-branch file into `main` (§7.3).
+
+### 1.1 Upstream's data-driven defaults are registries: a name they omit is gone
+
+Upstream increasingly ships features whose behaviour is a *default table of names* — a stored
+toolbar layout, a command table, a menu catalogue, an extension list. Taking such a table in a
+merge without adding the fork's entries removes the fork feature from the running app **while
+every upstream test stays green**, because the feature still exists, still compiles, and is simply
+not reachable.
+
+Measured failure, 2026-11-16: the merge brought `DEFAULT_TOOLBAR` (`Edit › Toolbar`'s default
+layout, `crates/engine/src/prefs.rs`), which lists tools by name. It named neither `LamaCleaner`
+nor `Sam3Select`; `ToolbarCustomization::layout()` moves a tool named nowhere into Extra Tools, so
+both left the toolbar's brush and object-selection flyouts. Nothing failed until the daily exe was
+rebuilt five hours later, which is when the user lost the tools.
+
+Rule: when a merge adds or renames a default table, layout constant, name list or id registry,
+diff it against the fork's registrations **in the same commit** and add the fork entries. The
+check is mechanical, so run it rather than eyeballing it:
+
+```powershell
+# every tool the engine can select has a slot in the toolbar's own sections ...
+cargo test -p photocraft-ui-egui --lib every_selectable_tool_has_a_toolbar_slot
+# ... and in the stored layout's default, not pushed into Extra Tools
+cargo test -p photocraft-engine  --lib the_default_toolbar_lists_every_tool
+# the fork tools' own behaviour, so a "restored" entry is not an empty icon
+cargo test -p photocraft-ui-egui --lib sam3_toolbar
+cargo test -p photocraft-ui-egui --lib toolbar_group_order
+```
+
+A merge that leaves any of these red is not finished. A guard test is never weakened, skipped or
+deleted to make a merge pass: if a guard is wrong, change it only with a test that proves the
+weaker claim still protects the feature.
+
+### 1.2 A fork string is Japanese because the tree says so, not because a catalog cache says so
+
+`tr()` reads this fork's `JA_TEXT_OVERRIDES` before the shared catalog, so a fork-owned string is
+Japanese in every build. A fork string that lives **only** in the catalog is a trap: the test suite
+can stay green on a build whose catalog was compiled from an older checkout, while a clean build
+from the pin renders English.
+
+Measured 2026-11-16: the SAM Selection tool's five strings (`SAM Selection Tool`, `Prompt`,
+`Detect`, `Individual Masks`, and the "found nothing there" line) existed neither in the tree nor in
+the pinned `craft-i18n` (`e56d2624` deliberately: only `Detect Faces` is there). The test passed on
+the developer's stale cached catalog and failed the moment the catalogs were rebuilt from the pin —
+that is, in exactly the build the user runs.
+
+Rule: every string a fork feature shows (`tl!("...")` and command labels) resolves to Japanese from
+the **pinned** checkout; anything the pin lacks is carried in `JA_TEXT_OVERRIDES` in the same
+change. Check it against the pin, not against whatever is in `target/`:
+
+```powershell
+# every tl!("...") in the fork's own options bar must have a pinned catalog row or an override
+rg -n 'tl!\("' crates/ui-egui/src/tools/retouch_ui.rs
+rg -n 'SAM Selection Tool|Individual Masks' <craft-i18n>/locales/ja/photocraft.tsv
+```
+
+---
+
+## 2. Pre-merge checks
+
+Run all of these before touching anything:
+
+```powershell
+cd <repo>
+git switch main
+git fetch origin
+git fetch upstream
+
+# 2.1 Working tree must be clean, and no other session may be operating in this tree.
+git status --short                       # must print nothing
+if (Test-Path .git\MERGE_HEAD) { 'merge in progress' }
+git diff --name-only --diff-filter=U     # must print nothing (no leftover conflicts)
+
+# 2.2 How far behind is main, and how big is the merge?
+git log --oneline main..upstream/main | Measure-Object -Line
+git diff main...upstream/main --stat | Select-Object -Last 3
+
+# 2.3 Is upstream itself healthy? A broken upstream tip (e.g. duplicate definitions) fails at
+#     compile time and its CI shows it. Check before merging so an upstream break is never
+#     mistaken for a merge mistake.
+gh run list --repo storytold/photocraft --branch main --workflow ci.yml --limit 3 `
+  --json databaseId,conclusion,headSha --jq '.[] | "\(.headSha[0:8]) \(.conclusion) \(.databaseId)"'
+# If a run is "failure", open the failed jobs and their logs now and record the root cause.
+# A null conclusion means the run has not finished yet: take the newest run whose conclusion is
+# set, and read its jobs with `gh api repos/storytold/photocraft/actions/runs/<id>/jobs`.
+
+# 2.4 Build environment
+$env:CARGO_TARGET_DIR   = '<drive>:\pf_target'    # large data drive only, never the system drive
+$env:CARGO_INCREMENTAL  = '0'                     # keeps the target directory from bloating
+$env:CRAFT_I18N_DIR     = '<craft-i18n checkout>'  # catalogs; see §7.1 — required for translated runs
+$env:CRAFT_FONTS_DIR    = '<craft-fonts checkout>' # optional craft-fonts faces; see §2.5
+```
+
+### 2.5 What each environment variable actually does (verified)
+
+| Variable | Effect when set | Effect when unset |
+|---|---|---|
+| `CARGO_TARGET_DIR` | all build artifacts land on that drive | the system drive fills up |
+| `CARGO_INCREMENTAL` | `0` disables incremental artifacts | the target directory grows without bound |
+| `CRAFT_I18N_DIR` | `crates/ui-egui/build.rs` embeds the craft-i18n catalogs: every language works, and `needs_catalogs()` (`crates/ui-egui/src/i18n.rs`, `pub(crate)`) returns true | English-only build; language-iterating tests silently cover English only, so translation regressions stay invisible |
+| `CRAFT_FONTS_DIR` | `crates/text/build.rs` compiles in every face listed in the craft-fonts `fonts/manifest.txt` (Japanese, Arabic, Thai, …) | the app falls back to system fonts only; the test suites still pass (verified: `cjk_fonts` 55/0 both ways) but the shipped script coverage is reduced — set it for the fork's release |
+
+`craft-fonts` is **not** tracked in this repository (`git ls-files craft-fonts` → 0 files): it is an
+external checkout, exactly like craft-i18n. A `CRAFT_FONTS_DIR` pointing inside the working tree is
+a local convenience, not a repository path.
+
+---
+
+## 3. Divergence and overlap analysis
+
+Run this **before** the merge: afterwards, `main..upstream/main` is empty by construction and the
+overlap count is 0, which says nothing about the conflicts the merge had.
+
+Predict the conflicts before merging so each one meets a prepared decision:
+
+```powershell
+# 3.1 Every file upstream changes
+git diff main...upstream/main --name-only > $env:TEMP\up_files.txt
+
+# 3.2 Every file the fork changed since the merge base
+$mb = git merge-base main upstream/main
+git diff "$mb..main" --name-only > $env:TEMP\fork_files.txt
+
+# 3.3 The overlap = where git will report hard conflicts (or silently mis-merge)
+$up = Get-Content $env:TEMP\up_files.txt
+$fk = Get-Content $env:TEMP\fork_files.txt
+$fk | Where-Object { $up -contains $_ }
+```
+
+For every overlap file, decide in advance: **ours** (fork behavior wins), **theirs** (upstream
+wins), or **synthesis** (both, merged by hand). §5 lists the standard decisions.
+
+Also check whether any fork-only fix still lives only on a pull-request branch and is needed on
+`main` (§7.3); plan to port it in the same merge session.
+
+---
+
+## 4. The merge
+
+```powershell
+$env:GIT_AUTHOR_NAME    = 'ussoewwin'
+$env:GIT_AUTHOR_EMAIL   = '136552381+ussoewwin@users.noreply.github.com'
+$env:GIT_COMMITTER_NAME = 'ussoewwin'
+$env:GIT_COMMITTER_EMAIL= '136552381+ussoewwin@users.noreply.github.com'
+
+git merge upstream/main -m "Merge upstream/main into main"
+git diff --name-only --diff-filter=U     # the hard-conflict list
+```
+
+Never use `git add -A`; stage only files you actually resolved, checking `git status --short`
+entry by entry. The same discipline applies to every later commit in this procedure.
+
+---
+
+## 5. Conflict-resolution policy (hard conflicts)
+
+| Conflict kind | Decision | Rationale |
+|---|---|---|
+| `crates/format/src/atomic.rs` (doc comment + `dir_sync_unsupported` body) | **ours** | The fork classifies Windows dir-sync codes 1 / 50 / **120** as non-fatal; upstream treats only 1 / 50 as such. Fold upstream's informational notes (SMB, issue references) into our doc comment. The merged `crates/format/src/atomic/tests.rs` must still assert 120 → success; if it does not, the wrong side won. |
+| `crates/ui-egui/src/i18n/ja.tsv` (modify/delete after the catalog externalization) | **ours, keep the file** | Preserve the fork's translation data as a record. The live translations come from craft-i18n plus the in-repo override table (§7.1); the file itself is data, not code, and deleting it loses the fork's wording record. |
+| `crates/ui-egui/src/canvas/canvas_tool_menu.rs` (label call style) | **theirs** | Upstream moved menu labels to the new `tl!` lookup; the fork's old `tr_id(current(), …)` call no longer matches the merged i18n module. Take upstream's style, then `cargo check`. |
+| `Cargo.lock` | resolve by hand, then **let cargo finalize** | Keep fork-only workspace entries that upstream lacks, and drop entries for crates upstream removed — verify each against the workspace manifests (example: a crate upstream replaced with a craft-libs dependency must leave the lock). After the conflicts are staged, a build pass rewrites the lock to match the merged manifests; stage that rewrite. |
+
+Anything not in this table: read both sides, pick the side that keeps the fork's documented
+behavior, and state the reason in the eventual fix commit's message.
+
+---
+
+## 6. Semantic conflicts — what auto-merge gets wrong
+
+Git reports these as success. Every one of them has actually happened in this fork; check all of
+them after every merge:
+
+1. **Duplicated definitions (E0428).** When both sides add the same constant or function in
+   different places, auto-merge can keep both copies. Upstream's own tip has shipped exactly this
+   bug (`TAG_JPEG_TABLES` / `TAG_PREDICTOR` in `crates/codecs/src/codecs/tiff/decode.rs`); its
+   `ci.yml` run for that tip fails with the same E0428. After the merge, run a full
+   `cargo check --workspace --all-targets` early; on E0428 keep the copy that carries the doc
+   comment and delete the bare duplicate — then re-check upstream's CI conclusion so you know you
+   fixed *their* bug and did not introduce one.
+2. **Removed test helpers.** Upstream may delete a constructor the fork's tests still use (e.g. a
+   `JA()` language constructor replaced by `Lang::from_code("ja")`). Port the test to the new API
+   and gate it on catalog availability (`if !needs_catalogs() { return; }`, `needs_catalogs()` is
+   `pub(crate)` in `crates/ui-egui/src/i18n.rs`) so it still runs when catalogs are embedded and
+   skips cleanly when they are not.
+3. **Message wording changed upstream.** Tests that assert refusal/alert strings break when
+   upstream re-words the message or re-routes which tool gets which string. Align the test with the
+   merged implementation's routing (measured tools get their own wording via
+   `brush_refusal::tool_name` in `crates/ui-egui/src/tools/brush_refusal.rs`, everything else gets
+   the generic template) — build the expectation with the same `i18n::fmt(tl!(…))` call the
+   production code uses, never with a stale literal.
+4. **Signature drift on shared functions.** If a fork branch added a parameter to a function
+   upstream also evolved (`begin_with_layer`, a probe command's options, …), the auto-merge keeps
+   one signature while callers on the other branch expect another. `cargo check --all-targets`
+   catches it; resolve by synthesizing both parameters (see §7.3 for the transfer example).
+5. **Fork tests calling removed modules.** Grep the fork's test names from §1 after the merge; if a
+   helper or module disappeared, port the test — do not delete it.
+
+---
+
+## 7. Restoring fork behavior inside upstream-refactored areas
+
+### 7.1 i18n: the catalog moved to craft-i18n
+
+Upstream replaced the in-repo `crates/ui-egui/src/i18n/*.tsv` catalogs with the external
+`storytold/craft-i18n` crate, embedded at build time from `CRAFT_I18N_DIR` at the commit pinned in
+`craft-i18n.rev`. Consequences and the required steps:
+
+```powershell
+# One-time setup of the catalog checkout (repeat whenever craft-i18n.rev changes):
+git clone https://github.com/storytold/craft-i18n <craft-i18n-checkout>
+cd <craft-i18n-checkout>
+git checkout (Get-Content <repo>\craft-i18n.rev)
+```
+
+- **Never edit the catalog checkout to carry fork wording.** A fix that lives only in a local
+  checkout is not in the repository: any other build loses it. Fork-specific rows belong in the
+  in-repo override table instead (next bullet).
+- Fork wording that upstream's catalog gets wrong or lacks belongs in
+  `crates/ui-egui/src/i18n.rs`: the `JA_TEXT_OVERRIDES` (English source → Japanese) and
+  `JA_ID_OVERRIDES` (command id → Japanese) tables, applied only when `lang.code() == "ja"` inside
+  `tr()` and `tr_id()`. The current rows cover `Skew`, `Set horizontal skew`, `Set vertical skew`
+  (text) and `edit.transform.skew`, `edit.transform.distort` (ids). The guarding test
+  `japanese_transform_labels_keep_skew_and_distinct` must pass with a **pristine** catalog
+  checkout — that is the proof the feature no longer depends on the local machine.
+- Keep the old `ja.tsv` in the tree as the fork's data record (§5).
+
+### 7.2 Crate swaps that replace fork-touched code
+
+Upstream sometimes deletes a crate the fork carried (example: `crates/heif` replaced by
+`craft-heif` from craft-libs, pinned in the workspace `Cargo.toml`). Before accepting the
+deletion, prove the fork had no private changes, comparing the merge base against the fork's `main`
+**as it was before the merge** (afterwards the path is gone from `main` — verified: `crates/heif`
+has one entry at the pre-merge commit and none at `HEAD`):
+`git diff <merge-base>..<pre-merge main> -- <crate-path>` — empty means pure upstream history, so
+the swap is a pure follow and the fork loses nothing. Non-empty means the fork customized it; then
+port the customization first. After the swap, the corresponding tests (here: the codecs HEIF
+tests) are the proof the feature still works.
+
+### 7.3 Porting fork fixes that only exist on pull-request branches
+
+`main` already contains merged PR features; upstream changes can silently break them (git sees no
+conflict because both sides edited different lines). Symptom: a fork-feature test fails although no
+hard conflict exists anywhere. Procedure:
+
+1. Run the guarding test from §1 and read the exact assertion.
+2. Diff `main` against the branch that carries the fix: `git diff main <branch> -- <file>`. The
+   missing hunk is the port. Example (transfer): `move_drag()`'s condition must accept a recorded
+   blocked press, and `arm_move_transfer()` must treat the active layer as optional; without that
+   hunk a background-layer drag no longer transfers.
+3. Port only the relevant hunks — never copy the whole branch file, which carries changes that
+   belong to other pull requests.
+4. If the hunk depends on engine-side support that branch added (for example an extra option on a
+   probe command), port that dependency too, or verify the merged code path already provides the
+   equivalent behavior. The guarding tests decide.
+
+---
+
+## 8. Fixing failing tests the right way
+
+- Read the assertion and the production code it exercises. Decide which side is stale. Then fix
+  the stale side. Never "fix" by deleting a test or widening a tolerance.
+- **Replacing `Ui::label` with custom painting** (needed for pixel-exact fixes) silently drops the
+  widget's accessibility node, and every label-driven test fails. Always re-add
+  `resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, text.to_owned()));`
+- **Pixel fixes must be conditional, never unconditional.** An unconditional inset moves every
+  dialog and breaks the reference-layout tests. When a glyph mesh reaches past the pen position
+  (script ink, antialiasing fringe), inset by `galley.mesh_bounds` only when the overhang exceeds
+  0.5 px, rounded up to whole pixels — text whose mesh starts at the pen keeps its exact position.
+- **Debug probes are never committed.** A temporary `eprintln!` used to measure a galley must be
+  removed in the same session, and the final fix must stand on the measurement, not the probe.
+- **Environment claims need proof.** Before calling a failure "environment", change one variable at
+  a time (stash one file, unset one env var) and rerun. If the failure survives every local
+  variable change, compare against upstream CI evidence (which jobs ran, what failed there) before
+  writing a single sentence about "upstream".
+
+---
+
+## 9. Verification gates (all must be green; measure, never assume)
+
+```powershell
+$env:CARGO_TARGET_DIR   = '<drive>:\pf_target'
+$env:CARGO_INCREMENTAL  = '0'
+$env:CRAFT_I18N_DIR     = '<craft-i18n checkout>'   # catalogs embedded, or the run is blind
+$env:CRAFT_FONTS_DIR    = '<craft-fonts checkout>'  # optional, see §2.5
+
+cargo fmt --check
+cargo clippy -p photocraft-engine -p photocraft-ui-egui -p photocraft-format -p photocraft-text `
+             -p photocraft-codecs --all-targets -- -D warnings
+cargo check --workspace --all-targets          # catches E0428-style breakage everywhere
+
+cargo test -p photocraft-ui-egui --lib         # ~6.7k tests, includes cjk_fonts / i18n /
+                                               # layer_transfer / retouch_ui / label_column
+cargo test -p photocraft-engine --lib
+cargo test -p photocraft-codecs
+
+# Fork features stay reachable. A new upstream default table is where they vanish (§1.1);
+# a stored layout can name every tool upstream knows and none of the fork's.
+cargo test -p photocraft-ui-egui --lib every_selectable_tool_has_a_toolbar_slot
+cargo test -p photocraft-engine  --lib the_default_toolbar_lists_every_tool
+```
+
+The `CRAFT_I18N_DIR` and `CRAFT_FONTS_DIR` lines above are **not optional for judging the suite**: the
+fork's own tests assert Japanese strings and CJK glyphs, so a run without them reports failures that
+are the run's fault. Measured 2026-11-16 on `0b5548513` without either variable: `type_tool` 15
+failed ("No glyph for 世" — egui's stack has no CJK face), `cjk_fonts` 1 (`from_pref` falls back to
+`system_lang`, so `"ko"` is English), `i18n` 1 (Arabic shaping needs a face). With both set:
+`type_tool` 341/0, `cjk_fonts` 55/0, `i18n` 59/0, `retouch_ui` 123/0. A red run without the
+variables proves nothing; a **green** run without them proves nothing either (§1.2: it may be
+reading a stale cached catalog).
+
+Keep the fork-feature suites in the command list, one filter each, so a single red test cannot hide
+inside a 7.7k-test run:
+
+```powershell
+foreach ($f in 'cjk_fonts','type_tool','i18n','retouch_ui','layer_transfer','move_box',
+               'sam3_toolbar','sam3_options_bar','toolbar_group_order','tool_key_default') {
+  cargo test -p photocraft-ui-egui --lib $f
+}
+```
+A crate whose **tests do not compile** is a blocking finding, not a "known failure": the suite
+that would have caught the regression never ran. Measured 2026-11-16: `assign_shortcut` gained an
+`index` argument upstream and a test in `prefs/prefs_ui/shortcut_set_switch_tests.rs` still passed
+a name, so `cargo test -p photocraft-ui-egui --lib` failed to build while the merge looked green.
+
+Expected baseline (measured 2026-11-16 on `0b5548513`, catalogs and fonts embedded): engine
+4068 passed / 0 failed, codecs 1053 / 0, clippy exit 0, workspace check exit 0. The ui-egui lib
+suite as a whole still carries environment failures outside the fork areas (a scratch-disk warning
+replaces the status text), so judge it by the per-feature filters above and by the delta against
+the same run on `main` before the merge — not by its total.
+
+Run the fork-feature suites explicitly after fmt touches anything (`i18n::tests`,
+`label_column_tests`, `cjk_fonts`, `layer_transfer`, `retouch_ui`) — formatting must not move a
+test result.
+
+---
+
+## 10. Commit discipline
+
+- The merge itself is one commit: `Merge upstream/main into main`, author/committer
+  `ussoewwin <136552381+ussoewwin@users.noreply.github.com>` (set via `GIT_AUTHOR_*` /
+  `GIT_COMMITTER_*`; the environment may carry different values).
+- Everything the merge required beyond conflict resolution — ported branch hunks, test API
+  migrations, upstream-bug fixes (duplicate definitions), fork-behavior restorations — is a
+  **separate follow-up commit** with a subject naming the change, e.g.
+  `Keep the fork's Japanese transform labels in the tree and section-label ink inside the dialog`.
+  A merge commit that silently mixes repairs cannot be reviewed or reverted.
+- Stage files individually (`git add <file>`), never `-A`.
+- Push only on explicit instruction. After pushing, verify `git rev-parse HEAD` equals
+  `origin/main` and read the commit back from the API.
+
+### Two-track upstream synchronization
+
+`main` is not the only branch that tracks upstream. While a fork pull request is still open, that
+branch needs its own upstream merge:
+
+1. **Redundancy check first.** After upstream absorbs a feature the fork also carries, the fork's
+   pull request becomes redundant. Compare the feature's files against upstream:
+   `git log upstream/main --oneline -- <feature files>`; if upstream now contains the same change,
+   closing the fork's pull request is better than maintaining a duplicate.
+2. **Merge, never rebase.** Bring upstream into the branch with
+   `git merge upstream/main -m "Merge upstream/main into <branch>"` and keep the branch's history
+   replayable; no force-push over a published branch.
+3. **Same conflict policy.** §5 and §6 apply unchanged, and the branch's guarding tests (§1) must
+   be green after the merge — the transfer and selection-mode suites are the ones that break.
+4. **Order of operations.** Merge upstream into `main` first; then update the open branches against
+   the new `main` so their diffs stay reviewable.
+
+### Iron rule: every pull request's content is merged into `main`, and each branch stays pure
+
+Two halves, both mandatory:
+
+* `main` is the integration branch: it carries **100% of the content of every open pull request**
+  at all times — the pull request is merged into `main` in the same session it is updated.
+* A pull-request branch carries **only that pull request's own changes**: upstream base plus the
+  request's files. Nothing else — no fork-only feature, no other pull request's work, no internal
+  procedure document.
+
+This rule answers the 2026-11-12 incidents: the launcher exe was rebuilt from a `main` that did not
+carry the Japanese-font pull request (the feature vanished from the app the user runs), and the fork
+`main` had been merged into the open branches, so their upstream diffs carried 55–65 files of other
+people's work instead of the 14 / 14 / 2 / 4 files each request actually proposes.
+
+1. **Pull request → `main`, one direction, every session.** Merge the branch into `main` right after
+   the branch is brought up to date. A branch that was updated but not merged back leaves `main`
+   behind — that is a violation, not a task to schedule later.
+2. **Never merge the fork's `main` into a pull-request branch.** Merging `main` drags fork-only
+   features, other pull requests and the internal procedure documents into the request's diff.
+   The only thing a branch may take is `upstream/main` (`git merge upstream/main`), and only to
+   resolve an upstream conflict.
+3. **Verification of purity, measured.** For every open branch,
+   `git diff --name-only upstream/main...<branch>` must equal the file set the request proposes
+   (measured when the request was opened). A file outside that set is contamination: restore it to
+   `upstream/main`'s version, or delete it when upstream has no such file, and commit that cleanup.
+4. **Verification of integration, measured.** For every file the request proposes,
+   `git diff main <branch> -- <file>` must print nothing.
+5. **A remaining difference is a blocking finding, never "drift".** Calling a difference
+   "upstream-version drift" is how a lost hunk survives: measured 2026-11-16, the containment
+   report recorded `feat/localized-japanese-fonts` as "6 files, main differs on 1
+   (`tools/type_tool/fonts.rs`)" and shipped it. That one file was the branch's own `try_shared`
+   fix, gone from `main`; the UI blocked on the font scan until it was restored. A difference in a
+   request's file is resolved by putting the branch's lines back, or by proving line by line that
+   every differing line is `main`-ahead. Two checks, both cheap:
+
+   ```powershell
+   # every file the request touches must show no difference at all
+   foreach ($f in (git diff --name-only main <branch>)) { git diff main <branch> -- $f }
+   # and the branch's own commits: empty means every fork commit is in main (ancestry)
+   git log --no-merges --oneline main..<branch>
+   ```
+
+   `git log --no-merges main..<branch>` being empty is the strong result for a branch; for a branch
+   that carries upstream merges (so it is not an ancestor of `main`), compare the added lines of
+   each of its own commits against `main`'s file, as done for `f23efc982` and `2456b4fed`.
+6. **A `git cherry` `+` line is not automatically a leak, and `-` is not automatically a pass.**
+   When the same change reached `main` through another line of history (a formatting-only commit, a
+   conflict-resolved merge whose patch-id differs) `git cherry` still lists it, and a squash-style
+   integration can list everything while content differs. Only the file comparison of point 4 and the
+   line comparison of point 5 decide.
+7. **Never rebuild a user-facing exe from a tree that misses pull-request content.** The daily exe
+   comes from `main`; every pull-request content must be in `main` before any rebuild.
+8. **The fork's internal procedure documents never ride on a pull-request branch.**
+   `md/upstream-merge-procedure.md` and `md/build-procedure.md` describe this fork's own operation:
+   they live on `main` only, and each open branch carries a commit that removes them. Never push a
+   branch that carries them.
+9. **Report at the end of every merge and build session**, one line per open branch:
+   `<branch>: <n> files upstream diff (pure) / contained in main`.
+
+---
+
+## 11. Fork release and tag discipline (only on explicit instruction)
+
+- A release follows a merge only when it is asked for. The tag object is the current `HEAD` of the
+  fork's `main` — fetch first and state the object (`git rev-parse HEAD`) before tagging.
+- The release-note and changelog format is copied byte-for-byte from the previous fork release
+  (language-switch table, section order, link form, bullet kinds). No invented elements, no new
+  bullet kinds, no new link targets.
+- After publishing, read the published body back through the API and compare it with the local
+  source before reporting success; a self-check that only inspects local bytes proves nothing.
+- Tag and release operations are outward-facing: never create, move or delete a tag, publish a
+  release, or dispatch a workflow without an explicit instruction.
+
+---
+
+## 12. Release build and cleanup
+
+```powershell
+$env:CARGO_TARGET_DIR  = '<drive>:\pf_target'
+$env:CARGO_INCREMENTAL = '0'
+$env:CRAFT_I18N_DIR    = '<craft-i18n checkout>'   # a release without it ships English-only
+$env:CRAFT_FONTS_DIR   = '<craft-fonts checkout>'  # optional; see §2.5
+
+cargo build --release -p photocraft -p photocraft-cli
+```
+
+Verify the artifacts exist with fresh timestamps, and smoke-test the CLI
+(`<target>\release\photocraft-cli.exe --version`). A GUI executable is not launched as a check.
+
+Cleanup after the build: delete every scratch log and helper script created during the session
+(logs, temporary patch scripts, backup directories of already-committed files). Keep only the
+build outputs (`<target>\release`), the test cache (`<target>\debug`), and the craft-i18n and
+craft-fonts checkouts (required by future catalog- and font-embedded builds). Measure the freed
+space and list what remains and why.
+
+---
+
+## 13. Troubleshooting table
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `E0428: the name … is defined multiple times` in a file neither side "changed" | both sides added the same item; auto-merge kept both | keep the documented copy, delete the bare duplicate; compare with upstream CI |
+| Test calls a removed constructor (`JA()`, old catalog API) | upstream refactored the i18n API | port to `Lang::from_code("…")` plus the `needs_catalogs()` guard |
+| Group-refusal test expects the old generic wording | upstream re-routed which tools get which message | build the expectation via `brush_refusal::tool_name` + `i18n::fmt(tl!(…))` like the production code |
+| Transfer test: neighbour cell receives nothing | upstream's Auto-Select refactor dropped the fork's blocked-press / grabbed-layer path in `move_drag` / `arm_move_transfer` | port the branch's hunks for that file (§7.3) |
+| Japanese labels show the catalog's wording | the craft-i18n catalog's Japanese row for `Skew` is a mistranslation (it reads as "italic") | extend `JA_TEXT_OVERRIDES` / `JA_ID_OVERRIDES` in `crates/ui-egui/src/i18n.rs`; never edit the catalog checkout |
+| Label-driven tests fail after a paint change | custom painting dropped the accessibility node | re-add `WidgetInfo::labeled(egui::Role::Label, …)` |
+| Reference-layout tests fail after a pixel fix | unconditional inset moved every dialog | make the inset conditional on `galley.mesh_bounds` overhang > 0.5 px |
+| Catalog tests pass locally, translation regressions invisible | the build ran without `CRAFT_I18N_DIR` (English-only) | always set it for verification runs |
+| Catalog-dependent tests fail everywhere | `CRAFT_I18N_DIR` unset, or the checkout is not at the commit in `craft-i18n.rev` | clone/checkout the pinned commit and set the variable |
+| `cargo check` fine but a test count differs from the baseline | a suite ran filtered or with a stale environment | rerun unfiltered with the §9 environment block |
+
+---
+
+## 14. Final checklist
+
+- [ ] `git status --short` clean; `origin/main` == local `main` after the instructed push
+- [ ] All §1 fork-feature suites green, including the §1.1 default-table guards
+- [ ] The suites ran with `CRAFT_I18N_DIR` and `CRAFT_FONTS_DIR` set (§9); a green run without them
+      is not evidence
+- [ ] Every fork string is Japanese from the **pinned** catalog, or carried in `JA_TEXT_OVERRIDES`
+      (§1.2)
+- [ ] Every file an open request touches is identical in `main` and in the branch; no difference was
+      written off as drift (§10.5)
+- [ ] Every upstream default table / name list / id registry the merge touched lists the fork's
+      entries (not merely compiles)
+- [ ] Every touched crate's tests compile (`cargo test --lib` builds, not just `cargo check`)
+- [ ] fmt / clippy (`-D warnings`) / workspace `cargo check --all-targets` exit 0
+- [ ] ui-egui, engine, codecs: 0 failed, counts at or above the §9 baseline
+- [ ] Fork wording lives in the repository (override table), not in a local catalog checkout
+- [ ] Open pull-request branches updated or closed per the two-track section of §10
+- [ ] No temporary logs, probes, or backup directories left anywhere
+- [ ] Merge commit plus separate repair commits, correct author identity, nothing pushed or
+      published without instruction

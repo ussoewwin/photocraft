@@ -152,6 +152,7 @@ pub mod sample_cmds;
 #[cfg(test)]
 mod sample_zoom_box_tests;
 pub mod sampler_cmds;
+pub mod sam3_select_cmds;
 pub mod select_extra_cmds;
 pub mod selection_cmds;
 pub mod slice_cmds;
@@ -1367,6 +1368,7 @@ fn build() -> Vec<CommandSpec> {
     v.extend(crate::vector_cmds::specs());
     v.extend(crate::path_edit_cmds::specs());
     v.extend(crate::smartselect_cmds::specs());
+    v.extend(crate::sam3_select_cmds::specs());
     v.extend(crate::cutout_cmds::specs());
     v.extend(crate::symmetry_cmds::specs());
     v.extend(crate::edit_cmds::specs());

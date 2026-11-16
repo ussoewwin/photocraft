@@ -9,7 +9,23 @@ use crate::panels::toolbar::{TOOL_SECTIONS, next_slot_tool, toolbar};
 use crate::state::Tool;
 
 const HEALING: [Tool; 6] = [Tool::SpotHealing, Tool::Remove, Tool::Healing, Tool::Patch, Tool::ContentAwareMove, Tool::RedEye];
-const BRUSH: [Tool; 4] = [Tool::Brush, Tool::Pencil, Tool::ColorReplacement, Tool::MixerBrush];
+const BRUSH: [Tool; 5] = [Tool::Brush, Tool::Pencil, Tool::ColorReplacement, Tool::MixerBrush, Tool::LamaCleaner];
+
+/// Every tool the engine can select has a slot on the toolbar. A tool with no slot is
+/// unreachable in the app even though its command exists: the LaMa Cleaner and SAM Selection
+/// tools were lost that way when a stored toolbar layout arrived from upstream and named
+/// neither of them.
+#[test]
+fn every_selectable_tool_has_a_toolbar_slot() {
+    let sections: Vec<Tool> = TOOL_SECTIONS.iter().flat_map(|section| section.iter()).flat_map(|slot| slot.iter()).copied().collect();
+    for (id, label, _) in photocraft_engine::shell_commands::TOOLS {
+        let Some(name) = id.strip_prefix("tools.select.") else { continue };
+        let Some(tool) = Tool::from_name(name) else {
+            panic!("{label}: the engine lists {id} but the toolbar has no Tool for it");
+        };
+        assert!(sections.contains(&tool), "{label} ({name}) has no slot in TOOL_SECTIONS");
+    }
+}
 
 fn app() -> PhotocraftApp {
     let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
@@ -92,7 +108,7 @@ fn shift_j_follows_the_reference_sequence() {
 #[test]
 fn shift_b_follows_the_reference_sequence() {
     let want: Vec<Tool> = BRUSH.iter().chain(&BRUSH[..1]).copied().collect();
-    assert_eq!(shift_sequence(Key::B, 5), want);
+    assert_eq!(shift_sequence(Key::B, 6), want);
 }
 
 fn frame(app: &mut PhotocraftApp, ctx: &egui::Context, time: f64, events: Vec<egui::Event>) {

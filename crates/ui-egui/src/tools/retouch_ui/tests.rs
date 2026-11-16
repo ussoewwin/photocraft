@@ -1213,6 +1213,260 @@ fn history_brush_options_bar_shows_source_name() {
     h.get_by_label("The History Brush source was deleted: set a new source in the History panel");
 }
 
+#[test]
+fn quick_selection_options_bar_has_new_add_subtract_mode_buttons() {
+    use crate::theme::ThemeKind;
+    use egui::vec2;
+    use egui_kittest::kittest::Queryable;
+
+    let mut app = app();
+    app.ui.tool = Tool::QuickSelection;
+    assert_eq!(app.ui.tool_options.quick_selection_mode, 0, "Quick Selection defaults to New mode");
+
+    let mut h = egui_kittest::Harness::builder().with_size(vec2(1400.0, 60.0)).build_ui_state(
+        |ui, app: &mut PhotocraftApp| {
+            if !ui.ctx().fonts(|f| f.families().contains(&egui::FontFamily::Name("medium".into()))) {
+                return;
+            }
+            crate::panels::options_bar(app, ui);
+        },
+        app,
+    );
+    PhotocraftApp::setup_context(&h.ctx, ThemeKind::Studio);
+    h.run_steps(4);
+
+    // Verify New, Add, and Subtract buttons exist in the options bar
+    let add_tip = crate::i18n::fmt(tl!("Add to selection  ({key})"), &[("key", &crate::shortcuts::pretty("Shift"))]);
+    let sub_tip = crate::i18n::fmt(tl!("Subtract from selection  ({key})"), &[("key", &crate::shortcuts::pretty("Alt"))]);
+
+    // Clicking Subtract switches to Subtract mode (2)
+    h.get_by_label(&sub_tip).click();
+    h.run_steps(4);
+    assert_eq!(h.state().ui.tool_options.quick_selection_mode, 2);
+
+    // Clicking New switches to New mode (0)
+    h.get_by_label("New selection").click();
+    h.run_steps(4);
+    assert_eq!(h.state().ui.tool_options.quick_selection_mode, 0);
+
+    // Clicking Add switches to Add mode (1)
+    h.get_by_label(&add_tip).click();
+    h.run_steps(4);
+    assert_eq!(h.state().ui.tool_options.quick_selection_mode, 1);
+
+    // A saved mode exceeding 2 is normalized to Add mode (1) on render
+    h.state_mut().ui.tool_options.quick_selection_mode = 3;
+    h.run_steps(4);
+    assert_eq!(h.state().ui.tool_options.quick_selection_mode, 1, "out-of-range mode normalizes to Add mode");
+
+    // Test selection_mode feedback across modes
+    let none = egui::Modifiers::NONE;
+    let alt = egui::Modifiers::ALT;
+    let shift = egui::Modifiers::SHIFT;
+
+    the_quick_selection_mode_feedback_follows_the_mode();
+
+    // After drawing a stroke in New mode (0), it automatically flips back to Add mode (1).
+    let modifiers = egui::Modifiers::NONE;
+    let selected = |app: &PhotocraftApp, x: i32, y: i32| app.session.active().unwrap().doc.selection.as_ref().is_some_and(|s| s.sample_channel(x, y, 0) > 0.0);
+    // A filled patch gives the Quick Selection something to segment, so the selection it makes
+    // covers that patch alone.
+    h.state_mut().run("layer.new.layer", json!({"name": "Patch"})).unwrap();
+    h.state_mut().run("select.rect", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    h.state_mut().run("edit.fill", json!({"color": "#ff0000"})).unwrap();
+    h.state_mut().run("select.deselect", json!({})).unwrap();
+    h.state_mut().ui.tool_options.quick_selection_mode = 0;
+    tool_event(h.state_mut(), ToolEvent::Down { x: 20.0, y: 20.0, pressure: 1.0 }, modifiers);
+    tool_event(h.state_mut(), ToolEvent::Up { x: 20.0, y: 20.0 }, modifiers);
+    assert!(!h.state().ui.status_error, "{}", h.state().ui.status);
+    assert!(h.state().session.active().unwrap().doc.selection.is_some(), "select.quick created a selection");
+    assert!(selected(h.state(), 20, 20), "the stroke's own region is selected");
+    assert_eq!(h.state().ui.tool_options.quick_selection_mode, 1, "New mode automatically flips to Add mode after stroke");
+
+    // New mode replaces the selection: a selection made elsewhere is gone after the stroke
+    // instead of being added to.
+    h.state_mut().run("select.deselect", json!({})).unwrap();
+    h.state_mut().run("select.rect", json!({"x": 60, "y": 20, "width": 20, "height": 20})).unwrap();
+    h.state_mut().ui.tool_options.quick_selection_mode = 0;
+    tool_event(h.state_mut(), ToolEvent::Down { x: 20.0, y: 20.0, pressure: 1.0 }, modifiers);
+    tool_event(h.state_mut(), ToolEvent::Up { x: 20.0, y: 20.0 }, modifiers);
+    assert!(!h.state().ui.status_error, "{}", h.state().ui.status);
+    assert!(selected(h.state(), 20, 20), "the stroke's own region is selected");
+    assert!(!selected(h.state(), 70, 30), "New mode replaces the selection: the region selected before the stroke is gone");
+
+    // An empty stroke (outside canvas, changed: false) or failed stroke (no points) in New mode keeps New mode (0)
+    h.state_mut().run("select.deselect", json!({})).unwrap();
+    h.state_mut().ui.tool_options.quick_selection_mode = 0;
+    tool_event(h.state_mut(), ToolEvent::Down { x: -20.0, y: -20.0, pressure: 1.0 }, none);
+    tool_event(h.state_mut(), ToolEvent::Up { x: -20.0, y: -20.0 }, none);
+    assert!(h.state().session.active().unwrap().doc.selection.is_none());
+    assert_eq!(h.state().ui.tool_options.quick_selection_mode, 0, "Empty stroke keeps New mode");
+
+    finish_stroke(h.state_mut(), Tool::QuickSelection, &[], none, false);
+    assert!(h.state().ui.status_error);
+    assert_eq!(h.state().ui.tool_options.quick_selection_mode, 0, "Failed stroke keeps New mode");
+    h.state_mut().ui.status_error = false;
+
+    // Shift and Alt modifiers in New mode (0) run add/subtract and transition to Add mode (1) when changed
+    tool_event(h.state_mut(), ToolEvent::Down { x: 20.0, y: 20.0, pressure: 1.0 }, shift);
+    tool_event(h.state_mut(), ToolEvent::Up { x: 20.0, y: 20.0 }, shift);
+    assert!(h.state().session.active().unwrap().doc.selection.is_some());
+    assert_eq!(h.state().ui.tool_options.quick_selection_mode, 1);
+
+    // When selection is empty in New mode (0), Alt-drag falls back to New selection and flips to Add (1)
+    h.state_mut().run("select.deselect", json!({})).unwrap();
+    h.state_mut().ui.tool_options.quick_selection_mode = 0;
+    tool_event(h.state_mut(), ToolEvent::Down { x: 20.0, y: 20.0, pressure: 1.0 }, alt);
+    tool_event(h.state_mut(), ToolEvent::Up { x: 20.0, y: 20.0 }, alt);
+    assert!(h.state().session.active().unwrap().doc.selection.is_some(), "Alt on empty selection creates a new selection");
+    assert_eq!(h.state().ui.tool_options.quick_selection_mode, 1);
+
+    // When selection is non-empty in New mode (0), Alt-drag subtracts from it
+    h.state_mut().ui.tool_options.quick_selection_mode = 0;
+    tool_event(h.state_mut(), ToolEvent::Down { x: 20.0, y: 20.0, pressure: 1.0 }, alt);
+    tool_event(h.state_mut(), ToolEvent::Up { x: 20.0, y: 20.0 }, alt);
+    assert!(h.state().session.active().unwrap().doc.selection.is_none(), "Alt on existing selection subtracts");
+    assert_eq!(h.state().ui.tool_options.quick_selection_mode, 0, "only a first stroke on an empty selection switches to Add");
+}
+
+/// The mode the Quick Selection sends for each of its three modes, with and without the
+/// modifier keys: Shift always adds and Alt (also Shift+Alt) always subtracts.
+fn the_quick_selection_mode_feedback_follows_the_mode() {
+    use egui::Modifiers;
+    let m = crate::canvas::tool_feedback::selection_mode;
+    let (none, shift, alt) = (Modifiers::NONE, Modifiers::SHIFT, Modifiers::ALT);
+    let both = Modifiers { shift: true, alt: true, ..Modifiers::NONE };
+    assert_eq!(m(Tool::QuickSelection, 1, none), "add");
+    assert_eq!(m(Tool::QuickSelection, 1, alt), "subtract");
+    assert_eq!(m(Tool::QuickSelection, 1, shift), "add");
+
+    assert_eq!(m(Tool::QuickSelection, 2, none), "subtract");
+    assert_eq!(m(Tool::QuickSelection, 2, shift), "add", "Shift always adds");
+    assert_eq!(m(Tool::QuickSelection, 2, alt), "subtract", "Alt always subtracts");
+    assert_eq!(m(Tool::QuickSelection, 2, both), "subtract", "Alt subtracts even with Shift");
+
+    assert_eq!(m(Tool::QuickSelection, 0, none), "replace");
+    assert_eq!(m(Tool::QuickSelection, 0, alt), "subtract");
+    assert_eq!(m(Tool::QuickSelection, 0, shift), "add");
+    assert_eq!(m(Tool::QuickSelection, 0, both), "subtract", "Alt subtracts even with Shift");
+}
+
+/// The reference application starts the Quick Selection in New and Reset Tool puts it back to
+/// New, so the tool's mode is New unless the user picks another one.
+#[test]
+fn the_quick_selection_starts_in_new_and_reset_returns_to_it() {
+    let mut app = app();
+    app.ui.tool = Tool::QuickSelection;
+    assert_eq!(app.ui.tool_options.quick_selection_mode, 0, "the tool starts in New mode");
+    app.ui.tool_options.quick_selection_mode = 1;
+    crate::menus::invoke(&mut app, &egui::Context::default(), crate::tool_reset::RESET, json!({})).unwrap();
+    assert_eq!(app.ui.tool_options.quick_selection_mode, 0, "Reset Tool returns to New mode");
+}
+
+/// Shift always adds and Alt (also Shift+Alt) always subtracts, whatever the mode.
+#[test]
+fn the_quick_selection_modifiers_follow_the_mode() {
+    use egui::Modifiers;
+    let m = crate::canvas::tool_feedback::selection_mode;
+    assert_eq!(m(Tool::QuickSelection, 2, Modifiers::NONE), "subtract");
+    assert_eq!(m(Tool::QuickSelection, 2, Modifiers::SHIFT), "add", "Shift always adds");
+    assert_eq!(m(Tool::QuickSelection, 2, Modifiers::ALT), "subtract");
+    assert_eq!(m(Tool::QuickSelection, 2, Modifiers::SHIFT | Modifiers::ALT), "subtract");
+    assert_eq!(m(Tool::QuickSelection, 1, Modifiers::SHIFT), "add");
+    assert_eq!(m(Tool::QuickSelection, 1, Modifiers::ALT), "subtract");
+    assert_eq!(m(Tool::QuickSelection, 0, Modifiers::SHIFT), "add");
+    assert_eq!(m(Tool::QuickSelection, 0, Modifiers::ALT), "subtract");
+}
+
+/// New flips to Add after its first stroke on an empty selection; with a selection there, a
+/// Shift stroke adds and keeps New, and a plain stroke replaces it and keeps New too.
+#[test]
+fn a_new_mode_stroke_flips_to_add_only_on_the_first_one() {
+    use crate::canvas::{ToolEvent, tool_event};
+    use egui::Modifiers;
+    let mut app = app();
+    app.ui.tool = Tool::QuickSelection;
+    // A filled patch gives the Quick Selection something to segment.
+    app.run("layer.new.layer", json!({"name": "Patch"})).unwrap();
+    app.run("select.rect", json!({"x": 60, "y": 20, "width": 20, "height": 20})).unwrap();
+    app.run("edit.fill", json!({"color": "#ff0000"})).unwrap();
+    app.run("select.deselect", json!({})).unwrap();
+
+    // The first stroke on an empty selection switches New to Add.
+    app.ui.tool_options.quick_selection_mode = 0;
+    tool_event(&mut app, ToolEvent::Down { x: 70.0, y: 30.0, pressure: 1.0 }, Modifiers::NONE);
+    tool_event(&mut app, ToolEvent::Up { x: 70.0, y: 30.0 }, Modifiers::NONE);
+    assert_eq!(app.ui.tool_options.quick_selection_mode, 1, "the first stroke on an empty selection switches to Add");
+
+    // With a selection there, a plain stroke replaces it and keeps New.
+    app.run("select.rect", json!({"x": 10, "y": 10, "width": 30, "height": 30})).unwrap();
+    app.ui.tool_options.quick_selection_mode = 0;
+    tool_event(&mut app, ToolEvent::Down { x: 70.0, y: 30.0, pressure: 1.0 }, Modifiers::NONE);
+    tool_event(&mut app, ToolEvent::Up { x: 70.0, y: 30.0 }, Modifiers::NONE);
+    assert_eq!(app.ui.tool_options.quick_selection_mode, 0, "a stroke with a selection there keeps New");
+}
+
+#[test]
+/// An empty selection (Select All followed by Inverse) is no selection for the New-to-Add
+/// transition: the stroke that makes one flips New to Add instead of keeping New.
+fn an_empty_selection_counts_as_none_for_the_new_to_add_transition() {
+    use crate::canvas::{ToolEvent, tool_event};
+    use egui::Modifiers;
+    let mut app = app();
+    app.ui.tool = Tool::QuickSelection;
+    app.run("layer.new.layer", json!({"name": "Patch"})).unwrap();
+    app.run("select.rect", json!({"x": 60, "y": 20, "width": 20, "height": 20})).unwrap();
+    app.run("edit.fill", json!({"color": "#ff0000"})).unwrap();
+    // Select All followed by Inverse leaves `Some(empty)` when the layer fills the canvas.
+    app.run("select.all", json!({})).unwrap();
+    app.run("select.inverse", json!({})).unwrap();
+    let sel_bounds = app.session.active().unwrap().doc.selection.as_ref().map(|s| s.content_bounds());
+    assert_eq!(sel_bounds, Some(photocraft_geom::Rect::EMPTY), "the inverted selection is empty");
+    assert!(app.session.active().unwrap().doc.selection.is_some(), "an empty selection is still Some");
+
+    // The stroke that makes a selection out of the empty one flips New to Add.
+    app.ui.tool_options.quick_selection_mode = 0;
+    tool_event(&mut app, ToolEvent::Down { x: 70.0, y: 30.0, pressure: 1.0 }, Modifiers::NONE);
+    tool_event(&mut app, ToolEvent::Up { x: 70.0, y: 30.0 }, Modifiers::NONE);
+    assert_eq!(app.ui.tool_options.quick_selection_mode, 1, "the stroke out of the empty selection switches to Add");
+}
+
+/// In New mode a click inside the selection deselects it (one Deselect step) and a drag inside
+/// moves the outline (one Move Selection step); the mode stays New in both cases.
+#[test]
+fn a_click_or_drag_inside_the_selection_in_new_mode_acts_on_the_selection() {
+    use crate::canvas::{ToolEvent, tool_event};
+    use egui::Modifiers;
+    let mut app = app();
+    app.ui.tool = Tool::QuickSelection;
+    app.run("select.rect", json!({"x": 10, "y": 10, "width": 30, "height": 30})).unwrap();
+    app.ui.tool_options.quick_selection_mode = 0;
+    let bounds = |app: &PhotocraftApp| app.session.active().unwrap().doc.selection.as_ref().map(|s| s.content_bounds());
+
+    // A click inside the selection deselects it.
+    let steps = app.session.active().unwrap().history.past_len();
+    tool_event(&mut app, ToolEvent::Down { x: 20.0, y: 20.0, pressure: 1.0 }, Modifiers::NONE);
+    tool_event(&mut app, ToolEvent::Up { x: 20.0, y: 20.0 }, Modifiers::NONE);
+    assert!(bounds(&app).is_none(), "a click inside the selection deselects it");
+    assert_eq!(app.ui.tool_options.quick_selection_mode, 0, "the mode stays New");
+    let labels: Vec<String> = app.session.active().unwrap().history.entries().into_iter().skip(steps + 1).map(|e| e.to_string()).collect();
+    assert_eq!(labels.first().map(String::as_str), Some("Deselect"), "{labels:?}");
+
+    // A drag inside the selection moves its outline.
+    app.run("select.rect", json!({"x": 10, "y": 10, "width": 30, "height": 30})).unwrap();
+    app.ui.tool_options.quick_selection_mode = 0;
+    let steps = app.session.active().unwrap().history.past_len();
+    tool_event(&mut app, ToolEvent::Down { x: 20.0, y: 20.0, pressure: 1.0 }, Modifiers::NONE);
+    tool_event(&mut app, ToolEvent::Move { x: 30.0, y: 20.0, pressure: 1.0 }, Modifiers::NONE);
+    tool_event(&mut app, ToolEvent::Up { x: 30.0, y: 20.0 }, Modifiers::NONE);
+    let moved = bounds(&app).expect("the selection is still there");
+    assert_eq!((moved.width(), moved.height()), (30, 30), "the outline kept its size");
+    assert_eq!(moved.x0, 20, "the outline moved with the pointer");
+    assert_eq!(app.ui.tool_options.quick_selection_mode, 0, "the mode stays New");
+    let labels: Vec<String> = app.session.active().unwrap().history.entries().into_iter().skip(steps + 1).map(|e| e.to_string()).collect();
+    assert_eq!(labels.first().map(String::as_str), Some("Move Selection"), "{labels:?}");
+}
+
 /// An empty Clone Source slot refuses to paint, as with no source at all: the ⌥-click point left
 /// in `ui.clone_source` carries no document, so it must not be read from another document.
 #[test]
@@ -1224,4 +1478,118 @@ fn an_empty_clone_source_slot_refuses_to_paint() {
     app.run("cloneSource.select", json!({"index": 1})).unwrap();
     assert!(app.ui.clone_source.is_some(), "the old ⌥-click point is still remembered");
     assert!(crate::retouch_ui::clone_params(&app).is_none());
+}
+
+/// SAM Selection sends a click as a point prompt and a drag as a box prompt, with the options
+/// bar's prompt-independent settings (threshold, refine, Individual Masks, Sample All Layers) and
+/// the effective selection mode.
+#[test]
+fn sam_selection_sends_a_point_for_a_click_and_a_box_for_a_drag() {
+    let mut app = app();
+    app.ui.tool = Tool::Sam3Select;
+    app.ui.tool_options.sam3_threshold = 0.35;
+    app.ui.tool_options.sam3_refine = 4;
+    app.ui.tool_options.sam3_individual = true;
+    let m = egui::Modifiers::NONE;
+    let click = sam3_select_params(&app, [10.0, 20.0], [11.0, 20.0], m);
+    assert_eq!(click["point"], json!([11.0, 20.0]), "{click}");
+    assert!(click.get("box").is_none(), "{click}");
+    assert_eq!(click["threshold"], json!(0.35_f32), "{click}");
+    assert_eq!(click["refine"], json!(4_u8), "{click}");
+    assert_eq!(click["individual"], json!(true), "{click}");
+    let drag = sam3_select_params(&app, [60.0, 55.0], [5.0, 5.0], m);
+    assert_eq!(drag["box"], json!([5.0, 5.0, 55.0, 50.0]), "{drag}");
+    assert!(drag.get("point").is_none(), "{drag}");
+    // ⇧⌥ intersects whatever the options-bar mode, exactly as the other selection tools do.
+    let both = sam3_select_params(&app, [0.0, 0.0], [40.0, 40.0], egui::Modifiers { shift: true, alt: true, ..egui::Modifiers::NONE });
+    assert_eq!(both["mode"], json!("intersect"), "{both}");
+}
+/// The tool end to end through the canvas gesture: a box around the disc runs `select.sam3` and
+/// leaves a selection on the canvas. Needs the built helper and its pack
+/// (`CRAFT_SAM3_HELPER` / `CRAFT_SAM3_PACK`).
+#[test]
+#[ignore = "needs the built SAM 3.1 helper and its HSWQ pack (CRAFT_SAM3_HELPER / CRAFT_SAM3_PACK)"]
+fn sam_selection_box_selects_the_disc_end_to_end() {
+    let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+    app.session.execute("file.new", json!({"width": 256, "height": 256, "depth": 8})).unwrap();
+    app.sync_views();
+    app.session
+        .edit("paint", |doc, _| {
+            let bg = doc.layers[0].surface_mut().unwrap();
+            let n = bg.channels();
+            let mut data = Vec::with_capacity(256 * 256 * n);
+            for y in 0..256i32 {
+                for x in 0..256i32 {
+                    let inside = (x - 128).pow(2) + (y - 128).pow(2) <= 40 * 40;
+                    let c = if inside { [0.1f32, 0.7, 0.2] } else { [1.0, 1.0, 1.0] };
+                    data.extend_from_slice(&c[..n.min(3)]);
+                    if n == 4 {
+                        data.push(1.0);
+                    }
+                }
+            }
+            bg.write_region(photocraft_geom::Rect::new(0, 0, 256, 256), &data);
+            Ok(())
+        })
+        .unwrap();
+    app.ui.tool = Tool::Sam3Select;
+    app.ui.tool_options.sam3_prompt.clear();
+    app.ui.tool_options.sam3_refine = 1;
+    let m = egui::Modifiers::NONE;
+    tool_event(&mut app, ToolEvent::Down { x: 128.0, y: 128.0, pressure: 1.0 }, m);
+    tool_event(&mut app, ToolEvent::Up { x: 128.0, y: 128.0 }, m);
+    assert!(!app.ui.status_error, "{}", app.ui.status);
+    assert_eq!(app.session.journal.last().map(|(id, _)| id.as_str()), Some("select.sam3"));
+    let bounds = app.session.active().expect("document").doc.selection.as_ref().expect("a selection").content_bounds();
+    assert!(bounds.width() > 40 && bounds.width() < 160, "bounds {bounds:?}");
+    // A drag is the box prompt: it runs too (the box path's region is the helper's, not the UI's).
+    tool_event(&mut app, ToolEvent::Down { x: 70.0, y: 70.0, pressure: 1.0 }, m);
+    tool_event(&mut app, ToolEvent::Move { x: 185.0, y: 185.0, pressure: 1.0 }, m);
+    tool_event(&mut app, ToolEvent::Up { x: 185.0, y: 185.0 }, m);
+    assert!(!app.ui.status_error, "{}", app.ui.status);
+    assert_eq!(app.session.journal.last().map(|(id, _)| id.as_str()), Some("select.sam3"));
+}
+/// The SAM Selection strings resolve in Japanese once craft-i18n has the rows: the label, the
+/// options bar and both status messages.
+#[test]
+fn sam_selection_strings_are_translated_in_japanese() {
+    use crate::i18n::{Lang, tr};
+    // Nothing to look up without a craft-i18n checkout; with one the catalog must be embedded.
+    if std::env::var_os("CRAFT_I18N_DIR").is_none_or(|d| d.is_empty()) {
+        return;
+    }
+    assert!(crate::i18n::catalogs_embedded(), "craft-i18n is configured but no catalog is embedded");
+    let ja = Lang::from_code("ja").expect("a Japanese catalog");
+    for (en, want) in [
+        ("SAM Selection Tool", "SAM選択ツール"),
+        ("Prompt", "プロンプト"),
+        ("Detect", "検出"),
+        ("Individual Masks", "個別マスク"),
+        ("SAM found nothing there — try a tighter box", "SAM はそこに何も見つけられませんでした — より狭いボックスで試してください"),
+        // Shared words come from craft-i18n's `common.tsv`, not this app's catalog.
+        ("Threshold", "しきい値"),
+        ("Refine", "調整"),
+    ] {
+        assert_eq!(tr(ja, en), want, "{en}");
+    }
+}
+/// A text prompt typed in the options bar wins over the gesture: the engine's text path covers
+/// the whole document, so a click does not send a point prompt beside it, and neither does a drag
+/// send a box the engine would ignore.
+#[test]
+fn a_typed_prompt_wins_over_the_gesture() {
+    let mut app = app();
+    app.ui.tool = Tool::Sam3Select;
+    app.ui.tool_options.sam3_prompt = "face".into();
+    let m = egui::Modifiers::NONE;
+    let click = sam3_select_params(&app, [10.0, 20.0], [10.0, 20.0], m);
+    assert_eq!(click["prompt"], json!("face"), "{click}");
+    assert!(click.get("point").is_none(), "{click}");
+    let drag = sam3_select_params(&app, [5.0, 5.0], [60.0, 55.0], m);
+    assert_eq!(drag["prompt"], json!("face"), "{drag}");
+    assert!(drag.get("box").is_none(), "{drag}");
+    // Clearing the prompt gives the gestures back.
+    app.ui.tool_options.sam3_prompt.clear();
+    let click = sam3_select_params(&app, [10.0, 20.0], [10.0, 20.0], m);
+    assert_eq!(click["point"], json!([10.0, 20.0]), "{click}");
 }

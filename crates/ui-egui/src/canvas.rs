@@ -1043,7 +1043,7 @@ fn handle_primary_canvas_input(app: &mut PhotocraftApp, ui: &mut egui::Ui, view:
     // Capture intent at the press, before egui's drag threshold or click replay on release:
     // Type transforms keep Command; selections keep Add/Subtract if Shift/Alt is released.
     let capture_press =
-        tool.is_type() || matches!(tool, Tool::RectMarquee | Tool::EllipseMarquee | Tool::SingleRowMarquee | Tool::SingleColumnMarquee | Tool::ObjectSelection);
+        tool.is_type() || matches!(tool, Tool::RectMarquee | Tool::EllipseMarquee | Tool::SingleRowMarquee | Tool::SingleColumnMarquee | Tool::ObjectSelection | Tool::Sam3Select);
     let tool_press = egui::Id::unique(("tool-pointer-press-modifiers", idx));
     // Read from the raw events, so a dialog's modal layer doesn't block it: gated here, or a ⌘-press
     // under a dialog would start a type transform (#12896).
@@ -2363,6 +2363,7 @@ fn update_polygon_camera(app: &mut PhotocraftApp, ctx: &egui::Context, (idx, pri
 
 pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect: Rect, mut view: View, primary: bool) -> View {
     let ctx = ui.ctx().clone();
+    app.current_viewport = Some(ctx.viewport_id());
     // The Frame tool starts transforms from pointer events, which carry no context; the options
     // bar that also records it can be hidden.
     if primary {

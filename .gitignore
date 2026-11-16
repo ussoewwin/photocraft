@@ -11,3 +11,8 @@ target/
 /craft-fonts
 *.log
 __pycache__/
+plugins/**/target/
+plugins/**/output/
+
+# ONNX Runtime provider binaries the LaMa helper loads at run time (build outputs, see plugins/lama-cleaner).
+/plugins/*.dll
