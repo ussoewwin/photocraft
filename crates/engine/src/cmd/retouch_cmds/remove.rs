@@ -160,7 +160,10 @@ fn hole(plan: &Plan, sel: Option<&Surface>) -> Result<Vec<bool>> {
         m = photocraft_algo::remove::close_loops(w, h, &m);
     }
     m = photocraft_algo::remove::dilate(w, h, &m, GROW);
-    if let Some(sel) = sel {
+    // A selection that selects nothing is no selection, as in Photoshop: Select › All then
+    // Inverse leaves one, as can subtracting everything, and it shows no ants. Clipping the
+    // hole by it would make every stroke \"cover nothing\" with no visible reason.
+    if let Some(sel) = sel.filter(|s| !s.content_bounds().is_empty()) {
         for (v, c) in m.iter_mut().zip(coverage(sel, win)) {
             *v &= c > 0.0;
         }
@@ -276,3 +279,23 @@ pub(super) fn remove(s: &mut Session, p: &Value) -> Result<Value> {
 #[cfg(test)]
 #[path = "remove_new_layer_name_tests.rs"]
 mod remove_new_layer_name_tests;
+
+#[cfg(test)]
+mod selection_tests {
+    use super::*;
+
+    /// A selection that selects nothing is no selection (see `hole`): Select › All then Inverse
+    /// leaves one, it shows no ants, and clipping by it made every stroke "cover nothing".
+    #[test]
+    fn a_selection_that_selects_nothing_does_not_clip_the_stroke() {
+        let mut s = Session::new();
+        s.execute("file.new", json!({"width": 64, "height": 64})).unwrap();
+        let p = json!({"points": [[24, 24], [40, 40]], "size": 12});
+        let pl = plan(&s, &p).unwrap();
+        s.execute("select.all", json!({})).unwrap();
+        s.execute("select.inverse", json!({})).unwrap();
+        let sel = s.active().unwrap().doc.selection.clone();
+        assert!(sel.as_ref().is_some_and(|m| m.content_bounds().is_empty()), "the selection selects nothing and shows no ants");
+        assert!(hole(&pl, sel.as_ref()).unwrap().iter().any(|v| *v), "the stroke still covers its own pixels");
+    }
+}

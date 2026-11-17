@@ -144,7 +144,10 @@ fn hole(plan: &Plan, sel: Option<&Surface>) -> Result<Vec<bool>> {
         m = photocraft_algo::remove::close_loops(w, h, &m);
     }
     m = photocraft_algo::remove::dilate(w, h, &m, GROW);
-    if let Some(sel) = sel {
+    // A selection that selects nothing is no selection, as in Photoshop: Select › All then
+    // Inverse leaves one, as can subtracting everything, and it shows no ants. Clipping the
+    // hole by it would make every stroke \"cover nothing\" with no visible reason.
+    if let Some(sel) = sel.filter(|s| !s.content_bounds().is_empty()) {
         for (v, c) in m.iter_mut().zip(coverage(sel, win)) {
             *v &= c > 0.0;
         }
@@ -914,5 +917,34 @@ mod tests {
         for home in [concat!("/Us", "ers/"), concat!("/ho", "me/")] {
             assert!(!src.contains(home), "this file writes the absolute path {home}");
         }
+    }
+
+    /// A selection that selects nothing is no selection, as in Photoshop. Select › All followed by
+    /// Inverse leaves one: it draws no ants, and clipping the hole by it made every stroke fail
+    /// with "cover nothing" until the document was reopened.
+    #[test]
+    fn a_selection_that_selects_nothing_does_not_clip_the_stroke() {
+        let mut s = session();
+        s.execute("file.new", json!({"width": 64, "height": 64})).unwrap();
+        let p = json!({"points": [[24.0, 24.0, 1.0], [40.0, 40.0, 1.0]], "size": 12.0});
+        let pl = plan(&s, &p).unwrap();
+        s.execute("select.all", json!({})).unwrap();
+        s.execute("select.inverse", json!({})).unwrap();
+        let sel = s.active().unwrap().doc.selection.clone();
+        assert!(sel.as_ref().is_some_and(|m| m.content_bounds().is_empty()), "the selection selects nothing and shows no ants");
+        assert!(hole(&pl, sel.as_ref()).unwrap().iter().any(|v| *v), "the stroke still covers its own pixels");
+    }
+
+    /// A stroke outside a real selection changes nothing there: the hole stays empty so the
+    /// command can say why.
+    #[test]
+    fn a_stroke_outside_the_selection_covers_nothing() {
+        let mut s = session();
+        s.execute("file.new", json!({"width": 64, "height": 64})).unwrap();
+        s.execute("select.rect", json!({"x": 0, "y": 0, "width": 4, "height": 4})).unwrap();
+        let p = json!({"points": [[32.0, 32.0, 1.0]], "size": 8.0});
+        let pl = plan(&s, &p).unwrap();
+        let sel = s.active().unwrap().doc.selection.clone();
+        assert!(!hole(&pl, sel.as_ref()).unwrap().iter().any(|v| *v), "the stroke lies outside the selection");
     }
 }
