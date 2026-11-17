@@ -108,11 +108,7 @@ fn finish(app: &mut PhotocraftApp, mut d: Drag, click: Option<bool>) {
         // The press's ⌥/⇧ keep their meaning when let go before the button, as the marquees' do
         // (`Drag::released` records the ones let go since the press).
         Tool::Sam3Select => {
-            let m = egui::Modifiers {
-                alt: d.modifiers.alt && !d.released.alt,
-                shift: d.modifiers.shift && !d.released.shift,
-                ..d.modifiers
-            };
+            let m = egui::Modifiers { alt: d.modifiers.alt && !d.released.alt, shift: d.modifiers.shift && !d.released.shift, ..d.modifiers };
             crate::retouch_ui::finish_sam3_selection(app, d.start, [end[0], end[1]], m)
         }
         Tool::FreeformPen => {

@@ -148,11 +148,11 @@ pub mod rasterize_style_cmds;
 pub mod redeye_cmds;
 pub mod render_cmds;
 pub mod retouch_cmds;
+pub mod sam3_select_cmds;
 pub mod sample_cmds;
 #[cfg(test)]
 mod sample_zoom_box_tests;
 pub mod sampler_cmds;
-pub mod sam3_select_cmds;
 pub mod select_extra_cmds;
 pub mod selection_cmds;
 pub mod slice_cmds;
