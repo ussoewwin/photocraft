@@ -13,3 +13,4 @@ data/*
 
 # Console logs of a build or a test run.
 *.log
+!data/*.png
