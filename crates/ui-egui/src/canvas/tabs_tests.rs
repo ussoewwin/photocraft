@@ -136,3 +136,19 @@ fn quick_mask_mode_names_the_quick_mask_in_the_tab() {
     let detail = title(&h);
     assert!(detail.contains("Layer 1") && detail.contains("RGB") && !detail.contains("Quick Mask"), "{detail}");
 }
+
+/// The × on a tab closes that document. `file.close` names its document by index while the tab strip names
+/// one by `DocId` (which starts at 1), so passing the id closed nothing and said nothing.
+#[test]
+fn the_close_button_on_a_tab_closes_its_document() {
+    let mut h = harness(1);
+    assert_eq!(h.state().session.documents().len(), 1);
+    let label = h
+        .get_all_by_role(Role::Button)
+        .filter_map(|node| node.accesskit_node().label())
+        .find(|label| label.starts_with("Close "))
+        .expect("the tab's close button");
+    h.get_by_label(&label).click();
+    h.run_steps(2);
+    assert_eq!(h.state().session.documents().len(), 0, "`{label}` must close the document");
+}

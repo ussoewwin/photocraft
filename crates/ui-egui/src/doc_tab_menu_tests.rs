@@ -6,16 +6,17 @@ use serde_json::json;
 use crate::canvas::tabs::tab_context_items;
 use crate::{PhotocraftApp, Services};
 
-/// The rows name the clicked tab's document by its id, which stays the same when another document closes.
+/// Every row names the clicked tab's document. The two close commands take a document index and the window
+/// and reveal rows take its id, so each row carries the form its command reads.
 #[test]
 fn each_row_names_its_command_and_the_clicked_tabs_document() {
-    let items = tab_context_items(DocId(7), 3, true);
+    let items = tab_context_items(DocId(7), 2, 3, true);
     let menu = crate::menus::menu_rows(&PhotocraftApp::new(photocraft_engine::Session::new(), Services::default()));
     let want = [
         ("Consolidate All to Here", "window.arrange.consolidateAllToTabs", json!({})),
-        ("Close", "file.close", json!({"document": 7})),
+        ("Close", "file.close", json!({"document": 2})),
         ("Close All", "file.closeAll", json!({})),
-        ("Close Others", "file.closeOthers", json!({"document": 7})),
+        ("Close Others", "file.closeOthers", json!({"document": 2})),
         ("Move to New Window", "window.arrange.floatInWindow", json!({"document": 7})),
         ("New Document…", "file.new", json!({})),
         ("Open Document…", "file.open", json!({})),
