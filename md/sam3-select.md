@@ -1,163 +1,163 @@
-# SAM Selection(SAM 3.1)技術解説
+# SAM Selection (SAM 3.1): technical notes
 
-SAM Selection ツール(`Tool::Sam3Select`、コマンド `select.sam3`)の全実装を解説する。SAM 3.1 Multiplex のオープン語彙検出と対話セグメンテーションを、**Pure Rust + CUDA(`candle-core` / `candle-nn`)** で直接実行する。ComfyUI も Python も実行時には一切使わない。ComfyUI の SAM 3.1 実装は数値リファレンス(開発時オラクル)としてのみ使われ、`plugins/sam3/data/*_reference.py` がそのコピーである(クリーンルーム)。
+This document describes the whole implementation of the SAM Selection tool (`Tool::Sam3Select`, command `select.sam3`). It runs SAM 3.1 Multiplex open-vocabulary detection and interactive segmentation directly in **pure Rust + CUDA (`candle-core` / `candle-nn`)**. Neither ComfyUI nor Python is used at all at run time. ComfyUI's SAM 3.1 implementation serves only as a numerical reference (a development-time oracle), and `plugins/sam3/data/*_reference.py` is a copy of it (clean room).
 
-- 主要コミット: `395be2eff`(SAM Selection tool 追加)、`a4d67a60c`(日本語ラベルをツリー内に復帰)
-- 主要ファイル: `plugins/sam3/src/`(推論ヘルパー `sam3-select`)、`crates/engine/src/cmd/sam3_select_cmds.rs`(コマンド `select.sam3`)、`crates/ui-egui/src/tools/retouch_ui.rs`(オプションバーとジェスチャ)
-- 計画と検証の原典: `plugins/sam3/PLAN.md`(Revision 5、実測記録を含む)。本書は現状の main に合わせた要約である
+- Key commits: `395be2eff` (adds the SAM Selection tool), `a4d67a60c` (restores the Japanese labels inside the tree)
+- Key files: `plugins/sam3/src/` (inference helper `sam3-select`), `crates/engine/src/cmd/sam3_select_cmds.rs` (command `select.sam3`), `crates/ui-egui/src/tools/retouch_ui.rs` (options bar and gestures)
+- Source of the plan and the verification: `plugins/sam3/PLAN.md` (Revision 5, including the measured records). This document is a summary brought in line with the current main
 
 ---
 
-## 1. 概要
+## 1. Overview
 
-- **モデル**: `sam3.1_multiplex_hswq_convrot_int8.safetensors`(1,738,165,347 バイト = 1.74 GB)。SAM 3.1 Multiplex チェックポイント(`image_model = "SAM31"`、`multiplex = True`)の HSWQ ConvRot INT8 パック。**ONNX 変換なし**で `safetensors` をメモリマップし、GPU 上で直接実行する。
-- **推論バックエンド**: `candle-core` / `candle-nn` 0.11(`features = ["cuda"]`)。cublas / curand / cuda_runtime に直接リンクし、cuDNN や onnxruntime の DLL は不要。
-- **プロンプト**: テキスト(`face:3, person` のカンマ区切り、`category:N` で検出上限)、ボックス、ポイント(1 点)。検出 → 精細化の 2 段階。
-- **出力**: `[N, H, W]` バイナリマスク → ドキュメント座標の選択範囲(`doc.selection`)として合成。
-- **常駐**: `--serve` モードでパック(1.74 GB、ConvRot 逆回転込み)を VRAM に保持し、画像フレームもキャッシュする。2 回目以降の選択はサブ秒。
+- **Model**: `sam3.1_multiplex_hswq_convrot_int8.safetensors` (1,738,165,347 bytes = 1.74 GB). An HSWQ ConvRot INT8 pack of the SAM 3.1 Multiplex checkpoint (`image_model = "SAM31"`, `multiplex = True`). With **no ONNX conversion** it memory-maps the `safetensors` and runs directly on the GPU.
+- **Inference backend**: `candle-core` / `candle-nn` 0.11 (`features = ["cuda"]`). It links directly against cublas / curand / cuda_runtime; no cuDNN or onnxruntime DLL is needed.
+- **Prompts**: text (comma-separated as in `face:3, person`, with `category:N` setting the detection limit), boxes, points (one point). Two stages: detect → refine.
+- **Output**: `[N, H, W]` binary masks → composited as a document-space selection (`doc.selection`).
+- **Resident**: in `--serve` mode it keeps the pack (1.74 GB, including the ConvRot inverse rotation) in VRAM and caches image frames too. The second selection onward takes under a second.
 
-## 2. 構成要素とデータフロー
+## 2. Components and data flow
 
 ```text
-UI (W スロットの SAM Selection Tool)
-  └─ ジェスチャ: クリック → point / ドラッグ → box / Detect ボタン → prompt
-       └─ engine コマンド select.sam3        crates/engine/src/cmd/sam3_select_cmds.rs:606
-            ├─ prompt_from(): ドキュメント座標 → 1008 グリッドへ変換 (:223)
-            ├─ サンプリング: 対象レイヤー(または sampleAllLayers 合成)を
-            │   インターリーブ 8bit RGB で一時ファイルへ (run_helper, :457)
+UI (SAM Selection Tool in the W slot)
+  └─ gesture: click → point / drag → box / Detect button → prompt
+       └─ engine command select.sam3        crates/engine/src/cmd/sam3_select_cmds.rs:606
+            ├─ prompt_from(): document coordinates → 1008 grid (:223)
+            ├─ sampling: the target layer (or the sampleAllLayers composite)
+            │   to a temporary file as interleaved 8bit RGB (run_helper, :457)
             ├─ resident::apply() → sam3-select --serve (:427)
-            │     └─ 使えないときは one-shot CLI(--verify-weights + --select-*)へ
-            ├─ masks.bin(f32 LE) + masks.json(形状/coverage/boxes/scores)を読む
-            └─ HelperMask(document 空間にトリム) → Region → combine_region (:163, :568)
+            │     └─ when unavailable, the one-shot CLI (--verify-weights + --select-*)
+            ├─ reads masks.bin (f32 LE) + masks.json (shapes/coverage/boxes/scores)
+            └─ HelperMask (trimmed to document space) → Region → combine_region (:163, :568)
 ```
 
-wasm ビルドはヘルパーを起動できないため、常駐経路が `#[cfg(not(target_arch = "wasm32"))]` で閉じられ、one-shot も含めてデスクトップ専用である。
+Because a wasm build cannot launch the helper, the resident path is closed off with `#[cfg(not(target_arch = "wasm32"))]`, and the feature — the one-shot path included — is desktop-only.
 
-## 3. ビルド構成
+## 3. Build configuration
 
-`plugins/sam3/Cargo.toml`(スタンドアロンクレート、`[workspace]` 空テーブル):
+`plugins/sam3/Cargo.toml` (a standalone crate, with an empty `[workspace]` table):
 
 ```toml
 candle-core = { version = "0.11", features = ["cuda"] }
 candle-nn   = { version = "0.11", features = ["cuda"] }
 memmap2 = "0.9"; safetensors = "0.8"; half = "2"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
-regex = "1"   # CLIP BPE の事前トークン分割
+regex = "1"   # CLIP BPE pre-tokenization
 ```
 
-release プロファイルは `opt-level = 3`、`lto = "thin"`、`codegen-units = 1`。MSVC(`vcvars64.bat`)の下でローカル CUDA ツールキットに直接リンクされ、`plugins/sam3/target/release/sam3-select.exe` を作る。
+The release profile is `opt-level = 3`, `lto = "thin"`, `codegen-units = 1`. Under MSVC (`vcvars64.bat`) it links directly against the local CUDA toolkit and produces `plugins/sam3/target/release/sam3-select.exe`.
 
-## 4. モデル: HSWQ ConvRot INT8 パック
+## 4. The model: HSWQ ConvRot INT8 pack
 
-`plugins/sam3/sam3.1_multiplex_hswq_convrot_int8.safetensors` の実測内訳(全 1,672 テンソル):
+Measured breakdown of `plugins/sam3/sam3.1_multiplex_hswq_convrot_int8.safetensors` (1,672 tensors in total):
 
-| 種別 | 数 | 内容 |
+| Kind | Count | Contents |
 |---|---|---|
-| FP16 | 1,549 | 32 ブロック ViTDet trunk、FPN 3 ネック(convs / interactive_convs / propagation_convs)、24 層 CLIP テキストエンコーダ、SAM31Tracker 全体 |
-| INT8 `weight` | 41 | すべて `detector.*` 内の 2D `nn.Linear`(resizer、dot_prod_scoring、geometry_encoder、segmentation_head.out_proj、decoder/encoder) |
-| FP32 `weight_scale` | 41 | `[out, 1]` の行スケール(`amax / 127.0`) |
-| U8 `comfy_quant` | 41 | 67 バイトの JSON `{"format":"int8_tensorwise","convrot":true,"convrot_groupsize":256}`。groupsize 64 や量子化 Conv2d は 0 個 |
+| FP16 | 1,549 | The 32-block ViTDet trunk, the 3-level FPN neck (convs / interactive_convs / propagation_convs), the 24-layer CLIP text encoder, the whole SAM31Tracker |
+| INT8 `weight` | 41 | All are 2D `nn.Linear` inside `detector.*` (resizer, dot_prod_scoring, geometry_encoder, segmentation_head.out_proj, decoder/encoder) |
+| FP32 `weight_scale` | 41 | The row scale of shape `[out, 1]` (`amax / 127.0`) |
+| U8 `comfy_quant` | 41 | A 67-byte JSON `{"format":"int8_tensorwise","convrot":true,"convrot_groupsize":256}`. Zero layers use groupsize 64 and zero Conv2d layers are quantized |
 
-**ConvRot の逆回転は決定的**(`loader.rs:29` の `GROUP_SIZE = 256`): 回転行列は正規 regular Hadamard 行列 H₄(符号配置のみ異なる 4×4)の 4 回クロネッカー冪を √256 で割った H₂₅₆ で、H₂₅₆ᵀ = H₂₅₆、H₂₅₆² = I が成り立つため、ロード時の復元は GPU 上の 1 行列乗算で済む:
+**The ConvRot inverse rotation is deterministic** (`GROUP_SIZE = 256` at `loader.rs:29`): the rotation matrix is H₂₅₆, the 4-fold Kronecker power of the normalized regular Hadamard matrix H₄ (a 4×4 differing only in sign placement) divided by √256, and since H₂₅₆ᵀ = H₂₅₆ and H₂₅₆² = I hold, restoring it at load time takes a single matrix multiply on the GPU:
 
 1. `deq = f32(q) × weight_scale`
 2. `W = f16(reshape(deq.view(O, I/256, 256) · H₂₅₆))`
 
-`build_hadamard()`(`loader.rs:450`)が H₂₅₆ を GPU 上で構築し、`Pack::load`(`loader.rs:116`)が 41 層を一括で非量子化・f16 アップロードする。量子化されていない Conv2d は 0 個なので、畳み込みはすべて元の FP16 のまま実行される。
+`build_hadamard()` (`loader.rs:450`) builds H₂₅₆ on the GPU, and `Pack::load` (`loader.rs:116`) dequantizes all 41 layers in one go and uploads them as f16. Zero Conv2d layers are quantized, so every convolution runs in the original FP16.
 
-## 5. キーのリマップ(ロード時に必須の 4 種)
+## 5. Key remaps (the four required at load time)
 
-チェックポイントは upstream のキー配置で保存されており、`remap_name()`(`loader.rs:94`)とローダの分割処理で 4 種の再マップを行う:
+The checkpoint is stored with upstream's key layout, and `remap_name()` (`loader.rs:94`) plus the loader's splitting perform four kinds of remap:
 
-1. **`tracker.model.*` → `tracker.*`**: ファイルは `tracker.model.*` が 457 個、素の `tracker.*` は 0 個。`.model` セグメントを剥がす。
-2. **CLIP 融合 QKV の分割**(24 モジュール、48 テンソル): `encoder.transformer.resblocks.{0..23}.attn.in_proj_weight`(`[3072, 1024]`)と bias(`[3072]`)を dim0 で 3 分割し、`.q_proj` / `.k_proj` / `.v_proj`(`[1024, 1024]` と `[1024]`)へ。
-3. **Detector `SplitMHA` 融合 QKV の分割**(37 モジュール、74 テンソル): `geometry_encoder.encode.{0..2}.{self_attn, cross_attn_image}`(6)、`segmentation_head.cross_attend_prompt`(1)、`transformer.decoder.layers.{0..5}.{self_attn, cross_attn, ca_text}`(18)、`transformer.encoder.layers.{0..5}.{self_attn, cross_attn_image}`(12)。`[768, 256]` → 3 × `[256, 256]`。
-4. **Tracker `TwoWayTransformer` のリネーム**: `sam_mask_decoder.transformer.*` を含むキーへ `.mlp.lin1.` → `.mlp.0.`、`.mlp.lin2.` → `.mlp.2.`、`.norm_final_attn.` → `.norm_final.`。
+1. **`tracker.model.*` → `tracker.*`**: the file has 457 `tracker.model.*` keys and zero bare `tracker.*` keys. Strip the `.model` segment.
+2. **Splitting the CLIP fused QKV** (24 modules, 48 tensors): split `encoder.transformer.resblocks.{0..23}.attn.in_proj_weight` (`[3072, 1024]`) and bias (`[3072]`) into three along dim0, into `.q_proj` / `.k_proj` / `.v_proj` (`[1024, 1024]` and `[1024]`).
+3. **Splitting the detector `SplitMHA` fused QKV** (37 modules, 74 tensors): `geometry_encoder.encode.{0..2}.{self_attn, cross_attn_image}` (6), `segmentation_head.cross_attend_prompt` (1), `transformer.decoder.layers.{0..5}.{self_attn, cross_attn, ca_text}` (18), `transformer.encoder.layers.{0..5}.{self_attn, cross_attn_image}` (12). `[768, 256]` → 3 × `[256, 256]`.
+4. **Renames in the tracker `TwoWayTransformer`**: for keys containing `sam_mask_decoder.transformer.*`, `.mlp.lin1.` → `.mlp.0.`, `.mlp.lin2.` → `.mlp.2.`, `.norm_final_attn.` → `.norm_final.`.
 
-## 6. モデル構造(入力 1008×1008)
+## 6. Model structure (1008×1008 input)
 
-**前処理**: RGB を `[0.0, 1.0]` に正規化し、bilinear(`align_corners=False`)で 1008×1008 へ。**ImageNet の mean/std 正規化は使わない**(`ViTDet.patch_embed` が `Conv2d(3, 1024, k=14, s=14, bias=False)` で直接受ける)。ヘルパーはエンジンから渡されたインターリーブ RGB を CHW f32 に並べ替えてから bilinear で 1008 にし、f16 にキャストする(`main.rs:844` `load_raw_rgb`、`main.rs:874` `load_image_1008`)。
+**Preprocessing**: normalize RGB to `[0.0, 1.0]` and resample bilinearly (`align_corners=False`) to 1008×1008. **No ImageNet mean/std normalization is used** (`ViTDet.patch_embed` takes the image directly through `Conv2d(3, 1024, k=14, s=14, bias=False)`). The helper reorders the interleaved RGB handed over by the engine into CHW f32, resamples it bilinearly to 1008, then casts to f16 (`main.rs:844` `load_raw_rgb`, `main.rs:874` `load_image_1008`).
 
-**ViTDet trunk**(`vitdet.rs`):
+**ViTDet trunk** (`vitdet.rs`):
 
-- `img_size=1008, patch_size=14, embed_dim=1024, depth=32, num_heads=16, mlp_ratio=4.625, window_size=24, global_att_blocks=(7,15,23,31), use_rope=True`。
-- `patch_embed` → `[B, 1024, 72, 72]` → `72×72 = 5,184` トークン。**cls トークンは trunk に入らない**(保存 `pos_embed` は `[1, 577, 1024]` = cls + 24×24。空間グリッドを 4×4 タイリングして 72×72 にクロップし、`pos[:, 1:]` のみ使用、`cls_pos` は捨てる)。その後 `ln_pre`。
-- 注意は 28 ブロックが 24×24 ウィンドウ(9 ウィンドウ × 576 トークン)、ブロック 7/15/23/31 がグローバル(5,184 トークン)。
-- 位置エンコードは Flux 系 `EmbedND` の 2 軸 RoPE(`rope_2d`、head_dim 64): グローバルは `scale_pos = 24/72`、ウィンドウは `scale_pos = 1.0`、theta 10000。
+- `img_size=1008, patch_size=14, embed_dim=1024, depth=32, num_heads=16, mlp_ratio=4.625, window_size=24, global_att_blocks=(7,15,23,31), use_rope=True`.
+- `patch_embed` → `[B, 1024, 72, 72]` → `72×72 = 5,184` tokens. **The cls token does not enter the trunk** (the stored `pos_embed` is `[1, 577, 1024]` = cls + 24×24. Tile the spatial grid 4×4 and crop it to 72×72, use only `pos[:, 1:]`, and discard `cls_pos`). Then `ln_pre`.
+- Attention is a 24×24 window in 28 blocks (9 windows × 576 tokens), and global in blocks 7/15/23/31 (5,184 tokens).
+- Positional encoding is the 2-axis RoPE of Flux's `EmbedND` (`rope_2d`, head_dim 64): `scale_pos = 24/72` for global, `scale_pos = 1.0` for windows, theta 10000.
 
-**FPN ネック(SAM 3.1 multiplex のみの仕様)**: 3 スケール `[4.0, 2.0, 1.0]`、`scalp = 0`。SAM 3(multiplex=false)の 4 スケール `[4.0, 2.0, 1.0, 0.5]` と `sam2_convs` とは異なる。
+**FPN neck (a SAM 3.1 multiplex-only specification)**: 3 scales `[4.0, 2.0, 1.0]`, `scalp = 0`. This differs from SAM 3 (multiplex=false) with its 4 scales `[4.0, 2.0, 1.0, 0.5]` and `sam2_convs`.
 
-- scale 4.0(288×288): `dconv_2x2_0`(1024→512, k2s2)→ GELU → `dconv_2x2_1`(512→256, k2s2)→ `conv_1x1` → `conv_3x3`(pad 1)
-- scale 2.0(144×144): `dconv_2x2`(1024→512, k2s2)→ `conv_1x1` → `conv_3x3`
-- scale 1.0(72×72): identity → `conv_1x1`(1024→256)→ `conv_3x3`
+- scale 4.0 (288×288): `dconv_2x2_0` (1024→512, k2s2) → GELU → `dconv_2x2_1` (512→256, k2s2) → `conv_1x1` → `conv_3x3` (pad 1)
+- scale 2.0 (144×144): `dconv_2x2` (1024→512, k2s2) → `conv_1x1` → `conv_3x3`
+- scale 1.0 (72×72): identity → `conv_1x1` (1024→256) → `conv_3x3`
 
-`convs.{0,1,2}` が検出用、`interactive_convs.{0,1,2}` が対話トラッカー用の特徴量(288/144/72)。`propagation_convs` は動画追跡用で静止画選択ではロードしない。
+`convs.{0,1,2}` are the features for detection, `interactive_convs.{0,1,2}` those for the interactive tracker (288/144/72). `propagation_convs` are for video tracking and are not loaded for still-image selection.
 
-## 7. 検出(DETR)
+## 7. Detection (DETR)
 
 `detector.rs`:
 
-- **CLIP テキストエンコーダ**(`clip.rs` + `tokenizer.rs`): hidden 1024、24 層、16 ヘッド、`quick_gelu`(`x · sigmoid(1.702x)`)、vocab 49,408、max_position 32。special token は start 49406 / end 49407 / **pad 0(`pad_with_end = false`)**。attention_mask(有効トークン 1、末尾 pad 0)を CLIP の自己注意(因果マスクと併用)と Detector の両方に渡す。`language_backbone.resizer`(1024→256)が Detector へ投影する。
-- **プロンプト構文**: 括弧を剥がし、カンマ区切りカテゴリ。`face:3` の `:N` で `max_detections = max(1, round(N))`(既定 1)。
-- **位置エンコード**: `PositionEmbeddingSine(num_pos_feats=256, normalize=True, scale=2π)` を 72×72 レベルに適用。
-- **GeometryEncoder**: 点プロンプトは `points_direct_project` + bilinear `grid_sample` + `points_pool_project` + sine pos + `label_embed`。ボックスは `boxes_direct_project` + `roi_align(roi_size=7, aligned=False)` + `boxes_pool_project`(`Conv2d 256→256, k=7`)。3 層の pre-norm EncoderLayer の後、`cls_embed` に対して `_run_geo_layer`(geo が `k = img + pos`、`v = img` に注意)を実行し、`[text_embeddings, geo_prompts, geo_cls]` を連結して `text_mask` を延長する。
-- **TransformerEncoder**: 6 層の pre-norm(`self_attn` は `q = k = norm1(x) + pos, v = norm1(x)`、`cross_attn_image` が text_memory へ、FFN は ReLU)。
-- **TransformerDecoder**: **201 トークン**(`presence_token` 1 + `query_embed` 200)上の 6 層 post-norm。LayerNorm の順序は `norm2 → catext_norm → norm1 → norm3`。`query_pos = ref_point_head(sineembed(ref_points))`(512→256、presence にはゼロを前置)。`_compute_box_rpb` は log スケール座標差 `sign(8d)·log₂(|8d|+1)/log₂8` を `boxRPB_embed_x/y`(2→256→8)に通し、`[B, 8, 201, 5184]` の cross_attn バイアスを作る。レイヤー 0..4 の後で反復ボックス精緻化 `ref_points = sigmoid(inv_sig(ref_points) + bbox_embed(norm(tgt)))`。
-- **DotProductScoring**: `prompt_mlp`(2 局残差 MLP + LayerNorm)、マスク平均プール、`hs_proj` / `prompt_proj`、スケール `1/√256`、clamp ±12、`scores.sigmoid() > threshold` でフィルタ。
-- **SegmentationHead**: `cross_attend_prompt`(`cross_attn_norm(memory)` が prompt に注意)→ `encoder_visual` を `seg_features[2]`(72×72)へ → 3 段 top-down PixelDecoder(`Conv2d 3×3 pad1` + `GroupNorm(8,256)` + ReLU、nearest 2× アップサンプル 72→144→288)→ `instance_seg_head`(256→256, k1)→ `MaskPredictor`(3 層 MLP `mask_embed` + `einsum("bqc,bchw->bqhw")`)で `[B, 200, 288, 288]` の粗マスク logits。
+- **CLIP text encoder** (`clip.rs` + `tokenizer.rs`): hidden 1024, 24 layers, 16 heads, `quick_gelu` (`x · sigmoid(1.702x)`), vocab 49,408, max_position 32. The special tokens are start 49406 / end 49407 / **pad 0 (`pad_with_end = false`)**. The attention_mask (1 for a valid token, 0 for the trailing pad) is passed both to CLIP's self-attention (together with the causal mask) and to the detector. `language_backbone.resizer` (1024→256) projects it for the detector.
+- **Prompt syntax**: strip parentheses, then comma-separated categories. The `:N` of `face:3` sets `max_detections = max(1, round(N))` (default 1).
+- **Positional encoding**: applies `PositionEmbeddingSine(num_pos_feats=256, normalize=True, scale=2π)` at the 72×72 level.
+- **GeometryEncoder**: a point prompt goes through `points_direct_project` + bilinear `grid_sample` + `points_pool_project` + sine pos + `label_embed`. A box goes through `boxes_direct_project` + `roi_align(roi_size=7, aligned=False)` + `boxes_pool_project` (`Conv2d 256→256, k=7`). After the three pre-norm EncoderLayers, `_run_geo_layer` runs against `cls_embed` (note that geo uses `k = img + pos` and `v = img`), then `[text_embeddings, geo_prompts, geo_cls]` are concatenated and `text_mask` is extended.
+- **TransformerEncoder**: 6 pre-norm layers (`self_attn` with `q = k = norm1(x) + pos, v = norm1(x)`, `cross_attn_image` attending to text_memory, ReLU FFN).
+- **TransformerDecoder**: 6 post-norm layers over **201 tokens** (1 `presence_token` + 200 `query_embed`). The LayerNorm order is `norm2 → catext_norm → norm1 → norm3`. `query_pos = ref_point_head(sineembed(ref_points))` (512→256, with zeros prepended for presence). `_compute_box_rpb` passes the log-scaled coordinate difference `sign(8d)·log₂(|8d|+1)/log₂8` through `boxRPB_embed_x/y` (2→256→8) and builds a `[B, 8, 201, 5184]` cross_attn bias. After layers 0..4, iterative box refinement `ref_points = sigmoid(inv_sig(ref_points) + bbox_embed(norm(tgt)))`.
+- **DotProductScoring**: `prompt_mlp` (a 2-block residual MLP + LayerNorm), masked mean pooling, `hs_proj` / `prompt_proj`, scale `1/√256`, clamp ±12, filtered by `scores.sigmoid() > threshold`.
+- **SegmentationHead**: `cross_attend_prompt` (`cross_attn_norm(memory)` attending to the prompt) → `encoder_visual` onto `seg_features[2]` (72×72) → a three-stage top-down PixelDecoder (`Conv2d 3×3 pad1` + `GroupNorm(8,256)` + ReLU, nearest 2× upsample 72→144→288) → `instance_seg_head` (256→256, k1) → `MaskPredictor` (3-layer MLP `mask_embed` + `einsum("bqc,bchw->bqhw")`), producing coarse mask logits of `[B, 200, 288, 288]`.
 
-## 8. 対話セグメンテーション(SAM31Tracker)
+## 8. Interactive segmentation (SAM31Tracker)
 
 `tracker.rs`:
 
-- `forward_segment`: `interactive_convs.{0,1,2}` から `high_res = [288, 144]` と `backbone_feat = feat_72 + interactivity_no_mem_embed`(`[1,1,256]`)を作る。
-- **プロンプトエンコーダ**: 点(label が有効なもののみ `point_embeddings`、box なしのときは `label = -1` の `not_a_point_embed` を 1 件パッド)、ボックス(`point_embeddings[2]` と `[3]`)、マスク logits(`1008→288` へ **`antialias=True`** の bilinear、`mask_downscaling` の stride-2 2×2 conv + `LayerNorm2d` で 72×72 へ。マスクなしは `no_mask_embed`)。位置は `pe_layer` の `positional_encoding_gaussian_matrix`(`[2, 128]`)。
-- **マスクデコーダ**: `SAMMaskDecoder`(single object、`num_mask_tokens = 4`)。`SAMTwoWayTransformer`(深さ 2)→ `output_upscaling` + `conv_s1(feat_144)` + `conv_s0(feat_288)` で 288×288 へ → `output_hypernetworks_mlps.{0..3}` → `object_score_logits > 0` でゲート(負なら `-1024.0`)。`multimask_output = false` ではマスク index 0、`0 < num_pts ≤ 1` の multimask では index 1..3 の `argmax(ious)`。最後に 1008×1008 へ bilinear 補間。
+- `forward_segment`: builds `high_res = [288, 144]` and `backbone_feat = feat_72 + interactivity_no_mem_embed` (`[1,1,256]`) from `interactive_convs.{0,1,2}`.
+- **Prompt encoder**: points (only those with a valid label get `point_embeddings`; when there is no box, one `not_a_point_embed` with `label = -1` is padded in), boxes (`point_embeddings[2]` and `[3]`), mask logits (bilinear `1008→288` with **`antialias=True`**, then to 72×72 through `mask_downscaling`'s stride-2 2×2 conv + `LayerNorm2d`; `no_mask_embed` when there is no mask). Positions come from `pe_layer`'s `positional_encoding_gaussian_matrix` (`[2, 128]`).
+- **Mask decoder**: `SAMMaskDecoder` (single object, `num_mask_tokens = 4`). `SAMTwoWayTransformer` (depth 2) → `output_upscaling` + `conv_s1(feat_144)` + `conv_s0(feat_288)` up to 288×288 → `output_hypernetworks_mlps.{0..3}` → gated by `object_score_logits > 0` (`-1024.0` when negative). With `multimask_output = false` it takes mask index 0; with multimask and `0 < num_pts ≤ 1` it takes `argmax(ious)` over indices 1..3. Finally it interpolates bilinearly to 1008×1008.
 
-**実測で固定した 2 つの挙動**(`nn.rs` のユニットテストが守る):
+**Two behaviours pinned down by measurement** (guarded by the unit tests in `nn.rs`):
 
-1. **`label = -1` のトークンは `not_a_point_embed` を足す前に座標エンコードをゼロにする**。素の座標エンコードに足すと object_score が 5.26 → 0.92 にずれた(マスクプロンプト ケース)。
-2. **`1008→288` のマスクプロンプトリサイズは `antialias=True`**。カーネルは分離三角形: `scale = in/out`、`support = max(scale, 1)`、`center = (o + 0.5)·scale − 0.5`(0 でクランプ)、入力内のタップに重み `1 − |i − center| / support` を正規化。`nn::resample_bilinear_antialias` は 10 通りのサイズ対で `F.interpolate(antialias=True)` と 3.2e-07 まで一致する。無いと object_score が 4.54 になる。
+1. **A token with `label = -1` zeroes its coordinate encoding before `not_a_point_embed` is added**. Adding it to the raw coordinate encoding shifted object_score from 5.26 → 0.92 (the mask-prompt case).
+2. **The `1008→288` mask-prompt resize uses `antialias=True`**. The kernel is a separable triangle: `scale = in/out`, `support = max(scale, 1)`, `center = (o + 0.5)·scale − 0.5` (clamped at 0), normalizing the weight `1 − |i − center| / support` over the taps inside the input. `nn::resample_bilinear_antialias` matches `F.interpolate(antialias=True)` to 3.2e-07 across 10 size pairs. Without it object_score becomes 4.54.
 
-## 9. 選択パイプライン(精細化とマスク組立)
+## 9. Selection pipeline (refinement and mask assembly)
 
-`select.rs`(`PAD_FRAC = 0.1`、`SIZE = 1008`、`refine_mask()` `:28`、`union_masks()` `:112`)と `selection.rs`(`DEFAULT_THRESHOLD = 0.5`、`DEFAULT_REFINE = 2`、`SelectionStack` `:24`):
+`select.rs` (`PAD_FRAC = 0.1`, `SIZE = 1008`, `refine_mask()` `:28`, `union_masks()` `:112`) and `selection.rs` (`DEFAULT_THRESHOLD = 0.5`, `DEFAULT_REFINE = 2`, `SelectionStack` `:24`):
 
-1. 検出ボックスを各辺 10% 膨張させ、`[0..W, 0..H]` にクランプして元画像と粗マスクからクロップ。
-2. クロップを 1008×1008 にリサイズし、**trunk + `interactive_convs` はクロップごとに 1 回だけ**実行。
-3. `interactive_sam_prompt_encoder` + `interactive_sam_mask_decoder` を `refine_iterations` 回だけ回す(軽い)。ボックス/点プロンプトの全画面経路では trunk を 1 回だけ実行して GPU テンソルをキャッシュし、デコーダのみ反復する(`segment_prompt_cached` / `detect_and_refine_cached`、`selection.rs:90` / `:144`)。
-4. 粗マスクと精細マスクを `coarse | refined` で合成。`individual` 指定時はマスクごとに個別出力(`Selection::finish`)。
-5. ボックスは元ピクセル空間で出力される(`orig_size` がボックスと粗マスクの両方をスケール)。`select.rs` はモデル dtype を明示し、画像クロップは f32 でリサイズしてから f16 にキャストする(参照の `common_upscale(...).to(dtype)` と同じ順序)。
+1. Inflate each edge of the detection box by 10%, clamp to `[0..W, 0..H]`, and crop from the source image and the coarse mask.
+2. Resize the crop to 1008×1008 and run **the trunk + `interactive_convs` only once per crop**.
+3. Loop `interactive_sam_prompt_encoder` + `interactive_sam_mask_decoder` `refine_iterations` times (they are cheap). On the full-screen path for box/point prompts, run the trunk once, cache the GPU tensors and iterate only the decoder (`segment_prompt_cached` / `detect_and_refine_cached`, `selection.rs:90` / `:144`).
+4. Combine the coarse and refined masks with `coarse | refined`. With `individual` set, emit each mask separately (`Selection::finish`).
+5. Boxes are output in original pixel space (`orig_size` scales both the boxes and the coarse mask). `select.rs` makes the model dtype explicit, resizing the image crop in f32 before casting to f16 (the same order as the reference's `common_upscale(...).to(dtype)`).
 
-## 10. ヘルパーのモードと CLI
+## 10. Helper modes and CLI
 
-`sam3-select.exe` の全モード(`usage()`、`main.rs:15`):
+All modes of `sam3-select.exe` (`usage()`, `main.rs:15`):
 
-| モード | 引数 | 用途 |
+| Mode | Arguments | Purpose |
 |---|---|---|
-| トークン検査 | `--tokens <text>` | 32 トークン ID と attention mask を表示 |
-| プロンプト解析 | `--parse <text>` | カテゴリと検出上限を表示 |
-| 重み検証 | `--verify-weights` | パックを開き、ConvRot 層を非量子化して報告(`--dump-dequant <out>` で統計 JSON) |
-| 検出 | `--detect-image <png> --detect-prompt <text> --detect-out <bin>` | DETR 検出のみ |
-| セグメント | `--segment-image <png> --segment-box x1,y1,x2,y2 / --segment-point x,y / --segment-mask <f32> --segment-out <bin>` | 対話セグメンテーション(点は multimask 有効) |
-| 選択 | `--select-prompt <text> / --select-box <4 値> / --select-point <2 値>` + `--select-raw <path> --select-raw-size <w>x<h>` + `--select-threshold / --select-refine / --select-individual / --select-out <path>` | エンジンが使う統合入口。`--select-raw` は PNG ではなくインターリーブ 8bit RGB(PNG コーデックを両側で排除) |
-| 常駐 | `--serve [--model <safetensors>] [--data <dir>]` | stdin/stdout の JSON-lines ワーカー |
+| Token inspection | `--tokens <text>` | Prints the 32 token IDs and the attention mask |
+| Prompt parsing | `--parse <text>` | Prints the categories and the detection limits |
+| Weight verification | `--verify-weights` | Opens the pack, dequantizes the ConvRot layers and reports (statistics JSON with `--dump-dequant <out>`) |
+| Detection | `--detect-image <png> --detect-prompt <text> --detect-out <bin>` | DETR detection only |
+| Segment | `--segment-image <png> --segment-box x1,y1,x2,y2 / --segment-point x,y / --segment-mask <f32> --segment-out <bin>` | Interactive segmentation (multimask enabled for points) |
+| Select | `--select-prompt <text> / --select-box <4 values> / --select-point <2 values>` + `--select-raw <path> --select-raw-size <w>x<h>` + `--select-threshold / --select-refine / --select-individual / --select-out <path>` | The single entry point the engine uses. `--select-raw` is not a PNG but interleaved 8bit RGB (removing the PNG codec on both sides) |
+| Resident | `--serve [--model <safetensors>] [--data <dir>]` | A JSON-lines worker on stdin/stdout |
 
-共通: `--model <pack>`(既定は実行ファイル隣の `PACK_FILENAME`)、`--data <dir>`(`vocab.json` と `merges.txt` のあるディレクトリ、既定 `<exe folder>/data`)。デバイスは `default_device()`(`loader.rs:483`)が `Device::new_cuda(0)` を選び、GPU がなければ CPU に落ちる。
+Common: `--model <pack>` (defaults to the `PACK_FILENAME` next to the executable), `--data <dir>` (the directory holding `vocab.json` and `merges.txt`, default `<exe folder>/data`). For the device, `default_device()` (`loader.rs:483`) picks `Device::new_cuda(0)` and falls back to CPU when there is no GPU.
 
-**出力形式**: `masks.bin` はマスクごとの f32(LE)を連結したもの、`masks.json` は `{"masks": [形状...], "coverage": [...], "boxes": [...], "scores": [...], "threshold", "refine_iterations", "individual"}`。エンジンは shapes を読んで f32 列を `[H, W]` ごとに切り出す。
+**Output format**: `masks.bin` is the concatenation of the per-mask f32 (LE), and `masks.json` is `{"masks": [shapes...], "coverage": [...], "boxes": [...], "scores": [...], "threshold", "refine_iterations", "individual"}`. The engine reads the shapes and slices the f32 stream into `[H, W]` blocks.
 
-## 11. 常駐ワーカー(--serve)
+## 11. Resident worker (--serve)
 
-- **要求**(`ServeRequest`、`main.rs:916`): `{"warmup":true}`(何もせず即応答)または `{"raw":"<path>","width":W,"height":H,"prompt":"..."|"box_xyxy":[4]|"point_xy":[2],"threshold":0.5,"refine":2,"individual":false,"out":"<path>"}`。`raw` は `W×H×3` バイトのインターリーブ RGB で、長さ不一致はエラー。
-- **フレームキャッシュ**: `fnv1a_hash()`(`main.rs:942`)が生バイト + 寸法の 64bit FNV-1a ダイジェストを作り、同一画像なら `CachedFrame`(`native` f32 CHW と `frame` 1008 f16)を再利用する(`serve_one`、`main.rs:963`)。別画像なら再構築する。
-- **応答**: stdout へ 1 行の JSON。stderr は診断専用。
-- **エンジン側**(`crates/engine/src/cmd/sam3_select_cmds.rs:261` の `resident` モジュール): スロットは `OnceLock<Mutex<Option<Worker>>>`(`:380`)。`matches()` は exe・pack・data_dir の 3 点一致を見る。`REPLY_TIMEOUT = 180 秒`(`:273`、初回はパックロード + ConvRot 非量子化を含む)。stdout は専用スレッドが mpsc へ流し、要求側は `recv_timeout` で待つ。`Unavailable`(起動失敗・終了・タイムアウト・非 JSON prose)はワーカーを破棄し、既存ワーカーの死なら 1 回だけ再起動して再試行、起動直後の失敗は即諦める。`Failed`(健全なワーカーの `{"ok":false,"error":...}`)はワーカーを保持してエラーを直接報告。`Unavailable` に落ちたら one-shot CLI へフォールバックする。
-- エンジンは現状 `{"warmup":true}` を自動送信しない。最初の選択はパックロード(実測 15.2 秒)を支払う。
+- **Request** (`ServeRequest`, `main.rs:916`): `{"warmup":true}` (responds immediately without doing anything) or `{"raw":"<path>","width":W,"height":H,"prompt":"..."|"box_xyxy":[4]|"point_xy":[2],"threshold":0.5,"refine":2,"individual":false,"out":"<path>"}`. `raw` is `W×H×3` bytes of interleaved RGB; a length mismatch is an error.
+- **Frame cache**: `fnv1a_hash()` (`main.rs:942`) builds a 64-bit FNV-1a digest of the raw bytes + dimensions, and for the same image it reuses `CachedFrame` (`native` f32 CHW and `frame` 1008 f16) (`serve_one`, `main.rs:963`). A different image is rebuilt.
+- **Response**: one line of JSON on stdout. stderr is diagnostics only.
+- **Engine side** (the `resident` module at `crates/engine/src/cmd/sam3_select_cmds.rs:261`): the slot is `OnceLock<Mutex<Option<Worker>>>` (`:380`). `matches()` requires the exe, pack and data_dir to agree. `REPLY_TIMEOUT = 180 seconds` (`:273`, including the pack load + ConvRot dequantization on the first run). A dedicated thread streams stdout into an mpsc, and the requester waits with `recv_timeout`. `Unavailable` (failed start, exit, timeout, non-JSON prose) discards the worker: if an existing worker died it restarts it once and retries, while a failure right after start gives up immediately. `Failed` (a healthy worker's `{"ok":false,"error":...}`) keeps the worker and reports the error directly. Once it lands on `Unavailable` it falls back to the one-shot CLI.
+- The engine does not currently send `{"warmup":true}` on its own. The first selection pays the pack load (15.2 seconds measured).
 
-## 12. エンジン統合(`select.sam3`)
+## 12. Engine integration (`select.sam3`)
 
-コマンド仕様(`sam3_select_cmds.rs:606`):
+Command spec (`sam3_select_cmds.rs:606`):
 
 ```json
 {"prompt":"text" | "box":[x,y,width,height] | "point":[x,y],
@@ -165,89 +165,89 @@ release プロファイルは `opt-level = 3`、`lto = "thin"`、`codegen-units 
  "sampleAllLayers":bool=false, "mode":"replace|add|subtract|intersect"="replace"}
 ```
 
-- **プロンプトのスケーリング**(`prompt_from`、`:223`): ドキュメント座標から bounds を引き、`(x − bounds.x0) × 1008/W` でモデルの 1008 グリッドへ変換する(ボックスは xyxy の 2 隅へ)。テキスト優先: `prompt` があれば全文書を対象に検出し、box/point は無視される(UI 側も同じ規則)。
-- **サンプリング**: `with_doc_sampler`(smartselect_cmds から再利用)で対象レイヤー、または `sampleAllLayers` 時は合成を RGBA でサンプルし、8bit RGB へ落として一時ディレクトリの `image.rgb` に書く。推論後 `masks.bin` / `masks.json` を読み、使い終わった一時ディレクトリは削除する。
-- **選択への合成**(`HelperMask`、`:163`; `sam3_selection`、`:568`): 各 `[H, W]` マスクは document 空間で内容 bbox にトリムされ、`Region`(GRAY8 の coverage)になって `combine_region(doc.selection, region, mode)` で置換/加算/減算/交差する。出力 JSON は `{"selected","changed","objects","bounds":[x,y,w,h]}`。マスクが空のときは `changed: false, objects: 0`。
-- **ヘルパー/パック/データの解決**(`:22`〜`:159`): `CRAFT_SAM3_HELPER` / `CRAFT_SAM3_PACK` 環境変数が最優先(存在しないパスは明示エラー)。ヘルパーは Preferences › Plug-ins の追加フォルダ(有効時、直下と `sam3/` 直下)→ 実行ファイル隣の `plugins`・`plugins\sam3` → 実行ファイル直下 → 実行ファイルと CWD の各祖先の `plugins(\/sam3)(\/target\/release)`。パックはヘルパーの隣・`sam3/`・祖先の `plugins/sam3`・CWD 祖先。データディレクトリ(`vocab.json` のある場所)はパック/ヘルパーの親から推定。**見つからないエラーは探索した全候補を列挙**し、ソースにマシン固有パスは書かない。
-- **one-shot フォールバック**(`run_helper`、`:457`): 常駐が `Unavailable` のとき、`--verify-weights`(パック検証)を付けた `--select-*` を 1 プロセスで実行する。stderr の最後の 4 行をエラーメッセージに載せる。
+- **Prompt scaling** (`prompt_from`, `:223`): subtract the bounds from the document coordinates and convert them to the model's 1008 grid with `(x − bounds.x0) × 1008/W` (for a box, to its two xyxy corners). Text wins: if `prompt` is present it detects over the whole document and box/point are ignored (the same rule holds in the UI).
+- **Sampling**: `with_doc_sampler` (reused from smartselect_cmds) samples the target layer, or the composite when `sampleAllLayers` is set, in RGBA, reduces it to 8bit RGB and writes `image.rgb` in a temporary directory. After inference it reads `masks.bin` / `masks.json` and deletes the temporary directory once done.
+- **Compositing into the selection** (`HelperMask`, `:163`; `sam3_selection`, `:568`): each `[H, W]` mask is trimmed to its content bbox in document space, becomes a `Region` (GRAY8 coverage), and is replaced/added/subtracted/intersected by `combine_region(doc.selection, region, mode)`. The output JSON is `{"selected","changed","objects","bounds":[x,y,w,h]}`. When the mask is empty the result is `changed: false, objects: 0`.
+- **Resolving helper/pack/data** (`:22`–`:159`): the `CRAFT_SAM3_HELPER` / `CRAFT_SAM3_PACK` environment variables win (a path that does not exist is an explicit error). The helper is looked for in the Preferences › Plug-ins additional folder (when enabled, directly inside it and directly inside `sam3/`) → `plugins` and `plugins\sam3` next to the executable → directly next to the executable → `plugins(\/sam3)(\/target\/release)` in each ancestor of the executable and of the CWD. The pack is looked for next to the helper, in `sam3/`, in an ancestor's `plugins/sam3`, and in an ancestor of the CWD. The data directory (where `vocab.json` lives) is inferred from the pack's/helper's parent. **A not-found error lists every candidate that was searched**, and no machine-specific path is written into the source.
+- **one-shot fallback** (`run_helper`, `:457`): when the resident worker is `Unavailable`, it runs `--select-*` with `--verify-weights` (pack verification) in a single process. The last 4 lines of stderr go into the error message.
 
-## 13. UI 統合
+## 13. UI integration
 
-| 場所 | 内容 |
+| Place | Content |
 |---|---|
-| `state/tool.rs:83` | `Tool::Sam3Select`(`Tool::ALL` の末尾に追加。既存ツール順を動かさない) |
+| `state/tool.rs:83` | `Tool::Sam3Select` (added at the end of `Tool::ALL`, so the order of existing tools does not move) |
 | `shell_commands.rs:181` | `("tools.select.sam3Select", "SAM Selection Tool", Some("W"))` |
-| `prefs.rs:1353` | `DEFAULT_TOOLBAR` の選択列 `[ObjectSelection, QuickSelection, MagicWand, Sam3Select]` |
-| `panels/toolbar.rs:26` | W スロットのフライアウト同じ 4 項目(SAM は最後) |
-| `icons.rs` | `scan` グリフ |
-| `state/tool_options.rs:106-115` | `sam3_prompt: String`、`sam3_threshold: f32`(0.5)、`sam3_refine: u8`(2)、`sam3_individual: bool` + `SampleAllLayers::sam3_select` |
-| `tools/retouch_ui.rs:689` | `sam3_select_params`: クリック(nudge < 2px)→ `point`、ドラッグ → `box`(document ピクセル)。**入力済みプロンプトがあれば point/box ではなく prompt を送る**(テキスト経路は全文書対象で、box は無視されるため)。修飾子は ⇧⌥ で intersect、⇧ で add、⌥ で subtract、なければオプションバーの mode |
-| `tools/retouch_ui.rs:720` | `finish_sam3_selection`: リリースで `select.sam3` を実行 |
-| `tools/retouch_ui.rs:1315, 1394` | オプションバー(`sam3_select_options_bar`): モードボタン 4 つ、Sample All Layers、Prompt(プレースホルダ `e.g. face`)、Detect、Threshold、Refine、Individual Masks、ヒント行 |
-| `canvas/gesture.rs:110` | リリース時にコミット。修飾子は「プレス時に押されていたか」で判定(`alt: d.modifiers.alt && !d.released.alt`)— 早期リリースでもモードを保持 |
-| `canvas/paint.rs` | ドラッグ中の marching-ants 矩形 |
-| `canvas/tool_feedback.rs` | モードバッジ(+/−/×) |
-| `canvas.rs` / `input/hold_keys.rs` | プレス時の修飾子確保、Space でドラッグ中の再配置 |
-| `app/commands.rs` | 選択ができたら View › Extras を表示(他の `select.*` と同じ) |
+| `prefs.rs:1353` | The selection column of `DEFAULT_TOOLBAR`, `[ObjectSelection, QuickSelection, MagicWand, Sam3Select]` |
+| `panels/toolbar.rs:26` | The same 4 items in the W slot's flyout (SAM last) |
+| `icons.rs` | The `scan` glyph |
+| `state/tool_options.rs:106-115` | `sam3_prompt: String`, `sam3_threshold: f32` (0.5), `sam3_refine: u8` (2), `sam3_individual: bool` + `SampleAllLayers::sam3_select` |
+| `tools/retouch_ui.rs:689` | `sam3_select_params`: click (nudge < 2px) → `point`, drag → `box` (document pixels). **If a prompt has been entered, it sends the prompt rather than point/box** (because the text path covers the whole document and box is ignored). Modifiers are ⇧⌥ for intersect, ⇧ for add, ⌥ for subtract, otherwise the options bar's mode |
+| `tools/retouch_ui.rs:720` | `finish_sam3_selection`: runs `select.sam3` on release |
+| `tools/retouch_ui.rs:1315, 1394` | The options bar (`sam3_select_options_bar`): 4 mode buttons, Sample All Layers, Prompt (placeholder `e.g. face`), Detect, Threshold, Refine, Individual Masks, a hint line |
+| `canvas/gesture.rs:110` | Commits on release. Modifiers are judged by whether they were held at press time (`alt: d.modifiers.alt && !d.released.alt`) — so an early release still keeps the mode |
+| `canvas/paint.rs` | The marching-ants rectangle while dragging |
+| `canvas/tool_feedback.rs` | The mode badge (+ / − / ×) |
+| `canvas.rs` / `input/hold_keys.rs` | Capturing the modifiers at press time, re-placing the rectangle with Space while dragging |
+| `app/commands.rs` | Shows View › Extras once a selection exists (like the other `select.*`) |
 
-**実測で発見・修正した 2 つの欠陥**: (1) ボタンを離す前に Alt を離すとモードが落ちて選択に化けていた → プレス時基準に修正。(2) 入力済みプロンプトがクリック/ドラッグに無視されていた → プロンプト優先に修正。
+**Two defects found and fixed by measurement**: (1) releasing Alt before the mouse button dropped the mode and turned the gesture into a plain selection → fixed by basing it on press time. (2) an entered prompt was ignored by click/drag → fixed by letting the prompt win.
 
-**日本語ラベル**: `SAM Selection Tool` → `SAM選択ツール` 等の行は **`crates/ui-egui/src/i18n.rs` の `JA_TEXT_OVERRIDES` でツリー内に持つ**(`tr()` がカタログより先に読む)。固定した craft-i18n ピンにはこれらの行が無いため、カタログ非依存で日本語表示を保証する。翻訳テストは `retouch_ui::tests::sam_selection_strings_are_translated_in_japanese`。
+**Japanese labels**: rows such as `SAM Selection Tool` → `SAM選択ツール` are **held inside the tree in `JA_TEXT_OVERRIDES` of `crates/ui-egui/src/i18n.rs`** (`tr()` reads them before the catalogue). The pinned craft-i18n revision does not have these rows, so this guarantees the Japanese display independently of the catalogue. The translation test is `retouch_ui::tests::sam_selection_strings_are_translated_in_japanese`.
 
-## 14. 実測性能と精度
+## 14. Measured performance and accuracy
 
-計測環境: RTX 5060 Ti、`plugins/sam3/data/test_face.png`(640×640 合成顔を 1008×1008 へ)、HSWQ ConvRot INT8 パック。
+Measurement environment: RTX 5060 Ti, `plugins/sam3/data/test_face.png` (a 640×640 synthetic face scaled to 1008×1008), the HSWQ ConvRot INT8 pack.
 
-**速度**:
+**Speed**:
 
-| 項目 | 値 |
+| Item | Value |
 |---|---|
-| パックロード(スタック構築、VRAM へ非量子化込み) | 15.2 秒(one-off) |
-| ViTDet backbone(1008 フレーム 1 回) | 12.3〜13.5 秒 |
-| 対話セグメンター(プロンプト 1 件) | 123〜204 ms |
-| テキスト選択の end-to-end(検出 + CLIP + 精細化 2 回) | 12.9 秒 |
-| エンジン e2e(point、`--ignored` テスト) | 19.0 秒 |
-| UI e2e(box、実ヘルパー、`--ignored` テスト) | 34.9 秒 |
+| Pack load (stack construction, including dequantization into VRAM) | 15.2 seconds (one-off) |
+| ViTDet backbone (one pass over the 1008 frame) | 12.3–13.5 seconds |
+| Interactive segmenter (one prompt) | 123–204 ms |
+| Text selection end-to-end (detection + CLIP + 2 refinements) | 12.9 seconds |
+| Engine e2e (point, `--ignored` test) | 19.0 seconds |
+| UI e2e (box, real helper, `--ignored` test) | 34.9 seconds |
 
-**精度**(マスクは最終 1008×1008 logits、IoU は `logit > 0`):
+**Accuracy** (the masks are the final 1008×1008 logits, IoU is `logit > 0`):
 
-| 段階 | 比較 | 結果 |
+| Stage | Comparison | Result |
 |---|---|---|
-| 対話セグメンター(box / point / mask プロンプト) | Rust vs `tracker_reference.py` | mask cosine 0.9999990〜0.9999995、logit max abs 0.08〜0.23、IoU(>0) 0.9998〜0.99997 |
-| `_refine_mask`(オラクルの粗マスクから) | 2 値マスク | IoU 0.999968(61,756 / 61,758 px) |
-| box プロンプト(refine = 1) | Rust vs M2d マスクの 640 リサイズ | IoU 1.000000(61,568 px 両側) |
-| テキスト `"face"` end-to-end | Rust vs オラクル + refine | IoU 0.999968、coverage 両側 0.150771、score 0.981934 / 0.981453 |
-| `--select-raw`(インターリーブ RGB)vs PNG 経路 | 同一画像 | IoU 0.999968(2 px 差) |
+| Interactive segmenter (box / point / mask prompts) | Rust vs `tracker_reference.py` | mask cosine 0.9999990–0.9999995, logit max abs 0.08–0.23, IoU (>0) 0.9998–0.99997 |
+| `_refine_mask` (from the oracle's coarse mask) | binary mask | IoU 0.999968 (61,756 / 61,758 px) |
+| box prompt (refine = 1) | Rust vs the M2d mask resized to 640 | IoU 1.000000 (61,568 px on both sides) |
+| text `"face"` end-to-end | Rust vs the oracle + refine | IoU 0.999968, coverage 0.150771 on both sides, score 0.981934 / 0.981453 |
+| `--select-raw` (interleaved RGB) vs the PNG path | the same image | IoU 0.999968 (2 px difference) |
 
-差分はすべて f16 のノイズフロアに収まる。
+Every difference stays within the f16 noise floor.
 
-## 15. テスト
+## 15. Tests
 
-| 場所 | 件数と内容 |
+| Place | Count and content |
 |---|---|
-| `crates/engine/src/cmd/sam3_select_cmds.rs` の tests | 8 件(7 pass + 1 ignored)。マスクの bbox トリム、空マスク、Region カバレッジ、プロンプト検証、1008 スケーリング、ヘルパー候補、resident の要求行/応答パース(prose 拒否を含む)、および実ヘルパー + 実パックを使う end-to-end(`a_point_selects_the_disc_under_it_end_to_end`、`CRAFT_SAM3_HELPER` / `CRAFT_SAM3_PACK` 必須で ignored) |
-| `crates/ui-egui/src/sam3_toolbar_tests.rs` | 4 件。W スロットの 4 項目と順序、フライアウトのアンカー、行クリック、Edit › Keyboard Shortcuts の行 |
-| `crates/ui-egui/src/sam3_options_bar_tests.rs` | 3 件。実 egui ハーネスでモードボタン 4 つ + Sample All Layers + Prompt + Threshold + Refine + Individual Masks + Detect が名前で到達可能、他ツールにバーが無いこと |
-| `crates/ui-egui/src/sam3_canvas_tests.rs` | 実キャンバス経路(生 egui イベント): クリックで円が選択される、早期リリースでも ⇧ が加算になる、モードバッジ追従 |
-| `retouch_ui::tests::sam_selection_strings_are_translated_in_japanese` | 日本語ラベル(ツリー内 `JA_TEXT_OVERRIDES` 由来) |
+| tests in `crates/engine/src/cmd/sam3_select_cmds.rs` | 8 (7 pass + 1 ignored). Mask bbox trimming, empty masks, Region coverage, prompt validation, 1008 scaling, helper candidates, parsing of resident request lines/responses (including the rejection of prose), and an end-to-end with the real helper + real pack (`a_point_selects_the_disc_under_it_end_to_end`, ignored and requiring `CRAFT_SAM3_HELPER` / `CRAFT_SAM3_PACK`) |
+| `crates/ui-egui/src/sam3_toolbar_tests.rs` | 4. The 4 items in the W slot and their order, the flyout's anchor, clicking a row, the Edit › Keyboard Shortcuts row |
+| `crates/ui-egui/src/sam3_options_bar_tests.rs` | 3. In a real egui harness, the 4 mode buttons + Sample All Layers + Prompt + Threshold + Refine + Individual Masks + Detect are reachable by name, and the other tools have no bar |
+| `crates/ui-egui/src/sam3_canvas_tests.rs` | The real canvas path (raw egui events): a click selects the disc, ⇧ still adds on an early release, the mode badge follows |
+| `retouch_ui::tests::sam_selection_strings_are_translated_in_japanese` | The Japanese labels (from `JA_TEXT_OVERRIDES` in the tree) |
 
-M4 の記録: UI 結線の回帰一式 `canvas:: hold_keys:: tool_feedback marquee retouch_ui tool_reset sam_selection` で **1258 passed / 0 failed**。
+M4 record: the UI-wiring regression set `canvas:: hold_keys:: tool_feedback marquee retouch_ui tool_reset sam_selection` gave **1258 passed / 0 failed**.
 
-## 16. デプロイ
+## 16. Deployment
 
-1. `plugins/sam3` で `cargo build --release` → `plugins/sam3/target/release/sam3-select.exe`。
-2. ヘルパーを探せる場所に置く(§12 の探索順)。開発中は `CRAFT_SAM3_HELPER` と `CRAFT_SAM3_PACK` で明示するのが最速。
-3. パック 1.74 GB はヘルパーの隣か `plugins/sam3/`。`vocab.json` / `merges.txt` は `plugins/sam3/data/`(パックやヘルパーの隣の `data/` でも可)。
-4. CUDA ツールキット(cublas / curand / cuda_runtime)にリンクするため MSVC 環境が必要。**cuDNN は不要**(candle が直接使う)。GPU が無いマシンでは CPU に落ちる(速度は未計測)。
-5. Preferences › Plug-ins の追加フォルダを使う場合の設定キーは LaMa と共通(`"plugIns": {"useAdditionalPluginsFolder", "additionalPluginsFolder"}`)。
+1. `cargo build --release` in `plugins/sam3` → `plugins/sam3/target/release/sam3-select.exe`.
+2. Put the helper where it can be found (the search order in §12). While developing, the fastest way is to point `CRAFT_SAM3_HELPER` and `CRAFT_SAM3_PACK` at it explicitly.
+3. The 1.74 GB pack goes next to the helper or in `plugins/sam3/`. `vocab.json` / `merges.txt` go in `plugins/sam3/data/` (`data/` next to the pack or the helper also works).
+4. Because it links against the CUDA toolkit (cublas / curand / cuda_runtime), an MSVC environment is required. **cuDNN is not needed** (candle calls them directly). A machine without a GPU falls back to CPU (speed not measured).
+5. When using the Preferences › Plug-ins additional folder, the settings keys are shared with LaMa (`"plugIns": {"useAdditionalPluginsFolder", "additionalPluginsFolder"}`).
 
-## 17. 制限と設計判断の記録
+## 17. Limitations and record of design decisions
 
-- **クリーンルーム**: ComfyUI のコードは実行時に一切使わない。`data/*_reference.py` は数値検証専用のオラクル。
-- **静止画専用**: `propagation_convs`(動画追跡用)はロードしない。
-- **入力は 1008×1008 固定**: 高解像度キャンバスは全書類をスケーリングして解析する(部分領域解析は計画上の拡張項目で、未実装)。
-- **最初の選択はパックロード 15.2 秒を支払う**: エンジンは `{"warmup":true}` を自動送信しない。アイドル中の先行起動は可能(常駐プロトコルで対応済み)。
-- **VRAM 使用量は未計測**: パック 1.74 GB に f16 トランク + 41 層の非量子化が乗る。
-- **1 スロット**: 常駐ワーカーはプロセス全体で 1 個。exe / pack / data_dir の不一致で即作り直す。
-- **タイムアウト**: 180 秒(`REPLY_TIMEOUT`)。初回のパックロードを含む。
-- ONNX + `ort` 構成(PLAN Revision 4 まで)は廃止: 動的制御流の困難、約 2.5 GB の中間 `.onnx`、外部 cuDNN / provider DLL のバージョン依存をすべて排除した(Revision 5 の決定)。
+- **Clean room**: no ComfyUI code is used at run time. `data/*_reference.py` are oracles for numerical verification only.
+- **Still images only**: `propagation_convs` (for video tracking) are not loaded.
+- **The input is fixed at 1008×1008**: a high-resolution canvas is analysed by scaling the whole document (partial-region analysis is a planned extension, not implemented).
+- **The first selection pays the 15.2 second pack load**: the engine does not send `{"warmup":true}` on its own. Starting it ahead of time while idle is possible (the resident protocol already supports it).
+- **VRAM usage is not measured**: the 1.74 GB pack plus the f16 trunk and the dequantized 41 layers on top.
+- **One slot**: the resident worker is one per process. A mismatch in exe / pack / data_dir rebuilds it immediately.
+- **Timeout**: 180 seconds (`REPLY_TIMEOUT`). It includes the first pack load.
+- The ONNX + `ort` configuration (up to PLAN Revision 4) was retired: it eliminated the difficulty of dynamic control flow, the roughly 2.5 GB intermediate `.onnx`, and the version dependency on the external cuDNN / provider DLL (the Revision 5 decision).
