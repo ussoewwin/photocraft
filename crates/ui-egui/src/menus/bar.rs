@@ -48,5 +48,17 @@ pub(crate) fn help_entries(app: &mut PhotocraftApp, ctx: &egui::Context) -> Vec<
     let label = |s: &'static str| crate::i18n::tr(lang, s).to_string();
     let keys = |chord: &craft::keymap::Chord| craft::ui::runtime::commands::holder(ctx, chord);
     let options = LayoutOptions::new(crate::native_menu::APP_NAME).label(&label).keys(&keys);
-    model.bar.help_entries(Target::current(), &options, Some(&english_of(model)))
+    let entries = model.bar.help_entries(Target::current(), &options, Some(&english_of(model)));
+    // A row no catalog translates (the theme names, which the framework names in English) already reads the
+    // same in every language, so its label is its English name: a query in English still finds it.
+    entries
+        .into_iter()
+        .map(|entry| match entry.english() {
+            Some(_) => entry,
+            None => {
+                let label = entry.label().clone();
+                entry.with_english(label)
+            }
+        })
+        .collect()
 }

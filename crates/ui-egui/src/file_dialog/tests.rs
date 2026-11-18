@@ -80,7 +80,7 @@ fn pdn_save_requests_a_native_copy_without_overwriting_the_source() {
     st.path = Some("/pics/layers.PDN".into());
     let ctx = egui::Context::default();
     menus::invoke(&mut app, &ctx, "file.save", json!({})).unwrap();
-    assert_eq!(asked_save(&files), "/pics/layers.pcraft");
+    assert_eq!(Path::new(&asked_save(&files)), Path::new("/pics/layers.pcraft"));
     answer(&files, chose("/pics/layers.pcraft"));
     app.poll_file_dialog();
     assert_eq!(*written.borrow(), ["/pics/layers.pcraft"]);
@@ -147,7 +147,7 @@ fn layered_flat_source_save_defaults_to_psd_without_overwriting_source() {
     for command in ["file.save", "file.saveAs"] {
         let (mut app, files, written) = jpeg_app(Some("/pics/My image.JPEG"), true);
         menus::invoke(&mut app, &ctx, command, json!({})).unwrap();
-        assert_eq!(asked_save(&files), "/pics/My image.psd", "{command}");
+        assert_eq!(Path::new(&asked_save(&files)), Path::new("/pics/My image.psd"), "{command}");
         assert!(written.borrow().is_empty(), "asking where to save must not overwrite the JPEG");
         assert_eq!(app.session.active().unwrap().path.as_deref(), Some("/pics/My image.JPEG"));
         answer(&files, chose("/pics/My image.psd"));
@@ -182,7 +182,7 @@ fn save_dialog_preserves_flat_and_existing_layered_format_defaults() {
     ] {
         let (mut app, files, written) = jpeg_app(Some(path), layered);
         menus::invoke(&mut app, &ctx, "file.saveAs", json!({})).unwrap();
-        assert_eq!(asked_save(&files), path);
+        assert_eq!(Path::new(&asked_save(&files)), Path::new(path));
         cancel(&files);
         app.poll_file_dialog();
         assert!(written.borrow().is_empty());
@@ -198,7 +198,7 @@ fn a_jpeg_with_transparency_is_offered_as_png() {
     let (mut app, files, written) = jpeg_app(Some("/pics/photo.jpg"), false);
     app.run("layer.new.layerFromBackground", json!({})).unwrap();
     menus::invoke(&mut app, &ctx, "file.saveAs", json!({})).unwrap();
-    assert_eq!(asked_save(&files), "/pics/photo.jpg", "opaque: still a JPEG");
+    assert_eq!(Path::new(&asked_save(&files)), Path::new("/pics/photo.jpg"), "opaque: still a JPEG");
     cancel(&files);
     app.poll_file_dialog();
     // Not the Background any more but still opaque: the JPEG keeps it, so Save writes back
@@ -214,7 +214,7 @@ fn a_jpeg_with_transparency_is_offered_as_png() {
     app.run("select.deselect", json!({})).unwrap();
     for command in ["file.save", "file.saveAs"] {
         menus::invoke(&mut app, &ctx, command, json!({})).unwrap();
-        assert_eq!(asked_save(&files), "/pics/photo.png", "{command}");
+        assert_eq!(Path::new(&asked_save(&files)), Path::new("/pics/photo.png"), "{command}");
         cancel(&files);
         app.poll_file_dialog();
     }
@@ -247,14 +247,14 @@ fn transparent_png_keeps_its_format_until_its_lone_layer_becomes_smart() {
     app.session.add_document(doc, Some("/pics/transparent.PNG".into()));
     let ctx = egui::Context::default();
     menus::invoke(&mut app, &ctx, "file.saveAs", json!({})).unwrap();
-    assert_eq!(asked_save(&files), "/pics/transparent.PNG");
+    assert_eq!(Path::new(&asked_save(&files)), Path::new("/pics/transparent.PNG"));
     cancel(&files);
     app.poll_file_dialog();
     app.run("layer.smartObjects.convertToSmartObject", json!({})).unwrap();
     assert_eq!(app.session.active().unwrap().doc.layers.len(), 1);
     assert!(matches!(app.session.active().unwrap().doc.layers[0].content, photocraft_doc::LayerContent::Smart(_)));
     menus::invoke(&mut app, &ctx, "file.saveAs", json!({})).unwrap();
-    assert_eq!(asked_save(&files), "/pics/transparent.psd");
+    assert_eq!(Path::new(&asked_save(&files)), Path::new("/pics/transparent.psd"));
     assert!(written.borrow().is_empty());
     cancel(&files);
     app.poll_file_dialog();
@@ -615,12 +615,12 @@ fn save_dialogs_remember_where_each_document_was_last_saved() {
     cancel(&files);
     app.poll_file_dialog();
     menus::invoke(&mut app, &ctx, "file.saveAs", json!({})).unwrap();
-    assert_eq!(asked_save(&files), "/proj/original.psd");
+    assert_eq!(Path::new(&asked_save(&files)), Path::new("/proj/original.psd"));
     cancel(&files);
     app.poll_file_dialog();
     // A cancelled dialog and an explicit directory change nothing.
     app.pick_save("/elsewhere/x.png", |_, _| Ok(Value::Null)).unwrap();
-    assert_eq!(asked_save(&files), "/elsewhere/x.png");
+    assert_eq!(Path::new(&asked_save(&files)), Path::new("/elsewhere/x.png"));
     cancel(&files);
     app.poll_file_dialog();
     app.pick_save("third.png", |_, _| Ok(Value::Null)).unwrap();
@@ -663,7 +663,7 @@ fn save_suggestions_preserve_explicit_directories_and_untitled_names() {
     {
         app.session.active_mut().unwrap().path = document_path.map(str::to_string);
         app.pick_save(suggested, |_, _| Ok(Value::Null)).unwrap();
-        assert_eq!(asked_save(&files), suggested);
+        assert_eq!(Path::new(&asked_save(&files)), Path::new(suggested));
         cancel(&files);
         app.poll_file_dialog();
     }
@@ -1055,7 +1055,7 @@ fn openraster_save_never_overwrites_what_it_cannot_hold() {
     let notices = app.ui.notices.len();
     menus::invoke(&mut app, &ctx, "file.save", json!({})).unwrap();
     assert_eq!(written.borrow().len(), 1, "the .ora is not overwritten");
-    assert_eq!(asked_save(&files), "/pics/art.psd", "Save As offers PSD");
+    assert_eq!(Path::new(&asked_save(&files)), Path::new("/pics/art.psd"), "Save As offers PSD");
     assert_eq!(app.ui.notices.len(), notices + 1);
     assert!(app.ui.notices.last().unwrap().lines.iter().any(|l| l.contains("adjustment layers")), "{:?}", app.ui.notices.last().unwrap().lines);
     assert!(app.session.active().unwrap().is_dirty(), "the edits are still unsaved");
@@ -1311,7 +1311,7 @@ fn save_asks_jpeg_options_then_writes_a_flat_jpeg_over_itself() {
     app.run("layer.new.layer", json!({})).unwrap();
     menus::invoke(&mut app, &ctx, "file.save", json!({})).unwrap();
     assert!(parked(&app).is_none());
-    assert_eq!(asked_save(&files), "/pics/photo.psd");
+    assert_eq!(Path::new(&asked_save(&files)), Path::new("/pics/photo.psd"));
     cancel(&files);
     app.poll_file_dialog();
 }

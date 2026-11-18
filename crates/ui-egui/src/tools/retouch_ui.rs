@@ -755,7 +755,6 @@ pub fn source_marker_point(app: &PhotocraftApp, at: Option<[f64; 2]>) -> Option<
 }
 
 pub(crate) mod bar;
-pub(crate) use bar::options_bar;
 
 #[cfg(test)]
 mod tests;

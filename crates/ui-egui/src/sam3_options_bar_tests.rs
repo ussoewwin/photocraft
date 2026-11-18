@@ -23,7 +23,7 @@ fn bar(tool: Tool, drawn: bool) -> Harness<'static, PhotocraftApp> {
                 ready = true;
                 return;
             }
-            assert_eq!(crate::tools::retouch_ui::options_bar(ui, app, app.ui.tool), drawn, "{:?}", app.ui.tool);
+            assert_eq!(crate::tools::retouch_ui::bar::options_bar(ui, app, app.ui.tool), drawn, "{:?}", app.ui.tool);
         },
         app,
     );

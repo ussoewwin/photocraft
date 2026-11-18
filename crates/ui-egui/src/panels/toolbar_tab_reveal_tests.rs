@@ -41,7 +41,7 @@ fn short_toolbar_harness() -> egui_kittest::Harness<'static, PhotocraftApp> {
 }
 
 /// From no focus, Tab enters the rail's buttons (one roving group) and the arrow keys walk them: the last tool is
-/// reached in a window shorter than the rail, it is scrolled into view, and Space picks it.
+/// reached in a window shorter than the rail, it is scrolled into view, and Enter picks it.
 #[test]
 fn tab_reveals_and_activates_the_last_tool() {
     let mut harness = short_toolbar_harness();
@@ -74,7 +74,7 @@ fn tab_reveals_and_activates_the_last_tool() {
     let rect = button_rect(&harness, "Zoom Tool");
     assert!(rect.height() >= full_height - 0.5, "the focused tool is clipped: {rect:?} against a full height of {full_height}");
     assert!(rect.top() >= 0.0 && rect.bottom() <= HEIGHT, "the focused tool is outside the window: {rect:?}");
-    harness.key_press(egui::Key::Space);
+    harness.key_press(egui::Key::Enter);
     harness.run_steps(3);
-    assert_eq!(harness.state().ui.tool, Tool::Zoom, "Space must select the revealed tool");
+    assert_eq!(harness.state().ui.tool, Tool::Zoom, "Enter must select the revealed tool");
 }
