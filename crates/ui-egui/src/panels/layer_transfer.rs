@@ -31,6 +31,11 @@ struct Transfer {
     /// What the ghost by the pointer says.
     label: String,
     selection_only: bool,
+    /// The layer's mask is the content that travels (`"target": "mask"`), not its pixels.
+    mask: bool,
+    /// The viewport the transfer was armed in: only that viewport completes it, so a document
+    /// window's `finish` cannot clear a transfer the main window is still dragging.
+    viewport: egui::ViewportId,
 }
 
 fn key() -> egui::Id {
@@ -77,6 +82,8 @@ fn panel_transfer(app: &PhotocraftApp, ctx: &egui::Context) -> Option<Transfer> 
         grab: None,
         label: label_of(&source.doc, &layers),
         selection_only: false,
+        mask: false,
+        viewport: ctx.viewport_id(),
     })
 }
 
@@ -87,9 +94,26 @@ fn begin(app: &PhotocraftApp, ctx: &egui::Context, layers: Vec<LayerId>, grab: [
     // Several selected layers move whole; the engine's selected-pixel copy intentionally accepts
     // exactly one raster layer.
     let selection_only = layers.len() == 1 && st.doc.selection.is_some();
-    let t = Transfer { source: st.doc.id, layers: layers.iter().map(|l| l.0).collect(), grab: Some(grab), label: label_of(&st.doc, &layers), selection_only };
+    // A mask target travels as the mask, not as the layer's pixels: the mask's own selection is what
+    // the pointer grabbed. A floating piece's kind decides when one exists.
+    let mask = selection_only && st.floating.as_ref().map_or_else(|| app.layer_mask_targeted(), |f| f.parts.is_mask());
+    let t = Transfer {
+        source: st.doc.id,
+        layers: layers.iter().map(|l| l.0).collect(),
+        grab: Some(grab),
+        label: label_of(&st.doc, &layers),
+        selection_only,
+        mask,
+        viewport: ctx.viewport_id(),
+    };
     ctx.data_mut(|d| d.insert_temp(key(), t));
     true
+}
+
+/// Is a cross-document transfer armed in the app's context? The tool events have no context of
+/// their own, so the app's answers it.
+pub(crate) fn armed(app: &PhotocraftApp) -> bool {
+    get(app.ctx()).is_some()
 }
 
 /// The document a transfer under way started in.
@@ -105,6 +129,22 @@ fn layer_drag(app: &PhotocraftApp) -> Option<MoveLayerDrag> {
 /// A Move-tool drag of whole layers (not a selection or a floating piece) under way: the document
 /// point it grabbed.
 fn move_drag(app: &PhotocraftApp, ctx: &egui::Context) -> Option<[f64; 2]> {
+    // No drag object exists for a refused Move press or a marquee that grabbed a locked layer or
+    // the Background (#11971): both can still become a cross-document transfer.
+    if layer_drag(app).is_none() {
+        if app.move_blocked
+            && let Some(start) = app.move_blocked_start
+            && app.ui.transform.is_none()
+            && app.session.active().is_some_and(|st| st.floating.is_none())
+            && (app.move_blocked_layer.is_some() || st_has_selection(app))
+        {
+            return Some(start);
+        }
+        if app.session.active().is_some_and(|st| st.doc.selection.is_some() || st.floating.is_some()) {
+            return None;
+        }
+        return app.layer_box.filter(|b| b.grabbed_layer.is_some()).map(|b| b.start);
+    }
     let d = layer_drag(app)?;
     let st = app.session.active()?;
     let canvas = CanvasHost::primary(app, app.session.active_index()?).canvas_id();
@@ -112,6 +152,11 @@ fn move_drag(app: &PhotocraftApp, ctx: &egui::Context) -> Option<[f64; 2]> {
         && craft::ui::canvas_controls::reading::running(ctx, canvas).is_none()
         && ((st.doc.selection.is_none() && st.floating.is_none()) || d.moves_selection);
     plain.then_some(d.start)
+}
+
+/// The document has a non-empty pixel selection.
+fn st_has_selection(app: &PhotocraftApp) -> bool {
+    app.session.active().is_some_and(|st| st.doc.selection.is_some())
 }
 
 /// The pointer, while layers are dragged (or a Move drag could become a transfer): tabs only
@@ -129,6 +174,38 @@ pub fn pointer_if_armed(app: &PhotocraftApp, ctx: &egui::Context) -> Option<egui
 fn arm_move_transfer(app: &mut PhotocraftApp, ctx: &egui::Context, index: usize) -> bool {
     if transfer(app, ctx).is_none() {
         let Some(grab) = move_drag(app, ctx) else { return false };
+        if app.session.active_index() == Some(index) {
+            return false;
+        }
+        // A refused press or a marquee's grabbed layer: no drag object to take back, so the
+        // grabbed or hit layer is what travels (#11971).
+        if layer_drag(app).is_none() {
+            if app.move_viewport.is_some_and(|v| v != ctx.viewport_id()) {
+                return false;
+            }
+            if let Some(b) = app.layer_box {
+                let Some(g) = b.grabbed_layer else { return false };
+                if b.doc != app.session.active().map(|st| st.doc.id) {
+                    return false;
+                }
+                app.layer_box = None;
+                app.move_viewport = None;
+                return begin(app, ctx, vec![g], grab);
+            }
+            if app.move_blocked_doc != app.session.active().map(|st| st.doc.id) {
+                return false;
+            }
+            let active = app.session.active().and_then(|st| st.active_layer);
+            let Some(hit) = app.move_blocked_layer.or_else(|| active.filter(|_| app.session.active().is_some_and(|st| st.doc.selection.is_some()))) else {
+                return false;
+            };
+            app.clear_move_blocked();
+            let layers = match app.session.active() {
+                Some(st) if st.is_layer_selected(hit) => st.selected_layers(),
+                _ => vec![hit],
+            };
+            return begin(app, ctx, layers, grab);
+        }
         let Some(active) = app.session.active().and_then(|st| st.active_layer) else { return false };
         if app.session.active_index() == Some(index) {
             return false;
@@ -182,7 +259,7 @@ pub fn over_tab(app: &mut PhotocraftApp, ctx: &egui::Context, index: usize) {
         app.session.set_active(index);
         app.jobs.focus = None;
     }
-    if ctx.input(|i| i.pointer.any_released()) {
+    if ctx.input(|i| i.pointer.primary_released()) {
         drop(app, ctx, index, None);
     }
 }
@@ -194,8 +271,30 @@ pub fn over_tab(app: &mut PhotocraftApp, ctx: &egui::Context, index: usize) {
 /// A second pass of a frame gets no release event (egui gives a frame's input events to its
 /// first pass), so a release drops once; the first pass also clears the Move-tool transfer.
 pub fn finish(app: &mut PhotocraftApp, ctx: &egui::Context) {
+    // The primary button ends the gesture: a secondary release during a drag leaves it held.
+    let (primary_released, primary_down) = ctx.input(|i| (i.pointer.primary_released(), i.pointer.primary_down()));
+    // A refused Move press or a marquee's grabbed layer is cleaned up by the window that owns it,
+    // so another window's pointer state cannot clear the source window's gesture.
+    if (!primary_down || primary_released) && transfer(app, ctx).is_none() && app.move_viewport.is_none_or(|v| v == ctx.viewport_id()) {
+        let show_lock = app.move_blocked && app.move_blocked_moved;
+        app.clear_move_blocked();
+        if show_lock {
+            crate::move_lock::prompt(app);
+        }
+        if let Some(b) = app.layer_box.as_ref()
+            && b.grabbed_layer.is_some()
+        {
+            app.layer_box = None;
+            app.move_viewport = None;
+        }
+    }
     let Some(t) = transfer(app, ctx) else { return };
-    let (pos, released, down) = ctx.input(|i| (i.pointer.latest_pos(), i.pointer.any_released(), i.pointer.primary_down()));
+    // Only the viewport that armed the transfer completes it: a document window's pointer state
+    // must not clear a transfer the main window is still dragging.
+    if t.viewport != ctx.viewport_id() {
+        return;
+    }
+    let (pos, released, down) = ctx.input(|i| (i.pointer.latest_pos(), i.pointer.primary_released(), i.pointer.primary_down()));
     let target = pos.and_then(|p| target_at(app, p));
     if !released {
         if !down {
@@ -218,6 +317,8 @@ pub fn finish(app: &mut PhotocraftApp, ctx: &egui::Context) {
     clear(ctx);
 }
 
+/// The refused Move press ended in this window: no button is held, and the window recorded for
+
 /// Run before canvases process release: a tiled destination must take over the
 /// drag before the source can commit it as an ordinary move.
 pub(crate) fn prepare(app: &mut PhotocraftApp, ctx: &egui::Context) {
@@ -227,7 +328,7 @@ pub(crate) fn prepare(app: &mut PhotocraftApp, ctx: &egui::Context) {
     // Do not consume a source drag merely because it passes over another tile. On release this
     // runs before canvas input, so a destination can take ownership without the source committing;
     // returning to the source still releases as the original move.
-    if !ctx.input(|i| i.pointer.any_released()) {
+    if !ctx.input(|i| i.pointer.primary_released()) {
         return;
     }
     let Some(pos) = pointer_if_armed(app, ctx) else { return };
@@ -282,7 +383,16 @@ fn drop(app: &mut PhotocraftApp, ctx: &egui::Context, dest: usize, at: Option<[f
     let Some(to) = docs.get(dest).filter(|_| dest != src) else { return };
     let same_size = to.doc.size == docs[src].doc.size;
     let mut p = json!({"document": dest, "source": src, "layers": t.layers});
-    p["selectionOnly"] = json!(t.selection_only);
+    if t.selection_only {
+        // The selection travels as pixels (or as the mask, `target`) and is not cut.
+        p["selection"] = json!(true);
+        p["cut"] = json!(false);
+        if t.mask {
+            p["target"] = json!("mask");
+        }
+    } else {
+        p["selectionOnly"] = json!(false);
+    }
     match at.filter(|_| !ctx.input(|i| i.modifiers.shift)) {
         Some(at) => match t.grab {
             Some(g) => p["offset"] = json!([(at[0] - g[0]).round(), (at[1] - g[1]).round()]),
@@ -309,3 +419,16 @@ fn ghost(ctx: &egui::Context, p: egui::Pos2, label: &str) {
 
 #[cfg(test)]
 mod tests;
+
+/// A transfer armed for `layer` without the panel's runtime drag, for the tests that need one
+/// under way.
+#[cfg(test)]
+pub(crate) fn begin_from_panel(app: &PhotocraftApp, ctx: &egui::Context, layer: LayerId) -> bool {
+    begin(app, ctx, vec![layer], [0.0, 0.0])
+}
+
+/// Whether a transfer is under way.
+#[cfg(test)]
+pub(crate) fn is_transfer_armed(ctx: &egui::Context) -> bool {
+    get(ctx).is_some()
+}

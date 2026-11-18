@@ -15,7 +15,7 @@ use crate::PhotocraftApp;
 /// The marquee being dragged, in document pixels.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct LayerBox {
-    start: [f64; 2],
+    pub(crate) start: [f64; 2],
     end: [f64; 2],
     /// ⇧ at the press: add to the layer selection.
     add: bool,
@@ -23,6 +23,11 @@ pub(crate) struct LayerBox {
     move_auto_select: bool,
     /// An empty plain marquee from a locked-only hit clears the selection.
     clear_on_empty: bool,
+    /// A locked layer or the Background under the press: a drag toward another document
+    /// transfers it (#11971).
+    pub(crate) grabbed_layer: Option<photocraft_doc::LayerId>,
+    /// The document the press began in: a transfer only arms there.
+    pub(crate) doc: Option<photocraft_doc::DocId>,
 }
 
 /// Start the marquee at `p` after an empty or locked-only hit. With `move_auto_select`, the
@@ -30,7 +35,25 @@ pub(crate) struct LayerBox {
 /// locked-only press so an empty replacement marquee clears the selection.
 /// Temporary Move keeps ordinary lock filtering.
 pub(crate) fn begin(app: &mut PhotocraftApp, p: [f64; 2], add: bool, move_auto_select: bool, clear_on_empty: bool) {
-    app.layer_box = Some(LayerBox { start: p, end: p, add, move_auto_select, clear_on_empty });
+    app.layer_box =
+        Some(LayerBox { start: p, end: p, add, move_auto_select, clear_on_empty, grabbed_layer: None, doc: app.session.active().map(|st| st.doc.id) });
+    app.move_viewport = app.current_viewport;
+}
+
+/// [`begin`], recording the locked layer or Background the press hit: a drag toward another
+/// document's tab transfers it (#11971).
+pub(crate) fn begin_with_layer(
+    app: &mut PhotocraftApp,
+    p: [f64; 2],
+    add: bool,
+    grabbed_layer: Option<photocraft_doc::LayerId>,
+    move_auto_select: bool,
+    clear_on_empty: bool,
+) {
+    begin(app, p, add, move_auto_select, clear_on_empty);
+    if let Some(b) = app.layer_box.as_mut() {
+        b.grabbed_layer = grabbed_layer;
+    }
 }
 
 /// No visible layer has pixels at document point `p` (locked ones included).
@@ -41,6 +64,11 @@ pub(crate) fn empty_at(app: &mut PhotocraftApp, p: [f64; 2]) -> bool {
 /// The pointer moved to document point `p` while a marquee is dragged (unsnapped, unconstrained):
 /// true when a marquee is running.
 pub(crate) fn drag_to(app: &mut PhotocraftApp, p: [f64; 2]) -> bool {
+    if let (Some(owner), Some(here)) = (app.move_viewport, app.current_viewport)
+        && owner != here
+    {
+        return false;
+    }
     let Some(b) = app.layer_box.as_mut() else { return false };
     b.end = p;
     true
@@ -49,7 +77,13 @@ pub(crate) fn drag_to(app: &mut PhotocraftApp, p: [f64; 2]) -> bool {
 /// The button came up at document point `p`: selects the layers the box touches. True when a
 /// marquee was running.
 pub(crate) fn release(app: &mut PhotocraftApp, p: [f64; 2]) -> bool {
+    if let (Some(owner), Some(here)) = (app.move_viewport, app.current_viewport)
+        && owner != here
+    {
+        return false;
+    }
     let Some(b) = app.layer_box.take() else { return false };
+    app.move_viewport = None;
     let b = LayerBox { end: p, ..b };
     let (w, h) = (b.end[0] - b.start[0], b.end[1] - b.start[1]);
     if w == 0.0 && h == 0.0 && !b.add {
@@ -83,6 +117,7 @@ pub(crate) fn release(app: &mut PhotocraftApp, p: [f64; 2]) -> bool {
 /// The drag ends without selecting anything.
 pub(crate) fn cancel(app: &mut PhotocraftApp) {
     app.layer_box = None;
+    app.move_viewport = None;
 }
 
 /// The marquee being dragged, over the canvas `canvas`.
@@ -203,5 +238,68 @@ mod tests {
         assert!(!app.dialog_open(), "no lock dialog");
         assert!(app.layer_box.is_none());
         assert_eq!(app.session.active().unwrap().selected_layers(), vec![paint]);
+    }
+
+    #[test]
+    fn begin_records_current_viewport_as_marquee_owner() {
+        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+        let vid = egui::ViewportId::from_hash_of("secondary-window");
+        app.current_viewport = Some(vid);
+        app.move_viewport = None;
+        super::begin(&mut app, [10.0, 10.0], false, true, false);
+        assert_eq!(app.move_viewport, Some(vid));
+    }
+
+    #[test]
+    fn finish_and_clear_move_blocked_retain_move_viewport_while_layer_box_is_active() {
+        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+        let vid = egui::ViewportId::from_hash_of("secondary-window");
+        app.current_viewport = Some(vid);
+        super::begin(&mut app, [10.0, 10.0], false, true, false);
+        assert_eq!(app.move_viewport, Some(vid));
+        assert!(app.layer_box.as_ref().is_some_and(|b| b.grabbed_layer.is_none()));
+
+        // While an empty-space marquee is active, clear_move_blocked retains move_viewport:
+        app.clear_move_blocked();
+        assert_eq!(app.move_viewport, Some(vid), "move_viewport is retained while layer_box is active");
+
+        // finish also retains move_viewport:
+        let ctx = egui::Context::default();
+        let mut raw = egui::RawInput { viewport_id: vid, ..Default::default() };
+        raw.viewports.insert(vid, egui::ViewportInfo::default());
+        let mut out = ctx.run_ui(raw, |ui| {
+            crate::layer_transfer::finish(&mut app, ui.ctx());
+        });
+        out.textures_delta.clear();
+        assert_eq!(app.move_viewport, Some(vid), "finish retains move_viewport while layer_box is active");
+
+        // Events from another viewport are guarded:
+        app.current_viewport = Some(egui::ViewportId::from_hash_of("other-window"));
+        assert!(!super::drag_to(&mut app, [20.0, 20.0]), "other viewport drag is guarded");
+        assert!(!super::release(&mut app, [20.0, 20.0]), "other viewport release is guarded");
+
+        // Ending the marquee via release clears both layer_box and move_viewport:
+        app.current_viewport = Some(vid);
+        assert!(super::release(&mut app, [20.0, 20.0]));
+        assert!(app.layer_box.is_none());
+        assert_eq!(app.move_viewport, None, "marquee end clears move_viewport");
+    }
+
+    #[test]
+    fn closing_window_owning_marquee_clears_layer_box() {
+        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+        let vid = egui::ViewportId::from_hash_of("secondary-window");
+        app.current_viewport = Some(vid);
+        super::begin(&mut app, [10.0, 10.0], false, true, false);
+        assert_eq!(app.move_viewport, Some(vid));
+
+        let close = true;
+        let closing_owner = close && app.move_viewport == Some(vid);
+        if close && closing_owner {
+            app.layer_box = None;
+            app.clear_move_blocked();
+        }
+        assert!(app.layer_box.is_none());
+        assert_eq!(app.move_viewport, None);
     }
 }

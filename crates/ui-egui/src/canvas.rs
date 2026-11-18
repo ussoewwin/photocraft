@@ -171,6 +171,7 @@ pub fn canvas_view(
     mut view: View,
     primary: bool,
 ) -> (View, craft::ui::canvas::CanvasOutput) {
+    app.current_viewport = Some(ui.ctx().viewport_id());
     let ctx = ui.ctx().clone();
     let idx = host.idx;
     // The primary canvas keeps its view in `app.ui.views`: the pass starts from the stored view and stores the one it

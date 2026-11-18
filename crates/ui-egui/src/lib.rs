@@ -351,6 +351,16 @@ pub struct PhotocraftApp {
     pub(crate) menu_model: Option<menus::MenuModel>,
     /// Move tool drag shown live (`move_ui`).
     pub(crate) move_preview: Option<move_ui::MovePreview>,
+    /// A refused Move press: where it began, the layer it hit, the document (#11971) and the
+    /// window that owns the gesture. No drag object exists, so the press cannot become a
+    /// cross-document transfer without them.
+    pub(crate) move_blocked: bool,
+    pub(crate) move_blocked_start: Option<[f64; 2]>,
+    pub(crate) move_blocked_moved: bool,
+    pub(crate) move_blocked_layer: Option<photocraft_doc::LayerId>,
+    pub(crate) move_blocked_doc: Option<photocraft_doc::DocId>,
+    pub(crate) move_viewport: Option<egui::ViewportId>,
+    pub(crate) current_viewport: Option<egui::ViewportId>,
     /// Move tool › Show Highlight on Rollover: the last hover answer (`move_hover`).
     pub(crate) move_hover: Option<move_hover::Hover>,
     /// Smart Guides distances shown with ⌘ held over the canvas: the last answer (`move_distance`).

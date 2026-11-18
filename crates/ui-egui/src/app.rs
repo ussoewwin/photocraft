@@ -70,6 +70,13 @@ impl PhotocraftApp {
             remove_trail: None,
             menu_model: None,
             move_preview: None,
+            move_blocked: false,
+            move_blocked_start: None,
+            move_blocked_moved: false,
+            move_blocked_layer: None,
+            move_blocked_doc: None,
+            move_viewport: None,
+            current_viewport: None,
             move_hover: None,
             move_distance: None,
             object_finder: None,
@@ -247,6 +254,20 @@ impl PhotocraftApp {
     /// writes and code that holds no context of its own use it.
     pub fn ctx(&self) -> &egui::Context {
         &self.ctx
+    }
+}
+
+impl PhotocraftApp {
+    /// Clear the state of a refused Move press and its candidate transfer layer.
+    pub(crate) fn clear_move_blocked(&mut self) {
+        self.move_blocked = false;
+        self.move_blocked_start = None;
+        self.move_blocked_moved = false;
+        self.move_blocked_layer = None;
+        self.move_blocked_doc = None;
+        if self.layer_box.is_none() {
+            self.move_viewport = None;
+        }
     }
 }
 
