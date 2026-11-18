@@ -109,7 +109,11 @@ fn binding_edits_leave_the_old_owner_after_ok() {
     // (command given the key, the key, the commands that held it before).
     let table: [(&str, &str, &[&str]); 2] = [
         ("edit.search", "Cmd+J", &["layer.new.layerViaCopy"]),
-        ("edit.search", "B", &["tools.select.brush", "tools.select.pencil", "tools.select.colorReplacement", "tools.select.mixerBrush"]),
+        (
+            "edit.search",
+            "B",
+            &["tools.select.brush", "tools.select.pencil", "tools.select.colorReplacement", "tools.select.mixerBrush", "tools.select.lamaCleaner"],
+        ),
     ];
     for (command, key, old_owners) in table {
         let mut h = harness();

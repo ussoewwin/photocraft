@@ -54,7 +54,7 @@ fn shift_w_cycles_in_toolbar_order() {
     let mut h = app_harness(app());
     h.state_mut().ui.tool = Tool::ObjectSelection;
 
-    for expected in [Tool::QuickSelection, Tool::MagicWand, Tool::ObjectSelection] {
+    for expected in [Tool::QuickSelection, Tool::MagicWand, Tool::Sam3Select, Tool::ObjectSelection] {
         tap(&mut h, Key::W, Modifiers::SHIFT);
         assert_eq!(h.state().ui.tool, expected);
     }

@@ -4315,3 +4315,8 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
 	Content-aware fill	コンテンツに応じた塗りつぶし
 	Sample content from part of the image and use it to fill a small area	画像の一部から内容をサンプリングして小さな領域を塗りつぶす
 	Reset the crop box, image rotation, and aspect ratio settings	切り抜き枠、画像の回転、アスペクト比をリセット
+	SAM Selection Tool	SAM選択ツール
+	Prompt	プロンプト
+	Detect	検出
+	Individual Masks	個別マスク
+	SAM found nothing there — try a tighter box	SAM はそこに何も見つけられませんでした — より狭いボックスで試してください

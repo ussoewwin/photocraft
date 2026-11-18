@@ -138,10 +138,10 @@ fn shift_letter_cycles_in_layout_order_across_slots() {
     assert_eq!(app.ui.tool, Tool::EllipseMarquee);
     shift_press(&mut app, Key::M);
     assert_eq!(app.ui.tool, Tool::RectMarquee);
-    // A reordered group steps in its new order: Magic Wand, Quick Selection, Object Selection.
-    app.run("edit.toolbar", json!({"toolbar": [["MagicWand", "QuickSelection", "ObjectSelection"]]})).unwrap();
+    // A reordered group steps in its new order: Magic Wand, Quick Selection, Object Selection, Sam3Select.
+    app.run("edit.toolbar", json!({"toolbar": [["MagicWand", "QuickSelection", "ObjectSelection", "Sam3Select"]]})).unwrap();
     app.ui.tool = Tool::MagicWand;
-    for expected in [Tool::QuickSelection, Tool::ObjectSelection, Tool::MagicWand] {
+    for expected in [Tool::QuickSelection, Tool::ObjectSelection, Tool::Sam3Select, Tool::MagicWand] {
         shift_press(&mut app, Key::W);
         assert_eq!(app.ui.tool, expected);
     }
