@@ -4,6 +4,7 @@
 //! invoked through `std::process::Command`.
 
 mod corpus;
+mod craftlibs;
 mod corpus_pins;
 mod i18n_report;
 mod ico;
@@ -53,6 +54,11 @@ commands:
                   check perf/budgets.toml and perf/baseline.json (non-zero on a broken budget or regression)
   scorecard [--check]
                   regenerate docs/scorecard.md (--check: fail if it is stale)
+  craftlibs [status|on|off|check]
+                  the local craft-libs patch: `on` points every crate at ../craft-libs,
+                  `off` removes it and puts Cargo.lock back on the pin, `check` fails
+                  when either file still carries that work (run it before a commit)
+                  (md/craft-libs-並行管理手順.md)
   version [set X.Y.Z[-pre]]
                   print the workspace version, or set it (Cargo.toml + Cargo.lock)
   ico <out.ico> <in.png>...
@@ -78,6 +84,7 @@ fn main() -> ExitCode {
         Some("i18n-report") => i18n_report::run(&root()),
         Some("perf") => perf::run(&root(), &rest),
         Some("scorecard") => scorecard::run(&root(), &rest),
+        Some("craftlibs") => craftlibs::run_craftlibs(&root(), &rest),
         Some("version") => version::run(&root(), &rest),
         Some("ico") => ico::run(&rest),
         Some("psd-write-oracle") => psd_write_oracle::run(&root(), &rest),

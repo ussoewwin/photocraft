@@ -185,6 +185,7 @@ Then append a terse entry to `log/devlog.md` (what landed, numbers, what's still
 - `ROADMAP.md`, `docs/target-app-parity.md`, `docs/gaps.md` and the `docs/*-parity.md` checklists: where we stand against Photoshop.
 - `docs/parity-checklist.md`: generated Photoshop menu coverage.
 - `docs/scorecard.md`: generated scorecard (sources: `scorecard/*.toml`, `perf/budgets.toml`, `perf/baseline.json`, corpus floors, prefs audit).
+- `md/craft-libs-並行管理手順.md`: working in `craft-libs` alongside this repository — the local `[patch]`, `cargo xtask craftlibs status|on|off|check`, and the pin bump. A fix in the shared UI framework is made there and pinned here; the patch and the lock it rewrites never reach a commit.
 - `docs/releasing.md`: cutting a release (`cargo xtask version`, the `release` branch), signing secrets, packaging scripts in `packaging/`.
 - `plan/` is an optional gitignored notebook (research, parity notes, estimates). Do not ask for it and do not stop when it is absent.
 - `log/` (local, gitignored): the dev log.
