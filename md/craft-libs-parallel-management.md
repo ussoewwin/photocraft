@@ -27,7 +27,7 @@ Measured (as of 2026-11-19):
 |---|---|
 | The tip of upstream `next` | `7a7f5302` |
 | Upstream `main` | A different line from `next`. It has no `crates/ui-contract` |
-| The pin in PhotoCraft's `Cargo.toml` | `a6b9d9c986f7c4c399632d72d9a4a8c8ea0b86e9` (1,895 commits behind `next`) |
+| The pin in PhotoCraft's `Cargo.toml` | `a6b9d9c986f7c4c399632d72d9a4a8c8ea0b86e9` (**231 commits behind `next`**) |
 
 **You cannot open a PR based on `main`.** Because the code to fix does not exist on `main`.
 
@@ -69,7 +69,7 @@ cargo xtask craftlibs status
 workspace:   D:\USERFILES\GitHub\photocraft
 checkout:    D:\USERFILES\GitHub\craft-libs (present)
 .cargo/config.toml: PATCHED (local craft-libs)
-Cargo.lock:  69 craft-libs crate(s) from local paths (NOT safe to commit)
+Cargo.lock:  70 craft-libs crate(s) from local paths (NOT safe to commit)
 pinned rev:  a6b9d9c986f7c4c399632d72d9a4a8c8ea0b86e9
 checkout at: 8fbb0720
 ```
@@ -159,6 +159,8 @@ git status --short               # .cargo/config.toml and Cargo.lock should be g
 
 `off` runs `git checkout -- Cargo.lock .cargo/config.toml`. Your work (the commit on the craft-libs side) is not lost.
 
+`on` only writes the `[patch]` section. **The lock is rewritten by the next cargo run**, not by `on` itself: right after `on`, `cargo xtask craftlibs status` still says `Cargo.lock: still on the pin, but the next cargo run rewrites it (NOT safe to commit)`. Run one cargo command (`cargo tree` is enough) before you count the lock lines.
+
 `check` looks at the following and, if it is dangerous, exits non-zero listing the crates concerned.
 
 - A `[patch."https://github.com/storytold/craft-libs"]` is left in `.cargo/config.toml`
@@ -219,7 +221,7 @@ Leave even one line on the old rev and that one crate comes from a different com
 | Sent (the fork's `next`) | `8fbb0720` ← `e875a7c9` ← `f7fc484a` (already rebased directly on top of upstream `next` `7a7f5302`) |
 | PhotoCraft's pin | `a6b9d9c9` (the upstream source of truth. Not raised until the conditions of §6 are met) |
 | PhotoCraft's patch | **Applied** (211 crates). Run `cargo xtask craftlibs off` when committing |
-| PhotoCraft's branch | `main` of `ussoewwin/photocraft`, tip `50026dac3d` |
+| PhotoCraft's branch | `main` of `ussoewwin/photocraft` (tip as of 2026-11-19: `bedb718659`) |
 
 The three commits already sent:
 
@@ -246,6 +248,8 @@ Going through `cargo xtask` makes cargo itself emit a flood of patch warnings. T
 target\debug\xtask.exe craftlibs check
 ```
 
+That path only exists after `cargo build -p xtask --bin xtask` (or after any test run). **After a clean-up (§10) it is gone** — then use `cargo xtask craftlibs check`, which rebuilds xtask first and prints a flood of patch warnings.
+
 **Limit**: `check` only stops your own commit; it does not protect anyone else's environment.
 ---
 
@@ -261,7 +265,7 @@ Delete scratch files and every build cache — the test binaries are not artefac
 | Investigation scripts | throwaway `*.cmd` |
 | Backups of settings and the lock | `*.bak-*`, `Cargo.lock.before-*` |
 | PR description drafts | `md/pr-*.md` (after submitting) |
-| `target\debug` (PhotoCraft) | Caches and test binaries. 103 GB when left alone |
+| `target\debug` (PhotoCraft) | Caches and test binaries. 103 GB when left alone. It comes back on every test run and every `cargo build -p xtask` — delete it again afterwards |
 | `craft-libs\target\*` | A library has no artefact — the whole directory is disposable (see below) |
 
 | Never delete | Reason |
