@@ -284,3 +284,53 @@ Get-ChildItem target -Directory | ForEach-Object {
 ### ビルドの直後
 
 **ビルドが終わった直後に、別のビルドやテストを始めない。** ご主人様がそのビルドの結果を使う前かもしれない。テストが要るなら、実行してよいかを確認する。
+
+---
+
+## 11. フォークの Actions は無効のまま保つ（フォーク機能）
+
+**このリポジトリのフォークでは GitHub Actions を走らせない。** フォークには secrets が無く、stepsecurity の monitor に接続できずに `Workspace / lint` が必ず落ちる。赤い印が増えるだけで、何も守らない。
+
+無効化は**このフォークの機能の一部**として管理する。一度設定したら終わりではなく、**上流を取り込むたびに確認して戻す**。
+
+### 現在の状態（2026-11-19 実測）
+
+| リポジトリ | Actions 権限 | ワークフロー |
+|---|---|---|
+| `ussoewwin/craft-libs` | `enabled: false` | 30 件すべて `disabled_manually` |
+| `ussoewwin/photocraft` | `enabled: false` | 10 件すべて `disabled_manually` |
+
+### なぜ復活するか
+
+上流を merge / rebase して新しい `.github/workflows/*.yml` が入ると、GitHub はそのワークフローを `active` で登録し直す。リポジトリの Actions 権限（`enabled`）は残るが、**新しいファイルの分だけ有効に戻る**。
+
+### 上流を取り込んだ直後に必ず実行する
+
+```powershell
+$env:GH_TOKEN = ((('protocol=https`nhost=github.com`n') | git credential fill) 2>$null |
+  Select-String '^password=(.*)$').Matches[0].Groups[1].Value
+
+foreach ($r in @('ussoewwin/craft-libs','ussoewwin/photocraft')) {
+  # 1. 権限を無効に
+  gh api -X PUT "repos/$r/actions/permissions" -F enabled=false | Out-Null
+  # 2. すべてのワークフローを無効に
+  gh api "repos/$r/actions/workflows?per_page=100" --jq '.workflows[] | .id' | ForEach-Object {
+    gh api -X PUT "repos/$r/actions/workflows/$_/disable" | Out-Null
+  }
+  # 3. 実行中があれば止める
+  gh api "repos/$r/actions/runs?per_page=20" --jq '.workflow_runs[] | select(.status=="in_progress" or .status=="queued") | .id' | ForEach-Object {
+    gh api -X POST "repos/$r/actions/runs/$_/cancel" | Out-Null
+  }
+  # 4. 確認
+  gh api "repos/$r/actions/permissions" --jq '.enabled'
+  gh api "repos/$r/actions/workflows?per_page=100" --jq '[.workflows[] | .state] | group_by(.) | map({(.[0]): length}) | add'
+}
+```
+
+期待する出力：`false` と `{"disabled_manually": N}`（N は全ワークフロー数、`active` が 0）。
+
+### 禁止
+
+- フォークでワークフローを走らせない。`gh workflow run` も使わない
+- 「一度無効にしたから大丈夫」と前提にしない。上流を取り込んだら必ず上の 4 段を実行する
+- 無効化を解除しない。解除が必要なら、その理由をご主人様に確認する

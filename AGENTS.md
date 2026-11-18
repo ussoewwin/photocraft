@@ -170,6 +170,7 @@ Commands must **never panic** on bad input (Rule 9): every `run` closure and the
 
 **Never delete build output.** `target/release/photocraft.exe` is the deliverable; deleting it costs a 20–30 minute rebuild, and `target/debug` is what the tests run from. Delete only what the build does not need — investigation logs, throwaway scripts, lock or settings backups, PR drafts — and if the disk is still tight, ask which build output may go rather than deciding. `md/craft-libs-並行管理手順.md` §10 has the commands.
 Then append a terse entry to `log/devlog.md` (what landed, numbers, what's still open). Sessions can end abruptly (crashes, context limits), so the dev log plus a green tree is how the next agent picks up. Keep the tree building at every step.
+**The fork's Actions stay off.** `ussoewwin/photocraft` and `ussoewwin/craft-libs` have GitHub Actions disabled (repository permission `false`, every workflow `disabled_manually`): the fork has no secrets, so the stepsecurity monitor step always fails and every push turns CI red for nothing. This is part of how the fork works, not a one-off setting. A merge from upstream re-registers the incoming workflow files as `active`, so after every upstream merge run the re-disable in `md/craft-libs-並行管理手順.md` §11 and confirm `false` plus `disabled_manually` for all of them. Never re-enable them, and never start a fork workflow by hand.
 
 ## 6. Parallel agents
 
