@@ -168,6 +168,7 @@ While iterating, run less and keep the full commands above as the final gate: `c
 
 Commands must **never panic** on bad input (Rule 9): every `run` closure and the code it calls returns `Err`, not a panic, for any params or document state. New commands come with a graceful-failure test (empty/out-of-range/wrong-type params → `Err`, not a crash).
 
+**Leave no build output behind.** A debug build of this workspace reaches tens of gigabytes and `target/release` several more; `target/debug` alone reached 103 GB and left 0.4 GB free. Delete what the build produced once its purpose is served, keep the `target/wt-*` directories (`git worktree list`: other sessions' worktrees), measure the free space afterwards and report the number. `md/craft-libs-並行管理手順.md` §10 has the commands.
 Then append a terse entry to `log/devlog.md` (what landed, numbers, what's still open). Sessions can end abruptly (crashes, context limits), so the dev log plus a green tree is how the next agent picks up. Keep the tree building at every step.
 
 ## 6. Parallel agents

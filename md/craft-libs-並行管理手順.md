@@ -246,4 +246,51 @@ fork の `next` のコミットは、上流 `storytold/craft-libs` の `next` �
 target\debug\xtask.exe craftlibs check
 ```
 
-**限界**：`check` は手元の commit を止めるだけで、他人の環境は守らない。リポジトリ側の防壁は CI だが、CI は feature / fix の PR で触らない決まりなので、必要なら別 issue の案件。
+**限界**：`check` は手元の commit を止めるだけで、他人の環境は守らない。
+---
+
+## 10. ビルド後の後片付け（必須）
+
+**ビルドが終わったら、そのビルドの成果物は残さない。** craft-libs は 200 クレート超、PhotoCraft は 6 パッケージあり、debug ビルド 1 回で数十 GB になる。放置するとディスクが埋まり、他の作業（他のエージェントのビルドを含む）が止まる。
+
+実測（2026-11-19）：`target\debug` を消さずに積んだ結果 **103.17 GB**、`target\release` 8.22 GB、空き容量は **0.4 GB** まで落ちた。削除後は 120.3 GB。
+
+### 消すもの
+
+| 対象 | いつ |
+|---|---|
+| `target\debug` | テスト・調査が終わったら即。テスト目的で作ったものは残す理由がない |
+| `target\release` | exe を確認・受け渡しした後 |
+| `target\diag`（制御ログ、設定コピー、バックアップ） | 調査が終わったら |
+| `space-log.txt` などの診断ファイル | 用が済んだら |
+| PR 本文の草稿（`md/pr-*.md`） | PR を提出したら |
+
+### 消してはいけないもの
+
+| 対象 | 理由 |
+|---|---|
+| `target\wt-*`（`git worktree list` にある他の作業ツリー） | 別セッションの未コミット作業が入っている |
+| `md/` の他人の文書、`plugins/` などの未追跡資産 | 自分が作ったものではない |
+
+### 手順
+
+```powershell
+# 1. 何がどれだけ占めているか測る
+Get-ChildItem target -Directory | ForEach-Object {
+  $s = (Get-ChildItem $_.FullName -Recurse -File -Force -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum
+  [pscustomobject]@{ Name = $_.Name; GB = [math]::Round($s/1GB, 2) }
+} | Sort-Object GB -Descending
+
+# 2. 消す（worktree は除く）
+Remove-Item target\debug, target\release -Recurse -Force -ErrorAction SilentlyContinue
+
+# 3. 空きを確認して報告する
+[math]::Round((Get-PSDrive D).Free/1GB, 1)
+```
+
+削除後に空き容量を測り、**数字を報告に含める**。測っていない削除は「消した」と言わない。
+
+### テストを回すときの注意
+
+`target\debug` を消した直後に `cargo test` を実行すると、フル debug ビルド（10〜15 分、数十 GB）が走る。**ビルドが終わった直後にこれを始めない。** テストが必要なら、`target` が温まっているうちに済ませるか、そもそも実行をご主人様に確認する。
+リポジトリ側の防壁は CI だが、CI は feature / fix の PR で触らない決まりなので、必要なら別 issue の案件。
