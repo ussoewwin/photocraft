@@ -62,8 +62,8 @@ pub(crate) use appearance::{appearance_button, cycle_appearance, interface_zoom,
 pub use appearance::{canvas_style, pasteboard_color};
 #[cfg(test)]
 pub(crate) use dialogs::set_draft;
-pub use dialogs::{apply_window, invoke, open_preferences, window_open};
 pub(crate) use dialogs::{PrefsDialog, feed, take as take_window};
+pub use dialogs::{apply_window, invoke, open_preferences, window_open};
 pub(crate) use presets::{PRESETS_FAMILY, take as take_presets};
 pub(crate) use save::save_preferences;
 pub use save::{autosave_now, tick};

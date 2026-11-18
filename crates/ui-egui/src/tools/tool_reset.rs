@@ -206,6 +206,7 @@ pub fn option_keys(tool: Tool) -> &'static [&'static str] {
         Tool::MagicWand => reset!(tolerance, anti_alias, contiguous),
         Tool::QuickSelection => reset!(enhance_edge, quick_selection_mode),
         Tool::ObjectSelection => reset!(enhance_edge, object_finder, object_hard_edge),
+        Tool::Sam3Select => reset!(sam3_prompt, sam3_threshold, sam3_refine, sam3_individual),
         Tool::Crop => reset!(crop),
         Tool::PerspectiveCrop => reset!(perspective_crop, perspective_crop_grid),
         Tool::Eyedropper => reset!(eyedropper),
@@ -298,6 +299,7 @@ pub fn option_keys(tool: Tool) -> &'static [&'static str] {
         | Tool::Count
         | Tool::RotateView
         | Tool::HistoryBrush
+        | Tool::LamaCleaner
         | Tool::PathSelection
         | Tool::DirectSelection
         | Tool::SliceSelect

@@ -186,7 +186,7 @@ impl CanvasTool for RetouchTool<'_> {
         }
         // A press of another document never reaches here: the canvas pass ends it (`end_foreign_gesture`), which
         // cancels this tool and drops its press.
-        let drags = self.scope.with_app(|app| tool == Tool::ObjectSelection || retouch_ui::patch_drags_selection(app, at, mods));
+        let drags = self.scope.with_app(|app| tool == Tool::ObjectSelection || tool == Tool::Sam3Select || retouch_ui::patch_drags_selection(app, at, mods));
         if drags {
             state.press = Some(PatchPress::new(tool, at, mods));
             state.last = at;
@@ -235,6 +235,10 @@ impl CanvasTool for RetouchTool<'_> {
         self.scope.with_app(|app| match tool {
             // The rectangle combines as its press decided, as the cursor's badge showed.
             Tool::ObjectSelection => retouch_ui::finish_object_selection(app, start, end, press.modifiers),
+            Tool::Sam3Select => {
+                let m = Mods { alt: press.modifiers.alt && mods.alt, shift: press.modifiers.shift && mods.shift, ..press.modifiers };
+                retouch_ui::finish_sam3_selection(app, start, end, m)
+            }
             // A click with no drag moves nothing.
             _ if end == start => {}
             Tool::Patch => {
@@ -284,9 +288,9 @@ impl CanvasTool for RetouchTool<'_> {
         let press = state.press.as_ref().map(|p| (p.start, p.modifiers));
         let at = cx.pointer.as_ref().map(|pointer| doc_point(pointer, cx));
         let badge = self.scope.with_app(|app| match self.tool {
-            Tool::ObjectSelection => {
+            Tool::ObjectSelection | Tool::Sam3Select => {
                 let mods = press.map_or(cx.mods, |(_, mods)| mods);
-                tool_feedback::selection_op(Tool::ObjectSelection, app.ui.selection_mode, mods, tool_feedback::has_selection(app)).badge()
+                tool_feedback::selection_op(self.tool, app.ui.selection_mode, mods, tool_feedback::has_selection(app)).badge()
             }
             Tool::Patch | Tool::ContentAwareMove => {
                 state.lasso.outline_operation().map_or_else(|| at.and_then(|at| tool_feedback::patch_badge(app, at, press, cx.mods)), |op| op.badge())

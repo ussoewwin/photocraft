@@ -56,6 +56,8 @@ pub(crate) enum ToolCommand {
     MixerBrush,
     #[command(label = "Color Replacement Tool", icon = "brush_replace", kind = "tool", group = "B", default = "B", alias = "tools.select.colorReplacement")]
     ColorReplacement,
+    #[command(label = "LaMa Cleaner Tool", icon = "sparkles", kind = "tool", group = "B", default = "B", alias = "tools.select.lamaCleaner")]
+    LamaCleaner,
     #[command(label = "Eraser Tool", icon = "eraser", kind = "tool", group = "E", default = "E", alias = "tools.select.eraser")]
     Eraser,
     #[command(label = "Background Eraser Tool", icon = "eraser_background", kind = "tool", group = "E", default = "E", alias = "tools.select.backgroundEraser")]
@@ -130,6 +132,8 @@ pub(crate) enum ToolCommand {
         alias = "tools.select.objectSelection"
     )]
     ObjectSelection,
+    #[command(label = "SAM Selection Tool", icon = "scan", kind = "tool", group = "W", default = "W", alias = "tools.select.sam3Select")]
+    Sam3Select,
     #[command(label = "Pen Tool", icon = "pen_tool", kind = "tool", group = "P", default = "P", alias = "tools.select.pen")]
     Pen,
     #[command(label = "Freeform Pen Tool", icon = "pen_freeform", kind = "tool", group = "P", default = "P", alias = "tools.select.freeformPen")]
@@ -192,6 +196,7 @@ pub(crate) fn command_of(tool: Tool) -> ToolCommand {
         Tool::Pencil => ToolCommand::Pencil,
         Tool::MixerBrush => ToolCommand::MixerBrush,
         Tool::ColorReplacement => ToolCommand::ColorReplacement,
+        Tool::LamaCleaner => ToolCommand::LamaCleaner,
         Tool::Eraser => ToolCommand::Eraser,
         Tool::BackgroundEraser => ToolCommand::BackgroundEraser,
         Tool::MagicEraser => ToolCommand::MagicEraser,
@@ -222,6 +227,7 @@ pub(crate) fn command_of(tool: Tool) -> ToolCommand {
         Tool::Sponge => ToolCommand::Sponge,
         Tool::QuickSelection => ToolCommand::QuickSelection,
         Tool::ObjectSelection => ToolCommand::ObjectSelection,
+        Tool::Sam3Select => ToolCommand::Sam3Select,
         Tool::Pen => ToolCommand::Pen,
         Tool::FreeformPen => ToolCommand::FreeformPen,
         Tool::CurvaturePen => ToolCommand::CurvaturePen,
@@ -267,6 +273,7 @@ pub(crate) fn tool_of(command: ToolCommand) -> Tool {
         ToolCommand::Pencil => Tool::Pencil,
         ToolCommand::MixerBrush => Tool::MixerBrush,
         ToolCommand::ColorReplacement => Tool::ColorReplacement,
+        ToolCommand::LamaCleaner => Tool::LamaCleaner,
         ToolCommand::Eraser => Tool::Eraser,
         ToolCommand::BackgroundEraser => Tool::BackgroundEraser,
         ToolCommand::MagicEraser => Tool::MagicEraser,
@@ -297,6 +304,7 @@ pub(crate) fn tool_of(command: ToolCommand) -> Tool {
         ToolCommand::Sponge => Tool::Sponge,
         ToolCommand::QuickSelection => Tool::QuickSelection,
         ToolCommand::ObjectSelection => Tool::ObjectSelection,
+        ToolCommand::Sam3Select => Tool::Sam3Select,
         ToolCommand::Pen => Tool::Pen,
         ToolCommand::FreeformPen => Tool::FreeformPen,
         ToolCommand::CurvaturePen => Tool::CurvaturePen,

@@ -208,7 +208,7 @@ pub(crate) fn family(tool: Tool) -> Family {
         Tool::Artboard => Family::Artboard,
         Tool::Frame => Family::Frame,
         Tool::Slice | Tool::SliceSelect => Family::Slice,
-        Tool::Patch | Tool::ContentAwareMove | Tool::RedEye | Tool::ObjectSelection => Family::Retouch,
+        Tool::Patch | Tool::ContentAwareMove | Tool::RedEye | Tool::ObjectSelection | Tool::Sam3Select => Family::Retouch,
         Tool::Pen
         | Tool::FreeformPen
         | Tool::CurvaturePen

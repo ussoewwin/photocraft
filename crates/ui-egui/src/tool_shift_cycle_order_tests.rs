@@ -89,8 +89,8 @@ fn the_first_shift_letter_from_another_tool_lands_on_the_groups_first_tool() {
 }
 
 #[test]
-fn w_cycles_object_selection_quick_selection_magic_wand() {
-    assert_eq!(sequence('W', 4), vec![Tool::ObjectSelection, Tool::QuickSelection, Tool::MagicWand, Tool::ObjectSelection]);
+fn w_cycles_object_selection_quick_selection_magic_wand_and_sam3() {
+    assert_eq!(sequence('W', 5), vec![Tool::ObjectSelection, Tool::QuickSelection, Tool::MagicWand, Tool::Sam3Select, Tool::ObjectSelection]);
 }
 
 #[test]
@@ -134,7 +134,7 @@ fn with_the_shift_switch_preference_off_plain_w_keeps_the_old_order() {
         tap(&mut h, Key::W, Modifiers::NONE);
         seen.push(h.state().ui.tool);
     }
-    assert_eq!(seen, vec![Tool::ObjectSelection, Tool::QuickSelection, Tool::MagicWand]);
+    assert_eq!(seen, vec![Tool::Sam3Select, Tool::ObjectSelection, Tool::QuickSelection]);
 }
 
 #[test]

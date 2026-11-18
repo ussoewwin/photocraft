@@ -825,6 +825,12 @@ mod lock_layers_shortcut_tests;
 #[cfg(test)]
 mod pencil_tests;
 #[cfg(test)]
+mod sam3_canvas_tests;
+#[cfg(test)]
+mod sam3_options_bar_tests;
+#[cfg(test)]
+mod sam3_toolbar_tests;
+#[cfg(test)]
 mod smart_objects_menu_tests;
 #[cfg(test)]
 mod tool_shift_cycle_order_tests;

@@ -934,6 +934,7 @@ pub fn applies(tool: Tool) -> bool {
             | Tool::MagneticLasso
             | Tool::MagicWand
             | Tool::ObjectSelection
+            | Tool::Sam3Select
             // Its brush is set from the options bar's chip; the canvas right-click is the
             // selection menu, as in Photoshop (#7268).
             | Tool::QuickSelection
@@ -1043,7 +1044,7 @@ pub fn rows(menu: &CanvasToolMenu) -> &'static [Row] {
                 SAMPLER_MENU
             } else if menu.tool == Tool::Count {
                 COUNT_MENU
-            } else if matches!(menu.tool, Tool::RedEye | Tool::ObjectSelection) {
+            } else if matches!(menu.tool, Tool::RedEye | Tool::ObjectSelection | Tool::Sam3Select) {
                 if menu.has_selection { MEASURED_SELECTION_MENU } else { COUNT_MENU }
             } else if menu.tool == Tool::Eyedropper {
                 EYEDROPPER_MENU

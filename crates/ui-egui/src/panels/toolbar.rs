@@ -28,14 +28,14 @@ pub(crate) const TOOL_SECTIONS: &[&[&[Tool]]] = &[
     &[
         &[Tool::RectMarquee, Tool::EllipseMarquee, Tool::SingleRowMarquee, Tool::SingleColumnMarquee],
         &[Tool::Lasso, Tool::PolygonLasso, Tool::MagneticLasso],
-        &[Tool::ObjectSelection, Tool::QuickSelection, Tool::MagicWand],
+        &[Tool::ObjectSelection, Tool::QuickSelection, Tool::MagicWand, Tool::Sam3Select],
         &[Tool::Crop, Tool::PerspectiveCrop, Tool::Slice, Tool::SliceSelect],
         &[Tool::Frame],
         &[Tool::Eyedropper, Tool::ColorSampler, Tool::Ruler, Tool::Note, Tool::Count],
     ],
     &[
         &[Tool::SpotHealing, Tool::Remove, Tool::Healing, Tool::Patch, Tool::ContentAwareMove, Tool::RedEye],
-        &[Tool::Brush, Tool::Pencil, Tool::ColorReplacement, Tool::MixerBrush],
+        &[Tool::Brush, Tool::Pencil, Tool::ColorReplacement, Tool::MixerBrush, Tool::LamaCleaner],
         &[Tool::CloneStamp, Tool::PatternStamp],
         &[Tool::HistoryBrush, Tool::ArtHistoryBrush],
         &[Tool::Eraser, Tool::BackgroundEraser, Tool::MagicEraser],

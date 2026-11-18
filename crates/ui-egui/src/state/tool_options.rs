@@ -107,6 +107,18 @@ pub struct ToolOptions {
     /// as in Photoshop: the other selection tools share `app.ui.selection_mode` (#11837).
     #[serde(default = "default_quick_selection_mode")]
     pub quick_selection_mode: u8,
+    /// SAM Selection: the open-vocabulary prompt (empty = click or box instead).
+    #[serde(default)]
+    pub sam3_prompt: String,
+    /// SAM Selection: the detector's score threshold, 0-1.
+    #[serde(default = "default_sam3_threshold")]
+    pub sam3_threshold: f32,
+    /// SAM Selection: refinement passes, 0-5.
+    #[serde(default = "default_sam3_refine")]
+    pub sam3_refine: u8,
+    /// SAM Selection: keep one mask per detected object instead of their union.
+    #[serde(default)]
+    pub sam3_individual: bool,
     /// Pen: a work path or a shape layer.
     pub vector_mode: VectorMode,
     /// Pen, Freeform Pen and Curvature Pen › Path Operations (#1397): how a new path combines with
@@ -309,6 +321,16 @@ fn default_quick_selection_mode() -> u8 {
     0
 }
 
+/// SAM Selection's threshold (`comfy_extras/nodes_sam3.py:105`).
+fn default_sam3_threshold() -> f32 {
+    0.5
+}
+
+/// SAM Selection's refinement passes (`comfy_extras/nodes_sam3.py:106`).
+fn default_sam3_refine() -> u8 {
+    2
+}
+
 fn default_pen_path_op() -> String {
     "newLayer".into()
 }
@@ -356,6 +378,7 @@ pub struct SampleAllLayers {
     pub magic_wand: bool,
     pub quick_selection: bool,
     pub object_selection: bool,
+    pub sam3_select: bool,
     pub paint_bucket: bool,
     pub magic_eraser: bool,
     pub spot_healing: bool,
@@ -373,6 +396,7 @@ impl Default for SampleAllLayers {
             magic_wand: false,
             quick_selection: false,
             object_selection: false,
+            sam3_select: false,
             paint_bucket: false,
             magic_eraser: false,
             spot_healing: false,
@@ -398,6 +422,7 @@ impl SampleAllLayers {
             Tool::MagicWand => &mut self.magic_wand,
             Tool::QuickSelection => &mut self.quick_selection,
             Tool::ObjectSelection => &mut self.object_selection,
+            Tool::Sam3Select => &mut self.sam3_select,
             Tool::PaintBucket => &mut self.paint_bucket,
             Tool::MagicEraser => &mut self.magic_eraser,
             Tool::SpotHealing => &mut self.spot_healing,
@@ -467,6 +492,10 @@ impl Default for ToolOptions {
             smudge_mode: photocraft_color::BlendMode::Normal,
             enhance_edge: false,
             quick_selection_mode: 0,
+            sam3_prompt: String::new(),
+            sam3_threshold: default_sam3_threshold(),
+            sam3_refine: default_sam3_refine(),
+            sam3_individual: false,
             vector_mode: VectorMode::Path,
             pen_path_op: default_pen_path_op(),
             shape_path_op: default_shape_path_op(),

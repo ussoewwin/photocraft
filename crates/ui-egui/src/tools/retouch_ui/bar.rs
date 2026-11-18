@@ -27,13 +27,15 @@ pub(crate) struct Pending {
 
 /// Shows the options of the retouch and smart-selection tools. False for other tools.
 pub(crate) fn options_bar(ui: &mut egui::Ui, app: &mut PhotocraftApp, tool: Tool) -> bool {
-    if !tool.is_brushlike() && !matches!(tool, Tool::QuickSelection | Tool::ObjectSelection | Tool::Patch | Tool::ContentAwareMove | Tool::RedEye)
+    if !tool.is_brushlike()
+        && !matches!(tool, Tool::QuickSelection | Tool::ObjectSelection | Tool::Sam3Select | Tool::Patch | Tool::ContentAwareMove | Tool::RedEye)
         || matches!(tool, Tool::Brush | Tool::Pencil | Tool::MixerBrush | Tool::Eraser)
     {
         return false;
     }
     let alert: Option<RangeAlert> = match tool {
         Tool::Remove => heal::remove(ui, app),
+        Tool::LamaCleaner => heal::lama_cleaner(ui, app),
         Tool::Patch => heal::patch(ui, app),
         Tool::ContentAwareMove => heal::content_aware_move(ui, app),
         Tool::SpotHealing => heal::spot_healing(ui, app),
@@ -44,6 +46,7 @@ pub(crate) fn options_bar(ui: &mut egui::Ui, app: &mut PhotocraftApp, tool: Tool
         Tool::ColorReplacement => tone::color_replacement(ui, app),
         Tool::QuickSelection => select::quick_selection(ui, app),
         Tool::ObjectSelection => select::object_selection(ui, app),
+        Tool::Sam3Select => select::sam3_select(ui, app),
         Tool::HistoryBrush => history::history_brush(ui, app),
         Tool::ArtHistoryBrush => history::art_history(ui, app),
         Tool::PatternStamp => history::pattern_stamp(ui, app),

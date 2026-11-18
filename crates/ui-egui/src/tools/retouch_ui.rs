@@ -250,6 +250,18 @@ pub(crate) fn finish_stroke_with(app: &mut PhotocraftApp, tool: Tool, points: &[
             Some(cp) => cp,
             None => return false,
         },
+        Tool::LamaCleaner => {
+            let b = &app.session.tools.brush;
+            (
+                "paint.lamaCleaner",
+                json!({
+                    "points": points,
+                    "size": b.size,
+                    "hardness": b.hardness * 100.0,
+                    "spacing": b.spacing * 100.0,
+                }),
+            )
+        }
         Tool::QuickSelection => {
             let size = app.session.tools.brush.size;
             // Its own New / Add / Subtract bar, with ⇧ adding and ⌥ subtracting (#11837).
@@ -633,6 +645,59 @@ pub fn finish_object_selection(app: &mut PhotocraftApp, start: [f64; 2], end: [f
     report_smart_result(app, r, tl!("Object Selection found nothing there — try a tighter rectangle"));
 }
 
+/// The `select.sam3` params for the gesture from `start` to `end`. With a text prompt typed the
+/// prompt wins (the engine's text path covers the whole document, as the Detect button's does);
+/// otherwise a click (or a sub-2 px nudge) is a point prompt and a drag a box prompt.
+pub fn sam3_select_params(app: &PhotocraftApp, start: [f64; 2], end: [f64; 2], mods: Mods) -> Value {
+    let o = &app.ui.tool_options;
+    let mode = if mods.shift && mods.alt {
+        "intersect"
+    } else if mods.shift {
+        "add"
+    } else if mods.alt {
+        "subtract"
+    } else {
+        match app.ui.selection_mode {
+            1 => "add",
+            2 => "subtract",
+            3 => "intersect",
+            _ => "replace",
+        }
+    };
+    let (x, y) = (start[0].min(end[0]), start[1].min(end[1]));
+    let (w, h) = ((end[0] - start[0]).abs(), (end[1] - start[1]).abs());
+    let mut params = if w < 2.0 && h < 2.0 && !o.sam3_prompt.trim().is_empty() {
+        // A press that never moved with a prompt typed: the text prompt, as Detect sends it.
+        json!({"prompt": o.sam3_prompt.trim()})
+    } else if !o.sam3_prompt.trim().is_empty() {
+        // A drag with a prompt typed is the text prompt; the engine's text path covers the whole
+        // document, so the box is not sent beside it (it would be ignored).
+        json!({"prompt": o.sam3_prompt.trim()})
+    } else if w < 2.0 || h < 2.0 {
+        json!({"point": [end[0], end[1]]})
+    } else {
+        json!({"box": [x.round(), y.round(), w.round(), h.round()]})
+    };
+    if let Some(map) = params.as_object_mut() {
+        map.insert("mode".into(), json!(mode));
+        map.insert("sampleAllLayers".into(), json!(o.sample_all.sam3_select));
+        map.insert("threshold".into(), json!(o.sam3_threshold));
+        map.insert("refine".into(), json!(o.sam3_refine));
+        map.insert("individual".into(), json!(o.sam3_individual));
+    }
+    params
+}
+
+/// SAM Selection: a click segments the object under the pointer, a drag segments inside the box
+/// (`SAM3_Detect`'s point and box prompts). The options bar holds the text prompt instead; the
+/// preview is the same marching-ants rectangle Object Selection drags. Modes follow the other
+/// selection tools (⇧⌥ intersects, ⇧ adds, ⌥ subtracts, otherwise the options-bar mode).
+pub fn finish_sam3_selection(app: &mut PhotocraftApp, start: [f64; 2], end: [f64; 2], mods: Mods) {
+    let params = sam3_select_params(app, start, end, mods);
+    let r = app.run("select.sam3", params);
+    report_smart_result(app, r, tl!("SAM found nothing there — try a tighter box"));
+}
+
 /// Reports a smart-selection command result in the status bar. Engine errors are already
 /// reported by [`PhotocraftApp::run`], but an empty result (`changed: false`) is a silent
 /// success that looks like a dead button (Select Subject finding nothing on a busy photo,
@@ -690,6 +755,7 @@ pub fn source_marker_point(app: &PhotocraftApp, at: Option<[f64; 2]>) -> Option<
 }
 
 pub(crate) mod bar;
+pub(crate) use bar::options_bar;
 
 #[cfg(test)]
 mod tests;
