@@ -249,48 +249,38 @@ target\debug\xtask.exe craftlibs check
 **限界**：`check` は手元の commit を止めるだけで、他人の環境は守らない。
 ---
 
-## 10. ビルド後の後片付け（必須）
+## 10. 後片付け（一時ファイルだけ。ビルド成果物は消さない）
 
-**ビルドが終わったら、そのビルドの成果物は残さない。** craft-libs は 200 クレート超、PhotoCraft は 6 パッケージあり、debug ビルド 1 回で数十 GB になる。放置するとディスクが埋まり、他の作業（他のエージェントのビルドを含む）が止まる。
+**ビルド成果物は消さない。** `target\release\photocraft.exe` は成果物であり、消せば再ビルドに 20〜30 分かかる。`target\` は残す。
 
-実測（2026-11-19）：`target\debug` を消さずに積んだ結果 **103.17 GB**、`target\release` 8.22 GB、空き容量は **0.4 GB** まで落ちた。削除後は 120.3 GB。
+消してよいのは、ビルドに寄与しない一時ファイルだけ。
 
-### 消すもの
-
-| 対象 | いつ |
+| 消すもの | 例 |
 |---|---|
-| `target\debug` | テスト・調査が終わったら即。テスト目的で作ったものは残す理由がない |
-| `target\release` | exe を確認・受け渡しした後 |
-| `target\diag`（制御ログ、設定コピー、バックアップ） | 調査が終わったら |
-| `space-log.txt` などの診断ファイル | 用が済んだら |
-| PR 本文の草稿（`md/pr-*.md`） | PR を提出したら |
+| 調査用のログ・診断出力 | `target\diag\*`、`*-log.txt`、`space-log.txt` |
+| 調査用のスクリプト | 使い捨ての `*.cmd` |
+| 設定や lock のバックアップ | `*.bak-*`、`Cargo.lock.before-*` |
+| PR 本文の草稿 | `md/pr-*.md`（提出後） |
 
-### 消してはいけないもの
-
-| 対象 | 理由 |
+| 消してはいけないもの | 理由 |
 |---|---|
-| `target\wt-*`（`git worktree list` にある他の作業ツリー） | 別セッションの未コミット作業が入っている |
-| `md/` の他人の文書、`plugins/` などの未追跡資産 | 自分が作ったものではない |
+| `target\release\photocraft.exe` | 成果物そのもの。消すと再ビルド 20〜30 分 |
+| `target\debug` | **テスト実行ファイルは成果物ではない。消す。** テストを回すときだけ作り、終わったら消す |
+| `target\wt-*` | 別セッションの作業ツリー |
+| 他人の `md/`、`plugins/` | 自分が作ったものではない |
 
-### 手順
+### ディスクが苦しいとき
+
+まず上の「消すもの」と `target\debug`（テスト実行ファイル）を消す。それでも足りないときは、**`target\release` を消してよいかをご主人様に確認する**。exe は成果物なので、独断で消さない。
 
 ```powershell
-# 1. 何がどれだけ占めているか測る
+# 何がどれだけ占めているか測る
 Get-ChildItem target -Directory | ForEach-Object {
   $s = (Get-ChildItem $_.FullName -Recurse -File -Force -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum
   [pscustomobject]@{ Name = $_.Name; GB = [math]::Round($s/1GB, 2) }
 } | Sort-Object GB -Descending
-
-# 2. 消す（worktree は除く）
-Remove-Item target\debug, target\release -Recurse -Force -ErrorAction SilentlyContinue
-
-# 3. 空きを確認して報告する
-[math]::Round((Get-PSDrive D).Free/1GB, 1)
 ```
 
-削除後に空き容量を測り、**数字を報告に含める**。測っていない削除は「消した」と言わない。
+### ビルドの直後
 
-### テストを回すときの注意
-
-`target\debug` を消した直後に `cargo test` を実行すると、フル debug ビルド（10〜15 分、数十 GB）が走る。**ビルドが終わった直後にこれを始めない。** テストが必要なら、`target` が温まっているうちに済ませるか、そもそも実行をご主人様に確認する。
-リポジトリ側の防壁は CI だが、CI は feature / fix の PR で触らない決まりなので、必要なら別 issue の案件。
+**ビルドが終わった直後に、別のビルドやテストを始めない。** ご主人様がそのビルドの結果を使う前かもしれない。テストが要るなら、実行してよいかを確認する。
