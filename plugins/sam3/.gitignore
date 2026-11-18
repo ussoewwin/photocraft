@@ -1,0 +1,7 @@
+# The helper's build output, and the weights it loads: the HSWQ pack is 1.7 GB and belongs beside
+# the helper, not in the repository (`CRAFT_SAM3_PACK`).
+target/
+*.safetensors
+
+# Console logs of a build or a test run.
+*.log

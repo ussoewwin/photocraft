@@ -1490,6 +1490,37 @@ mod tests {
         assert_eq!(docs, 0, "the step after the budget ran out did not run");
     }
 
+    /// rmcp may drop a cancelled request's future without polling it again; its job must still
+    /// stop and leave the document unchanged (#8129).
+    #[tokio::test(flavor = "multi_thread")]
+    async fn dropping_a_waited_command_cancels_its_job() {
+        let mcp = PhotocraftMcp::headless();
+        mcp.headless_op(|h| {
+            h.command_run("file.new", json!({"width": 6000, "height": 6000}))?;
+            h.command_run("filter.noise.addNoise", json!({"amount": 50}))
+        })
+        .await
+        .unwrap()
+        .unwrap();
+        let before = mcp.headless_op(|h| h.inspect(None)).await.unwrap().unwrap();
+        let mut waiter = Waiter::new(None);
+        // Per-pixel noise is seconds of work on any machine, so the job is still running when
+        // the waiter is dropped (a GPU blur can finish inside the 100 ms window).
+        let waited = mcp.headless_wait("filter.noise.addNoise".into(), json!({"amount": 50}), &mut waiter, (0, 1));
+        assert!(tokio::time::timeout(std::time::Duration::from_millis(100), waited).await.is_err(), "the noise ended before it was dropped");
+        let t = std::time::Instant::now();
+        loop {
+            let (running, cancelled) =
+                mcp.headless_op(|h| Ok((h.session.has_jobs(), h.session.jobs_with_recent().iter().any(|j| j.state == "cancelled")))).await.unwrap().unwrap();
+            if !running {
+                assert!(cancelled, "the job ended without being cancelled");
+                break;
+            }
+            assert!(t.elapsed().as_secs() < 30, "the dropped job kept running");
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        assert_eq!(mcp.headless_op(|h| h.inspect(None)).await.unwrap().unwrap(), before);
+    }
     /// Dropped while its start still waits for the session lock (held here as a long synchronous
     /// command would): the job that starts afterwards is cancelled too, not left running.
     #[tokio::test(flavor = "multi_thread")]

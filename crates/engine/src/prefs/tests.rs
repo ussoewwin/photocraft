@@ -1300,3 +1300,24 @@ fn a_saved_control_port_turns_the_agent_connection_on() {
     assert!(!load(r#"{"integrations":{"controlPort":7878,"connectAgents":false}}"#).connect_agents, "an explicit choice wins");
     assert!(!load("{}").connect_agents, "off by default");
 }
+
+/// Every tool the toolbar can select is in the default layout. A tool left out of
+/// `DEFAULT_TOOLBAR` is moved to Extra Tools by `layout()`, which takes it off the toolbar: the
+/// LaMa Cleaner and SAM Selection tools went missing that way when the default layout arrived
+/// with an upstream merge.
+#[test]
+fn the_default_toolbar_lists_every_tool() {
+    let listed: Vec<&str> = DEFAULT_TOOLBAR.iter().flat_map(|group| group.iter().copied()).collect();
+    for (id, label, _) in crate::shell_commands::TOOLS {
+        let Some(name) = ToolbarCustomization::tool_name(id.trim_start_matches("tools.select.")) else { continue };
+        assert!(listed.contains(&name.as_str()), "{label} ({name}) is missing from DEFAULT_TOOLBAR");
+    }
+    // A tool in the default layout still has to land on the toolbar rather than in Extra Tools.
+    let layout = ToolbarCustomization::default().layout();
+    let on_toolbar = |tool: &str| layout.toolbar.iter().flatten().any(|t| t.as_str() == tool);
+    let in_extras = |tool: &str| layout.extras.iter().flatten().any(|t| t.as_str() == tool);
+    for tool in ["LamaCleaner", "Sam3Select"] {
+        assert!(on_toolbar(tool), "{tool} is not on the default toolbar");
+        assert!(!in_extras(tool), "{tool} was pushed into Extra Tools");
+    }
+}

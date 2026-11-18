@@ -115,6 +115,7 @@ pub const TOOLS: &[(&str, &str, Option<&str>)] = &[
     ("tools.select.pencil", "Pencil Tool", Some("B")),
     ("tools.select.colorReplacement", "Color Replacement Tool", Some("B")),
     ("tools.select.mixerBrush", "Mixer Brush Tool", Some("B")),
+    ("tools.select.lamaCleaner", "LaMa Cleaner Tool", Some("B")),
     ("tools.select.eraser", "Eraser Tool", Some("E")),
     ("tools.select.backgroundEraser", "Background Eraser Tool", Some("E")),
     ("tools.select.magicEraser", "Magic Eraser Tool", Some("E")),
@@ -163,6 +164,7 @@ pub const TOOLS: &[(&str, &str, Option<&str>)] = &[
     ("tools.select.slice", "Slice Tool", Some("C")),
     ("tools.select.sliceSelect", "Slice Select Tool", Some("C")),
     ("tools.select.frame", "Frame Tool", Some("K")),
+    ("tools.select.sam3Select", "SAM Selection Tool", Some("W")),
 ];
 
 /// The default key of tool shortcut `id`, if it's a tool.

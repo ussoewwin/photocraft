@@ -33,6 +33,7 @@ mod pattern_stamp;
 pub use pattern_stamp::{
     INDEXED_REFUSAL as PATTERN_STAMP_INDEXED_REFUSAL, live_impressionist as live_pattern_impressionist, press_refusal as pattern_stamp_press_refusal,
 };
+mod lama_cleaner;
 mod periodic;
 mod remove;
 pub use content_aware_move::{ContentAwarePreview, preview as content_aware_move_preview};
@@ -329,6 +330,18 @@ pub fn specs() -> Vec<CommandSpec> {
             ),
             enabled: has_pixel_layer,
             run: remove::remove,
+            journal: true,
+        },
+        CommandSpec {
+            id: "paint.lamaCleaner",
+            label: "LaMa Cleaner",
+            menu: &[],
+            shortcut: None,
+            params: brush_params!(
+                r#","strokes":[[[x,y,pressure?],…]|{"points":[…],"size"?,"hardness"?,"spacing"?},…]?,"closeLoops":bool=true,"sampleAllLayers":bool=false,"newLayer":bool=false,"exe":text,"model":text (the LaMa helper and model, when they are not beside the app) → {"damage","layer"?}"#
+            ),
+            enabled: has_pixel_layer,
+            run: lama_cleaner::lama_cleaner,
             journal: true,
         },
         CommandSpec {

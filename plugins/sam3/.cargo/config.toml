@@ -1,0 +1,3 @@
+[env]
+CL = "/Zc:preprocessor"
+NVCC_PREPEND_FLAGS = "-Xcompiler=/Zc:preprocessor"

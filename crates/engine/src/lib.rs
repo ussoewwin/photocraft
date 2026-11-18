@@ -139,6 +139,7 @@ pub use cmd::rasterize_style_cmds;
 pub use cmd::redeye_cmds;
 pub use cmd::render_cmds;
 pub use cmd::retouch_cmds;
+pub use cmd::sam3_select_cmds;
 pub use cmd::sample_cmds;
 pub use cmd::sampler_cmds;
 pub use cmd::select_extra_cmds;
