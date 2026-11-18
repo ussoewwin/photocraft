@@ -253,7 +253,7 @@ target\debug\xtask.exe craftlibs check
 
 **Do not delete build artefacts.** `target\release\photocraft.exe` is the artefact, and deleting it makes the rebuild take 20–30 minutes. `target\` stays.
 
-Only temporary files that contribute nothing to the build may be deleted.
+Delete scratch files and every build cache — the test binaries are not artefacts and neither is anything under `craft-libs\target\`. What stays is the exe and anything you did not create.
 
 | To delete | Examples |
 |---|---|
@@ -261,17 +261,19 @@ Only temporary files that contribute nothing to the build may be deleted.
 | Investigation scripts | throwaway `*.cmd` |
 | Backups of settings and the lock | `*.bak-*`, `Cargo.lock.before-*` |
 | PR description drafts | `md/pr-*.md` (after submitting) |
+| `target\debug` (PhotoCraft) | Caches and test binaries. 103 GB when left alone |
+| `craft-libs\target\*` | A library has no artefact — the whole directory is disposable (see below) |
 
 | Never delete | Reason |
 |---|---|
 | `target\release\photocraft.exe` | The artefact itself. Deleting it means a 20–30 minute rebuild |
-| `target\debug` | **Test binaries are not artefacts. Delete them.** Create them only when running tests, and delete them when done |
+| `target\release\photocraft.pdb` | The exe's debug information, built with it |
 | `target\wt-*` | Another session's worktree |
 | someone else's `md/`, `plugins/` | You did not create them |
 
 ### When disk is tight
 
-First delete the "to delete" items above and `target\debug` (the test binaries). If that is still not enough, **ask the owner whether `target\release` may be deleted**. The exe is the artefact, so never delete it on your own judgement.
+First delete the "to delete" items above — including `target\debug` on both sides. That is where the tens of gigabytes are. If that is still not enough, **ask the owner whether `target\release` may be deleted**. The exe is the artefact, so never delete it on your own judgement.
 
 ```powershell
 # measure what takes how much
@@ -281,6 +283,44 @@ Get-ChildItem target -Directory | ForEach-Object {
 } | Sort-Object GB -Descending
 ```
 
+### The craft-libs side grows even faster
+
+PhotoCraft's `target\` is not the only one. **`D:\USERFILES\GitHub\craft-libs\target\debug` reached 40.76 GB** (measured 2026-11-19): `deps` 18.65 GB, `incremental` 21.81 GB, `build` 0.29 GB. It is the same kind of output as PhotoCraft's `target\debug` — caches and test binaries, not artefacts.
+
+**craft-libs builds a library, so it has no deliverable at all.** Everything under `craft-libs\target\` is disposable. Delete all of it; the source and the history are what matter.
+
+| Path | Measured 2026-11-19 | Delete? |
+|---|---|---|
+| `craft-libs\target\debug\incremental` | 21.81 GB | Yes — incremental cache |
+| `craft-libs\target\debug\deps` | 18.65 GB | Yes — compiled deps and test binaries |
+| `craft-libs\target\debug\build` | 0.29 GB | Yes — build-script output |
+| `craft-libs\target\debug` (whole) | 40.76 GB | Yes |
+| `craft-libs\crates`, `.git`, `Cargo.toml`, `Cargo.lock`, `vendor` | 76.4 MB / 0.04 GB / — | **Never** |
+
+```powershell
+# craft-libs has no artefact: the whole target directory is disposable
+Set-Location 'D:\USERFILES\GitHub\craft-libs'
+
+# measure first, so the numbers go in the report
+Get-ChildItem target -Directory -Force | ForEach-Object {
+  $s = (Get-ChildItem $_.FullName -Recurse -File -Force -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum
+  [pscustomobject]@{ Name = $_.Name; GB = [math]::Round($s/1GB, 2) }
+} | Sort-Object GB -Descending
+
+$free0 = (Get-PSDrive D).Free
+Remove-Item 'target\debug' -Recurse -Force -ErrorAction SilentlyContinue
+'{0} GB freed' -f [math]::Round(((Get-PSDrive D).Free - $free0)/1GB, 2)
+
+# the source and the branch must be untouched afterwards
+(git status --short | Measure-Object).Count   # expect 0
+git log -1 --format='%h %s'                    # expect the Space fix commit
+```
+
+Measured result on 2026-11-19: 40.76 GB deleted in 13 seconds, 35.51 GB freed (the shells were still holding some), `crates` 76.4 MB and `.git` 0.04 GB intact, working tree clean at `8fbb0720`.
+
+**After deleting it, the next `cargo test` in craft-libs rebuilds from scratch.** That is the price, and it is the right trade: the cache costs 40 GB and buys a few minutes once.
+
+PhotoCraft's build does not use `craft-libs\target\`: with `cargo xtask craftlibs on`, the patch builds craft-libs into PhotoCraft's own `target\`. Deleting `craft-libs\target\debug` therefore does not touch the PhotoCraft exe.
 ### Right after a build
 
 **Do not start another build or test right after a build has finished.** The owner may not have used that build's result yet. If a test is needed, ask whether you may run it.
