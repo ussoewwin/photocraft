@@ -16,7 +16,7 @@ photocraft-geom = { workspace = true }
 photocraft-color = { workspace = true }
 craft-cms = { workspace = true }
 # PCTIP codec from craft-libs#1564; isolated pin until the shared revision is adopted workspace-wide.
-craft-pcraft-tip = { package = "craft-pcraft-format", git = "https://github.com/storytold/craft-libs", rev = "17532dce06bff7e17c6611537e7190dc88257726" }
+craft-pcraft-tip = { package = "craft-pcraft-format", git = "https://github.com/storytold/craft-libs", rev = "9a96194fd23aa4f7eb845187747e9e8f6e7f1e7d" }
 photocraft-raster = { workspace = true }
 photocraft-doc = { workspace = true }
 photocraft-ops = { workspace = true }
