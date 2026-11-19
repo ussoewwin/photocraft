@@ -16,6 +16,7 @@ concurrency:
 
 jobs:
   sonarcloud:
+    if: github.repository_owner == 'storytold'
     # Track shared CI improvements on main.
     uses: storytold/craft-common-actions/.github/workflows/sonarcloud.yml@main
     with:
