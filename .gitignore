@@ -13,3 +13,5 @@ target/
 __pycache__/
 plugins/**/target/
 plugins/**/output/
+plugins/**/models/
+*.onnx

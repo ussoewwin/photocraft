@@ -10,13 +10,13 @@ use serde_json::json;
 use crate::PhotocraftApp;
 use crate::state::Tool;
 
-fn bar(tool: Tool, drawn: bool) -> Harness<'static, PhotocraftApp> {
+fn bar(tool: Tool, drawn: bool) -> Harness<'static, Box<PhotocraftApp>> {
     let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
     app.run("file.new", json!({"width": 64, "height": 64})).unwrap();
     app.ui.tool = tool;
     let mut ready = false;
     let mut h = Harness::builder().with_size(vec2(1400.0, 60.0)).build_ui_state(
-        move |ui, app: &mut PhotocraftApp| {
+        move |ui: &mut egui::Ui, app: &mut Box<PhotocraftApp>| {
             if !ready {
                 crate::theme::install_fonts(ui.ctx());
                 crate::theme::apply(ui.ctx(), &crate::theme::AppTheme::pro());

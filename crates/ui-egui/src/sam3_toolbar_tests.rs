@@ -24,7 +24,7 @@ fn selecting_sam_tool_shows_it_on_the_toolbar() {
     crate::tool_memory::select(&mut app, Tool::Sam3Select);
     let mut ready = false;
     let mut h = egui_kittest::Harness::builder().with_context(app.ctx().clone()).with_size(vec2(400.0, 1800.0)).build_ui_state(
-        move |ui, app: &mut PhotocraftApp| {
+        move |ui: &mut egui::Ui, app: &mut Box<PhotocraftApp>| {
             if !ready {
                 egui_extras::install_image_loaders(ui.ctx());
                 crate::theme::install_fonts(ui.ctx());

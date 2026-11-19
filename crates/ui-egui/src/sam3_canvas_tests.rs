@@ -10,7 +10,7 @@ use crate::canvas::testing::{ToolEvent, tool_event};
 use crate::state::Tool;
 
 /// A 256x256 document with a green disc of radius 40 at (128, 128) on white, the tool selected.
-fn app() -> PhotocraftApp {
+fn app() -> Box<PhotocraftApp> {
     let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
     app.session.execute("file.new", json!({"width": 256, "height": 256, "depth": 8})).unwrap();
     app.sync_views();

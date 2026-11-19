@@ -204,14 +204,9 @@ impl LamaTool {
             folders.push(std::path::PathBuf::from(chosen));
         }
         if let Some(dir) = std::env::current_exe().ok().and_then(|e| e.parent().map(std::path::Path::to_path_buf)) {
-            // A development build lives in `target\release`, which is below the checkout's `plugins` folder,
-            // the same way the model is found below (see `model`): without this the helper is "not installed"
-            // in a build the person is running straight out of the checkout.
-            for root in dir.ancestors() {
-                for folder in [root.join("plugins"), root.to_path_buf()] {
-                    if !folders.contains(&folder) {
-                        folders.push(folder);
-                    }
+            for folder in [dir.join("plugins"), dir] {
+                if !folders.contains(&folder) {
+                    folders.push(folder);
                 }
             }
         }
@@ -229,6 +224,13 @@ impl LamaTool {
         }
         let folders = Self::folders(s);
         if let Some(found) = folders.iter().map(|folder| folder.join(name)).find(|path| path.exists()) {
+            return Ok(found);
+        }
+        // A development build lives in `target\release` or `target\debug`, which is below the checkout's `plugins` folder
+        #[cfg(not(test))]
+        if let Some(dir) = std::env::current_exe().ok().and_then(|e| e.parent().map(std::path::Path::to_path_buf))
+            && let Some(found) = dir.ancestors().map(|root| root.join("plugins").join(name)).find(|path| path.exists())
+        {
             return Ok(found);
         }
         let searched: Vec<String> = folders.iter().map(|folder| folder.join(name).display().to_string()).collect();
@@ -257,14 +259,8 @@ impl LamaTool {
                 Err(EngineError::Other(format!("PHOTOCRAFT_LAMA_MODEL points at {}, which is not a file", path.display())))
             };
         }
-        let folders = Self::folders(s);
         let mut searched: Vec<std::path::PathBuf> = Vec::new();
-        for folder in &folders {
-            searched.push(folder.join("lama-cleaner").join(MODELS).join(MODEL_NAME));
-            searched.push(folder.join(MODELS).join(MODEL_NAME));
-            searched.push(folder.join(MODEL_NAME));
-        }
-        // The helper's own `models` folder is searched even when no `folders` entry covers it
+        // The helper's own `models` folder is searched first when an explicit `exe` path is provided
         // (the helper lives where the params or the environment name it).
         if let Some(dir) = p.get("exe").and_then(|e| e.as_str()).map(std::path::PathBuf::from).and_then(|p| p.parent().map(std::path::Path::to_path_buf)) {
             for candidate in [dir.join(MODELS).join(MODEL_NAME), dir.join(MODEL_NAME)] {
@@ -272,18 +268,27 @@ impl LamaTool {
                     searched.push(candidate);
                 }
             }
-        // The repository's own `plugins/lama-cleaner/models`, found from the app's ancestors the
-        // same way the SAM 3.1 pack is: a development build lives in `target\release`, which is
-        // below the checkout's `plugins` folder.
-        } else if let Some(dir) = std::env::current_exe().ok().and_then(|e| e.parent().map(std::path::Path::to_path_buf)) {
-            for root in dir.ancestors() {
-                for candidate in [
-                    root.join("plugins").join("lama-cleaner").join(MODELS).join(MODEL_NAME),
-                    root.join("plugins").join(MODELS).join(MODEL_NAME),
-                    root.join("plugins").join(MODEL_NAME),
-                ] {
-                    if !searched.contains(&candidate) {
-                        searched.push(candidate);
+        } else {
+            let folders = Self::folders(s);
+            for folder in &folders {
+                searched.push(folder.join("lama-cleaner").join(MODELS).join(MODEL_NAME));
+                searched.push(folder.join(MODELS).join(MODEL_NAME));
+                searched.push(folder.join(MODEL_NAME));
+            }
+            // The repository's own `plugins/lama-cleaner/models`, found from the app's ancestors the
+            // same way the SAM 3.1 pack is: a development build lives in `target\release`, which is
+            // below the checkout's `plugins` folder.
+            #[cfg(not(test))]
+            if let Some(dir) = std::env::current_exe().ok().and_then(|e| e.parent().map(std::path::Path::to_path_buf)) {
+                for root in dir.ancestors() {
+                    for candidate in [
+                        root.join("plugins").join("lama-cleaner").join(MODELS).join(MODEL_NAME),
+                        root.join("plugins").join(MODELS).join(MODEL_NAME),
+                        root.join("plugins").join(MODEL_NAME),
+                    ] {
+                        if !searched.contains(&candidate) {
+                            searched.push(candidate);
+                        }
                     }
                 }
             }
