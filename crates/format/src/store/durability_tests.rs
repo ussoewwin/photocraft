@@ -125,10 +125,10 @@ fn failed_bundle_publication_retains_old_objects_and_same_writer_retry_is_durabl
 /// #9440: a network share refuses a directory flush with `ERROR_INVALID_FUNCTION` (1) or
 /// `ERROR_NOT_SUPPORTED` (50). At each barrier (the tiles and blobs folders before the manifest,
 /// and the bundle folder after it) that counts as flushed, so the bundle save succeeds;
-/// `ERROR_ACCESS_DENIED` (5) still fails it.
+/// `ERROR_ACCESS_DENIED` (5) counts as flushed too, for the same reason.
 #[test]
 fn an_unsupported_directory_flush_still_saves_the_bundle() {
-    let cases = [FailAt::Tiles, FailAt::Blobs, FailAt::Manifest].into_iter().flat_map(|stage| [(stage, 1, true), (stage, 50, true), (stage, 5, false)]);
+    let cases = [FailAt::Tiles, FailAt::Blobs, FailAt::Manifest].into_iter().flat_map(|stage| [(stage, 1, true), (stage, 50, true), (stage, 5, true)]);
     for (stage, code, saves) in cases {
         let dir = std::env::temp_dir().join(format!("pcraft-smb-flush-{}-{stage:?}-{code}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);

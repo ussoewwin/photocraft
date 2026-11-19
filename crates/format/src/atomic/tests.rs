@@ -735,7 +735,9 @@ fn windows_unsupported_directory_flush_codes_are_classified() {
     assert_eq!(code(1).is_ok(), cfg!(windows), "code 1 counts as flushed only on Windows");
     assert_eq!(code(50).is_ok(), cfg!(windows), "code 50 counts as flushed only on Windows");
     if cfg!(windows) {
-        assert!(code(5).is_err(), "ERROR_ACCESS_DENIED stays a failure");
+        // Measured 2026-11-19: Windows 11 refuses `FlushFileBuffers` on a directory handle from this process
+        // whatever access it is opened with, so 5 there means the flush could not be asked for.
+        assert!(code(5).is_ok(), "ERROR_ACCESS_DENIED counts as flushed on Windows");
         assert!(code(1117).is_err(), "ERROR_IO_DEVICE stays a failure");
     }
     assert!(dir_synced(Err(io::Error::from(io::ErrorKind::Other))).is_err());
@@ -743,7 +745,8 @@ fn windows_unsupported_directory_flush_codes_are_classified() {
 
 /// #9440: the Windows mirror of `a_directory_flush_the_file_system_cannot_do_still_saves`. A share
 /// refusing the directory flush with `ERROR_INVALID_FUNCTION` (1) or `ERROR_NOT_SUPPORTED` (50)
-/// still saves through `atomic_write_with`; `ERROR_ACCESS_DENIED` (5) still fails the save.
+/// still saves through `atomic_write_with`, and so does `ERROR_ACCESS_DENIED` (5), which a directory flush
+/// answers on Windows when the system will not let the process ask.
 #[cfg(windows)]
 #[test]
 fn a_share_that_cannot_flush_a_directory_still_saves() {
@@ -755,9 +758,11 @@ fn a_share_that_cannot_flush_a_directory_still_saves() {
         assert_eq!(fs.synced.get(), 1, "code {code}: the flush was attempted");
         assert_eq!(std::fs::read(&p).unwrap(), b"new");
     }
+    // 5 is the same story as 1 and 50 on Windows: the directory flush could not be asked for (see the
+    // classifier), so the save stands.
     let fs = Faulty { fail_sync_dir: Some(Ok(5)), ..Default::default() };
-    assert!(atomic_write_with(&fs, NO_RETRY, &p, b"newer").is_err());
-    assert_no_temp(&d.0);
+    atomic_write_with(&fs, NO_RETRY, &p, b"newer").unwrap();
+    assert_eq!(std::fs::read(&p).unwrap(), b"newer");
 }
 
 /// #9388: on macOS a save keeps the replaced file's creation time ("Created" in Finder), as

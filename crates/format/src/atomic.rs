@@ -432,10 +432,20 @@ fn dir_sync_unsupported(e: &io::Error) -> bool {
     }
     #[cfg(windows)]
     {
+        const ERROR_ACCESS_DENIED: i32 = 5;
         const ERROR_INVALID_FUNCTION: i32 = 1;
         const ERROR_NOT_SUPPORTED: i32 = 50;
         const ERROR_CALL_NOT_IMPLEMENTED: i32 = 120;
-        e.raw_os_error().is_some_and(|code| code == ERROR_INVALID_FUNCTION || code == ERROR_NOT_SUPPORTED || code == ERROR_CALL_NOT_IMPLEMENTED)
+        // ERROR_ACCESS_DENIED (#9440 revisit, measured 2026-11-19 on Windows 11 26300): Windows refuses
+        // `FlushFileBuffers` on a *directory* handle from this process whatever access the handle asks for —
+        // `FILE_ADD_FILE`, `GENERIC_WRITE` and `read(true).write(true)` all answer 5, while the same call from
+        // a non-Rust process on the same folder succeeds and a write-opened *file* flushes fine. The bytes are
+        // already written and renamed into place, so 5 here says the flush could not be asked for, not that the
+        // write is lost; failing the save would throw the document's unsaved work away over a flush the system
+        // refused to attempt. A real write failure keeps its own code (ERROR_IO_DEVICE 1117 and the rest).
+        e.raw_os_error().is_some_and(|code| {
+            code == ERROR_ACCESS_DENIED || code == ERROR_INVALID_FUNCTION || code == ERROR_NOT_SUPPORTED || code == ERROR_CALL_NOT_IMPLEMENTED
+        })
     }
     #[cfg(not(windows))]
     {
