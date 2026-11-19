@@ -67,7 +67,22 @@ pub(super) fn arrange(app: &mut PhotocraftApp, k: &str, p: &Value) -> Result<Val
         return float_in_window(app, p);
     }
     let space = space(app);
-    let arranged = run_arrange(&mut app.ui.document_windows, command, &space);
+    let arranged = match command {
+        // A document here is a tab of the window's document area, and a floating document window is a window of its
+        // own: the framework's tile hands every document to a floating window, which leaves the document area empty
+        // and covers the screen with windows. Tiling therefore splits the area into one pane per document, as the
+        // n-up layouts do, so every document shows side by side (Vertically) or stacked (Horizontally).
+        ArrangeCommands::TileAllVertically | ArrangeCommands::TileAllHorizontally => {
+            let active = app.session.active().map(|st| st.doc.id);
+            let windows = &mut app.ui.document_windows;
+            windows.consolidate(active.as_ref());
+            let documents = windows.docked.first().map_or(0, |group| group.documents.len());
+            windows.split_into(documents);
+            windows.arrangement = Some(command.arrangement());
+            Arranged::Windows
+        }
+        _ => run_arrange(&mut app.ui.document_windows, command, &space),
+    };
     crate::canvas::document_area::apply_arranged(app, arranged);
     if matches!(command, ArrangeCommands::NewWindowForDocument) {
         keep_own_view(app);

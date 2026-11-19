@@ -1103,3 +1103,31 @@ mod gpu_tests {
         assert_eq!(texture_key(canvas_display(&app, &doc, Some(1)).0.as_deref(), &doc), texture_key(canvas_display(&app, &doc, Some(4)).0.as_deref(), &doc));
     }
 }
+
+/// Window › Arrange › Tile All Vertically with two documents open as tabs: the document area splits into one pane per
+/// document and every document shows. The framework's tile hands each document to a floating window instead, and a
+/// floating document window is a window of its own here: the document area went empty and windows covered the screen.
+#[test]
+fn tile_all_vertically_shows_every_document_in_its_own_pane() {
+    for layout in ["tileAllVertically", "tileAllHorizontally"] {
+        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+        for name in ["one", "two"] {
+            app.run("file.new", json!({"width": 400, "height": 300, "name": name})).unwrap();
+        }
+        app.sync_views();
+        let app_ctx = app.ctx().clone();
+        crate::menus::invoke(&mut app, &app_ctx, &format!("window.arrange.{layout}"), json!({})).unwrap();
+        assert_eq!(app.ui.document_windows.docked.len(), 2, "{layout}: one pane per document");
+        assert!(app.ui.document_windows.floating.is_empty(), "{layout}: no document goes to a window of its own");
+        let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(900.0, 600.0));
+        let cells = super::document_area::arranged_cells(&app, rect).unwrap_or_else(|| panic!("{layout}: two panes"));
+        assert_eq!(cells.len(), 2, "{layout}: both documents show");
+        let shown: Vec<usize> = cells.iter().map(|(document, _)| *document).collect();
+        assert_eq!(shown, vec![0, 1], "{layout}: each pane shows its own document");
+        if layout == "tileAllVertically" {
+            assert!(cells[0].1.max.x <= cells[1].1.min.x, "{layout}: side by side, {:?}", cells);
+        } else {
+            assert!(cells[0].1.max.y <= cells[1].1.min.y, "{layout}: stacked, {:?}", cells);
+        }
+    }
+}
