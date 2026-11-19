@@ -25,9 +25,19 @@ pub(super) const TOP_PREFERRED: [(&str, char); 10] = [
 pub fn menu_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     let (gate, _) = menu_gate(app);
     let ctx = ui.ctx().clone();
-    let model = items::model(app, &ctx);
-    let english = english_of(model);
-    MenuBarUi::new(&model.bar).english(&english).mnemonics(&TOP_PREFERRED).help_search(true).keyboard(!(gate.modal || gate.recording_shortcut)).show(ui);
+    // The bar is laid out in the title bar's leading region, which declares the width the bar's titles take
+    // (`TitleBar::leading_width`): laid out at the share of the line the empty title strip leaves, the bar cut its
+    // last titles (Window, Help) into the overflow menu. The bar reports the width its titles take, and the next
+    // frame's region declares it, so every title keeps its place.
+    let declared = app.menus_bar_width;
+    let measured = {
+        let model = items::model(app, &ctx);
+        let english = english_of(model);
+        let bar = MenuBarUi::new(&model.bar).english(&english).mnemonics(&TOP_PREFERRED).help_search(true);
+        let out = bar.keyboard(!(gate.modal || gate.recording_shortcut)).width(declared).show(ui);
+        out.titles_width
+    };
+    app.menus_bar_width = (measured > 0.0).then_some(measured);
 }
 
 /// The English name of a command or menu title of `model`, for the bar's and the palette's search.
