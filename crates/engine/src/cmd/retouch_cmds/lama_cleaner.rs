@@ -204,9 +204,14 @@ impl LamaTool {
             folders.push(std::path::PathBuf::from(chosen));
         }
         if let Some(dir) = std::env::current_exe().ok().and_then(|e| e.parent().map(std::path::Path::to_path_buf)) {
-            for folder in [dir.join("plugins"), dir] {
-                if !folders.contains(&folder) {
-                    folders.push(folder);
+            // A development build lives in `target\release`, which is below the checkout's `plugins` folder,
+            // the same way the model is found below (see `model`): without this the helper is "not installed"
+            // in a build the person is running straight out of the checkout.
+            for root in dir.ancestors() {
+                for folder in [root.join("plugins"), root.to_path_buf()] {
+                    if !folders.contains(&folder) {
+                        folders.push(folder);
+                    }
                 }
             }
         }
