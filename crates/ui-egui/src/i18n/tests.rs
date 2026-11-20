@@ -489,3 +489,17 @@ fn the_fork_settles_the_transform_submenu_in_japanese() {
     assert_eq!(tr_id(ja, "edit.transform.distort", "Distort"), "多方向に伸縮");
     assert_eq!(tr(ja, "Distort"), "ゆがみ", "the Filter menu's category keeps its word");
 }
+
+#[test]
+fn language_cache_separates_catalogs_and_keys() {
+    let cache = LangCache::<u8, String>::new();
+    let first = fixture_lang("de", "\tAll\tfirst\n");
+    let second = fixture_lang("de", "\tAll\tsecond\n");
+    with_language(first, || {
+        assert_eq!(cache.get_or_build(1, || t("All").to_owned()), "first");
+        assert_eq!(cache.get_or_build(1, || "unexpected rebuild".to_owned()), "first");
+        assert_eq!(cache.get_or_build(2, || "other key".to_owned()), "other key");
+    });
+    with_language(second, || assert_eq!(cache.get_or_build(1, || t("All").to_owned()), "second"));
+    with_language(first, || assert_eq!(cache.get_or_build(1, || "unexpected rebuild".to_owned()), "first"));
+}
