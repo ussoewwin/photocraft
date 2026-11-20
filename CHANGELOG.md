@@ -3,6 +3,23 @@
 PhotoCraft's release history, newest first. Every release has full notes on GitHub; the last line of
 each entry links to them.
 
+## Version 1.3.6
+
+- **Fixed**: **`Edit > Transform > Skew` now reads ゆがみ** - it read 斜体 ("italic"), which is a
+  type-style word rather than a transform. The two hints that belong to it follow:
+  `Set horizontal skew` and `Set vertical skew` read 水平方向のゆがみを設定 and 垂直方向のゆがみを設定.
+- **Fixed**: **`Edit > Transform > Distort` now reads 多方向に伸縮** - it read ゆがみ, the same word
+  the `Filter > Distort` submenu already uses, so two different commands read as one tool. The
+  submenu keeps ゆがみ: the command is translated by its own command id
+  (`edit.transform.distort`), the submenu title by the plain `Distort` row.
+- **Changed**: both rows now live in the Japanese catalog this repository carries itself
+  (`crates/ui-egui/i18n/fork/ja/photocraft.tsv`), which `crates/ui-egui/build.rs` embeds with or
+  without a craft-i18n checkout, and which wins over a checkout for the same locale. The file the
+  v1.3 rows went into (`crates/ui-egui/src/i18n/ja.tsv`) is read by no build.
+- **Tests**: `i18n::tests::the_fork_settles_the_transform_submenu_in_japanese` pins the three rows
+  and runs without a checkout.
+- See [Release Notes v1.3.6](https://github.com/ussoewwin/photocraft/releases/tag/v1.3.6) for details.
+
 ## Version 1.3.5
 
 - **Changed**: the app is built against the PhotoCraft fork of the shared UI framework
