@@ -1,4 +1,8 @@
 <p align="center">
+  <img alt="PhotoCraft" src="assets/brand/logo.png" width="200">
+</p>
+
+<p align="center">
   <img src="assets/app-icon/hicolor/256x256/apps/ai.storyteller.photocraft.png" width="128" height="128" alt="PhotoCraft icon: an engraved nine-tailed fox on a blue tile">
 </p>
 
@@ -451,9 +455,14 @@ Every artwork shown is in the public domain (Wikimedia Commons, NASA, U.S. Natio
 The ArtCraft name and wordmark are trademarks of the ArtCraft Team and are not covered by this
 license. This fork adds features of its own, so it carries none of those marks: `docs/brand/` holds
 only their terms ([`docs/brand/LICENSE-brand.txt`](docs/brand/LICENSE-brand.txt)), and nothing here
-is an ArtCraft product or presented as one.
+is an ArtCraft product or presented as one. The logo above is this fork's own (`assets/brand/logo.png`).
 
 <sub>Adobe, Photoshop, Illustrator, Premiere Pro, Lightroom, Acrobat, After Effects and InDesign are trademarks or registered trademarks of Adobe Inc. in the United States and/or other countries. PhotoCraft is an independent, open-source project and is not affiliated with, sponsored by or endorsed by Adobe Inc.; these names are used only to describe the workflows it is compatible with.</sub>
+
+<p align="center">
+  <img alt="PhotoCraft" src="assets/brand/logo.png" width="28"><br>
+  <sub>Based on <a href="https://github.com/storytold/photocraft">PhotoCraft</a> by the <a href="https://getartcraft.com/">ArtCraft</a> team and community; this fork adds its own features.</sub>
+</p>
 
 ## Star history
 
