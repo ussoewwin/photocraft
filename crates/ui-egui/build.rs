@@ -54,6 +54,7 @@ fn craft_i18n() -> String {
     let required = std::env::var("CRAFT_I18N_REQUIRED").is_ok_and(|v| v.trim() == "1");
     let out = out_dir();
     let mut entries = match std::env::var_os("CRAFT_I18N_DIR").filter(|d| !d.is_empty()) {
+        // Not canonicalized: on Windows that gives `\\?\C:\…`, which `include_str!` can't read.
         Some(dir) => match locales(&std::path::PathBuf::from(dir).join("locales")) {
             Ok(entries) => entries,
             Err(e) => {
@@ -136,9 +137,12 @@ fn fork_locales() -> Vec<Locale> {
 /// Every locale under `dir` with PhotoCraft's catalog, by code. An error when `dir` isn't a
 /// craft-i18n `locales/` directory.
 fn locales(dir: &std::path::Path) -> Result<Vec<Locale>, String> {
+    // Build scripts run in the crate's directory and `include_str!` resolves against the
+    // generated file, so a relative path would mean two different places.
     if !dir.is_absolute() {
         return Err(format!("{} is not an absolute path", dir.display()));
     }
+    // Before read_dir, so a checkout that appears later reruns the script.
     println!("cargo::rerun-if-changed={}", dir.display());
     let list = std::fs::read_dir(dir).map_err(|e| format!("{} is not a craft-i18n checkout ({e})", dir.display()))?;
     let mut out = Vec::new();
