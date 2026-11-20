@@ -16,7 +16,7 @@ photocraft-geom = { workspace = true }
 photocraft-color = { workspace = true }
 craft-cms = { workspace = true }
 # PCTIP codec from craft-libs#1564; isolated pin until the shared revision is adopted workspace-wide.
-craft-pcraft-tip = { package = "craft-pcraft-format", git = "https://github.com/storytold/craft-libs", rev = "9a96194fde99bfd53d205c139fabc06250f03df0" }
+craft-pcraft-tip = { package = "craft-pcraft-format", git = "https://github.com/storytold/craft-libs", rev = "0398e1927a20eb4bbfe7dc588de4f0a00ba77a2c" }
 photocraft-raster = { workspace = true }
 photocraft-doc = { workspace = true }
 photocraft-ops = { workspace = true }
@@ -79,3 +79,7 @@ exr = { version = "1.73", default-features = false }
 # WebAssembly text -> binary for plug-in test modules (Apache-2.0 WITH LLVM-exception).
 wat = "1.228"
 # Synthetic multi-part EXR fixtures for the parts-commands tests.
+
+# Palette PNGs at 1, 2 and 4 bits and with an eXIf chunk for the Color Table index tests
+# (the png 0.18 already in the tree).
+png = "0.18"
