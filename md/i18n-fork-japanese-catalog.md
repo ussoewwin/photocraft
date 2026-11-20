@@ -1,6 +1,6 @@
 # The Japanese Transform submenu, and why this fork now carries its own catalog
 
-**Date:** 2026-11-20 · **Version:** 0.23.1 · **Commits:** `68e7d33e92` (catalog and build script), `8b15cb1087` (guard comments), plus this document · **Branch:** `main`, pushed to `origin` (`ussoewwin/photocraft`)
+**Date:** 2026-11-20 · **Version:** 0.23.1 · **Commits:** `68e7d33e92` (catalog and build script), `8b15cb1087` (guard comments), `e3617e51b3` (this document), `08ee4c178a` and `870ab35a6b` (its corrections) · **Branch:** `main`, pushed to `origin` (`ussoewwin/photocraft`)
 
 This is the full account of one defect and its fix: the Japanese interface labelled `Skew` as 斜体 and
 `Distort` as ゆがみ, edits made to fix it disappeared with the next build, and the fix ended up moving
@@ -653,7 +653,9 @@ Not run, and why:
 |---|---|
 | `68e7d33e92` | `i18n/fork/ja/{photocraft,common}.tsv` (new), `build.rs` fork catalogs + `embed()`, the test, `docs/localization.md`, `ATTRIBUTION.md` |
 | `8b15cb1087` | The three guard comments in `build.rs` restored |
-| this document's commit | `build.rs` header names the fork catalogs; `md/i18n-fork-japanese-catalog.md` added |
+| `e3617e51b3` | `build.rs` header names the fork catalogs; `md/i18n-fork-japanese-catalog.md` added |
+| `08ee4c178a` | The document cites the catalog row parser (`craft-libs crates/i18n/src/catalog.rs`) |
+| `870ab35a6b` | The document numbers the changed rows before and after, and states the measured per-language cost |
 
 One earlier attempt at the same fix lived in a checkout outside the repository (`D:\craft-i18n`,
 since deleted). It proved the wording was right and proved nothing about durability — which is exactly
