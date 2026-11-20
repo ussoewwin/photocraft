@@ -14,6 +14,12 @@
 <h1 align="center">PhotoCraft</h1>
 
 <p align="center">
+  Based on <a href="https://github.com/storytold/photocraft">PhotoCraft</a>: this fork keeps the upstream editor and adds its own improvements,
+  including AI integration (SAM Selection, the LaMa Cleaner and agent automation).<br>
+  <a href="CHANGELOG.md">Changelog</a>
+</p>
+
+<p align="center">
   <b>Image editing; an open-source, clean-room reimplementation of Adobe Photoshop, rebuilt in pure Rust.</b><br>
   Layers, masks, adjustment layers, layer styles, type, vectors, brushes and real PSD files,<br>
   in a native app written entirely in Rust. Open source, offline, and yours.
