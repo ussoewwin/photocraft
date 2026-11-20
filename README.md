@@ -7,6 +7,7 @@
 <p align="center">
   Based on <a href="https://github.com/storytold/photocraft">PhotoCraft</a>: this fork keeps the upstream editor and adds its own improvements,
   including AI integration (SAM Selection, the LaMa Cleaner and agent automation).<br>
+  Per the ArtCraft brand terms this fork uses none of the official ArtCraft logos: the logo above is its own.<br>
   <a href="CHANGELOG.md">Changelog</a>
 </p>
 
