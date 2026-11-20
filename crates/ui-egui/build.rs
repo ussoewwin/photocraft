@@ -37,51 +37,108 @@ fn main() {
 /// The catalog this app reads in each locale: `locales/<locale>/photocraft.tsv`.
 const APP_CATALOG: &str = "photocraft.tsv";
 
-/// `CRAFT_I18N` from `CRAFT_I18N_DIR`: the `Embedded` list the craft-i18n crate reads.
+/// This fork's own catalogs: `i18n/fork/<locale>/<catalog>`, each a whole catalog.
+const FORK_CATALOGS: &str = "i18n/fork";
+
+/// `OUT_DIR`, where a checkout's catalogs are copied so `include_str!` reads one place.
+fn out_dir() -> std::path::PathBuf {
+    std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap_or_default())
+}
+
+/// `CRAFT_I18N`: the `Embedded` list the craft-i18n crate reads. A locale comes from the checkout
+/// `CRAFT_I18N_DIR` names, from this fork's own `i18n/fork/<locale>`, or from both, the fork's
+/// catalog winning: the fork ships the whole Japanese catalog it settles, so it needs no checkout.
 fn craft_i18n() -> String {
     println!("cargo::rerun-if-env-changed=CRAFT_I18N_DIR");
     println!("cargo::rerun-if-env-changed=CRAFT_I18N_REQUIRED");
     let required = std::env::var("CRAFT_I18N_REQUIRED").is_ok_and(|v| v.trim() == "1");
-    let entries = match std::env::var_os("CRAFT_I18N_DIR").filter(|d| !d.is_empty()) {
-        // Not canonicalized: on Windows that gives `\\?\C:\…`, which `include_str!` can't read.
+    let out = out_dir();
+    let mut entries = match std::env::var_os("CRAFT_I18N_DIR").filter(|d| !d.is_empty()) {
         Some(dir) => match locales(&std::path::PathBuf::from(dir).join("locales")) {
             Ok(entries) => entries,
             Err(e) => {
-                let level = if required { "error" } else { "warning" };
-                println!("cargo::{level}=CRAFT_I18N_DIR: {e}; the interface is English only");
+                println!("cargo::warning=CRAFT_I18N_DIR: {e}; this fork's own catalogs are used");
                 Vec::new()
             }
         },
-        None => {
-            if required {
-                println!("cargo::error=CRAFT_I18N_REQUIRED=1 but CRAFT_I18N_DIR is unset: a release must embed the translations");
-            }
-            Vec::new()
-        }
+        None => Vec::new(),
     };
+    for (code, shared, app) in fork_locales() {
+        match entries.iter_mut().find(|(known, _, _)| known == &code) {
+            Some(entry) => {
+                entry.1 = shared;
+                entry.2 = app;
+            }
+            None => entries.push((code, shared, app)),
+        }
+    }
+    if entries.is_empty() && required {
+        println!("cargo::error=CRAFT_I18N_REQUIRED=1 but no catalog: set CRAFT_I18N_DIR to a craft-i18n checkout, or add one under i18n/fork");
+    }
     let mut o = String::from("/// (locale, shared catalog, PhotoCraft's catalog), one entry per locale; `\"\"` for a missing file.\n");
     o.push_str("pub static CRAFT_I18N: &craft_i18n::Embedded = &[\n");
     for (code, shared, app) in entries {
-        // `{:?}` escapes the path (Windows backslashes) as a Rust string literal.
-        let shared = shared.map_or_else(|| "\"\"".to_string(), |p| format!("include_str!({p:?})"));
-        let _ = writeln!(o, "    ({code:?}, {shared}, include_str!({app:?})),");
+        let shared = shared.map_or_else(|| "\"\"".to_string(), |p| embed(&p, &out));
+        let _ = writeln!(o, "    ({code:?}, {shared}, {}),", embed(&app, &out));
     }
     o.push_str("];\n");
     o
 }
 
+/// A catalog as a Rust `include_str!`: the file itself when it is under `OUT_DIR`, else a copy there.
+/// The copy keeps a checkout's rows still when the checkout moves, and a path outside `OUT_DIR` out
+/// of the generated code.
+fn embed(path: &std::path::Path, out: &std::path::Path) -> String {
+    if path.starts_with(out) {
+        return format!("include_str!({path:?})");
+    }
+    let _ = std::fs::create_dir_all(out);
+    let Some(name) = path.file_name() else { return format!("include_str!({path:?})") };
+    let Some(parent) = path.parent().and_then(|p| p.file_name()) else { return format!("include_str!({path:?})") };
+    let target = out.join(format!("{}-{}", parent.to_string_lossy(), name.to_string_lossy()));
+    match std::fs::copy(path, &target) {
+        Ok(_) => format!("include_str!({target:?})"),
+        Err(e) => {
+            println!("cargo::warning=copying {}: {e}", path.display());
+            format!("include_str!({path:?})")
+        }
+    }
+}
+
 /// One embedded locale: its code, its `common.tsv` if it has one, and its PhotoCraft catalog.
 type Locale = (String, Option<std::path::PathBuf>, std::path::PathBuf);
+
+/// This fork's own locales: `i18n/fork/<code>/photocraft.tsv`, with `common.tsv` beside it when it
+/// has one. A whole catalog per locale, so the fork needs no checkout.
+fn fork_locales() -> Vec<Locale> {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(FORK_CATALOGS);
+    println!("cargo::rerun-if-changed={}", dir.display());
+    let Ok(list) = std::fs::read_dir(&dir) else { return Vec::new() };
+    let mut out = Vec::new();
+    for entry in list.flatten() {
+        let path = entry.path();
+        let Some(code) = path.file_name().and_then(|n| n.to_str()).map(str::to_string) else { continue };
+        let app = path.join(APP_CATALOG);
+        if !app.is_file() {
+            continue;
+        }
+        println!("cargo::rerun-if-changed={}", app.display());
+        let shared = Some(path.join("common.tsv")).filter(|p| p.is_file());
+        if let Some(p) = &shared {
+            println!("cargo::rerun-if-changed={}", p.display());
+        }
+        out.push((code, shared, app));
+    }
+    out.sort();
+    out
+}
 
 /// Every locale under `dir` with PhotoCraft's catalog, by code. An error when `dir` isn't a
 /// craft-i18n `locales/` directory.
 fn locales(dir: &std::path::Path) -> Result<Vec<Locale>, String> {
-    // Build scripts run in the crate's directory and `include_str!` resolves against the
-    // generated file, so a relative path would mean two different places.
     if !dir.is_absolute() {
         return Err(format!("{} is not an absolute path", dir.display()));
     }
-    // Before read_dir, so a checkout that appears later reruns the script.
     println!("cargo::rerun-if-changed={}", dir.display());
     let list = std::fs::read_dir(dir).map_err(|e| format!("{} is not a craft-i18n checkout ({e})", dir.display()))?;
     let mut out = Vec::new();

@@ -6,7 +6,17 @@ WebAssembly build: the `craft-i18n` crate (craft-libs) over the catalogs of
 English source strings are lookup keys. UTF-8 TSV catalogs (`locales/<code>/photocraft.tsv`, over
 the shared `common.tsv`) supply plain, contextual, command-ID and plural translations; missing
 entries fall back to English. The build embeds them from the checkout `CRAFT_I18N_DIR` names, at
-the commit in `craft-i18n.rev`; without it PhotoCraft builds and runs in English only.
+the commit in `craft-i18n.rev`; without it PhotoCraft runs on the catalogs this repository
+carries itself (below) and English.
+
+## This fork's own catalogs
+
+Japanese ships with the repository: `crates/ui-egui/i18n/fork/ja/photocraft.tsv` and its `common.tsv`,
+a whole catalog each. `crates/ui-egui/build.rs` embeds them with or without `CRAFT_I18N_DIR`, and a
+fork catalog replaces the checkout's for the same locale. A word this fork settles differently (the
+`変形` submenu's `ゆがみ` and `多方向に伸縮`, say) is edited there, never in the checkout, so the change
+travels with the fork and nobody needs write access to `storytold/craft-i18n`. Other languages still
+come from `CRAFT_I18N_DIR` when it is set.
 
 ## Supported languages
 

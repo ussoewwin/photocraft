@@ -476,3 +476,16 @@ fn bundled_catalogs_are_consistent() {
         }
     }
 }
+
+/// The fork's own Japanese catalog settles the `変形` submenu the way the Japanese interface does:
+/// `Skew` is ゆがみ and the Distort command is 多方向に伸縮, while the bare `Distort` the Filter menu's
+/// category reads keeps ゆがみ.
+#[test]
+fn the_fork_settles_the_transform_submenu_in_japanese() {
+    // This fork ships its own Japanese catalog, so the rows hold without a checkout and
+    // without `CRAFT_I18N_REQUIRED`; only an English-only build (no catalogs) skips.
+    let Some(ja) = Lang::from_code("ja") else { return };
+    assert_eq!(tr(ja, "Skew"), "ゆがみ");
+    assert_eq!(tr_id(ja, "edit.transform.distort", "Distort"), "多方向に伸縮");
+    assert_eq!(tr(ja, "Distort"), "ゆがみ", "the Filter menu's category keeps its word");
+}
