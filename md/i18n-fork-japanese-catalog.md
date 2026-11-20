@@ -442,12 +442,17 @@ fork-only build is in.
 `crates/ui-egui/i18n/fork/ja/photocraft.tsv` — four rows changed, all others identical to craft-i18n
 at `e56d2624`:
 
-| Line | Row (before) | Row (after) |
+| Line after | Row (before) | Row (after) |
 |---|---|---|
 | 2705 | *(absent)* | `@id\tedit.transform.distort\t多方向に伸縮` |
 | 2729 | `\tSet horizontal skew\t水平方向の斜体を設定` | `\tSet horizontal skew\t水平方向のゆがみを設定` |
 | 2746 | `\tSet vertical skew\t垂直方向の斜体を設定` | `\tSet vertical skew\t垂直方向のゆがみを設定` |
 | 2854 | `\tSkew\t斜体` | `\tSkew\tゆがみ` |
+
+Before the change those three rows sat at 2728, 2745 and 2853 — one line earlier each, because the
+`@id` row is new — and no `edit.transform.distort` row existed anywhere in the catalog. The "before"
+column is read from the checkout's own file at `e56d2624`, not reconstructed; a copy of it was kept at
+`target/ja-photocraft-head.tsv` (gitignored) while the change was made.
 
 Left alone on purpose:
 
@@ -536,11 +541,11 @@ asymmetry is not an inconsistency: it follows from which surfaces share a key.
 ### 5.4 Why the catalogs are embedded, not read at run time
 
 The binary must work from a read-only install and from a single executable with no data directory
-next to it, and the web build has no file system at all. `include_str!` keeps both working and costs
-7,237,632 B — measured: 303,841,280 B with every locale embedded, 296,603,648 B with Japanese only. The
-trade-off is that translations cannot be patched in the field; a wrong word
-needs a build. That is unchanged by this work — what changed is *who* can fix the word: the fork, in
-its own repository, with a normal commit.
+next to it, and the web build has no file system at all. `include_str!` keeps both working, at a cost
+measured from the two builds of this change: 303,841,280 B with every locale embedded and 296,603,648 B
+with Japanese only — 7,237,632 B for the other 34 languages. The trade-off is that translations cannot
+be patched in the field; a wrong word needs a build. That is unchanged by this work — what changed is
+*who* can fix the word: the fork, in its own repository, with a normal commit.
 
 ### 5.5 What the build now produces, measured
 
