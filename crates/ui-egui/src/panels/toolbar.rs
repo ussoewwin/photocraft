@@ -169,15 +169,7 @@ const FLYOUTS_OPEN: Side = Side::End;
 
 /// The rail over `slots`, its flyouts and drawer opening on `opens`.
 fn rail<'a>(slots: &'a [ToolSlot<Tool>], current: &'a Tool, remembered: &'a LastUsed<Tool>, opens: Side, editing: bool) -> ToolRail<'a, Tool> {
-    // The slots' rows, tooltips and accessible names come from the tools' commands, whose labels are English: the rail
-    // maps each through the catalog, so the toolbar follows the language the window draws in (Japanese in a Japanese
-    // window, English in an English one) and never a language of its own.
-    let lang = crate::i18n::current();
-    let labels = std::sync::Arc::new(move |label: &str| crate::i18n::tr(lang, label).to_string());
-    let rail = ToolRail::new(Label::Empty, slots, current, remembered)
-        .opens(opens)
-        .labels(labels)
-        .edit_toolbar(tl!("Edit Toolbar…").to_string());
+    let rail = ToolRail::new(Label::Empty, slots, current, remembered).opens(opens).edit_toolbar(tl!("Edit Toolbar…").to_string());
     // The drawer's open flag is the one source of "editing".
     if editing { rail.editing() } else { rail }
 }

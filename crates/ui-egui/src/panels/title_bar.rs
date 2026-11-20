@@ -12,8 +12,7 @@ use super::{PhotocraftApp, brand};
 /// window's title bar and the caption buttons take its ends; with the system's frame it shows the content and no title.
 pub fn title_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     let title = title_text(app);
-    // The leading region is as wide as the menu bar's titles, which the bar measured on the frame before.
-    let out = TitleBar::new().leading_width(app.menus_bar_width).show_titled(
+    let out = TitleBar::new().show_titled(
         ui,
         Title::new(title),
         |ui, _| {
