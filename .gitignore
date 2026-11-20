@@ -13,5 +13,8 @@ target/
 __pycache__/
 plugins/**/target/
 plugins/**/output/
-plugins/**/models/
+plugins/**/models/*
+# The folder itself is tracked (an empty directory does not survive a clone or a cleanup): only
+# its contents - the weights - are ignored.
+!plugins/**/models/.gitkeep
 *.onnx
