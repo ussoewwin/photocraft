@@ -459,9 +459,13 @@ Left alone on purpose:
 	Distort	ゆがみ
 ```
 
-The leading empty field is the *context* column: the row applies to the string in every context. No
-`@id` row existed for `edit.transform.distort` before; it was added beside the other `@id` block
-(after `@id\tselect.all`), not inside a context group.
+The leading empty field is the *context* column: `craft_i18n::catalog::parse_row` splits three columns
+`[context, source, translation]` (`craft-libs crates/i18n/src/catalog.rs:41-48`), and an empty context is a
+plain row, subject to the placeholder and trailing-`…` checks. `@id` is one of the three reserved
+contexts (`RESERVED` at `:15`), and rows under it are **exempt** from those checks (`:52-63`) — which is
+why PhotoCraft re-applies the same check itself in `own_id`. No `@id` row existed for
+`edit.transform.distort` before; it was added beside the other `@id` block (after `@id\tselect.all`), not
+inside a context group.
 
 ### 4.4 `docs/localization.md`
 
@@ -510,7 +514,9 @@ The cost is a re-sync duty, stated plainly in §5.6.
 
 `tr_id` asks `own_id` first (`crates/ui-egui/src/i18n.rs:459-470`): an `@id` row counts only when the
 language owns the id and the translation keeps the placeholders and the trailing `…` of the English
-label. Only then does `tid()` win over `tr(lang, label)`. So:
+label. Only then does `tid()` win over `tr(lang, label)`. That check has to live here because craft-i18n
+skips its own placeholder check for `@id` rows (`craft-libs crates/i18n/src/catalog.rs:52-63`), whose
+source is the id rather than the label. So:
 
 - `Edit > Transform > Distort` → `tr_id(lang, "edit.transform.distort", "Distort")` → 多方向に伸縮;
 - `Filter > Distort` (a submenu title) → `translate_titles` → `tr(lang, "Distort")` → ゆがみ;
