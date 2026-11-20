@@ -11,8 +11,13 @@
 //! - `CRAFT_I18N_DIR`, a craft-i18n checkout (storytold/craft-i18n, at the SHA in
 //!   `craft-i18n.rev`): `craft_i18n.rs` holds `CRAFT_I18N`, one (locale, shared catalog, PhotoCraft
 //!   catalog) entry per locale that has a `photocraft.tsv`, embedded raw. Unset, or not a checkout
-//!   (a warning), it is empty and the interface is English only; with `CRAFT_I18N_REQUIRED=1` (CI
-//!   and releases) that is an error instead. Recipe: craft-i18n's `docs/integration.md`.
+//!   (a warning), only this fork's own `i18n/fork/<locale>` catalogs are embedded and the rest of
+//!   the interface is English; with `CRAFT_I18N_REQUIRED=1` (CI and releases) that is an error
+//!   instead. Recipe: craft-i18n's `docs/integration.md`.
+//!
+//! - `i18n/fork/<locale>/{photocraft,common}.tsv`: this fork's own whole catalogs, embedded with or
+//!   without a checkout and winning over the checkout's catalog for the same locale, so a word the
+//!   fork settles differently lives in the fork and needs no write access to craft-i18n.
 
 use std::fmt::Write as _;
 
