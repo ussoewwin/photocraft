@@ -168,8 +168,6 @@ use params::{bad, set_clipped};
 pub(crate) use params::{check_f32_values, cmyk_param, color_param, int, int_i32, parse_hex, u32_id, u32_id_param};
 pub use photocraft_color::blend::parse_blend;
 
-pub mod sam3_select_cmds;
-
 pub use crate::install::{command_specs, find};
 pub use crate::registry::{CommandSpec, list_entry, list_entry_matches, search_keywords};
 
