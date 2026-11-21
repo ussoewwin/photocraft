@@ -293,6 +293,7 @@ select.object
 select.subject
 select.refineEdge
 select.focusArea
+select.sam3
 layer.removeBackground
 paint.setSymmetry
 paint.symmetryFromPath
@@ -399,6 +400,7 @@ paint.spotHealing
 paint.patch
 paint.contentAwareMove
 paint.remove
+paint.lamaCleaner
 paint.dodge
 paint.burn
 paint.sponge
