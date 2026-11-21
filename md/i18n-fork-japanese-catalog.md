@@ -69,10 +69,11 @@ Three separate reasons, all of which had to be removed:
    `CRAFT_I18N_DIR`. With it unset the generated table was empty and the interface was English only;
    with `CRAFT_I18N_REQUIRED=1` (CI and releases) it was a `cargo::error`. A fork-only catalog was
    not representable, so the fix could not live in the fork even as an addition.
-3. A stale catalog file sits at `crates/ui-egui/src/i18n/ja.tsv` (204,286 B, 2026-11-20 13:31). No
-   code reads it: it is mentioned nowhere except as a path string in the fixture list
-   `docs/integration-testing/approved-selection.json`. Editing it changes nothing, which makes the
-   "I fixed it and it came back" loop easy to enter.
+3. A stale catalog file formerly sat at `crates/ui-egui/src/i18n/ja.tsv` (204,286 B, 2026-11-20 13:31). No
+   code read it, and editing it changed nothing. In v1.3.6, this obsolete file was completely deleted from the
+   repository, establishing `crates/ui-egui/i18n/fork/ja/{photocraft,common}.tsv` as the sole authoritative
+   fork catalog. The fork catalog now carries complete Japanese translations for fork-specific tools including
+   `SAM 3.1 Selection Tool` and `LaMa Cleaner Tool`.
 
 ---
 

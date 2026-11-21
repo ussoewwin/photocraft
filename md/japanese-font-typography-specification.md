@@ -71,16 +71,16 @@ Without explicit classification patterns, Japanese fonts were either dumped into
          |                                                         |
          v                                                         v
 +-----------------------------------+     +---------------------------------------+
-|  crates/ui-egui                   |     |  crates/text                          |
+|  crates/ui-egui                   |     |  craft-libs / craft-font-manager      |
 |                                   |     |                                       |
-|  * sync_font_names                |     |  * OpenType name table parser         |
-|    - checks i18n::current()       |     |    - StringId::TYPOGRAPHIC_FAMILY     |
-|    - unblocks localized_families  |     |    - StringId::FAMILY_NAME            |
-|                                   |     |    - Platform 3 / LangID 0x0411 (ja)  |
-|  * font_preview                   |     |    - Non-ASCII heuristic fallback     |
-|    - JAPANESE_CORE ['あ','い','う']|     |                                       |
-|    - JAPANESE_SAMPLE "あいうえお" |     |  * font_class::classify               |
-|    - offscreen 18pt / 40pt render |     |    - Mincho/Gothic/Gyosho/Kaisho      |
+|  * sync_font_names                |     |  * rank::classify (SSOT)              |
+|    - checks i18n::current()       |     |    - PANOSE & IBM Family Class        |
+|    - unblocks localized_families  |     |    - CJK Mincho/Gothic/Script/Pop     |
+|                                   |     |    - localized_families fallback      |
+|  * font_preview                   |     |                                       |
+|    - JAPANESE_CORE ['あ','い','う']|     |  * OpenType name table resolution     |
+|    - JAPANESE_SAMPLE "あいうえお" |     |    - StringId::TYPOGRAPHIC_FAMILY     |
+|    - offscreen 18pt / 40pt render |     |    - StringId::FAMILY_NAME (Lang 0x411)|
 +-----------------------------------+     +---------------------------------------+
 ```
 
@@ -88,8 +88,8 @@ Without explicit classification patterns, Japanese fonts were either dumped into
 
 ## 3. Implementation Details
 
-### 3.1 Localized OpenType Name Resolution (`crates/text/src/fonts.rs`)
-The font parser inspects OpenType name table records with language precedence:
+### 3.1 Localized OpenType Name Resolution & Font Management Consolidation
+OpenType name table records are resolved with language precedence:
 1. Queries `StringId::TYPOGRAPHIC_FAMILY` (16) and `StringId::FAMILY_NAME` (1).
 2. Searches for Windows Platform (3), Unicode encoding (1), Language ID `0x0411` (Japanese).
 3. Evaluates Macintosh Platform (1), Roman encoding (0), Language ID `11` (Japanese).
@@ -107,12 +107,13 @@ When `JAPANESE_CORE.iter().copied().all(|c| face.has_char(c))` evaluates to `tru
 - Offscreen rasterization renders the sample at medium menu size (18 pt) and banner size (40 pt).
 - Provides immediate visual discrimination between Mincho, Gothic, Gyosho, and Kaisho typefaces.
 
-### 3.3 Visual Class Classification (`crates/text/src/font_class.rs`)
-The classification engine inspects `sFamilyClass`, PANOSE, and family name strings:
-- **Serif**: Matches `mincho`, `明朝`, `sung`, `song`, `宋体`, `宋體`.
+### 3.3 Visual Class Classification (Consolidated in `craft-font-manager/rank.rs`)
+Previously, PhotoCraft maintained duplicate classification heuristics in `crates/text/src/font_class.rs`. In v1.3.6, this downstream logic was completely consolidated into `craft-libs/crates/font-manager/src/picker/rank.rs` with `localized_families` fallback, establishing a single source of truth (SSOT) across the workspace:
+- **Serif**: Matches `mincho`, `明朝`, `sung`, `song`, `宋体`, `宋體` (foundry-guarded against Latin script collisions like `WindSong`).
 - **Sans Serif**: Matches `gothic`, `ゴシック`, `ｺﾞｼｯｸ`, `meiryo`, `メイリオ`, `hei`, `maru`, `丸ゴシック`.
 - **Script**: Matches `script`, `gyosho`, `行書`, `kaisho`, `楷書`, `sousho`, `草書`, `reisho`, `隷書`, `kanteiryu`, `勘亭流`. Covers `HG行書体`, `HGP行書体`, `HGS行書体`, and `HG正楷書体-PRO`.
 - **Handwritten**: Matches `hand`, `marker`, `brush`, `chalk`, `kyokasho`, `教科書`, `pop`, `ポップ`, `ﾎﾟｯﾌﾟ`. Covers `UD デジタル 教科書体` and `HG創英角ﾎﾟｯﾌﾟ体`.
+- **Fallback Resolution**: When an ASCII family name does not match CJK heuristics, `rank.rs` evaluates `localized_families` (e.g. native Japanese family names), ensuring consistent classification without redundant code in `photocraft/crates/text`.
 
 ### 3.4 UI Preferences & Font Synchronization (`crates/ui-egui/src/tools/type_tool/fonts.rs`)
 - `TypePrefs.show_font_names_in_english` defaults to `false`.
@@ -136,10 +137,9 @@ Windows system fallback chains provide seamless rendering across:
 
 ## 4. Verification & Validation
 
-1. **Unit Testing (`photocraft-text`)**:
-   - `font_class::tests::fixed_pitch_and_names_decide_the_rest`: Verifies correct classification of `MS Mincho` (Serif), `游明朝` (Serif), `MS Gothic` (SansSerif), `游ゴシック` (SansSerif), `Meiryo` (SansSerif), `メイリオ` (SansSerif), `HGGyoshotai` (Script), `HG行書体` (Script), `HG正楷書体-PRO` (Script), and `UD デジタル 教科書体 N` (Handwritten).
-   - `cjk::tests::type_tool_fallback_follows_locale`: Validates locale-driven candidate ordering.
-   - `tests::works_without_craft_fonts`: Validates fallback stability when optional font bundles are omitted.
+1. **Unit Testing**:
+   - `craft-font-manager`: `tests/it/picker.rs` validates comprehensive classification of `MS Mincho`, `游明朝`, `MS Gothic`, `游ゴシック`, `Meiryo`, `メイリオ`, `HGGyoshotai`, `HG行書体`, `HG正楷書体-PRO`, and `UD デジタル 教科書体` (60 passed, 0 failed).
+   - `photocraft-text`: `cjk::tests::type_tool_fallback_follows_locale` validates locale-driven candidate ordering; `tests::works_without_craft_fonts` validates fallback stability (6 passed, 0 failed).
 2. **Binary Verification**:
-   - Built optimized production release binary `photocraft.exe` (115 MB).
+   - Built optimized production release binary `photocraft.exe`.
    - Validated font picker display with Windows native Japanese fonts.
