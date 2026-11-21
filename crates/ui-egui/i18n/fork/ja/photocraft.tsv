@@ -3394,3 +3394,9 @@ fontWeight	Thin	極細
 	…and {n} more	…ほか {n} 件
 	↑↓ navigate   {key} run   esc close	↑↓ 移動   {key} 実行   esc 閉じる
 	↑↓ navigate   ↵ run   esc close	↑↓ 移動   ↵ 実行   esc 閉じる
+	Detect	検出
+	Individual Masks	個別マスク
+	LaMa Cleaner Tool	LaMa クリーナーツール
+	Prompt	プロンプト
+	SAM Selection Tool	SAM選択ツール
+	SAM found nothing there — try a tighter box	SAM はそこに何も見つけられませんでした — より狭いボックスで試してください

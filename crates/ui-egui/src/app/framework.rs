@@ -598,14 +598,27 @@ struct KeptStates {
     states: Vec<(CommandRef, CommandState)>,
 }
 
-/// The tool commands: the current tool's row is checked.
+/// The tool commands: the current tool's row is checked, and in a non-English interface its title follows the
+/// UI language so the toolbar's flyouts, tooltips and accessible names read in that language.
 fn tool_states(app: &PhotocraftApp) -> Vec<(CommandRef, CommandState)> {
-    Tool::ALL.iter().map(|&tool| (CommandRef::from(crate::panels::tool_commands::command_of(tool)), CommandState::new().checked(app.ui.tool == tool))).collect()
+    let lang = crate::i18n::current();
+    Tool::ALL
+        .iter()
+        .map(|&tool| {
+            let mut state = CommandState::new().checked(app.ui.tool == tool);
+            if lang != crate::i18n::Lang::EN {
+                state = state.title(crate::i18n::tr(lang, tool.label()));
+            }
+            (CommandRef::from(crate::panels::tool_commands::command_of(tool)), state)
+        })
+        .collect()
 }
 
-/// What [`tool_states`] reads: the tool.
+/// What [`tool_states`] reads: the tool and the UI language.
 fn tool_states_key(app: &PhotocraftApp) -> StatesKey {
-    [app.ui.tool as u64, 0, 0, 0]
+    let lang = crate::i18n::current().code();
+    let lang_idx = crate::i18n::LANGUAGES.iter().position(|l| l.code == lang).unwrap_or(0) as u64;
+    [app.ui.tool as u64, lang_idx, 0, 0]
 }
 
 /// Brings the held states up to date for the coming frame. A keyed source runs only when its key changed since it last

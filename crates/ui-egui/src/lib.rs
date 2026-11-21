@@ -351,11 +351,6 @@ pub struct PhotocraftApp {
     /// The menu bar's rows and the English text of its titles, rebuilt when their inputs change
     /// (`menus::MenuModel`).
     pub(crate) menu_model: Option<menus::MenuModel>,
-    /// The width the menu bar's titles take, measured by the bar this frame (menus::menu_bar): the title bar's
-    /// leading region declares it so the titles are laid out at their own width, not at the share of the line the
-    /// empty title strip leaves (Window and Help fell into the overflow menu otherwise). The bar reads it from the
-    /// frame before, since it is measured while the bar is being shown.
-    pub(crate) menus_bar_width: Option<f32>,
     /// The toolbar's slots for the stored layout (`tool_commands::ToolbarSlots`).
     pub(crate) toolbar_slots: panels::tool_commands::ToolbarSlots,
     /// The Layers panel's model, held across passes (`layers_tree::PhotoLayers::held`).
