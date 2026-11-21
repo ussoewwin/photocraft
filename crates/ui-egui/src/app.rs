@@ -71,6 +71,8 @@ impl PhotocraftApp {
             menu_model: None,
             menus_bar_width: None,
             toolbar_slots: Default::default(),
+            layers_tree: None,
+            dock_model: Default::default(),
             move_preview: None,
             move_blocked: false,
             move_blocked_start: None,

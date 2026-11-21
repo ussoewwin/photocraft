@@ -358,6 +358,10 @@ pub struct PhotocraftApp {
     pub(crate) menus_bar_width: Option<f32>,
     /// The toolbar's slots for the stored layout (`tool_commands::ToolbarSlots`).
     pub(crate) toolbar_slots: panels::tool_commands::ToolbarSlots,
+    /// The Layers panel's model, held across passes (`layers_tree::PhotoLayers::held`).
+    pub(crate) layers_tree: Option<craft::ui::contract::Tracked<panels::layers_tree::PhotoLayers>>,
+    /// The dock's spec model and kept panels (`panel_docking::DockModel`).
+    pub(crate) dock_model: panels::panel_docking::DockModel,
     /// Move tool drag shown live (`move_ui`).
     pub(crate) move_preview: Option<move_ui::MovePreview>,
     /// A refused Move press: where it began, the layer it hit, the document (#11971) and the
@@ -591,8 +595,7 @@ pub struct PhotocraftApp {
     pub(crate) hover_doc: Option<[f64; 2]>,
     /// Layer hovered in the Layers panel, outlined on the canvas.
     pub(crate) hover_layer: Option<photocraft_doc::LayerId>,
-    /// The commands run from any source (`menus::invoke`, the commands keys and surfaces fire, the control channel). Every
-    /// settling region's version holds it (`panels::region_versions`): a command may change anything a region shows.
+    /// The commands run from any source (`menus::invoke`, the commands keys and surfaces fire, the control channel).
     pub(crate) commands_run: u64,
     /// A layer whose row the Layers panel opens for renaming in its next pass (Layer › Rename
     /// Layer, the row menu's Rename Layer…).
@@ -968,8 +971,6 @@ mod drag_settle_trials;
 mod layer_thumb_bounds_tests;
 #[cfg(test)]
 mod mask_thumb_refresh_tests;
-#[cfg(test)]
-mod region_version_trials;
 
 #[cfg(test)]
 mod new_doc_remember_tests;
