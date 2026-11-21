@@ -420,8 +420,9 @@ fn a_move_tool_mask_selection_drag_onto_a_tab_copies_the_mask_and_leaves_layer_p
         let layer = src_layer.and_then(|id| st.doc.layer(id)).unwrap();
         layer.mask.as_ref().unwrap().value(6, 8)
     };
-    let selection_present =
-        |h: &Harness<'static, Box<PhotocraftApp>>| h.state().session.documents().iter().find(|s| s.doc.id == src_doc).is_some_and(|s| s.doc.selection.is_some());
+    let selection_present = |h: &Harness<'static, Box<PhotocraftApp>>| {
+        h.state().session.documents().iter().find(|s| s.doc.id == src_doc).is_some_and(|s| s.doc.selection.is_some())
+    };
     let before_mask = mask_sample(&h);
     let before_pixel = layer_pixel(&h);
     let before_selection = selection_present(&h);

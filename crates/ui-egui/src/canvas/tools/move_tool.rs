@@ -272,8 +272,7 @@ fn press_at(app: &mut PhotocraftApp, p: [f64; 2], mods: Mods, style: ConstrainSt
             }
         } else {
             let hit_layer = probe.as_ref().ok().and_then(|v| v["layer"].as_u64()).map(photocraft_doc::LayerId);
-            let locked_hit = !auto
-                && hit_layer.is_some_and(|id| locked_layer(app, id));
+            let locked_hit = !auto && hit_layer.is_some_and(|id| locked_layer(app, id));
             let transfer_candidate = if app.session.documents().len() > 1 { locked_hit_at(app, p) } else { None };
             let locked_hit = locked_hit || transfer_candidate.is_some();
             let active_before = app.session.active().and_then(|st| st.active_layer);
