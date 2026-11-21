@@ -34,7 +34,12 @@ merge these tests are the definition of "not broken".
 | LaMa Cleaner tool | `crates/engine/src/cmd/retouch_cmds/lama_cleaner.rs`, `crates/ui-egui/src/tools/retouch_ui.rs`, `crates/engine/src/cmd/retouch_cmds.rs` | `retouch_ui` (90 tests), engine lib suite, `the_default_toolbar_lists_every_tool` |
 | SAM Selection tool (SAM 3.1 on CUDA) | `crates/ui-egui/src/tools/sam3*`, `plugins/sam3-select.exe` | `sam3_toolbar`, `sam3_canvas`, `sam3_options_bar`, `every_selectable_tool_has_a_toolbar_slot` |
 | SAM Selection Japanese labels (tool name, options bar, both status lines) | `crates/ui-egui/src/i18n.rs` (`JA_TEXT_OVERRIDES`, read by `tr()` before the catalog) | `retouch_ui::tests::sam_selection_strings_are_translated_in_japanese` (in a catalog build, §9) |
-| Japanese typography / CJK font engine | `craft-libs` (`craft-font-manager/rank.rs`), `crates/text/src/cjk.rs`, `crates/text/src/fonts.rs`, `crates/ui-egui/src/text/font_preview.rs` | `cjk_fonts`, `craft-font-manager` tests |
+| Japanese typography / CJK font engine | `craft-libs` (`craft-font-manager/rank.rs`), `crates/text/src/cjk.rs`, `crates/text/src/fonts.rs`, `crates/ui-egui/src/text/font_preview.rs` | `cjk_fonts`, `craft-font-manager` tests (60 passed) |
+| Canvas Space-Key Hand Tool Preservation | `craft-libs` (`craft-ui-contract`, `craft-ui-panels`, `craft-ui-widgets`) | `cargo test -p craft-ui-contract` (538 passed), `cargo test -p craft-ui-panels` (222 passed) |
+| Resilient Remembered Printer Retention | `craft-libs` (`craft-print/ui/mod.rs`) | `cargo test -p craft-print` (51 passed) |
+| PSD Layr / Mt16 Merged Transparency | `craft-libs` (`craft-psd/merged.rs`) | `cargo test -p craft-psd` (189 passed) |
+| Large ZIP Archive EOCD64 Chunked Scanner | `craft-libs` (`craft-zip/guard.rs`) | `cargo test -p craft-zip` (45 passed) |
+| AccessKit Windows UIA Crash Prevention | `craft-libs` (`craft-ui-contract/runtime/egui/access.rs`) | `photocraft#15597` UIA menu click sweep, upstream PR #2328 |
 | Japanese transform-menu labels (`Skew` / `Distort` wording) | `crates/ui-egui/src/i18n.rs` (`JA_TEXT_OVERRIDES` at line 433, `JA_ID_OVERRIDES` at line 434, applied in `tr()` / `tr_id()`) | `i18n::tests::japanese_transform_labels_keep_skew_and_distinct` |
 | Move tool cross-document transfer (incl. background-layer drag) | `crates/ui-egui/src/panels/layer_transfer.rs` (`move_drag()` line 74, `arm_move_transfer()` line 112), `crates/ui-egui/src/tools/move_box.rs`, `crates/ui-egui/src/canvas/tool_input.rs` (`record_move_blocked()` line 403) | `layer_transfer` (26 tests) |
 | Windows directory-flush fix (dir sync: 1 / 50 / 120 are non-fatal) | `crates/format/src/atomic.rs` | `crates/format/src/atomic/tests.rs` |
@@ -43,6 +48,11 @@ merge these tests are the definition of "not broken".
 
 Rule: when upstream refactors an area a fork feature lives in, the feature is **ported**, not
 sacrificed, and the port is proven by the tests in this table.
+
+Automated MCP sync scripts must strictly respect all entries in this table:
+1. `crates/zip/` must NEVER be included in `upstream_only_prefixes` or resolved via `--theirs`.
+2. Associated constants such as `const KEYS: KeyUse = KeyUse::of(Input::Pointer).with_space_activation();` on `FlyoutButton` and `Button` must NEVER be stripped during refactoring.
+3. Automated sync must verify conflict hunks against known markers (`with_space_activation`, `space_activates`, `Layr`, `Mt16`, `scan_offsets`, `is_cjk_song`, `!self.printers.is_empty()`, `drop_dangling_relations`) and preserve fork modifications (`ours`).
 
 Note on scope: some fork work still lives only on an open pull-request branch (for example the
 `pickAt` `includeLocked` probe support is **not** in `main` — `git grep includeLocked -- crates`

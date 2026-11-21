@@ -379,3 +379,20 @@ Expected output: `false` and `{"disabled_manually": N}` (N is the total number o
 - Do not run workflows in the fork. Do not use `gh workflow run` either
 - Do not assume "it is fine because it was disabled once". Always run the four steps above after taking in upstream
 - Do not undo the disabling. If undoing it is needed, confirm the reason with the owner
+
+---
+
+## 12. Automated MCP Synchronization & Fork Pillar Preservation Protocols
+
+Automated tools (such as `photocraft_sync_mcp_server.py`) performing upstream synchronization and build workflows must adhere to strict non-negotiable rules:
+
+1. **`crates/zip/` is a Protected Fork Module**:
+   - `crates/zip/` must NEVER be listed under `upstream_only_prefixes` or resolved via `git checkout --theirs`. It carries the 64KiB chunked scanning and overlap carry security implementation in `crates/zip/src/guard.rs`.
+2. **Conflict Auto-Resolution Rules**:
+   - During upstream merges, any conflict hunk containing fork markers (`with_space_activation`, `space_activates`, `ActivateKeys::Enter`, `activate_on_space`, `PressRoute::Space`, `PressRoute::Free`, `Layr`, `Mt16`, `Mt32`, `Mtrn`, `MTrn`, `scan_offsets`, `EOCD64`, `carry`, `is_cjk_song`, `KANA_SAMPLE`, `shown_name`, `localized_families`, `!self.printers.is_empty()`, `drop_dangling_relations`, `prune_controls`) MUST be resolved to keep the fork version (`ours`).
+3. **Keyboard Associated Constants Preservation**:
+   - In `crates/ui-panels/src/rails/flyout.rs` and `crates/ui-patterns/src/action/button.rs`, associated constants declaring keyboard behavior (`const KEYS: KeyUse = KeyUse::of(Input::Pointer).with_space_activation();`) must NEVER be stripped when refactoring or retiring hooks.
+4. **Release Binary Build Integrity**:
+   - Automated scripts must never run `cargo xtask craftlibs off` before compiling release binaries (`photocraft.exe`). Doing so produces an unpatched binary compiled from the upstream pin that silently loses Space key Hand tool isolation and CJK typography.
+5. **Pre-Push Quality Gates**:
+   - Automated sync must verify all 6 pillars via the MSVC x64 test suite (`craft-ui-contract`, `craft-ui-canvas`, `craft-ui-widgets`, `craft-ui-panels`, `craft-font-manager`, `craft-print`, `craft-psd`, `craft-zip`) before pushing to `fork:next`.

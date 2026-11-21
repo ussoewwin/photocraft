@@ -5,15 +5,20 @@ binary that silently lacks the fixes it is supposed to contain, and reporting it
 
 ## Why this file exists
 
-The same mistake was made twice. A release build was started with the local `craft-libs` patch
+The same mistake was made multiple times. A release build was started with the local `craft-libs` patch
 removed from `.cargo/config.toml`, so cargo built the **pinned** revision instead of the checkout the
 fixes live in. The binary came out looking fine — right size, right time — and the bug the owner had
 already reported came back with it (Space opening the File menu again, the menu bar click aborting the
 process). Nothing in the build output said so.
 
+Furthermore, automated MCP sync pipelines previously wiped fork customizations by including `crates/zip/`
+under upstream-only checkout lists (`--theirs`), dropping the ZIP EOCD64 security fix, and lacked explicit
+conflict resolution rules for `with_space_activation`, `space_activates`, `Layr`, and `Mt16`.
+
 The patch disappears whenever `cargo xtask craftlibs off` runs (it ends with
 `git checkout -- Cargo.lock .cargo/config.toml`), and that command is easy to run while checking
-something else and then forget.
+something else and then forget. Automated build scripts must NEVER execute `ensure_craftlibs_off` before
+building release binaries.
 
 ## Never
 
@@ -22,13 +27,16 @@ something else and then forget.
    paths; committing it breaks every other checkout and CI.
 3. **Never build after `cargo xtask craftlibs off`.** `off` exists for the moment of committing.
    Run `cargo xtask craftlibs on` immediately afterwards and re-run the gate.
-4. **Never delete `target\release\photocraft.exe` or `target\release\photocraft.pdb`.** They are the
+4. **Never let an MCP or automation script wipe fork modules.** Modules containing active fork pillars
+   (`crates/zip`, `crates/ui-contract`, `crates/ui-panels`, `crates/ui-patterns`, `crates/font-manager`,
+   `crates/print`, `crates/psd`) must NEVER be treated as upstream-only or overwritten via `--theirs`.
+5. **Never delete `target\release\photocraft.exe` or `target\release\photocraft.pdb`.** They are the
    deliverable. Deleting the exe costs a full rebuild and cannot be undone.
-5. **Never report a build as finished without measuring it**: the exe's timestamp and size, and the
+6. **Never report a build as finished without measuring it**: the exe's timestamp and size, and the
    `Finished` line from the log.
-6. **Never start another build or a test run right after one finished.** The owner may not have used
+7. **Never start another build or a test run right after one finished.** The owner may not have used
    the result yet.
-7. **Never run the app or the tests the owner said he would run.** Hand over the exe and the paths.
+8. **Never run the app or the tests the owner said he would run.** Hand over the exe and the paths.
 
 ## The gate
 
