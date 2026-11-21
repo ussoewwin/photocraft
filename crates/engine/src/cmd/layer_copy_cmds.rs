@@ -472,7 +472,9 @@ fn copy_to_document(s: &mut Session, p: &Value) -> Result<Value> {
     if edited.is_err() {
         s.set_active(src);
         if let (Some(saved), Some(st)) = (prior_src, s.active_mut()) {
-            *st = saved;
+            // `documents()` yields the session's `Tracked<DocState>`; the document itself is the value inside it.
+            // `active_mut()` moves the tracked revision as it hands out the state, so the restore is seen.
+            *st = saved.into_inner();
         }
         s.sync_tools_mask_target();
     }

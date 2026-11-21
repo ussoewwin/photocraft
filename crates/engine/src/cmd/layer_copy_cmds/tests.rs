@@ -909,7 +909,8 @@ fn failed_destination_insert_during_cut_restores_source_and_preserves_coalesced_
     }
     let mut d = (*doc(&s, 1)).clone();
     d.layers.push(deep);
-    s.active_mut().unwrap().doc = std::sync::Arc::new(d);
+    // `doc` lives in `DocStateInputs`; `doc_mut()` hands out the field itself.
+    *s.active_mut().unwrap().doc_mut() = std::sync::Arc::new(d);
     let dest_before = doc(&s, 1).clone();
 
     s.set_active(0);
