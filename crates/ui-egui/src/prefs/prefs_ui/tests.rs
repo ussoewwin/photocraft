@@ -459,7 +459,9 @@ fn preferences_interface_offers_and_applies_sync_with_system() {
 #[test]
 fn theme_star_saves_favorite_and_menu_groups_it() {
     use egui_kittest::kittest::Queryable;
-    let (_, files) = app_with_store();
+    // The framework's star and footer read the window's language: pin English, so a Japanese
+    // system locale does not rename them under the test.
+    let (_, files) = app_with_json(&json!({"interface": {"language": "en"}}));
     let mut h = prefs_harness(&files, "interface", vec2(1280.0, 800.0), |_| {});
     h.get_by_label("Classic").hover();
     h.run_steps(2);
@@ -1674,6 +1676,9 @@ fn scratch_disk_browse_sets_only_its_draft_entry_and_cancel_keeps_it() {
     use egui_kittest::kittest::Queryable;
     let scripted = Arc::new(ScriptedFiles::answering([Picked::Paths(vec!["/tmp/scratch".into()]), Picked::Cancelled]));
     let (store, picks) = (Arc::new(MemoryFiles::new()), scripted.clone());
+    // Browse… comes from the framework's words: pin English, so a Japanese system locale does not
+    // rename it under the test.
+    seed(&store, &json!({"interface": {"language": "en"}}), Some(<prefs::SavedPrefs as Settings>::SCHEMA_VERSION));
     let mut h = egui_kittest::Harness::builder().with_size(vec2(1280.0, 800.0)).build_eframe(move |cc| {
         PhotocraftApp::setup_context(&cc.egui_ctx, Default::default());
         let services = crate::Services { files: Some(picks), ..services_on(&store) };
