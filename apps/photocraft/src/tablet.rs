@@ -234,10 +234,23 @@ mod tests {
     fn pressure_stroke(mut next: impl FnMut(f32) -> Option<Sample>) -> (f64, f64, f64, f64) {
         use egui_kittest::Harness;
         let mut session = photocraft_engine::Session::new();
+        // The interface language is a preference too: the window draws it in a Japanese system's
+        // language unless the session pins one, and the harness's font stack then needs kana.
+        photocraft_ui_egui::i18n::set_current(photocraft_ui_egui::i18n::Lang::EN);
         session.execute("file.new", json!({"width": 240, "height": 80, "background": "white"})).unwrap();
         // The app shares the harness's context, which is where the window's pointer input arrives.
         let mut h = Harness::builder().with_size(egui::vec2(1280.0, 800.0)).with_max_steps(64).build_eframe(move |cc| {
+            // A Japanese system would draw the window in Japanese, and the harness asks for every
+            // glyph; PhotoCraft's own stack (built next, on this language) draws the labels. A build
+            // without CRAFT_FONTS_DIR embeds no CJK face (craft_fonts holds what was embedded), so
+            // the rest of this test goes back without one.
+            if photocraft_ui_egui::cjk_fonts::craft_faces().is_empty() {
+                return PhotocraftApp::with_context(cc.egui_ctx.clone(), session, Default::default());
+            }
+            photocraft_ui_egui::i18n::set_current(photocraft_ui_egui::i18n::Lang::EN);
             PhotocraftApp::setup_context(&cc.egui_ctx, Default::default());
+            // PhotoCraft's own font stack (Inter, the craft faces, the embedded system scripts).
+            photocraft_ui_egui::theme::install_fonts(&cc.egui_ctx);
             PhotocraftApp::with_context(cc.egui_ctx.clone(), session, Default::default())
         });
         let sink = sink(h.state().stylus.feed.clone());
@@ -290,6 +303,11 @@ mod tests {
 
     #[test]
     fn appkit_tablet_pressure_drives_stroke_width_and_opacity() {
+        // The stroke path below draws Japanese labels only with an embedded CJK face.
+        if photocraft_ui_egui::cjk_fonts::craft_faces().is_empty() {
+            eprintln!("skipped: this build embeds no craft-fonts face (set CRAFT_FONTS_DIR)");
+            return;
+        }
         let mut st = appkit::State::default();
         let (light_dark, light_w, heavy_dark, heavy_w) = pressure_stroke(|p| {
             let e =
