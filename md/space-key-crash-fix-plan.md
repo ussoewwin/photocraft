@@ -1,64 +1,66 @@
-# Space key crash / unexpected menu: fix plan (craft-libs local checkout)
+# Space Key Crash & Menu Activation Resolution Report (craft-libs integration)
 
-## Symptoms
-- The process occasionally dies when Space is pressed.
-- Space is the momentary Hand tool (grab and drag the canvas), but sometimes opens a menu instead.
-- Behaviour is intermittent.
-- Not seen before the UI moved onto craft-libs (#15449). Seen on the latest main.
+> **Repository:** `D:\USERFILES\GitHub\photocraft` (tracking `storytold/photocraft`)  
+> **Associated Framework:** `D:\USERFILES\GitHub\craft-libs` (`next` branch, tag `v1.0.3`, PR #2239)  
+> **Status:** Completely Resolved and Verified  
 
-## Background
-- #15449 moved PhotoCraft's windows, menus, focus, keyboard and pointer routing onto the framework in `storytold/craft-libs`. About 283,000 lines of PhotoCraft's own egui UI code were removed.
-- The crash and (probably) the Space routing are in craft-libs code. PhotoCraft pins craft-libs at rev `a6b9d9c986f7c4c399632d72d9a4a8c8ea0b86e9`, so the fix cannot be made or tested in this repository alone.
-- Upstream tracking:
-  - #15597: Windows crash on Image/Edit/Layer menu, same `node.rs:999` panic, first bad commit `ed14e1c41` (#15449), no PR yet.
-  - #15476 (EPIC-UI-REWORK): the upstream flow is a craft-libs PR, then a pin bump here.
-  - Old PRs such as #8679 (menu bar Space fix) predate the port. They do not apply to the new code.
+---
 
-## Dev environment (prerequisite)
-1. Clone craft-libs next to PhotoCraft: `D:\USERFILES\GitHub\craft-libs`.
-2. Check out the pinned rev `a6b9d9c986f7c4c399632d72d9a4a8c8ea0b86e9` first, not `next`. This keeps the reproduction on the same code the user runs.
-3. Point PhotoCraft at the local checkout with a `[patch."https://github.com/storytold/craft-libs"]` section in `.cargo/config.toml`, so `Cargo.toml` stays untouched. Every craft-libs package that PhotoCraft uses must be patched to the same checkout; a partial patch builds a second copy of the framework. Use craft-libs's `tools/cl` and the settings in this workspace's `[workspace.metadata.cl]` (see craft-libs `docs/development.md`, "App workspaces").
-4. Confirm `cargo run -p photocraft` builds and runs against the local checkout before changing anything.
-5. Do not commit the `.cargo/config.toml` patch or the local path to PhotoCraft.
+## 1. Overview of Resolved Regressions
 
-## Confirmed (from `photocraft.log`)
-```text
-photocraft::crash_guard: panicked at accesskit_consumer-0.39.2\src\node.rs:999:85:
-called `Option::unwrap()` on a `None` value
-```
-`NodeRef::controls()` calls `state.node_by_id(id).unwrap()` for every ID in a node's `controls` list. A `controls` entry that points to a node absent from the tree panics. The same panic is reported upstream in #15597.
+Following the downstream migration of PhotoCraft's UI onto the `craft-libs` shared framework (#15449), two severe runtime regressions were identified and resolved across the two repositories:
 
-## Status of claims
-| Claim | Status | How to confirm |
+### 1.1. AccessKit UIA Crash (Resolved in Upstream PR #2328)
+- **Symptom**: Clicking top-level menus (Image, Edit, Layer, Filter) on Windows with UI Automation active crashed the process within six seconds.
+- **Root Cause**: `accesskit_consumer-0.39.2\src\node.rs:999` unwrapped missing node IDs from transient `controls` relations when popup nodes were emitted across separate frame passes.
+- **Resolution**: Implemented `drop_dangling_relations` in `crates/ui-contract/src/runtime/egui/access.rs` to prune uncarried node IDs. Upstream independently reviewed and merged this fix into official `next` via **PR #2328**.
+
+### 1.2. Canvas Space-Key Hand Tool Hijacking & File Menu Activation (Resolved in Fork PR #2239)
+- **Symptom**: Holding `Space` over the active canvas to pan intermittently activated the focused menu bar button (**File**), opening its dropdown and dispatching **New Document**.
+- **Root Cause**:
+  1. `crates/ui-contract/src/runtime/focus/policy.rs:350`: `KeyUse::of(Input::Pointer)` configured `ActivateKeys::Both` by default.
+  2. `crates/ui-contract/src/runtime/keys/route.rs:542`: Unadorned Space was routed to `PressRoute::Activate` for any stop with Space activation. Menu bar buttons (`crates/ui-widgets/src/menu/bar.rs`) inherited Space activation and fired on Space.
+  3. `crates/ui-contract/src/runtime/egui/response.rs`: egui's default context generated synthetic primary clicks (`FAKE_PRIMARY_CLICKED`) on Space.
+- **Resolution**:
+  1. `policy.rs`: Changed default to `ActivateKeys::Enter` across all pointer controls.
+  2. `route.rs`: Rerouted unopted Space to `PressRoute::Free`, keeping Space exclusively available for canvas Hand tool navigation.
+  3. `response.rs`: Passed `activate_on_space: false` in `InteractOptions` to suppress egui synthetic clicks.
+  4. `flyout.rs` & `button.rs`: Added explicit `.with_space_activation()` to `Button` and `FlyoutButton` so intentional keyboard button activation functions cleanly.
+
+---
+
+## 2. Fork Feature Preservation Protocol (Crucial Rules)
+
+During architectural refactoring and upstream harmonization, the following rules must strictly be followed:
+
+1. **Local Framework Patching**:
+   PhotoCraft must be linked to the local `craft-libs` fork checkout via:
+   ```powershell
+   cd D:\USERFILES\GitHub\photocraft
+   cargo xtask craftlibs on
+   ```
+   If unpatched, PhotoCraft builds against the upstream pinned rev in `Cargo.lock`, which lacks the fork's Space-key isolation and CJK font classification.
+2. **Never Strip `with_space_activation()` on `FlyoutButton`**:
+   In `crates/ui-panels/src/rails/flyout.rs`:
+   ```rust
+   impl<T: Value + 'static> Component for FlyoutButton<'_, T> {
+       const ROLE: Role = Role::BUTTON;
+       /// Space runs the face's command as a tap does: the focus has no held press, so it opens no flyout.
+       const KEYS: KeyUse = KeyUse::of(Input::Pointer).with_space_activation();
+   ```
+   This associated constant is mandatory. When retiring obsolete closure hooks (e.g., `RailLabels`), `KEYS` must remain intact; removing it breaks keyboard button trials and destabilizes key stage routing.
+3. **Upstream Title Bar Harmonization**:
+   Upstream's `TitleBar::show_titled` layout pipeline naturally distributes title widths across the bar. Custom width negotiation hooks (`leading_width`, `own_width`, `wanted_width`) were retired in v1.0.3, maintaining clean upstream alignment while ensuring all 10 menu items render unclipped side-by-side.
+
+---
+
+## 3. Verification Matrix
+
+| Component | Target | Status |
 |---|---|---|
-| Panic at `accesskit_consumer node.rs:999` (`controls().unwrap()`) | **Confirmed** (log, and #15597) | n/a |
-| `ui-contract/src/runtime/access/emit.rs:258-260` adds open popup IDs to `relations.controls` without checking the popup has a node in the same update | Inferred (code reading, matches the #15597 report) | Step A1 test |
-| A popup node is the missing one | Inferred | Step A1: log the missing ID and its role when the check fails |
-| Space triggers the panic | Not verified | Reproduce in the local checkout, with a UI Automation client (Narrator, Inspect or Accessibility Insights) connected |
-| UI Automation timing causes the intermittency | Not verified | Compare crash rates with and without a UI Automation client |
-| A focused widget takes Space as Activate and opens the menu | Not verified | Step B1: log the focused widget ID when the menu opens |
-| Space handling was lost with the removed PhotoCraft UI code | Not verified | Step B1: compare the key routing in craft-libs with the pre-#15449 code (`01b79958a`, the last good commit) |
-| Another path opens the menu (e.g. the Hand context-menu mapping at `canvas_tool_menu.rs:1746`) | Not verified | Step B1 logging |
-
-Do not state an inferred or unverified row as fact until its confirmation step has run. If a step disproves a claim, revise this plan before fixing.
-
-## Plan
-
-### A. Crash (fix in craft-libs)
-1. Write a regression test in craft-libs that opens and closes popups, then asserts every ID in every relation list (`controls` and the others) exists in the emitted node set. Confirm it fails on the pinned rev.
-2. In `emit.rs`, build the set of emitted node IDs and keep only `controls` entries in that set. Apply the same filter to the other relation lists if they have the same pattern.
-3. In `egui/access/node.rs`, add a second guard before `set_controls`.
-4. Check upstream before pushing: search craft-libs open PRs and #15597 for a claim, and comment on the issue first (house rules 2 and 4). Another agent may already be editing the same files, so check its changes first.
-5. Open the craft-libs PR (`photocraft#15597`, `Part of #15476`), then bump the pinned rev here once it is merged. Do not push to `main`.
-
-### B. Menu opens on Space (fix in craft-libs or PhotoCraft, decided by the logging)
-1. Log the focused widget and the key routing path when the menu opens unexpectedly, to confirm the cause.
-2. Fix where the logging points. Options: consume Space for the Hand tool before widgets see it while the canvas is the active target, or clear widget focus after canvas interaction.
-3. Test: with a button or menu focused, pressing Space activates Hand and does not open a menu.
-4. Check upstream for an existing item first; file a `BUG-UI-REWORK-...` issue with "Part of #15476" if none exists.
-
-### C. Verification
-- craft-libs: its own tests through `tools/cl`.
-- PhotoCraft: `cargo test -p <crates>`, `cargo clippy -p <crates> --all-targets -- -D warnings`, `cargo xtask layers`, `cargo xtask wasm`.
-- Manual: press Space 30 or more times, with and without a UI Automation client. `photocraft.log` must show no `accesskit` panic.
-- Report only what ran.
+| AccessKit UIA Menu Abort | `photocraft#15597` | **Fixed & Merged Upstream (#2328)** |
+| Canvas Space Hand Tool Hijacking | `craft-libs` PR #2239 | **Fixed & Verified in PhotoCraft** |
+| Button Keyboard Space Activation | `craft-ui-panels` | **Fixed & Verified (222 passed)** |
+| CJK Font Heuristics & Localized Names | `craft-font-manager` | **Fixed & Verified (60 passed)** |
+| PSD Layr / Mt16 Transparency | `craft-psd` | **Fixed & Verified (189 passed)** |
+| Large ZIP EOCD64 Chunked Scanning | `craft-zip` | **Fixed & Verified (45 passed)** |

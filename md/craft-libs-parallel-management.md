@@ -21,13 +21,14 @@ Get the relationship between these three wrong and you end up in a state where "
 
 PhotoCraft was ported to the new framework in PR #15449, so it tracks commits on `next`.
 
-Measured (as of 2026-11-19):
+Measured (as of 2026-11-22):
 
 | Item | Value |
 |---|---|
-| The tip of upstream `next` | `7a7f5302` |
+| The tip of upstream `next` | `d7fe2623` |
 | Upstream `main` | A different line from `next`. It has no `crates/ui-contract` |
-| The pin in PhotoCraft's `Cargo.toml` | `a6b9d9c986f7c4c399632d72d9a4a8c8ea0b86e9` (**231 commits behind `next`**) |
+| The pin in PhotoCraft's `Cargo.toml` | `683fe06031224725b913c8ad3697d8e8bfec6c90` |
+| The local fork `craft-libs` HEAD | `2504e8ec5` (tag `v1.0.3`, PR #2239) |
 
 **You cannot open a PR based on `main`.** Because the code to fix does not exist on `main`.
 
