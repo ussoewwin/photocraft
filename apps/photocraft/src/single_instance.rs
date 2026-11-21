@@ -45,6 +45,9 @@ use crate::launch_args::PerProcess;
 
 const LOCK_FILE: &str = "instance.lock";
 const INFO_FILE: &str = "instance.json";
+/// `send`'s answer when nothing listens where `instance.json` pointed: a crashed or force-killed
+/// launch left the record behind, and the next round must not wait out the budget for it.
+const REFUSED: &str = "connection refused";
 /// The Unix socket a sandboxed primary listens on, in the app's runtime directory.
 #[cfg(unix)]
 const SOCKET_FILE: &str = "instance.sock";
@@ -348,7 +351,14 @@ pub fn claim_in(dir: &Path, paths: &[String], timing: Timing, transport: &Transp
         if let Some((endpoint, token)) = read_info(dir) {
             match send(&endpoint, &token, paths, deadline) {
                 Ok(()) => return Launch::Forwarded,
-                Err(e) => last = e,
+                Err(e) => {
+                    if e == REFUSED {
+                        // The primary the record named is gone. Drop the record, so the next round
+                        // takes the lock over and this launch opens the files itself, at once.
+                        let _ = std::fs::remove_file(dir.join(INFO_FILE));
+                    }
+                    last = e;
+                }
             }
         }
         if Instant::now() >= deadline {
@@ -603,7 +613,8 @@ fn parse_request(line: &str, token: &str) -> Option<(Vec<String>, Duration)> {
 /// Offer `paths` to the primary at `endpoint`; `Ok` once its UI has taken them.
 fn send(endpoint: &Endpoint, token: &str, paths: &[String], deadline: Instant) -> Result<(), String> {
     let left = deadline.checked_duration_since(Instant::now()).filter(|d| !d.is_zero()).ok_or("out of time")?;
-    let mut stream = Stream::connect(endpoint, left).map_err(|e| e.to_string())?;
+    let mut stream =
+        Stream::connect(endpoint, left).map_err(|e| if e.kind() == std::io::ErrorKind::ConnectionRefused { REFUSED.to_string() } else { e.to_string() })?;
     // The primary must answer before our deadline, so it waits a little less than we do.
     let wait_ms = u64::try_from(left.saturating_sub(REPLY_MARGIN).as_millis()).unwrap_or(u64::MAX);
     let request = json!({"token": token, "open": paths, "wait_ms": wait_ms});
