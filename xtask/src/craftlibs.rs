@@ -115,10 +115,7 @@ fn without_section(config: &str) -> String {
 fn on(root: &Path) -> Result<(), String> {
     let checkout = checkout(root);
     if !checkout.is_dir() {
-        return Err(format!(
-            "no checkout at {}: clone storytold/craft-libs there and check out the revision Cargo.toml pins",
-            checkout.display()
-        ));
+        return Err(format!("no checkout at {}: clone storytold/craft-libs there and check out the revision Cargo.toml pins", checkout.display()));
     }
     let found = crates(&checkout)?;
     let config = config_path(root);
@@ -164,21 +161,13 @@ fn check(root: &Path) -> Result<(), String> {
     if let Ok(text) = fs::read_to_string(&config)
         && text.contains(&heading())
     {
-        problems.push(format!(
-            "{} patches craft-libs ({}): `cargo xtask craftlibs off` removes it, and its lock change",
-            config.display(),
-            heading()
-        ));
+        problems.push(format!("{} patches craft-libs ({}): `cargo xtask craftlibs off` removes it, and its lock change", config.display(), heading()));
     }
     let lock = root.join("Cargo.lock");
     let text = fs::read_to_string(&lock).map_err(|e| format!("read {}: {e}", lock.display()))?;
     let locals = local_crates(&text);
     if !locals.is_empty() {
-        problems.push(format!(
-            "Cargo.lock records {} craft-libs crate(s) with no source, so a clone cannot resolve them: {}",
-            locals.len(),
-            locals.join(", ")
-        ));
+        problems.push(format!("Cargo.lock records {} craft-libs crate(s) with no source, so a clone cannot resolve them: {}", locals.len(), locals.join(", ")));
     }
     if problems.is_empty() {
         println!("craft-libs is on the pin: safe to commit");
@@ -270,11 +259,7 @@ fn pinned_rev(manifest: &str) -> Option<String> {
 }
 
 fn checkout_head(checkout: &Path) -> Option<String> {
-    let output = std::process::Command::new("git")
-        .args(["rev-parse", "--short", "HEAD"])
-        .current_dir(checkout)
-        .output()
-        .ok()?;
+    let output = std::process::Command::new("git").args(["rev-parse", "--short", "HEAD"]).current_dir(checkout).output().ok()?;
     output.status.success().then(|| String::from_utf8_lossy(&output.stdout).trim().to_owned())
 }
 
@@ -317,7 +302,8 @@ source = \"git+https://github.com/storytold/craft-libs?rev=abc#abc\"\n";
     /// rejects a repeated table.
     #[test]
     fn without_section_removes_the_generated_table_and_keeps_the_rest() {
-        let config = "[alias]\nxtask = \"run -p xtask --\"\n\n[patch.\"https://github.com/storytold/craft-libs\"]\ncraft = { path = \"../craft-libs/crates/craft\" }\n";
+        let config =
+            "[alias]\nxtask = \"run -p xtask --\"\n\n[patch.\"https://github.com/storytold/craft-libs\"]\ncraft = { path = \"../craft-libs/crates/craft\" }\n";
         let kept = without_section(config);
         assert!(kept.contains("[alias]"), "{kept}");
         assert!(!kept.contains("[patch."), "{kept}");

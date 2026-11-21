@@ -6,8 +6,8 @@
 mod cache_units;
 mod cargo_env;
 mod corpus;
-mod craftlibs;
 mod corpus_pins;
+mod craftlibs;
 #[cfg(feature = "framework-checks")]
 mod i18n_report;
 mod ico;
