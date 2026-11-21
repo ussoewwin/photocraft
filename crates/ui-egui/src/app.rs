@@ -68,10 +68,11 @@ impl PhotocraftApp {
             remove_pending: Vec::new(),
             remove_pending_target: None,
             remove_trail: None,
+            texture_serials: Default::default(),
             menu_model: None,
             toolbar_slots: Default::default(),
-            layers_tree: None,
             dock_model: Default::default(),
+            preset_art: Default::default(),
             move_preview: None,
             move_blocked: false,
             move_blocked_start: None,
@@ -159,7 +160,6 @@ impl PhotocraftApp {
             layer_box: None,
             finished_pens: Vec::new(),
             hover_doc: None,
-            commands_run: 0,
             hover_layer: None,
             layers_rename: None,
             smart_filter_picks: HashMap::new(),
@@ -361,3 +361,6 @@ mod clipboard_tests;
 
 #[cfg(test)]
 mod apply_data_set_alert_tests;
+
+#[cfg(test)]
+mod apply_data_set_missing_file_tests;
