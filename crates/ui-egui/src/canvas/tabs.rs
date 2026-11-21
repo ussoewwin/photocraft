@@ -84,13 +84,7 @@ pub(super) fn apply(app: &mut PhotocraftApp, ctx: &egui::Context, out: DocumentT
     for event in out.events {
         match event {
             DocumentTabsEvent::Selected(tab) | DocumentTabsEvent::Picked(tab) | DocumentTabsEvent::Activated(tab) => show_tab(app, tab),
-            DocumentTabsEvent::CloseRequested(DocTab::Doc(id)) => {
-                // The guarded close: a document with unsaved changes gets the save prompt. `file.close` names
-                // its document by index, and a tab names it by `DocId`, which is not the index (it starts at 1).
-                if let Some(i) = document_index(app, id) {
-                    run(app, ctx, "file.close", json!({"document": i}));
-                }
-            }
+            DocumentTabsEvent::CloseRequested(DocTab::Doc(id)) => close_document(app, ctx, id),
             DocumentTabsEvent::CloseRequested(DocTab::Opening(job)) => {
                 let _ = crate::jobs_ui::cancel(app, job);
             }
@@ -120,6 +114,13 @@ pub(super) fn apply(app: &mut PhotocraftApp, ctx: &egui::Context, out: DocumentT
         }
     }
     menu
+}
+
+/// The guarded close shared by the tab strip and a tiled document's title.
+pub(super) fn close_document(app: &mut PhotocraftApp, ctx: &egui::Context, id: DocId) {
+    if let Some(index) = document_index(app, id) {
+        let _ = crate::menus::invoke(app, ctx, "file.close", json!({"document": index}));
+    }
 }
 
 /// A chosen tab: a document tab shows that document, an opening tab its progress.
@@ -201,9 +202,8 @@ pub(crate) const TAB_MENU_SEPARATORS_AFTER: [usize; 2] = [4, 6];
 pub(crate) type TabMenuItem = (&'static str, &'static str, serde_json::Value, bool);
 
 /// All tab actions go through the same guarded commands as the menu bar, including the
-/// unsaved-changes prompt. The clicked tab's document is explicit even when another document is active.
-/// `file.close` and `file.closeOthers` name it by index, which `index` must carry (a `DocId` is not one, so
-/// passing it closed the wrong document); the window and reveal rows take the id, so those keep `doc`.
+/// unsaved-changes prompt. The clicked tab's document `doc` (at `index` in the session's list now) is explicit even when
+/// another document is active: the file commands name it by its index, Move to New Window by its id.
 /// Order and separators follow the reference application (#11403); see [`TAB_MENU_SEPARATORS_AFTER`].
 pub(crate) fn tab_context_items(doc: DocId, index: usize, count: usize, has_path: bool) -> [TabMenuItem; 8] {
     [
@@ -214,7 +214,7 @@ pub(crate) fn tab_context_items(doc: DocId, index: usize, count: usize, has_path
         ("Move to New Window", "window.arrange.floatInWindow", json!({"document": doc.0}), true),
         ("New Document…", "file.new", json!({}), true),
         ("Open Document…", "file.open", json!({}), true),
-        (crate::menus::reveal_label(), "file.revealInFinder", json!({"document": doc.0}), has_path),
+        (crate::menus::reveal_label(), "file.revealInFinder", json!({"document": index}), has_path),
     ]
 }
 
