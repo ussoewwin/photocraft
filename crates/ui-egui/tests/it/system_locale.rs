@@ -2,7 +2,7 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 use egui_kittest::Harness;
-use egui_kittest::kittest::{NodeT, Queryable};
+
 use photocraft_ui_egui::{PhotocraftApp, i18n};
 
 #[test]
@@ -28,7 +28,7 @@ fn native_first_launch_follows_os_ui_preferences() {
     // window shows, their top-level titles with the English catalogue's keys. With no document
     // open the home screen covers the canvas, but not the menu bar.
     let (req, _rx) = photocraft_ui_egui::ControlRequest::new("ui.menu.list", serde_json::json!({}));
-    let mut ctx = h.ctx.clone();
+    let ctx = h.ctx.clone();
     let reply = photocraft_ui_egui::control::handle(h.state_mut(), &ctx, &req);
     let rows = match reply {
         craft::automation::Reply::Done(v) => v,
