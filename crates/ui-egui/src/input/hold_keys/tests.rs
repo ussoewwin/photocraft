@@ -415,6 +415,8 @@ fn the_command_stand_in_rule_is_the_table() {
         Tool::Pencil,
         Tool::ColorReplacement,
         Tool::MixerBrush,
+        // PhotoCraft's LaMa Cleaner is a retouch brush: it paints, so ⌘ moves instead.
+        Tool::LamaCleaner,
         Tool::Eraser,
         Tool::BackgroundEraser,
         Tool::MagicEraser,
@@ -440,6 +442,8 @@ fn the_command_stand_in_rule_is_the_table() {
         Tool::QuickSelection,
         Tool::ObjectSelection,
         Tool::Frame,
+        // PhotoCraft's SAM 3.1 select is a selection tool: ⌘ outside a selection moves the layer.
+        Tool::Sam3Select,
     ];
     assert_eq!(got, want, "which tools hand a ⌘ press to the Move tool");
 }
