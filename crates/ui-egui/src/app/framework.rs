@@ -618,12 +618,24 @@ pub(crate) struct HeldStates {
 
 /// The tool commands: the current tool's row is checked.
 fn build_tool_states(app: &PhotocraftApp) -> SourceStates {
-    Tool::ALL.iter().map(|&tool| (CommandRef::from(crate::panels::tool_commands::command_of(tool)), CommandState::new().checked(app.ui.tool == tool))).collect()
+    let lang = crate::i18n::current();
+    Tool::ALL
+        .iter()
+        .map(|&tool| {
+            let mut state = CommandState::new().checked(app.ui.tool == tool);
+            if lang != crate::i18n::Lang::EN {
+                state = state.title(crate::i18n::tr(lang, tool.label()));
+            }
+            (CommandRef::from(crate::panels::tool_commands::command_of(tool)), state)
+        })
+        .collect()
 }
 
-/// [`build_tool_states`], derived from the tool.
+/// [`build_tool_states`], derived from the tool and the UI language.
 fn tool_states(app: &PhotocraftApp, name: &'static str) -> Arc<SourceStates> {
-    derived_states(app, name, &(app.ui.tool as u64), || build_tool_states(app))
+    let lang = crate::i18n::current().code();
+    let lang_idx = crate::i18n::LANGUAGES.iter().position(|l| l.code == lang).unwrap_or(0) as u64;
+    derived_states(app, name, &(app.ui.tool as u64, lang_idx), || build_tool_states(app))
 }
 
 /// Brings the held states up to date for the coming frame. A source whose states are the `Arc` it last gave costs a
