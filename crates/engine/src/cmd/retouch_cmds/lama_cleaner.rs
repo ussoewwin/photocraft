@@ -166,13 +166,23 @@ struct LamaTool {
 }
 
 /// The wasm build cannot run a helper process: the command reports that it needs the desktop app.
+/// The fields stay so the code around it compiles for the web build as it does on the desktop,
+/// and so the refusal comes from one place ([`LamaTool::resolve`]) on both.
 #[cfg(target_arch = "wasm32")]
-struct LamaTool;
+#[derive(Debug)]
+struct LamaTool {
+    exe: Option<std::path::PathBuf>,
+    model: Option<std::path::PathBuf>,
+}
 
 #[cfg(target_arch = "wasm32")]
 impl LamaTool {
     fn resolve(_s: &Session, _p: &Value) -> Result<Self> {
         Err(EngineError::Other("LaMa Cleaner is only available in the desktop app".into()))
+    }
+
+    fn missing_helper_message(_s: &Session, _p: &Value) -> String {
+        "LaMa Cleaner is only available in the desktop app".to_string()
     }
 }
 
@@ -585,7 +595,6 @@ fn run_helper_once(exe: &std::path::Path, model: &std::path::Path, image: &std::
     Ok(())
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 /// What one LaMa run needs besides the pixels: the helper exe, the resolved model (already
 /// downloaded by the time this runs), and the preferences folder used by the download.
 struct LamaRun<'a> {
@@ -691,7 +700,7 @@ fn execute_lama(w: usize, h: usize, ch: usize, fmt: &PixelFormat, img_data: &[f3
 }
 
 #[cfg(target_arch = "wasm32")]
-fn execute_lama(_w: usize, _h: usize, _ch: usize, _fmt: &PixelFormat, _img_data: &[f32], _hole: &[bool], _tool: &LamaTool) -> Result<Vec<f32>> {
+fn execute_lama(_w: usize, _h: usize, _ch: usize, _fmt: &PixelFormat, _img_data: &[f32], _hole: &[bool], _run: &LamaRun<'_>) -> Result<Vec<f32>> {
     Err(EngineError::Other("LaMa Cleaner is only available in the desktop app".into()))
 }
 
