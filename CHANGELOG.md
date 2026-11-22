@@ -3,6 +3,26 @@
 PhotoCraft's release history, newest first. Every release has full notes on GitHub; the last line of
 each entry links to them.
 
+## Version 1.3.7
+
+- **Changed**: **the application now rides the current official upstream** - `storytold/photocraft`
+  `main` at `cf2e416e31`, 293 commits, bringing the Adjustment Brush tool, the rewritten font picker
+  and the toolchain pin at Rust 1.100. PhotoCraft's own features stay on top of it unchanged: LaMa
+  Cleaner, SAM 3.1 selection, the quick-selection mode buttons in the options bar, dragging selected
+  pixels between documents, and localized Japanese font names. The tools a user can pick now number
+  72, which is what the README, `Tool::ALL` and the trial over both report.
+- **Changed**: the shared framework follows the fork's `next`, merged with `storytold/craft-libs`
+  `next` (78 commits) and `main`, pinned at
+  [`e953d47a`](https://github.com/storytold/craft-libs/commit/e953d47a378776dea207899b10baf969fc8cbe53)
+  (was `aa8a00a3`).
+- **Fixed**: **a face that maps its icons into the private-use areas no longer breaks the font
+  picker** - a patched face such as a Nerd Font lists those codepoints first, and the sample was
+  laid out in the interface face, which has no glyph for them (`No glyph for U+F030 (U+F030) in
+  Proportional`). Samples now skip the private-use areas.
+- **Tests**: 14,829 tests pass (`cargo nextest run --workspace`), clippy is clean under
+  `-D warnings`, and the web build checks 19 crates plus the HEIF encoder.
+- See [Release Notes v1.3.7](https://github.com/ussoewwin/photocraft/releases/tag/v1.3.7) for details.
+
 ## Version 1.3.6
 
 - **Fixed**: **`Edit > Transform > Skew` now reads ゆがみ** - it read 斜体 ("italic"), which is a
