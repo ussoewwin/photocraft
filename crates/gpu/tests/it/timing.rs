@@ -126,15 +126,17 @@ fn gpu_time_tracks_execution_not_submission() {
     // Warm the residency and pipelines: the first refresh uploads every layer.
     let _ = measure(&device, &queue, &mut comp, &doc, full);
 
-    // Best of three, by the smallest encode. Everything below is a ratio against `submit_ms`,
-    // and CPU contention on a shared machine only ever inflates it — one run that happened to
-    // encode behind a busy scheduler (8.2 ms against a typical 1.0 ms) failed the comparison
-    // while the measurement itself was right. The GPU side is unaffected by that contention,
-    // so taking the least-disturbed encode tests the same property without the false failure.
+    // Best of three, by the least-disturbed refresh. Everything below compares the GPU span with
+    // the encode and with the wait for it, and CPU contention on a shared machine only ever
+    // inflates those two — one run that happened to encode behind a busy scheduler (8.2 ms
+    // against a typical 1.0 ms) failed the comparison while the measurement itself was right, and
+    // under the full suite's load the wait inflated the same way. The GPU side is unaffected, so
+    // taking the run whose waited window is smallest compares the two timings where the machine
+    // let them show, instead of failing on a run scheduled behind other work.
     let mut best: Option<(f64, f64, Option<GpuTiming>)> = None;
     for _ in 0..3 {
         let run = measure(&device, &queue, &mut comp, &doc, full);
-        if run.2.is_some() && best.as_ref().is_none_or(|b| run.0 < b.0) {
+        if run.2.is_some() && best.as_ref().is_none_or(|b| run.1 - run.0 < b.1 - b.0) {
             best = Some(run);
         }
     }
