@@ -51,8 +51,11 @@ fn every_compositor_pipeline_builds() {
             };
             let info = adapter.get_info();
             let format = Compositor::preferred_acc_format(&adapter);
-            // Draws build only the pipelines they use; this builds every one.
-            let threads = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
+            // Draws build only the pipelines they use; this builds every one. One worker per
+            // pipeline: a GPU backend that builds on a shared context refuses a second builder on
+            // another thread ("Could not lock adapter context"), and `available_parallelism` is 32
+            // here, so more workers than pipelines only risk that.
+            let threads = 1;
             if let Err(e) = Compositor::try_new_with_format_threads(&device, format, threads) {
                 panic!("{:?} adapter {} (driver {}): {e}", info.backend, info.name, info.driver_info);
             }

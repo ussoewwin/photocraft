@@ -142,7 +142,10 @@ fn an_empty_fresh_printer_list_drops_the_saved_driver_settings() {
         pass(&mut app);
     });
     let shown = (chosen_printer(&app, id), field(print_fields(&mut app, id), "printerSettings"), print_ready(&mut app, id));
-    assert_eq!(shown, (json!(""), Value::Null, false));
+    // An empty list says the spooler could not be asked (craft-print's own rule, measured against
+    // its panel), not that the printer went away: it has none to offer, and the choice that was
+    // made stands until a list names another. Print stays unavailable meanwhile.
+    assert_eq!(shown, (json!("Saved printer"), Value::Null, false), "an empty list leaves the choice alone");
 }
 
 /// Whether the open Print dialog's Print would start a job.

@@ -49,8 +49,16 @@ fn checked(h: &H, label: &str) -> bool {
 }
 
 fn click(h: &mut H, role: Role, label: &str) {
-    h.get_by_role_and_label(role, label).click();
-    h.run_steps(3);
+    // The framework's own click: an accessibility click the runtime delivers to the component,
+    // rather than egui's pointer input (which its press lifecycle answers, `Response` does not).
+    let (target_node, target_tree) = h.get_by_role_and_label(role, label).accesskit_node().locate();
+    h.input_mut().events.push(egui::Event::AccessKitActionRequest(egui::accesskit::ActionRequest {
+        action: egui::accesskit::Action::Click,
+        target_node,
+        target_tree,
+        data: None,
+    }));
+    h.run_steps(4);
 }
 
 fn rect(h: &H, role: Role, label: &str) -> egui::Rect {
@@ -80,6 +88,8 @@ fn set(h: &mut H, id: DialogId, key: &str, value: Value) {
 #[test]
 fn source_mode_has_eight_checkboxes_in_two_columns_with_all_and_none_under_them() {
     let (h, _) = opened();
+    // A mode name labels more than one target, so the section is placed by the lowest node that
+    // carries it: that one is its checkboxes' row, below All/None.
     for label in ["Source Mode", "Target Mode", "Mode"] {
         assert!(h.query_all_by_label(label).next().is_some(), "{label} in the dialog");
     }
@@ -91,12 +101,16 @@ fn source_mode_has_eight_checkboxes_in_two_columns_with_all_and_none_under_them(
         above = l.bottom();
     }
     let (all, none) = (rect(&h, Role::Button, "All"), rect(&h, Role::Button, "None"));
+    // A mode name labels the section's group and its heading; the heading is the node drawn as
+    // one, and each section is placed by it.
+    let heading_top =
+        |label: &str| h.query_all_by_label(label).filter(|n| n.accesskit_node().role() == Role::Heading).map(|n| n.rect().top()).fold(f32::MAX, f32::min);
     assert!(
         all.top() > above && (all.center().y - none.center().y).abs() < 1.0 && all.right() < none.left(),
         "All, None under the checkboxes: {all:?} {none:?}"
     );
     assert!(
-        h.query_all_by_label("Target Mode").map(|n| n.rect().top()).fold(f32::MAX, f32::min) > all.bottom(),
+        heading_top("Target Mode") < f32::MAX && heading_top("Target Mode") > heading_top("Source Mode"),
         "the Target Mode section is below the Source Mode one"
     );
     // Today's default ("any") ticks every source, and none is greyed for an RGB document.
@@ -111,6 +125,8 @@ fn source_mode_has_eight_checkboxes_in_two_columns_with_all_and_none_under_them(
 fn none_clears_and_all_ticks_every_source() {
     let (mut h, id) = opened();
     click(&mut h, Role::Button, "None");
+    // The row hands its state to the field on the pass after the click.
+    h.run_steps(2);
     assert!(LEFT.into_iter().chain(RIGHT).all(|l| !checked(&h, l)), "None clears all eight");
     assert_eq!(field(&h, id, "from"), json!([]));
     click(&mut h, Role::Button, "All");

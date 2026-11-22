@@ -82,6 +82,10 @@ fn sources_row(ui: &mut egui::Ui, fields: &mut DialogFields, _: &mut craft::ui::
                 ui.end_row();
             }
             for (label, all) in [(tl!("All"), true), (tl!("None"), false)] {
+                // The component's own click (a press and its release, within the framework's slop),
+                // not egui's: a framework button does not answer `Response::clicked()`.
+                // `ButtonOutput::clicked`: the framework's click rule (a press and its release
+                // within the slop), which a bare `egui::Response` does not answer.
                 if Button::new(label).show(ui).clicked() {
                     on = [all; 8];
                 }
