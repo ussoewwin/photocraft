@@ -6,21 +6,31 @@ each entry links to them.
 ## Version 1.3.7
 
 - **Changed**: **the application now rides the current official upstream** - `storytold/photocraft`
-  `main` at `cf2e416e31`, 293 commits, bringing the Adjustment Brush tool, the rewritten font picker
-  and the toolchain pin at Rust 1.100. PhotoCraft's own features stay on top of it unchanged: LaMa
-  Cleaner, SAM 3.1 selection, the quick-selection mode buttons in the options bar, dragging selected
-  pixels between documents, and localized Japanese font names. The tools a user can pick now number
-  72, which is what the README, `Tool::ALL` and the trial over both report.
-- **Changed**: the shared framework follows the fork's `next`, merged with `storytold/craft-libs`
-  `next` (78 commits) and `main`, pinned at
-  [`e953d47a`](https://github.com/storytold/craft-libs/commit/e953d47a378776dea207899b10baf969fc8cbe53)
-  (was `aa8a00a3`).
+  `main` at `dbad7de99a`, bringing the Adjustment Brush tool, the rewritten font picker, the
+  floating-document window title bar and the toolchain pin at Rust 1.100. PhotoCraft's own features
+  stay on top of it unchanged: LaMa Cleaner, SAM 3.1 selection, the quick-selection mode buttons in
+  the options bar, dragging selected pixels between documents, and localized Japanese font names.
+  The tools a user can pick now number 72, which is what the README, `Tool::ALL` and the trial over
+  both report.
+- **Changed**: the shared framework is pinned at
+  [`8d436f486a`](https://github.com/storytold/craft-libs/commit/8d436f486a2e890930ffdf10b602935feb492c97)
+  (was `aa8a00a3`); the fork's `next` carries both of `storytold/craft-libs`' lines, so one checkout
+  satisfies every revision the application pins.
 - **Fixed**: **a face that maps its icons into the private-use areas no longer breaks the font
   picker** - a patched face such as a Nerd Font lists those codepoints first, and the sample was
   laid out in the interface face, which has no glyph for them (`No glyph for U+F030 (U+F030) in
   Proportional`). Samples now skip the private-use areas.
-- **Tests**: 14,829 tests pass (`cargo nextest run --workspace`), clippy is clean under
-  `-D warnings`, and the web build checks 19 crates plus the HEIF encoder.
+- **Fixed**: **the engine's split into `engine-core` no longer leaves the fork's own trials
+  broken** - a bare `Session::new()` installs no command there, so the LaMa Cleaner, SAM 3.1
+  selection and move-tool trials answered `NotInstalled`; they start from
+  `crate::install::session()` now. A compile does not catch this one, only the trials do.
+- **Fixed**: **the preferences trials run in the interface language they assert** - upstream's new
+  rows are looked up by the English words they paint, and a Japanese interface paints Japanese;
+  the shared test harness opens those pages in English, and the application still follows the
+  user's own language.
+- **Tests**: 14,851 tests pass (`cargo nextest run --workspace`), clippy is clean under
+  `-D warnings`, the web build checks 20 crates plus the HEIF encoder, and the PSD/ATN/XCF corpora
+  run 667 trials green.
 - See [Release Notes v1.3.7](https://github.com/ussoewwin/photocraft/releases/tag/v1.3.7) for details.
 
 ## Version 1.3.6
