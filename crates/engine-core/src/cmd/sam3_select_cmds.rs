@@ -712,7 +712,7 @@ mod tests {
 
     #[test]
     fn a_prompt_needs_a_target() {
-        let mut s = Session::new();
+        let mut s = crate::install::session();
         s.execute("file.new", json!({"width": 16, "height": 16, "depth": 8})).unwrap();
         assert!(prompt_from(&s, &json!({})).is_err());
         assert!(prompt_from(&s, &json!({"box": [0, 0]})).is_err());
@@ -722,7 +722,7 @@ mod tests {
 
     #[test]
     fn a_point_and_a_box_are_scaled_to_the_model_grid() {
-        let mut s = Session::new();
+        let mut s = crate::install::session();
         s.execute("file.new", json!({"width": 504, "height": 252, "depth": 8})).unwrap();
         match prompt_from(&s, &json!({"point": [252, 126]})).unwrap() {
             SamPrompt::Point(p) => {
@@ -741,7 +741,7 @@ mod tests {
 
     #[test]
     fn helper_candidates_include_plugins_and_sam3_subfolders() {
-        let s = Session::new();
+        let s = crate::install::session();
         let list = helper_candidates(Some(&s));
         assert!(!list.is_empty());
         assert!(list.iter().any(|p| p.ends_with(Path::new("plugins").join(helper_name()))));
@@ -761,7 +761,7 @@ mod tests {
         let pack = models.join(PACK_NAME);
         std::fs::write(&pack, b"pack").unwrap();
 
-        let mut s = Session::new();
+        let mut s = crate::install::session();
         let chosen = plugins.to_string_lossy().into_owned();
         s.edit_prefs(|p| {
             p.plug_ins.use_additional_plugins_folder = true;
@@ -771,7 +771,7 @@ mod tests {
         assert_eq!(download_folder(Some(&s), &helper), models);
 
         // Without the preferences folder the helper's own layout decides, and never `plugins/`.
-        let mut bare = Session::new();
+        let mut bare = crate::install::session();
         bare.edit_prefs(|p| p.plug_ins.use_additional_plugins_folder = false);
         assert_eq!(download_folder(Some(&bare), &helper), plugins.join("sam3").join("models"));
         let inside = models.join(helper_name());
@@ -808,7 +808,7 @@ mod tests {
     #[test]
     #[ignore = "needs the built SAM 3.1 helper and its HSWQ pack (CRAFT_SAM3_HELPER / CRAFT_SAM3_PACK)"]
     fn a_point_selects_the_disc_under_it_end_to_end() {
-        let mut s = Session::new();
+        let mut s = crate::install::session();
         s.execute("file.new", json!({"width": 256, "height": 256, "depth": 8})).unwrap();
         s.edit("paint", |doc, _| {
             let bg = doc.layers[0].surface_mut().unwrap();

@@ -281,7 +281,7 @@ mod tests {
     /// it; without that, the hit falls through to the layer underneath.
     #[test]
     fn a_probe_can_name_an_all_locked_layer_without_selecting_it() {
-        let mut s = Session::new();
+        let mut s = crate::install::session();
         s.execute("file.new", json!({"width": 40, "height": 40})).unwrap();
         s.execute("layer.new.layer", json!({"name": "locked"})).unwrap();
         s.execute("select.rect", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();

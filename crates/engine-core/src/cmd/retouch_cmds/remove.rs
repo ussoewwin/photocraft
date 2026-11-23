@@ -288,7 +288,7 @@ mod selection_tests {
     /// leaves one, it shows no ants, and clipping by it made every stroke "cover nothing".
     #[test]
     fn a_selection_that_selects_nothing_does_not_clip_the_stroke() {
-        let mut s = Session::new();
+        let mut s = crate::install::session();
         s.execute("file.new", json!({"width": 64, "height": 64})).unwrap();
         let p = json!({"points": [[24, 24], [40, 40]], "size": 12});
         let pl = plan(&s, &p).unwrap();

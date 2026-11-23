@@ -811,7 +811,7 @@ mod tests {
     use super::*;
 
     fn session() -> Session {
-        Session::new()
+        crate::install::session()
     }
 
     /// The preferences folder comes first, then the app's own folders, built from wherever the
