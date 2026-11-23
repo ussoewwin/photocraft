@@ -136,6 +136,10 @@ fn prefs_harness(
     let mut h = egui_kittest::Harness::builder().with_size(size).build_eframe(move |cc| {
         PhotocraftApp::setup_context(&cc.egui_ctx, Default::default());
         let mut app = PhotocraftApp::with_context(cc.egui_ctx.clone(), photocraft_engine::Session::new(), services_on(&files));
+        // The trials assert the words upstream writes, so the harness runs the interface in English:
+        // the app's default follows the system's language, and a Japanese machine would paint
+        // Japanese. The shipped app still follows the user's preferences.
+        let _ = app.run("prefs.set", json!({"values": {"interface.language": "en"}}));
         setup(&mut app);
         open_prefs(&mut app, section);
         app
