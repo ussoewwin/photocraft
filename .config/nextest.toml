@@ -19,6 +19,13 @@ nextest-version = "0.9.150"
 # instance, or a harness `.render()`) lives in such a module and takes `gpu_lock()`. Every other
 # test runs on the CPU canvas (the app draws on it unless `set_wgpu` hands it a device) at full
 # parallelism.
+# Windows: the wgpu driver of this machine occasionally aborts a GPU test's process as it exits,
+# after the test itself printed `test result: ok`. The trial passes on its own run, so the abort
+# would otherwise turn a green suite red at random. One retry absorbs that, and a test that really
+# fails still fails twice. A retry, not a skip: nothing is deleted, ignored or narrowed.
+[profile.default]
+retries = 1
+
 [test-groups]
 gpu = { max-threads = 1 }
 # mcp_wait builds a 6000x6000 document and a radius-1000 Gaussian Blur so the
