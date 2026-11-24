@@ -29,20 +29,21 @@ pub fn menu_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     MenuBarUi::new(&model.bar).mnemonics(&TOP_PREFERRED).help_search(true).keyboard(!(gate.modal || gate.recording_shortcut)).show(ui);
 }
 
-/// The commands of the menu model's bar as the command palette lists them, with each path and the English names the model carries. The bar
-/// is laid out with the options the model was built with, so the palette and the bars agree.
+/// The commands of the menu model's bar as the command palette lists them, with each path and the English names the model carries. The model's
+/// source is laid out with the options the model was built with, so the palette and the bars agree.
 pub(crate) fn help_entries(app: &mut PhotocraftApp, ctx: &egui::Context) -> Vec<craft::ui::menu::HelpEntry> {
-    use craft::menu::{LayoutOptions, Target};
+    use craft::menu::LayoutOptions;
     let lang = crate::i18n::current();
     let model = items::model(app, ctx);
     let label = |s: &'static str| crate::i18n::tr(lang, s).to_string();
     let keys = |chord: &craft::keymap::Chord| craft::ui::runtime::commands::holder(ctx, chord);
     let options = LayoutOptions::new(crate::native_menu::APP_NAME).label(&label).keys(&keys);
-    let entries = model.bar.help_entries(Target::current(), &options);
-    // A row no catalog translates (the theme names, which the framework names in English) already reads the
-    // same in every language, so its label is its English name: a query in English still finds it.
-    entries
+    model
+        .source()
+        .help_entries(items::target(ctx), &options)
         .into_iter()
+        // A row no catalog translates (the theme names, which the framework names in English) already reads the
+        // same in every language, so its label is its English name: a query in English still finds it.
         .map(|entry| match entry.english() {
             Some(_) => entry,
             None => {
