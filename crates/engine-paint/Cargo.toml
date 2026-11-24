@@ -13,6 +13,7 @@ workspace = true
 photocraft-engine-core = { workspace = true }
 craft-cms = { workspace = true }
 photocraft-algo = { workspace = true }
+photocraft-codecs = { workspace = true }
 photocraft-color = { workspace = true }
 photocraft-compose = { workspace = true }
 photocraft-doc = { workspace = true }
@@ -23,6 +24,7 @@ photocraft-raster = { workspace = true }
 rayon = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+tempfile = "3"
 
 # Core's allocation failpoints, which the brush and fill tests arm.
 [dev-dependencies]

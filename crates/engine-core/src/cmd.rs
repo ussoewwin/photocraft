@@ -101,7 +101,6 @@ pub mod plugin_cmds;
 pub mod preset_import_cmds;
 pub mod print_cmds;
 pub mod render_cmds;
-pub mod retouch_cmds;
 pub mod sam3_select_cmds;
 
 #[cfg(test)]

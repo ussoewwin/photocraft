@@ -135,7 +135,6 @@ pub use cmd::plugin_cmds;
 pub use cmd::preset_import_cmds;
 pub use cmd::print_cmds;
 pub use cmd::render_cmds;
-pub use cmd::retouch_cmds;
 pub use cmd::sam3_select_cmds;
 pub use cmd::sample_cmds;
 pub use cmd::select_extra_cmds;
