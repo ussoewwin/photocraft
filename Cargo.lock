@@ -6695,6 +6695,7 @@ name = "photocraft-engine-paint"
 version = "0.23.1"
 dependencies = [
  "craft-cms 0.1.0 (git+https://github.com/storytold/craft-libs?rev=5c5e0d52c387c0a4ae2908a07e476d7584f60362)",
+ "craft-image-codecs",
  "photocraft-algo",
  "photocraft-color",
  "photocraft-compose",
@@ -6707,6 +6708,7 @@ dependencies = [
  "rayon",
  "serde",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]
