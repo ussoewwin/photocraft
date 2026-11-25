@@ -3,7 +3,7 @@
 PhotoCraft's release history, newest first. Every release has full notes on GitHub; the last line of
 each entry links to them.
 
-## Version 1.4
+## Version 1.3.9
 
 - **Changed**: **the application rides the current official upstream** - `storytold/photocraft` `main`
   at `e22facf45` (108 commits, of which 63 change commits), with PhotoCraft's own features kept on
@@ -16,7 +16,7 @@ each entry links to them.
   upstream additions resolve together.
 - **Suites**: the workspace runs **15,460 passed / 0 failed / 96 skipped** (one GPU timing trial
   passed on its retry); `cargo xtask test-corpus` exits 0 with 670 passed / 0 failed / 11 ignored.
-- See [Release Notes v1.4](https://github.com/ussoewwin/photocraft/releases/tag/v1.4) for details.
+- See [Release Notes v1.3.9](https://github.com/ussoewwin/photocraft/releases/tag/v1.3.9) for details.
 
 ## Version 1.3.8
 
