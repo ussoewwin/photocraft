@@ -713,6 +713,9 @@ pub mod blend_options;
 pub mod blur_pins;
 pub mod brush_preset_dialog;
 pub mod caf_ui;
+#[cfg(test)]
+mod calculations_preview_tests;
+pub(crate) mod calculations_ui;
 pub(super) mod camera_raw_detail_ui;
 pub(super) mod camera_raw_gpu;
 pub(super) mod camera_raw_scope_ui;
@@ -721,6 +724,8 @@ pub(crate) mod canvas_input;
 pub mod channel_options_ui;
 #[cfg(test)]
 mod color_lookup_no_remember_tests;
+#[cfg(test)]
+mod color_lookup_smart_edit_tests;
 pub(crate) mod color_picker_preview;
 pub mod color_picker_ui;
 pub mod color_range_ui;
