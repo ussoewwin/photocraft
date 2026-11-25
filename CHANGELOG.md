@@ -2,6 +2,22 @@
 
 PhotoCraft's release history, newest first. Every release has full notes on GitHub; the last line of
 each entry links to them.
+
+## Version 1.4
+
+- **Changed**: **the application rides the current official upstream** - `storytold/photocraft` `main`
+  at `e22facf45` (108 commits, of which 63 change commits), with PhotoCraft's own features kept on
+  top: LaMa Cleaner, SAM 3.1 selection, the quick-selection mode buttons in the options bar,
+  dragging selected pixels between documents, and the localized Japanese font names.
+- **Changed**: **the shared framework is pinned at `3656e8aaa4`** (`storytold/craft-libs`, the `next`
+  line) with `craft-develop` at `249a41bd93` (the `main` line) and egui at `a87d00caa`
+  (`storytold/egui`), so one checkout satisfies every revision the application pins.
+- **Changed**: **the lock file records both sides of the merge**, so the pinned revisions and the
+  upstream additions resolve together.
+- **Suites**: the workspace runs **15,460 passed / 0 failed / 96 skipped** (one GPU timing trial
+  passed on its retry); `cargo xtask test-corpus` exits 0 with 670 passed / 0 failed / 11 ignored.
+- See [Release Notes v1.4](https://github.com/ussoewwin/photocraft/releases/tag/v1.4) for details.
+
 ## Version 1.3.8
 
 - **Changed**: **the application rides `storytold/photocraft` `main` at `e56522780`**, with
