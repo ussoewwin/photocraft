@@ -11,9 +11,9 @@ mod scratch_disk;
 mod scratch_pause;
 mod scratch_release;
 mod shape_kernel_budget;
+mod smart_filter_stages;
 mod smart_source_cache;
 mod smart_source_peak;
-mod smart_filter_stages;
 mod spot_dot_gain;
 mod text_gamma;
 
