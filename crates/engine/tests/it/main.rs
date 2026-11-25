@@ -180,7 +180,6 @@ mod shortcuts_headless;
 mod smart_clipboard_sources;
 mod smart_duplicates;
 mod smart_filter_canvas_geometry;
-mod smart_filter_stages;
 mod smart_object_tones;
 mod smart_psd;
 mod smart_rerender_fallback;

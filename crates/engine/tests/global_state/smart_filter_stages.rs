@@ -22,6 +22,10 @@ fn same_tiles(a: &Surface, b: &Surface) -> bool {
 
 #[test]
 fn toggling_the_top_filter_reuses_the_stages_below_it_until_purged() {
+    // The stage cache is process-wide: the other tests here touch it too, so this one takes its turn
+    // and starts from empty.
+    let _turn = crate::lock(&crate::PROCESS);
+    crate::purge_all_caches();
     for depth in [8, 16, 32] {
         let mut s = Session::new();
         s.execute("file.new", json!({"width": 96, "height": 64, "depth": depth})).unwrap();
