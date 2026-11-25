@@ -2,6 +2,23 @@
 
 PhotoCraft's release history, newest first. Every release has full notes on GitHub; the last line of
 each entry links to them.
+## Version 1.3.8
+
+- **Changed**: **the application rides `storytold/photocraft` `main` at `e56522780`**, with
+  PhotoCraft's own features kept on top: LaMa Cleaner, SAM 3.1 selection, the quick-selection mode
+  buttons in the options bar, dragging selected pixels between documents, and the localized
+  Japanese font names.
+- **Changed**: **the shared framework is pinned at `5c5e0d52c3`** (`storytold/craft-libs`, the
+  `next` line) with `craft-develop` at `249a41bd93` (the `main` line), so one checkout satisfies
+  every revision the application pins.
+- **Fixed**: **a GPU trial's process abort on this Windows driver is retried once**, so a suite run
+  reports the trial's own result instead of the driver's exit code.
+- **Changed**: **the smart-filter stage trial now lives with the process-wide state trials**, where
+  it takes its turn instead of sharing a process with 1,200 parallel trials. Its assertions are
+  unchanged.
+- **Suites**: the workspace runs **15,362 passed / 0 failed / 96 skipped** (one GPU trial passed on
+  its retry); `cargo xtask test-corpus` exits 0 with 670 passed / 0 failed / 11 ignored.
+- See [Release Notes v1.3.8](https://github.com/ussoewwin/photocraft/releases/tag/v1.3.8) for details.
 
 ## Version 1.3.7
 
