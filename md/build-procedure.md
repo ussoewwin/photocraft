@@ -117,7 +117,7 @@ To run the launcher **with** the full configuration, set the variables in that s
 ```powershell
 $env:CRAFT_I18N_DIR  = '<craft-i18n-checkout>'
 $env:CRAFT_FONTS_DIR = '<craft-fonts-checkout>'
-& 'D:\USERFILES\GitHub\photocraft\start-photocraft.cmd'
+& '<repository>\start-photocraft.cmd'
 ```
 
 Changing the launcher script itself is a repository change and needs its own explicit
@@ -297,7 +297,7 @@ reported first with the full path and size:
 
 Deletable when instructed: everything under a `target\` directory **except** §8.1 paths
 (`target\debug` and all build intermediates, `plugins\sam3\target`, scratch targets such as
-`D:\pf_target`, wasm plugin targets), TEMP test debris (`photocraft-*`), and `build_*.log`.
+`<isolated build directory>`, wasm plugin targets), TEMP test debris (`photocraft-*`), and `build_*.log`.
 Method, in order:
 
 1. Measure (`Get-ChildItem`, sizes, mtimes) and name every item in the report before deleting.

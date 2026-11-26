@@ -11,15 +11,15 @@ This document records "everything that was done". Nothing is hidden, including f
 
 ## 0. Premises (environment and working location)
 
-- Repository: `D:\USERFILES\GitHub\photocraft` (fork `ussoewwin/photocraft`, upstream `storytold/photocraft`)
-- PR worktree: `D:\USERFILES\GitHub\photocraft\target\wt-pr11971` (branch `pr11971-sync`)
+- Repository: `<repository>` (fork `ussoewwin/photocraft`, upstream `storytold/photocraft`)
+- PR worktree: `<repository>\target\wt-pr11971` (branch `pr11971-sync`)
 - upstream baseline: `01a5b5a389` (#15449 "PhotoCraft on the craft UI framework" = a wholesale replacement of the UI foundation, 1,529 files / +108,256 / −283,197 lines) has already been merged in
 - Environment variables for build/test (set every time):
   ```
-  $env:CARGO_TARGET_DIR='D:\pf_target_pr11971'
+  $env:CARGO_TARGET_DIR='<isolated build directory>_pr11971'
   $env:CRAFT_I18N_REQUIRED='1'
-  $env:CRAFT_I18N_DIR='D:\USERFILES\GitHub\craft-i18n'
-  $env:CRAFT_FONTS_DIR='D:\USERFILES\GitHub\photocraft\craft-fonts'
+  $env:CRAFT_I18N_DIR='<local drive>\GitHub\craft-i18n'
+  $env:CRAFT_FONTS_DIR='<repository>\craft-fonts'
   ```
 - Note: `cargo check -p photocraft-ui-egui` on its own fails with a known feature-resolution problem (13 cases of `egui::Id: serde::Serialize` not implemented). Run it with a **6-package selection**:
   `-p photocraft-ui-egui -p photocraft-engine -p photocraft -p photocraft-cli -p photocraft-text -p photocraft-automation`
@@ -179,7 +179,7 @@ commit `be2ec83fdb` (author `ussoewwin`) → pushed.
 ### The one automation case (cause confirmed)
 `crates/automation/src/rpc/tests.rs:189`:
 ```
-Io("wrote C:\Users\ussoe\AppData\Local\Temp\pc-rpc-19772.png, but could not confirm the save is durable;
+Io("wrote <local appdata>\Temp\pc-rpc-19772.png, but could not confirm the save is durable;
 it may not survive a power loss or crash: アクセスが拒否されました。 (os error 5)")
 ```
 - The save succeeded; **the durability-check re-open gave os error 5**.
@@ -193,7 +193,7 @@ it may not survive a power loss or crash: アクセスが拒否されました�
 1. **In #12452 I copied the upstream side wholesale and deleted the fork feature (the kana specimen and the ja name rule)**. Correction: restored it at a seam inside the repository (adding a line to `framework_i18n()` in `i18n.rs`, `english_font_names` in `fonts.rs`). head `7534284d4c`.
 2. **Asserted that "it cannot be restored within #12452 alone"** (it was actually possible). Correction: implemented and restored it, and retracted the error.
 3. **Laid out options and threw the decision back** ("There are only two paths. Please instruct which one"). Correction: from then on I decided and acted myself.
-4. **Cloned craft-libs on my own and tried to create a fork dependency**. Correction: deleted the clone, target, logs and temporary scripts entirely (`D:\USERFILES\craft-libs-work`, `D:\pf_target_craftlibs`, 4 logs). `Cargo.toml`/`Cargo.lock` on the photocraft side are unchanged (grep 0 hits).
+4. **Cloned craft-libs on my own and tried to create a fork dependency**. Correction: deleted the clone, target, logs and temporary scripts entirely (`<local drive>\craft-libs-work`, `<isolated build directory>_craftlibs`, 4 logs). `Cargo.toml`/`Cargo.lock` on the photocraft side are unchanged (grep 0 hits).
 5. **In #11837, deleted a failing test without implementing it** (`a_click_or_drag_inside_the_selection_in_new_mode_acts_on_the_selection`). Correction: implemented "in New mode, a press inside the selection → click deselects / drag moves the outline" in `canvas/paint_tool.rs`, restored the test and made it green. head `c6bc85941d`.
 6. **In #11837, found and fixed a porting bug where "the 4-way control was drawn as is"** (the Intersect button existed and pressing it became Add) (`operation_segments_three`; ⇧⌥ is subtract). The existing `selection_op_table` was also still on the old rule and red, so it was updated.
 7. **Assumed the 19 whole-suite failures were "environment factors"**. When actually measured, FAILED was 2, and the number 19 was simply reused from a child agent's log without checking its contents. Retracted.

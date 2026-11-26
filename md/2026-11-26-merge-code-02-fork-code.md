@@ -738,3 +738,21 @@ index f324663a3..4ca6e3b39 100644
 3. `Tool::LamaCleaner` joins the tools reset with the brush's own options.
 
 **Checked by.** `cargo nextest run -p photocraft-ui-egui` (green).
+
+## The next round, 2026-11-27: `remove.rs` and `canvas_tool_menu.rs`
+
+Merging upstream `eff5ee712` (50 commits) conflicted on two files. Both conflicts are two
+additions meeting in the same place, so the resolution keeps both sides.
+
+### `crates/engine-paint/src/cmd/retouch_cmds/remove.rs`
+
+The fork's `selection_tests` (one selection that selects nothing does not clip the stroke) and
+upstream's `remove_smart_object_tests` are separate modules; both stay, each with its own
+`#[cfg(test)]`.
+
+### `crates/ui-egui/src/canvas/canvas_tool_menu.rs`
+
+Upstream adds the `Tool::VerticalTypeMask` branch and its measured selection table; the fork adds
+`Tool::Sam3Select` to the tools that branch shares. The merged branch keeps upstream's comment and
+table and matches `Tool::RedEye | Tool::ObjectSelection | Tool::Sam3Select | Tool::Type`.
+

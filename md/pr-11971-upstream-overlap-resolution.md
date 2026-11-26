@@ -145,14 +145,14 @@ files (`crates/ui-egui/src/panels/layer_transfer/tests.rs` +610,
 | `git diff --stat upstream/main <PR>` | 13 files changed (no `AGENTS.md` or `Cargo.toml`), crate-side deletions reduced from 50 to the ~14 required in-place modification lines (§4.2) |
 
 All test commands on Windows run with Visual Studio 2022 `vcvars64.bat`, `CRAFT_I18N_REQUIRED=1`,
-`CRAFT_I18N_DIR=D:\USERFILES\GitHub\craft-i18n`, and `CRAFT_FONTS_DIR=D:\USERFILES\GitHub\photocraft\craft-fonts`.
+`CRAFT_I18N_DIR=<local drive>\GitHub\craft-i18n`, and `CRAFT_FONTS_DIR=<repository>\craft-fonts`.
 
 ---
 
 ## 7. How the measurements were produced
 
 ```powershell
-Set-Location D:\USERFILES\GitHub\photocraft
+Set-Location <repository>
 git fetch upstream main
 git log -1 --format='%H %ci %s' upstream/main
 git log -1 --format='%H %s' origin/feat/move-tool-selection-drag-transfer

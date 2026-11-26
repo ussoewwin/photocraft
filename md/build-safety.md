@@ -72,8 +72,8 @@ writes the `[patch]` section.
 
 ```powershell
 $env:CRAFT_I18N_REQUIRED='1'
-$env:CRAFT_I18N_DIR='D:\USERFILES\GitHub\craft-i18n'
-$env:CRAFT_FONTS_DIR='D:\USERFILES\GitHub\photocraft\craft-fonts'
+$env:CRAFT_I18N_DIR='<local drive>\GitHub\craft-i18n'
+$env:CRAFT_FONTS_DIR='<repository>\craft-fonts'
 cargo build --release -p photocraft
 ```
 
@@ -83,7 +83,7 @@ The compiler names where every craft crate comes from. Read the log, do not assu
 
 | Line in the log | Meaning |
 |---|---|
-| `Compiling craft-ui-contract v0.1.0 (D:\USERFILES\GitHub\craft-libs\crates\ui-contract)` | **The patch is in use.** This is the build you wanted |
+| `Compiling craft-ui-contract v0.1.0 (<craft-libs>\crates\ui-contract)` | **The patch is in use.** This is the build you wanted |
 | `Compiling craft v0.1.0 (https://github.com/storytold/craft-libs?rev=…)` | **The pin is being built.** Stop: the patch is missing, the binary will not carry the fixes |
 
 Do not wait for the build to finish when the second line appears: cancel it, run the gate, start over.

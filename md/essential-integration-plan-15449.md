@@ -1,7 +1,7 @@
 # Essential integration plan: rebuild the fork on the official #15449 base
 
 Created: 2026-11-18
-Repository: `D:\USERFILES\GitHub\photocraft` (`origin` = ussoewwin/photocraft, `upstream` = storytold/photocraft)
+Repository: `<repository>` (`origin` = ussoewwin/photocraft, `upstream` = storytold/photocraft)
 Readers: every AI that continues this work (the goal is that this document alone is enough to execute it)
 
 ---
@@ -45,11 +45,11 @@ Measured values (as of 2026-11-18)
 
 ## 3. Where the work happens
 
-- Working worktree: `D:\USERFILES\GitHub\photocraft\target\wt-main` (branch `main-rebuild`, created from `upstream/main`)
+- Working worktree: `<repository>\target\wt-main` (branch `main-rebuild`, created from `upstream/main`)
 - Existing PR worktrees (do not touch):
   - `target\wt-pr12452` (`pr12452-sync`)
-  - `target\wt-pr11837` (`pr11837-sync`, warmed build at `D:\pf_target_pr11837`)
-  - `target\wt-pr11971` (`pr11971-sync`, warmed build at `D:\pf_target_pr11971`)
+  - `target\wt-pr11837` (`pr11837-sync`, warmed build at `<isolated build directory>_pr11837`)
+  - `target\wt-pr11971` (`pr11971-sync`, warmed build at `<isolated build directory>_pr11971`)
 - If a worktree is in a half-done state, it may be thrown away and recreated: `git worktree remove --force target\wt-main`, `git branch -D main-rebuild`, `git worktree add -b main-rebuild target\wt-main upstream/main`.
 - If an `index.lock` is left behind, confirm no git process is running before deleting it (`.git\worktrees\wt-main\index.lock`).
 
@@ -58,7 +58,7 @@ Measured values (as of 2026-11-18)
 ### Step 1: the base and the conflict-free PRs (skip if already done)
 
 ```powershell
-Set-Location D:\USERFILES\GitHub\photocraft
+Set-Location <repository>
 git fetch upstream origin
 git worktree add -b main-rebuild target\wt-main upstream/main
 Set-Location target\wt-main
@@ -99,7 +99,7 @@ git diff --name-only $base origin/main | Where-Object { $_ -notmatch '^(plugins/
 Targets: engine, format, automation, `plugins/`, `md/`, `assets/icons`, `.gitignore`, `README.md`, `start-photocraft.cmd`, `ja.tsv`. They do not depend on the UI framework, so they should apply cleanly.
 
 ```powershell
-Set-Location D:\USERFILES\GitHub\photocraft\target\wt-main
+Set-Location <repository>\target\wt-main
 $base='2163bd45af'
 # List the engine/format/automation files above plus plugins md assets .gitignore README start-photocraft.cmd ja.tsv
 git diff --binary $base origin/main -- <paths...> > ..\fork_a.patch
@@ -143,7 +143,7 @@ cargo xtask wasm
 ### Step 6: updating `main` (after the user's approval)
 
 1. Reflect `main-rebuild` into `main`. Because `origin/main` becomes a rebuilt history, always confirm with the user.
-2. For `photocraft_sync_and_build` (the `git_automation` MCP) **always** specify `repository_path` (without it, it fails with `Invalid repository path`). Example: `repository_path = D:\USERFILES\GitHub\photocraft`.
+2. For `photocraft_sync_and_build` (the `git_automation` MCP) **always** specify `repository_path` (without it, it fails with `Invalid repository path`). Example: `repository_path = <repository>`.
 3. Integrate one PR at a time, not in one batch. For the PR branch sync (`sync_pr_branches`), set it to `false` or state `pr_branches` explicitly so that the branch another AI is working on (#11971) is not touched.
 
 ### Step 7: integrating #11971 (last)
@@ -176,13 +176,13 @@ cargo xtask wasm
 - Load the MSVC environment before running `cargo`. Without it, `aws-lc-sys` cannot find `stdint.h` and fails.
 
 ```powershell
-$env:CARGO_TARGET_DIR = "D:\pf_target_main"   # use a dedicated target per job (about 10 GB each)
-Set-Location D:\USERFILES\GitHub\photocraft\target\wt-main
+$env:CARGO_TARGET_DIR = "<isolated build directory>_main"   # use a dedicated target per job (about 10 GB each)
+Set-Location <repository>\target\wt-main
 cmd /c "call ""C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"" >nul && cargo test --lib -- <filter>"
 ```
 
 - When using a warmed target, run `cargo test --lib -- <filter>` without `-p` (so that the feature unification matches the existing cache).
-- If Python is needed, call `D:\USERFILES\ComfyUI\python_embeded\python.exe` by its full path. Do not use the global Python.
+- If Python is needed, call `<local drive>\ComfyUI\python_embeded\python.exe` by its full path. Do not use the global Python.
 - Code conventions: never use `unwrap()`, `expect()` or `panic!()` in production code. Never put an AI's perspective or a signature into commits or documents.
 
 ## 8. Definition of done

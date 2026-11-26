@@ -289,3 +289,25 @@
 - The upstream steps after the last full suite (CI and documentation files only, no `.rs` or `.toml` change) were not re-run through the suite; the release executable is built from that tree.
 - The GPU timing trials measure the wall clock, so their results depend on the machine's load.
 - The release executable was started and its window shown; the interface was not judged by eye against the reference application.
+
+## The rounds that followed, 2026-11-27
+
+- The merge of upstream `eff5ee712` (50 commits, 52 files, +2,280 / −145) is commit `567c02af5`;
+  the upstream tip at the end of the round is `eff5ee712` and the branch is 0 behind it.
+- Conflicts: 2 files (`crates/engine-paint/src/cmd/retouch_cmds/remove.rs`,
+  `crates/ui-egui/src/canvas/canvas_tool_menu.rs`); both additions met in one place and both are
+  kept, recorded in `2026-11-26-merge-code-02-fork-code.md`.
+- The three-way audit: upstream changes dropped **0** of 52 files, fork changes dropped **0** of
+  190 files; the 10 files both sides touched keep every added line of both (255 upstream, 490 fork).
+- Fork-only files: **87**, the same count as before the round, none lost.
+
+### What was measured in this round
+
+- `cargo fmt -- --check`: exit 0.
+- `cargo clippy --workspace --all-targets -- -D warnings`: exit 0.
+- `cargo xtask layers`, `cargo xtask panel-commands`: both OK.
+- `cargo nextest run --workspace --no-fail-fast`: **15,845 passed / 0 failed / 96 skipped**, exit 0.
+- `cargo xtask wasm`: exit 0; `cargo xtask parity`: exit 0.
+- `cargo build --release -p photocraft`: exit 0; the executable is 331,762,176 B, was started, showed
+  the `PhotoCraft` window, answered, and left no process behind.
+

@@ -1,7 +1,7 @@
 # Space Key Crash & Menu Activation Resolution Report (craft-libs integration)
 
-> **Repository:** `D:\USERFILES\GitHub\photocraft` (tracking `storytold/photocraft`)  
-> **Associated Framework:** `D:\USERFILES\GitHub\craft-libs` (`next` branch, tag `v1.0.3`, PR #2239)  
+> **Repository:** `<repository>` (tracking `storytold/photocraft`)  
+> **Associated Framework:** `<craft-libs>` (`next` branch, tag `v1.0.3`, PR #2239)  
 > **Status:** Completely Resolved and Verified  
 
 ---
@@ -36,7 +36,7 @@ During architectural refactoring and upstream harmonization, the following rules
 1. **Local Framework Patching**:
    PhotoCraft must be linked to the local `craft-libs` fork checkout via:
    ```powershell
-   cd D:\USERFILES\GitHub\photocraft
+   cd <repository>
    cargo xtask craftlibs on
    ```
    If unpatched, PhotoCraft builds against the upstream pinned rev in `Cargo.lock`, which lacks the fork's Space-key isolation and CJK font classification.

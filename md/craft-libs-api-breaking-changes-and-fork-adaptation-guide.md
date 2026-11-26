@@ -1,114 +1,71 @@
-# craft-libs API 破壊的変更とフォーク機能完全対応技術仕様書
+# craft-libs API breaking changes and the fork's adaptation
 
-本文書は、`craft-libs`（`storytold/craft-libs:next` HEAD）における大規模な内部設計リファクタリングに伴う破壊的変更（API Breaking Changes）の技術的詳細、それに対する `photocraft`（`crates/ui-egui`）の適合改修、およびフォーク固有機能（Spaceキーによる Hand ツール排他制御、PSD 拡張ブロック、ZIP EOCD64、CJK フォント分類等）を完全温存するための技術仕様と実装全文を記録したものである。
+This document records the breaking changes that came with the upstream redesign of `storytold/craft-libs` (`next`), the changes `photocraft` (`crates/ui-egui`) needed to meet them, and the fork features that had to survive: Space as the Hand tool's own key (the `with_space_activation` rule), the PSD extension blocks, the ZIP 64-bit EOCD header, and the CJK font classification.
 
----
-
-## 目次
-1. [① 何が問題だったのか](#1-何が問題だったのか)
-2. [② 本質的な原因](#2-本質的な原因)
-3. [③ 新規作成・修正したファイル名一覧](#3-新規作成修正したファイル名一覧)
-4. [④ 新規作成・修正したコード全文](#4-新規作成修正したコード全文)
-   - [4-1. photocraft/Cargo.toml（egui 依存リビジョン同期）](#4-1-photocraftcargotomlegui-依存リビジョン同期)
-   - [4-2. crates/ui-egui/src/menus/bar.rs（メニューバー英語公開 API 撤廃対応）](#4-2-cratesui-egusrcmenusbarrsメニューバー英語公開-api-撤廃対応)
-   - [4-3. crates/ui-egui/src/menus/items.rs（メニュー項目コレクション簡素化）](#4-3-cratesui-egusrcmenusitemsrsメニュー項目コレクション簡素化)
-   - [4-4. crates/ui-egui/src/prefs/prefs_ui/presets.rs（HostedPresetManager ジェネリクス単一化）](#4-4-cratesui-egusrcprefsprefs_uipresetsrshostedpresetmanager-ジェネリクス単一化)
-   - [4-5. crates/ui-egui/src/panels/brush_panel/brushes.rs（MemoProps 導入と PresetSource 構築）](#4-5-cratesui-egusrcpanelsbrush_panelbrushesrsmemoprops-導入と-presetsource-構築)
-   - [4-6. crates/ui-egui/src/panels/preset_browser.rs（PresetRowsInput メモ化ラッパーとソース構築関数）](#4-6-cratesui-egusrcpanelspreset_browserrspresetrowsinput-メモ化ラッパーとソース構築関数)
-   - [4-7. crates/ui-egui/src/dialogs/pattern_fill_ui.rs（PatternSwatch への画像直接バインド）](#4-7-cratesui-egusrcdialogspattern_fill_uirspatternswatch-への画像直接バインド)
-   - [4-8. crates/ui-egui/src/dialogs/fill_ui.rs（パターンソース適合）](#4-8-cratesui-egusrcdialogsfill_uirsパターンソース適合)
-   - [4-9. crates/ui-egui/src/dialogs/layer_style/contour.rs（関数ポインタ輪郭サンプラー化）](#4-9-cratesui-egusrcdialogslayer_stylecontourrs関数ポインタ輪郭サンプラー化)
-   - [4-10. crates/ui-egui/src/dialogs/layer_style.rs（スタイルソース構築とスレッド安全性確保）](#4-10-cratesui-egusrcdialogslayer_stylersスタイルソース構築とスレッド安全性確保)
-   - [4-11. crates/ui-egui/src/panels/options_bar/paint.rs（不要フィールド削除）](#4-11-cratesui-egusrcpanelsoptions_barpaintrs不要フィールド削除)
-   - [4-12. crates/ui-egui/src/panels/brush_sections.rs（不要フィールド初期化削除）](#4-12-cratesui-egusrcpanelsbrush_sectionsrs不要フィールド初期化削除)
-   - [4-13. crates/ui-egui/src/tools/brush_picker.rs（ブラシプリセットピッカーソース適合）](#4-13-cratesui-egusrctoolsbrush_pickerrsブラシプリセットピッカーソース適合)
-   - [4-14. crates/ui-egui/src/tools/cas_transform.rs 他（PreviewTextures への &mut Serials 伝播）](#4-14-cratesui-egusrctoolscas_transformrs-他previewtextures-への-mut-serials-伝播)
-   - [4-15. crates/ui-egui/src/tools/stroke_trail.rs（CoverageMask への &mut Serials 伝播）](#4-15-cratesui-egusrctoolsstroke_trailrscoveragemask-への-mut-serials-伝播)
-   - [4-16. crates/ui-egui/src/tools/object_finder.rs（HoverMask への &mut Serials 伝播）](#4-16-cratesui-egusrctoolsobject_finderrshovermask-への-mut-serials-伝播)
-   - [4-17. MCP 自動同期スクリプト photocraft_sync_mcp_server.py（フォーク機能保護とテスト義務化）](#4-17-mcp-自動同期スクリプト-photocraft_sync_mcp_serverpyフォーク機能保護とテスト義務化)
-5. [⑤ その技術的意味と設計思想](#5-その技術的意味と設計思想)
+Every path below is repository-relative. Code is quoted from the working tree at the time of the repair; the measurements at the end are dated.
 
 ---
 
-## ① 何が問題だったのか
+## 1. What broke
 
-### 1. リリースビルドの完全停止とコンパイルエラー群
-`photocraft` の最新リリースバイナリをビルドする際、共有ライブラリである `craft-libs`（`next` ブランチ）をローカルパッチ（`cargo xtask craftlibs on`）でリンクしたところ、`crates/ui-egui` を中心に大量の型エラー・トレイト境界エラー・未定義メソッドエラーが発生し、ビルドが完全に停止した。
-これにより、最新のフォーク機能を含んだ Windows 向け実行可能バイナリ（`photocraft.exe`, `photocraft-cli.exe`）の生成が不能となっていた。
+### 1.1 The release build stopped
+Linking the shared library (`craft-libs`, `next`) into `photocraft` with the local patch (`cargo xtask craftlibs on`) produced type errors, trait-bound errors and calls to methods that no longer existed, across `crates/ui-egui`; no Windows binary (`photocraft.exe`, `photocraft-cli.exe`) could be produced from that tree.
 
-### 2. 公式 upstream の大幅リファクタリングによる破壊
-公式 upstream（`storytold/craft-libs:next`）において、UI コンポーネントの再描画コスト削減のためのメモ化（memoization）機構の導入、多言語メニュー処理のアーキテクチャ変更、プリセットマネージャの型パラメータ整理、egui レンダリングパイプラインの世代管理導入が一度にコミットされた。
-これにより、`craft-libs` が外部向けに公開している主要な API シグネチャが根本から変更され、従来の呼び出しを行っていた `photocraft` との結合が破壊された。
+### 1.2 The upstream redesign
+Upstream introduced memoization for the UI panels, changed how multilingual menus are published, simplified the preset manager's type parameters, and added generation tracking to the rendering caches — in one series of commits. The public signatures the application had been calling changed with them.
 
-### 3. 自動化スクリプトによるフォーク機能破壊の潜在リスク
-従来の MCP 同期スクリプト（`photocraft_sync_mcp_server.py`）では、upstream の同期時に `--theirs` 戦略（upstream 側コードで強制上書き）を採用している箇所が存在し、フォーク独自に導入した `crates/zip`（ZIP 64bit EOCD 拡張ヘッダ対応）がプレフィックス指定により一括削除・上書きされる危険性があった。
-また、Spaceキーによる Hand ツール排他起動処理（`activate_on_space`, `with_space_activation`）が upstream のジェスチャ更新と衝突して打ち消される懸念が存在した。
+### 1.3 The risk in the automation
+The local sync script used `--theirs` (take upstream's file) on some paths, and it listed `crates/zip` among the upstream-only prefixes; the fork's ZIP 64-bit EOCD support could have been overwritten by a sync. The Space rule (`activate_on_space`, `with_space_activation`) could have been cancelled the same way.
 
 ---
 
-## ② 本質的な原因
+## 2. The causes
 
-### 1. `PresetSource` における `MemoProps` トレイト境界の導入
-`craft-libs:next` では、UI パネル（ブラシ、パターン、レイヤースタイル等）の毎フレームの無駄な再生成を抑制するため、`PresetSource::new<I: MemoProps>` という型制約が導入された。
-しかし、従来の `photocraft` が保持していた `PresetRow<K>` は、内部フィールド `preview` に関数ポインタ・クロージャ（`Arc<dyn Fn...>`）を保持しているため、Rust 標準の `PartialEq` や `Hash` を自動導出できず、`MemoProps` を満たすことができなかった。このため、`PresetRow` 配列をそのまま渡していた全箇所でコンパイルが拒絶された。
-
-### 2. `HostedPresetManager` のジェネリクス単一化と `.rows()` 廃止
-以前の `HostedPresetManager<K, G>` はグループ型 `G`（`usize` 等）を受け取っていたが、upstream ではグループ化責務が別レイヤーに分離され、`HostedPresetManager<K>` に単一化された。さらに、行全体を一括取得する `.rows(...)` メソッドが撤廃され、識別名リストのみを管理する `.names(...)` メソッドへと変更された。呼び出し側の `prefs_ui/presets.rs` がこれに追従していなかった。
-
-### 3. 多言語メニュー公開 API（`publish_english` 等）の撤廃
-`craft-menu` において、英語のメニュー定義を外部へ公開する `MenuBarUi::english` や `publish_english`、関連するヘルパー関数群（`english_names`, `english_label`, `english_title`, `collect_english`）が削除された。`photocraft` の `menus/bar.rs` および `menus/items.rs` がこれらの未定義 API を呼び出し続けていたためエラーとなった。
-
-### 4. レンダリングキャッシュ管理用 `Serials` 引数の追加
-upstream の `craft-ui-primitives` において、テクスチャやマスクのキャッシュ有効性を追跡するため、コンストラクタ（`PreviewTextures::new`, `CoverageMask::new`, `HoverMask::sampled`）の第1引数に `&mut Serials` の受け渡しが義務付けられた。`photocraft` 側のツール群（変形ツール、選択ツール、ブラシストローク等）が旧来の引数なしコンストラクタを呼んでいた。
-
-### 5. `storytold/egui` 依存リビジョンの先行乖離
-`craft-libs` は、アクセシビリティツリーの循環参照を検証する新メソッド `Context::with_accesskit_parents` を利用するため、`storytold/egui` のピンをコミット `8a3c5ecb29` に更新していた。
-一方、`photocraft` のルート `Cargo.toml` は古いコミット `6525c87923` を固定していた。テスト実行時（`cargo test`）に `craft-ui-contract` の `testing` フィーチャーが有効化された際、古い `egui` には当該メソッドが存在しないため、リンク時コンパイルエラー `E0599` が発生した。
-
-### 6. スレッド安全性（`Send + Sync`）の境界問題
-`photocraft_engine::Session` は、バックグラウンド処理チャネル（`Jobs`）等を保持しているため、Rust の `!Sync`（スレッド間共有不可）である。
-`craft-libs:next` の `preset_source_with_thumb` に渡すサムネイル生成クロージャは `'static + Send + Sync` を要求するため、`Session` への参照を直接キャプチャするとスレッド安全性境界に違反してコンパイル不能となった。
+1. **`MemoProps` on `PresetSource`.** `PresetSource::new<I: MemoProps>` refuses the old `PresetRow<K>`, whose `preview` is an `Arc<dyn Fn...>`: it cannot derive `PartialEq` or `Hash`. Every place that passed a `PresetRow` array stopped compiling.
+2. **`HostedPresetManager<K, G>` became `HostedPresetManager<K>`,** and `.rows(...)` became `.names(...)`; grouping moved to another layer.
+3. **The English menu API was removed.** `MenuBarUi::english`, `publish_english` and the helpers (`english_names`, `english_label`, `english_title`, `collect_english`) are gone.
+4. **`&mut Serials` became a constructor argument** for `PreviewTextures::new`, `CoverageMask::new` and `HoverMask::sampled`.
+5. **The egui pin diverged.** craft-libs pins `storytold/egui` `8a3c5ecb29` for `Context::with_accesskit_parents`; the application root still pinned `6525c87923`, so `cargo test` failed to link (`E0599`) once the `testing` feature was on.
+6. **`Send + Sync` at the thumbnail boundary.** `photocraft_engine::Session` is `!Sync` (it owns the job channel), and the thumbnail closure requires `'static + Send + Sync`; a captured `Session` reference cannot satisfy both.
 
 ---
 
-## ③ 新規作成・修正したファイル名一覧
+## 3. The files that changed
 
-### photocraft 側修正ファイル（20ファイル + 構成定義2ファイル）
-1. [Cargo.toml](file:///D:/USERFILES/GitHub/photocraft/Cargo.toml) - `storytold/egui` の全クレートの rev を `8a3c5ecb29ab8679d57035f2cb51d7ec8a5c080f` へ更新
-2. [Cargo.lock](file:///D:/USERFILES/GitHub/photocraft/Cargo.lock) - ロックファイルの依存解決更新
-3. [.cargo/config.toml](file:///D:/USERFILES/GitHub/photocraft/.cargo/config.toml) - `craft-libs` 231クレートのローカルパッチ有効化
-4. [crates/ui-egui/src/menus/bar.rs](file:///D:/USERFILES/GitHub/photocraft/crates/ui-egui/src/menus/bar.rs) - 廃止された `MenuBarUi::english` の削除、`MenuModel` のキャッシュ世代管理化
-5. [crates/ui-egui/src/menus/items.rs](file:///D:/USERFILES/GitHub/photocraft/crates/ui-egui/src/menus/items.rs) - `publish_english` および不要な英語収集処理の完全削除
-6. [crates/ui-egui/src/prefs/prefs_ui/presets.rs](file:///D:/USERFILES/GitHub/photocraft/crates/ui-egui/src/prefs/prefs_ui/presets.rs) - `HostedPresetManager<String>` への単一化、`manager.names(...)` 適合
-7. [crates/ui-egui/src/panels/brush_panel/brushes.rs](file:///D:/USERFILES/GitHub/photocraft/crates/ui-egui/src/panels/brush_panel/brushes.rs) - `BrushKey` への `MemoProps` 付与と `preset_source` 呼び出し
-8. [crates/ui-egui/src/panels/brush_sections.rs](file:///D:/USERFILES/GitHub/photocraft/crates/ui-egui/src/panels/brush_sections.rs) - `PaintValues` 変更に伴う初期化コード適合
-9. [crates/ui-egui/src/panels/options_bar/paint.rs](file:///D:/USERFILES/GitHub/photocraft/crates/ui-egui/src/panels/options_bar/paint.rs) - 廃止された `size`, `hardness` の不要割り当て削除
-10. [crates/ui-egui/src/panels/preset_browser.rs](file:///D:/USERFILES/GitHub/photocraft/crates/ui-egui/src/panels/preset_browser.rs) - `PresetKey` への `MemoProps` 付与、`PresetRowsInput` ラッパー実装、`preset_source` / `preset_source_with_thumb` 実装
-11. [crates/ui-egui/src/dialogs/pattern_fill_ui.rs](file:///D:/USERFILES/GitHub/photocraft/crates/ui-egui/src/dialogs/pattern_fill_ui.rs) - 廃止された `.thumbnails(...)` の撤廃、`PatternSwatch::with_picture` による直接画像バインド
-12. [crates/ui-egui/src/dialogs/fill_ui.rs](file:///D:/USERFILES/GitHub/photocraft/crates/ui-egui/src/dialogs/fill_ui.rs) - `preset_source` 経由でのパターン一覧供給
-13. [crates/ui-egui/src/dialogs/layer_style/contour.rs](file:///D:/USERFILES/GitHub/photocraft/crates/ui-egui/src/dialogs/layer_style/contour.rs) - クロージャ型から関数ポインタ型 `fn(&[[f32; 2]]) -> Vec<f32>` への適合
-14. [crates/ui-egui/src/dialogs/layer_style.rs](file:///D:/USERFILES/GitHub/photocraft/crates/ui-egui/src/dialogs/layer_style.rs) - `StyleInputs` への `MemoProps` 実装、サムネイル用パターンのクローン分離（スレッド安全性担保）
-15. [crates/ui-egui/src/tools/brush_picker.rs](file:///D:/USERFILES/GitHub/photocraft/crates/ui-egui/src/tools/brush_picker.rs) - `PickerInput` への `MemoProps` 適合、`source` 参照の引き渡し
-16. [crates/ui-egui/src/tools/cas_transform.rs](file:///D:/USERFILES/GitHub/photocraft/crates/ui-egui/src/tools/cas_transform.rs) - `PreviewTextures::new` への `&mut Serials` 伝播
-17. [crates/ui-egui/src/tools/perspective_ui.rs](file:///D:/USERFILES/GitHub/photocraft/crates/ui-egui/src/tools/perspective_ui.rs) - 同上
-18. [crates/ui-egui/src/tools/puppet_ui.rs](file:///D:/USERFILES/GitHub/photocraft/crates/ui-egui/src/tools/puppet_ui.rs) - 同上
-19. [crates/ui-egui/src/tools/transform_tool.rs](file:///D:/USERFILES/GitHub/photocraft/crates/ui-egui/src/tools/transform_tool.rs) - 同上
-20. [crates/ui-egui/src/tools/transform_tool/begin.rs](file:///D:/USERFILES/GitHub/photocraft/crates/ui-egui/src/tools/transform_tool/begin.rs) - 全 7 箇所の `PreviewTextures::new` への `&mut Serials` 伝播
-21. [crates/ui-egui/src/tools/stroke_trail.rs](file:///D:/USERFILES/GitHub/photocraft/crates/ui-egui/src/tools/stroke_trail.rs) - `CoverageMask::new` への `&mut Serials` 伝播
-22. [crates/ui-egui/src/tools/object_finder.rs](file:///D:/USERFILES/GitHub/photocraft/crates/ui-egui/src/tools/object_finder.rs) - `HoverMask::sampled` への `&mut Serials` 伝播
+Twenty-two files in `photocraft`, and the local sync script (outside this repository).
 
-### MCP 自動化スクリプト修正ファイル（1ファイル）
-- `C:\Users\ussoe\.gemini\config\skills\photocraft-sync-builder\photocraft_sync_mcp_server.py`
-  - `upstream_only_prefixes` から `crates/zip` を完全除外
-  - フォーク独自機能の保護ルール（Spaceキー、PSD、ZIP、CJKフォント）の明示
-  - マージ後の x64 自動テスト対象（`craft-ui-canvas`, `craft-ui-widgets`, `craft-ui-panels`, `craft-psd`, `craft-zip`）の義務化
+| # | path | change |
+|---|---|---|
+| 1 | `Cargo.toml` | the pinned `storytold/egui` revision moves to `8a3c5ecb29` |
+| 2 | `Cargo.lock` | the lock file follows |
+| 3 | `.cargo/config.toml` | the local patch of the 231 `craft-libs` crates |
+| 4 | `crates/ui-egui/src/menus/bar.rs` | `MenuBarUi::english` is gone; `MenuModel` carries the cache generation |
+| 5 | `crates/ui-egui/src/menus/items.rs` | `publish_english` and the English collection are gone |
+| 6 | `crates/ui-egui/src/prefs/prefs_ui/presets.rs` | `HostedPresetManager<String>`, `manager.names(...)` |
+| 7 | `crates/ui-egui/src/panels/brush_panel/brushes.rs` | `BrushKey` implements `MemoProps`; `preset_source` |
+| 8 | `crates/ui-egui/src/panels/brush_sections.rs` | `PaintValues` initialisation |
+| 9 | `crates/ui-egui/src/panels/options_bar/paint.rs` | the removed `size` and `hardness` assignments |
+| 10 | `crates/ui-egui/src/panels/preset_browser.rs` | `PresetKey` implements `MemoProps`; `PresetRowsInput`, `preset_source`, `preset_source_with_thumb` |
+| 11 | `crates/ui-egui/src/dialogs/pattern_fill_ui.rs` | `.thumbnails(...)` is gone; `PatternSwatch::with_picture` |
+| 12 | `crates/ui-egui/src/dialogs/fill_ui.rs` | the pattern list through `preset_source` |
+| 13 | `crates/ui-egui/src/dialogs/layer_style/contour.rs` | the closure type becomes `fn(&[[f32; 2]]) -> Vec<f32>` |
+| 14 | `crates/ui-egui/src/dialogs/layer_style.rs` | `StyleInputs` implements `MemoProps`; the thumbnail pattern is cloned apart |
+| 15 | `crates/ui-egui/src/tools/brush_picker.rs` | `PickerInput` implements `MemoProps`; the source is passed by reference |
+| 16 | `crates/ui-egui/src/tools/cas_transform.rs` | `&mut Serials` reaches `PreviewTextures::new` |
+| 17 | `crates/ui-egui/src/tools/perspective_ui.rs` | the same |
+| 18 | `crates/ui-egui/src/tools/puppet_ui.rs` | the same |
+| 19 | `crates/ui-egui/src/tools/transform_tool.rs` | the same |
+| 20 | `crates/ui-egui/src/tools/transform_tool/begin.rs` | `&mut Serials` at all seven `PreviewTextures::new` calls |
+| 21 | `crates/ui-egui/src/tools/stroke_trail.rs` | `&mut Serials` reaches `CoverageMask::new` |
+| 22 | `crates/ui-egui/src/tools/object_finder.rs` | `&mut Serials` reaches `HoverMask::sampled` |
 
 ---
 
-## ④ 新規作成・修正したコード全文
+## 4. The code
 
-### 4-1. photocraft/Cargo.toml（egui 依存リビジョン同期）
-`craft-libs:next` HEAD が要求する `Context::with_accesskit_parents` を満たすため、egui 関連クレートの rev を一括更新した。
+### 4-1 `Cargo.toml` — the egui revision follows craft-libs
+
+craft-libs needs `Context::with_accesskit_parents`, so its pin moved to `8a3c5ecb29`; the application root pinned the older `6525c87923` and failed to link once `craft-ui-contract`'s `testing` feature turned on (`E0599`). The four `storytold/egui` entries move together.
 
 ```toml
 ecolor = { git = "https://github.com/storytold/egui.git", rev = "8a3c5ecb29ab8679d57035f2cb51d7ec8a5c080f" }
@@ -127,8 +84,9 @@ egui_demo_lib = { git = "https://github.com/storytold/egui.git", rev = "8a3c5ecb
 egui_inspection = { git = "https://github.com/storytold/egui.git", rev = "8a3c5ecb29ab8679d57035f2cb51d7ec8a5c080f" }
 ```
 
-### 4-2. crates/ui-egui/src/menus/bar.rs（メニューバー英語公開 API 撤廃対応）
-廃止された `MenuBarUi::english` を削除し、`MenuModel` に `state: u64` を保持させてメニュー状態キャッシュの変更検知を行う構造に最適化した。
+### 4-2 `crates/ui-egui/src/menus/bar.rs` — the English menu API is gone
+
+`MenuBarUi::english` and the helpers behind it were removed upstream; the model keeps its cache generation instead.
 
 ```rust
 #[derive(Clone, Default)]
@@ -163,8 +121,9 @@ pub fn menu_bar(
 }
 ```
 
-### 4-3. crates/ui-egui/src/menus/items.rs（メニュー項目コレクション簡素化）
-廃止された `publish_english` および不要な英語収集（`collect_english`）を全削除し、`help_entries` のシグネチャを 2 引数に整合させた。
+### 4-3 `crates/ui-egui/src/menus/items.rs` — the English collection is gone
+
+`publish_english` and the collection around it were removed upstream; the menu items are built once, in the language the catalog supplies.
 
 ```rust
 pub(crate) fn show_help_menu(
@@ -181,8 +140,9 @@ pub(crate) fn show_help_menu(
 }
 ```
 
-### 4-4. crates/ui-egui/src/prefs/prefs_ui/presets.rs（HostedPresetManager ジェネリクス単一化）
-`HostedPresetManager<String, usize>` から第2引数を削除し `HostedPresetManager<String>` に変更。廃止された `.rows(...)` を `.names(load_names(app, kind))` に変更した。
+### 4-4 `crates/ui-egui/src/prefs/prefs_ui/presets.rs` — one type parameter
+
+`HostedPresetManager<K, G>` became `HostedPresetManager<K>`, and `.rows(...)` became `.names(...)`; grouping now belongs to another layer.
 
 ```rust
 #[derive(Clone, Debug, Default)]
@@ -204,8 +164,9 @@ impl PresetsUi {
 }
 ```
 
-### 4-5. crates/ui-egui/src/panels/brush_panel/brushes.rs（MemoProps 導入と PresetSource 構築）
-`BrushKey` に `#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, MemoProps)]` を付与し、`preset_source` 経由でメモ化されたソースを構築した。
+### 4-5 `crates/ui-egui/src/panels/brush_panel/brushes.rs` — `MemoProps` on the key
+
+`PresetSource::new` requires `I: MemoProps` so a panel is not rebuilt every frame; `BrushKey` derives it and the source is built from the brush list.
 
 ```rust
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, MemoProps)]
@@ -216,8 +177,9 @@ pub(crate) fn brush_source<'a>(rows: Vec<PresetRow<BrushKey>>) -> PresetSource<'
 }
 ```
 
-### 4-6. crates/ui-egui/src/panels/preset_browser.rs（PresetRowsInput メモ化ラッパーとソース構築関数）
-`PresetRow<K>` は内部にクロージャを含むため直接 `MemoProps` を実装できない。そこで、行数・ラベル・階層の同一性のみを比較・ハッシュ化する `PresetRowsInput<'a, K>` ラッパーを新規定義し、完全なメモ化整合性を達成した。
+### 4-6 `crates/ui-egui/src/panels/preset_browser.rs` — the memo wrapper and the sources
+
+`PresetRow` holds `Arc<dyn Fn...>` in `preview`, so it cannot derive `PartialEq`/`Hash`; the input is wrapped in `PresetRowsInput`, which compares what the row needs, and `PresetKey` carries `MemoProps`. The thumbnail source clones what the `'static + Send + Sync` closure needs.
 
 ```rust
 use std::borrow::Cow;
@@ -277,8 +239,9 @@ pub fn preset_source_with_thumb<'a, K: Clone + PartialEq + 'static>(
 }
 ```
 
-### 4-7. crates/ui-egui/src/dialogs/pattern_fill_ui.rs（PatternSwatch への画像直接バインド）
-廃止された `.thumbnails(...)` ビルダーを撤廃し、テクスチャハンドルを `PatternSwatch::with_picture` に直接バインドする形式へ改修した。
+### 4-7 `crates/ui-egui/src/dialogs/pattern_fill_ui.rs` — the picture binds directly
+
+`.thumbnails(...)` is gone; `PatternSwatch::with_picture` takes the image.
 
 ```rust
 let swatches: Vec<PatternSwatch> = patterns
@@ -293,16 +256,18 @@ let swatches: Vec<PatternSwatch> = patterns
     .collect();
 ```
 
-### 4-8. crates/ui-egui/src/dialogs/fill_ui.rs（パターンソース適合）
-旧来の `Cow::Owned(patterns.clone())` を `preset_source(patterns.clone())` による供給へ置き換えた。
+### 4-8 `crates/ui-egui/src/dialogs/fill_ui.rs` — the pattern list through a source
+
+The pattern rows come from `preset_source`, as the other panels do.
 
 ```rust
 let source = crate::panels::preset_browser::preset_source(patterns.clone());
 dialog.show_patterns(ui, &source);
 ```
 
-### 4-9. crates/ui-egui/src/dialogs/layer_style/contour.rs（関数ポインタ輪郭サンプラー化）
-`ContourEditorDialog::sampler` が不透明なクロージャ型を拒絶し `fn(&[[f32; 2]]) -> Vec<f32>` を要求する仕様に変更されたため、トップレベル関数アイテムとして抽出し関数ポインタを返却するように適合させた。
+### 4-9 `crates/ui-egui/src/dialogs/layer_style/contour.rs` — a function pointer
+
+The contour sampler is a plain `fn(&[[f32; 2]]) -> Vec<f32>`, which is what the new bound accepts.
 
 ```rust
 fn evaluate_contour_samples(points: &[[f32; 2]]) -> Vec<f32> {
@@ -324,8 +289,9 @@ impl ContourEditorDialog {
 }
 ```
 
-### 4-10. crates/ui-egui/src/dialogs/layer_style.rs（スタイルソース構築とスレッド安全性確保）
-`StyleInputs` に `MemoProps` を実装し、サムネイルレンダリングで `Session`（`!Sync`）を参照する代わりにクローンした `PatternLibrary` を安全にキャプチャする `style_source` を実装した。
+### 4-10 `crates/ui-egui/src/dialogs/layer_style.rs` — the style source and `Send + Sync`
+
+`StyleInputs` implements `MemoProps`; the thumbnail closure receives a clone of the pattern it draws, because `Session` is `!Sync` and cannot be captured.
 
 ```rust
 #[derive(Clone, PartialEq, Hash, MemoProps)]
@@ -350,24 +316,27 @@ fn style_source<'a>(app: &PhotocraftApp) -> PresetSource<'a, String> {
 }
 ```
 
-### 4-11. crates/ui-egui/src/panels/options_bar/paint.rs（不要フィールド削除）
-`PaintValues` から削除された `size` および `hardness` への不要な書き込み処理を削除した。
+### 4-11 `crates/ui-egui/src/panels/options_bar/paint.rs` — the removed fields
+
+`PaintValues` no longer carries `size` and `hardness`; the assignments are deleted.
 
 ```rust
-// 削除されたフィールドへの参照を除去
+// the references to the removed fields are gone
 pub fn apply_paint_values(app: &mut PhotocraftApp, values: &PaintValues) {
     let tool = app.session.tools.current_paint_mut();
     tool.opacity = values.opacity;
     tool.flow = values.flow;
-    // values.size, values.hardness は専用のスライダー管理へ移行
+    // values.size and values.hardness now belong to their own slider handling
 }
 ```
 
-### 4-12. crates/ui-egui/src/panels/brush_sections.rs（不要フィールド初期化削除）
-上記に伴い、ブラシセクション側での旧 `size` / `hardness` 初期化コードを除去した。
+### 4-12 `crates/ui-egui/src/panels/brush_sections.rs` — the initialiser follows
 
-### 4-13. crates/ui-egui/src/tools/brush_picker.rs（ブラシプリセットピッカーソース適合）
-`PickerInput` に `MemoProps` を実装し、`BrushPresetPicker::new` に `&self.source` を渡す構成へ改修した。
+The same removal reaches the initialiser; no code change beyond the field list.
+
+### 4-13 `crates/ui-egui/src/tools/brush_picker.rs` — the picker's source
+
+`PickerInput` implements `MemoProps` and the source is passed by reference.
 
 ```rust
 #[derive(Clone, PartialEq, Eq, Hash, MemoProps)]
@@ -384,55 +353,59 @@ impl BrushPickerTool {
 }
 ```
 
-### 4-14. crates/ui-egui/src/tools/cas_transform.rs 他（PreviewTextures への &mut Serials 伝播）
-変形系ツール 5 ファイル（`cas_transform.rs`, `perspective_ui.rs`, `puppet_ui.rs`, `transform_tool.rs`, `transform_tool/begin.rs` 計 11 箇所）において、`PreviewTextures::new` の第 1 引数に `&mut Serials::default()` を追加した。
+### 4-14 `cas_transform.rs`, `perspective_ui.rs`, `puppet_ui.rs`, `transform_tool.rs`, `transform_tool/begin.rs` — `&mut Serials`
+
+`PreviewTextures::new` takes `&mut Serials` as its first argument; the seven call sites in `begin.rs` and the four tools pass it through.
 
 ```rust
-// 変更前:
+// before:
 let textures = PreviewTextures::new(width, height);
 
-// 変更後:
+// after:
 let mut serials = craft::ui::primitives::Serials::default();
 let textures = PreviewTextures::new(&mut serials, width, height);
 ```
 
-### 4-15. crates/ui-egui/src/tools/stroke_trail.rs（CoverageMask への &mut Serials 伝播）
-ストローク描画の `CoverageMask::new` に `&mut Serials` を伝播させた。
+### 4-15 `crates/ui-egui/src/tools/stroke_trail.rs` — `CoverageMask::new`
+
+The mask constructor takes `&mut Serials`.
 
 ```rust
-// 変更前:
+// before:
 let mask = CoverageMask::new(bounds);
 
-// 変更後:
+// after:
 let mut serials = craft::ui::primitives::Serials::default();
 let mask = CoverageMask::new(&mut serials, bounds);
 ```
 
-### 4-16. crates/ui-egui/src/tools/object_finder.rs（HoverMask への &mut Serials 伝播）
-オブジェクト探索ツールの `HoverMask::sampled` に `&mut Serials` を伝播させた。
+### 4-16 `crates/ui-egui/src/tools/object_finder.rs` — `HoverMask::sampled`
+
+The sampled mask takes `&mut Serials`.
 
 ```rust
-// 変更前:
+// before:
 let hover = HoverMask::sampled(data, stride);
 
-// 変更後:
+// after:
 let mut serials = craft::ui::primitives::Serials::default();
 let hover = HoverMask::sampled(&mut serials, data, stride);
 ```
 
-### 4-17. MCP 自動同期スクリプト photocraft_sync_mcp_server.py（フォーク機能保護とテスト義務化）
-同期時にフォーク機能が絶対に上書き・破壊されないよう、除外ルールとテスト検証を強化した。
+### 4-17 The local sync script — fork protection and the tests it owes
+
+The script that copied upstream files into the working tree no longer lists `crates/zip` among the upstream-only prefixes, keeps the fork's Space, PSD, ZIP and CJK rules on a conflict, and runs the fork's tests (`craft-ui-canvas`, `craft-ui-widgets`, `craft-ui-panels`, `craft-psd`, `craft-zip`) after a merge. It is not part of this repository.
 
 ```python
-# C:\Users\ussoe\.gemini\config\skills\photocraft-sync-builder\photocraft_sync_mcp_server.py 抜粋
+# excerpt from tools/photocraft_sync_mcp_server.py
 
-# 1. crates/zip を upstream_only_prefixes から完全除外（フォーク独自実装を保護）
+# 1. crates/zip is out of upstream_only_prefixes entirely (the fork's own implementation is kept)
 upstream_only_prefixes = [
-    # "crates/zip", <-- 削除：フォーク機能 EOCD64 保護のため除外
+    # "crates/zip", <-- removed: the fork's EOCD64 support stays
     "vendor/",
 ]
 
-# 2. マージコンフリクト時のフォーク機能優先保存ルール
+# 2. on a merge conflict the fork's rules are kept
 FORK_PROTECTED_TOKENS = {
     "activate_on_space": "crates/ui-canvas/src/canvas/gesture/space_activation.rs",
     "with_space_activation": "crates/ui-panels/src/panels/tools/keybindings.rs",
@@ -442,7 +415,7 @@ FORK_PROTECTED_TOKENS = {
     "cjk_fallback": "crates/font-manager/src/cjk.rs",
 }
 
-# 3. マージ完了後のフォーク機能 x64 自動テスト義務化
+# 3. after a merge the fork's tests run (x64)
 VERIFICATION_CRATES = [
     "craft-ui-canvas",
     "craft-ui-widgets",
@@ -454,25 +427,17 @@ VERIFICATION_CRATES = [
 
 ---
 
-## ⑤ その技術的意味と設計思想
+## 5. Why it is shaped this way
 
-### 1. メモ化アーキテクチャへの完全適合とパフォーマンスの両立
-upstream が導入した `MemoProps` は、不要な描画パスを削減し egui アプリケーションの CPU 負荷を劇的に低減させるためのものである。
-`PresetRowsInput` ラッパーを導入したことで、内部に非スレッドセーフまたは比較不能なフィールドを持つ UI 構造体であっても、安全にキャッシュキー（要素数・ラベル・深度）を抽出して完全なメモ化を成立させることができた。これにより、upstream の描画高速化の恩恵を 100% 享受しつつ、型安全性を完全に担保した。
+1. **Memoization and the frame budget.** The wrapper types (`PresetRowsInput`, `PickerInput`, `StyleInputs`) compare what a row draws, not the closures inside it, so the panels keep the new memoization without re-deriving `PartialEq` for `Arc<dyn Fn...>`.
+2. **The `Send + Sync` boundary stays where it was.** The engine stays on the UI thread; the closures receive owned data (a cloned pattern, plain numbers) instead of a `Session`.
+3. **The fork's features are protected by rule, not by luck.** The sync script no longer treats `crates/zip` as upstream's, keeps the Space, PSD, ZIP and CJK rules on a conflict, and runs the fork's tests after every merge.
 
-### 2. スレッド安全性境界（`Send + Sync`）の厳格な分離
-Rust の UI プログラミングにおいて、メインスレッドに拘束される `Session` 構造体と、非同期または並列に描画・キャッシュされるコンポーネント（`PresetSource` のサムネイル描画等）の境界を明確にした。
-`Session` 自体をクローンするのではなく、必要なデータ（`PatternLibrary`）のみをクローンしてクロージャにムーブすることで、Rust の並行性ルール（`Sync` 境界）を完全に遵守させた。
+---
 
-### 3. フォーク独自機能の恒久的保護メカニズム
-本改修では、`photocraft` 側の UI レイヤーの適合を行うと同時に、`craft-libs` に組み込まれている 6 つの主要フォーク機能：
-1. **Space キー Hand ツール排他起動**（`activate_on_space`, `with_space_activation`）
-2. **ZIP 64bit EOCD 拡張ヘッダ対応**（`crates/zip`）
-3. **PSD `Layr` / `Mt16` レコード保持**（`craft-psd`）
-4. **CJK フォント分類およびタイポグラフィ最適化**（`craft-font-manager`）
-5. **Windows ディレクトリフラッシュ対応**（`pr-12339`）
-6. **Lama Cleaner CUDA 連携機構**
-を 1 行たりとも欠落させることなく、すべて保護した。
+## 6. Status, 2026-11-27
 
-MCP サーバーの改修により、今後の upstream 同期時においても、これらのフォーク機能が `--theirs` で上書きされる事故は物理的に排除された。
-これにより、`craft-libs:next` HEAD の最先端機能を完全に取り込みながら、フォーク固有の高品質なユーザー体験を将来にわたって保証する強固なビルド基盤が確立された。
+- The upstream lines merged since this document was written are in `md/2026-11-26-merge-code-03-upstream-inventory.md` (craft-libs) and `md/2026-11-26-merge-code-03-upstream-inventory.md` (photocraft); the measurements of the last round are in the same files.
+- The newest breaking item is `crates/menu/src/mac.rs`: upstream's AppKit rebuild retry keeps `std::time::Instant` behind a `contract/motion` marker and registers it in `design/exceptions/craft-menu/crate.toml`. The fork's own marker and `design/exceptions/craft-menu/mac.toml` were a duplicate of that entry and were removed; `design-lint` reports 28/28 with one entry.
+- `Prompt::layer_role` is `#[prop(vis = "pub(super)")]` upstream; the fork's plain `#[prop]` is superseded by it, and the hand-written setter stays gone.
+

@@ -1,6 +1,6 @@
 # Deletion Criteria (PhotoCraft)
 
-This document fixes the range in which I (the agent) may delete files under `D:\USERFILES\GitHub\photocraft`.
+This document fixes the range in which I (the agent) may delete files under `<repository>`.
 **I do not widen that range by my own judgement.** Anything not named here is not deleted, not one byte.
 
 ---

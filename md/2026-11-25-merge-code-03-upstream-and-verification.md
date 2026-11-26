@@ -1491,8 +1491,8 @@ print 51, ui-contract 491, ui-widgets 1,181, ui-patterns 431, global_state 28.
 
 ```powershell
 # 1. the two merges and their upstream parents
-git -C D:\USERFILES\GitHub\craft-libs log -1 --format='%H %P' 65902c049
-git -C D:\USERFILES\GitHub\photocraft   log -1 --format='%H %P' c5af0bae9
+git -C <craft-libs> log -1 --format='%H %P' 65902c049
+git -C <repository>   log -1 --format='%H %P' c5af0bae9
 
 # 2. the fork's side of a merge, per file
 git -C <repo> diff <merge>^2..<merge> -- <path>
@@ -1501,8 +1501,8 @@ git -C <repo> diff <merge>^2..<merge> -- <path>
 git -C <repo> diff upstream/<line>..HEAD --stat
 
 # 4. the upstream inventory in this document
-git -C D:\USERFILES\GitHub\craft-libs log --oneline --no-merges a4e08cdaf..9f2961402
-git -C D:\USERFILES\GitHub\photocraft   log --oneline --no-merges dbad7de99a..e56522780
+git -C <craft-libs> log --oneline --no-merges a4e08cdaf..9f2961402
+git -C <repository>   log --oneline --no-merges dbad7de99a..e56522780
 ```
 
 ## The order the fork applied these changes

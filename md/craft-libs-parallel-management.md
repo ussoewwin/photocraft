@@ -37,7 +37,7 @@ Measured (as of 2026-11-22):
 ## 2. Repository layout
 
 ```
-D:\USERFILES\GitHub\
+<local drive>\GitHub\
 ├── photocraft\      fork ussoewwin/photocraft, only the main branch
 └── craft-libs\      fork ussoewwin/craft-libs, only the next branch
 ```
@@ -53,10 +53,10 @@ The craft-libs fork holds **only `next`**. It does not hold `main` (the default 
 Put the craft-libs checkout on `next` and apply the patch.
 
 ```powershell
-cd D:\USERFILES\GitHub\craft-libs
+cd <craft-libs>
 git switch next && git pull fork next
 
-cd D:\USERFILES\GitHub\photocraft
+cd <repository>
 cargo xtask craftlibs on
 ```
 
@@ -67,8 +67,8 @@ cargo xtask craftlibs status
 ```
 
 ```
-workspace:   D:\USERFILES\GitHub\photocraft
-checkout:    D:\USERFILES\GitHub\craft-libs (present)
+workspace:   <repository>
+checkout:    <craft-libs> (present)
 .cargo/config.toml: PATCHED (local craft-libs)
 Cargo.lock:  70 craft-libs crate(s) from local paths (NOT safe to commit)
 pinned rev:  a6b9d9c986f7c4c399632d72d9a4a8c8ea0b86e9
@@ -90,8 +90,8 @@ Naming a single package fails because feature resolution is not sufficient (`egu
 
 ```powershell
 $env:CRAFT_I18N_REQUIRED='1'
-$env:CRAFT_I18N_DIR='D:\USERFILES\GitHub\craft-i18n'
-$env:CRAFT_FONTS_DIR='D:\USERFILES\GitHub\photocraft\craft-fonts'
+$env:CRAFT_I18N_DIR='<local drive>\GitHub\craft-i18n'
+$env:CRAFT_FONTS_DIR='<repository>\craft-fonts'
 cargo test --lib -p photocraft-ui-egui -p photocraft-engine -p photocraft `
   -p photocraft-cli -p photocraft-text -p photocraft-automation
 ```
@@ -103,7 +103,7 @@ cargo test --lib -p photocraft-ui-egui -p photocraft-engine -p photocraft `
 The local craft-libs tracks `next`, so commit and push it as it is. `next` is a branch you **stack with fast-forwards**, and you never force-push it (`docs/craft-framework.md`).
 
 ```powershell
-cd D:\USERFILES\GitHub\craft-libs
+cd <craft-libs>
 git fetch origin next
 git rebase origin/next            # replay onto it if upstream has moved
 git add <the files you changed>   # do not use git add -A
@@ -152,7 +152,7 @@ Always confirm the expected remote SHA before using `--force-with-lease`. If it 
 **Do not commit the patch, nor the lock that it rewrote.** If you do, anyone who clones has no `craft-libs` next to it, and `cargo build` dies instantly.
 
 ```powershell
-cd D:\USERFILES\GitHub\photocraft
+cd <repository>
 cargo xtask craftlibs check      # do not commit unless this is 0
 cargo xtask craftlibs off        # remove the patch and return the lock to the pin
 git status --short               # .cargo/config.toml and Cargo.lock should be gone
@@ -204,7 +204,7 @@ Leave even one line on the old rev and that one crate comes from a different com
 
 | Symptom | Cause | Action |
 |---|---|---|
-| `cargo check` says "path not found" | The patch is there but the checkout is not | Check that `D:\USERFILES\GitHub\craft-libs` exists. If it is elsewhere, fix the relative path in `[patch]` |
+| `cargo check` says "path not found" | The patch is there but the checkout is not | Check that `<craft-libs>` exists. If it is elsewhere, fix the relative path in `[patch]` |
 | It says the same crate exists twice | The patch is missing a crate | Run `cargo xtask craftlibs on` again (it is generated, so nothing is missed) |
 | `egui::Id: serde::Serialize` appears in bulk | A single package was named | Run the six packages together as in §3 |
 | One craft-libs test fails | An existing failure that also fails on the unmodified tree | Measure the control case with `git stash push -- <file>` before deciding |
@@ -217,7 +217,7 @@ Leave even one line on the old rev and that one crate comes from a different com
 
 | Item | Value |
 |---|---|
-| The craft-libs checkout | `D:\USERFILES\GitHub\craft-libs`, branch `next`, tip `8fbb0720` |
+| The craft-libs checkout | `<craft-libs>`, branch `next`, tip `8fbb0720` |
 | The fork | `ussoewwin/craft-libs`, **`next` only**, default branch `next`, `main` deleted |
 | Sent (the fork's `next`) | `8fbb0720` ← `e875a7c9` ← `f7fc484a` (already rebased directly on top of upstream `next` `7a7f5302`) |
 | PhotoCraft's pin | `a6b9d9c9` (the upstream source of truth. Not raised until the conditions of §6 are met) |
@@ -290,7 +290,7 @@ Get-ChildItem target -Directory | ForEach-Object {
 
 ### The craft-libs side grows even faster
 
-PhotoCraft's `target\` is not the only one. **`D:\USERFILES\GitHub\craft-libs\target\debug` reached 40.76 GB** (measured 2026-11-19): `deps` 18.65 GB, `incremental` 21.81 GB, `build` 0.29 GB. It is the same kind of output as PhotoCraft's `target\debug` — caches and test binaries, not artefacts.
+PhotoCraft's `target\` is not the only one. **`<craft-libs>\target\debug` reached 40.76 GB** (measured 2026-11-19): `deps` 18.65 GB, `incremental` 21.81 GB, `build` 0.29 GB. It is the same kind of output as PhotoCraft's `target\debug` — caches and test binaries, not artefacts.
 
 **craft-libs builds a library, so it has no deliverable at all.** Everything under `craft-libs\target\` is disposable. Delete all of it; the source and the history are what matter.
 
@@ -304,7 +304,7 @@ PhotoCraft's `target\` is not the only one. **`D:\USERFILES\GitHub\craft-libs\ta
 
 ```powershell
 # craft-libs has no artefact: the whole target directory is disposable
-Set-Location 'D:\USERFILES\GitHub\craft-libs'
+Set-Location '<craft-libs>'
 
 # measure first, so the numbers go in the report
 Get-ChildItem target -Directory -Force | ForEach-Object {
