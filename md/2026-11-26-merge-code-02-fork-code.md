@@ -1,16 +1,15 @@
-# The fork's code in photocraft after the upstream merge
+# The fork's code in photocraft after the upstream merges
 
-The files the merges decided on. The upstream is `storytold/photocraft` `main` at
-`d827906d6`; the fork's `main` is `06dd81e8b`.
+The files the merges and their repairs decided on. The upstream is `storytold/photocraft` `main`
+at `f0205ae33`; the fork's `main` is `eaf7ef1e9`.
 
 ## How a file got here
 
-A file is in this document when the merge had to decide something about it: its merged content
-differs from **both** parents (`git show <p1>:<path>`, `git show <p2>:<path>`, `git show <merge>:<path>`),
-or it was written by the repair commit that followed the merge. A file that one side left alone is
-not a decision, and it is not listed.
+A file is here when a merge of this run had to decide something about it: its merged content differs
+from **both** parents, or a repair commit after a merge wrote it. The fork's own identity (its crates,
+documents and plugins) is not a merge decision and is not listed.
 
-Every diff below is `git diff <upstream> <head> -- <path>`: the fork's code as the tree holds it now.
+Every diff is `git diff <upstream> <head> -- <path>`, with `<head>` = the fork's branch tip of this run.
 
 ## `Cargo.lock`
 
@@ -20,18 +19,18 @@ Every diff below is `git diff <upstream> <head> -- <path>`: the fork's code as t
 
 ```diff
 diff --git a/Cargo.lock b/Cargo.lock
-index ad99b1725..00dd11f2b 100644
+index 80dd520bb..a6e077fa8 100644
 --- a/Cargo.lock
 +++ b/Cargo.lock
-@@ -6723,6 +6723,7 @@ name = "photocraft-engine-paint"
+@@ -6677,6 +6677,7 @@ name = "photocraft-engine-paint"
  version = "0.23.1"
  dependencies = [
-  "craft-cms 0.1.0 (git+https://github.com/storytold/craft-libs?rev=a165ef3a2cbc1e88f1b945966b77dc75a1fdf8e4)",
+  "craft-cms",
 + "craft-image-codecs",
   "photocraft-algo",
   "photocraft-color",
   "photocraft-compose",
-@@ -6735,6 +6736,7 @@ dependencies = [
+@@ -6689,6 +6690,7 @@ dependencies = [
   "rayon",
   "serde",
   "serde_json",
@@ -41,11 +40,11 @@ index ad99b1725..00dd11f2b 100644
  [[package]]
 ```
 
-**What it does, hunk by hunk.**
+**Hunk by hunk.**
 
-1. The merged graph keeps upstream's craft-libs pin `a165ef3a2` for the framework crates and the older `249a41bd9` for `craft-develop`, exactly as upstream's own workspace file asks; `photocraft-engine-paint` keeps `craft-image-codecs` and `tempfile`, which the LaMa Cleaner's module needs.
+1. The framework crates resolve to `storytold/craft-libs` `5c30761a8` with `craft-develop` at `249a41bd9`, the revisions upstream's own workspace file pins; `photocraft-engine-paint` keeps `craft-image-codecs` and `tempfile` for the LaMa Cleaner's module.
 
-**Checked by.** `cargo metadata` regenerates it; `cargo check --workspace --all-targets` (exit 0) proves the graph.
+**Checked by.** `cargo metadata` regenerates it; `cargo check --workspace --all-targets` (exit 0).
 
 ## `crates/engine-core/src/cmd.rs`
 
@@ -69,15 +68,15 @@ index 764d48d42..3eb51fd69 100644
  
 ```
 
-**What it does, hunk by hunk.**
+**Hunk by hunk.**
 
 1. The fork's `sam3_select_cmds` module is declared beside upstream's list.
 
-**Checked by.** `cargo check -p photocraft-engine-core --all-targets` (exit 0) and the command-id table check in `cargo xtask panel-commands` (exit 0).
+**Checked by.** `cargo check -p photocraft-engine-core --all-targets` and `cargo xtask panel-commands` (exit 0).
 
 ## `crates/engine-core/src/install.rs`
 
-**Role.** The registry of command tables: every module's `specs` function, by name.
+**Role.** The registry of command tables.
 
 **The code.**
 
@@ -96,15 +95,15 @@ index 44d6a4f9e..c56159802 100644
      ("edit_cmds", crate::edit_cmds::specs),
 ```
 
-**What it does, hunk by hunk.**
+**Hunk by hunk.**
 
-1. `sam3_select_cmds` joins `TABLES`, so its commands are installed with the rest and reach the menus and the automation surface.
+1. `sam3_select_cmds` joins `TABLES`, so its commands install with the rest.
 
-**Checked by.** `cargo xtask panel-commands` (exit 0 on 2026-11-26).
+**Checked by.** `cargo xtask panel-commands` (exit 0).
 
 ## `crates/engine/tests/global_state/main.rs`
 
-**Role.** The trials that assert on process-wide state, one at a time.
+**Role.** The trials that assert on process-wide state.
 
 **The code.**
 
@@ -123,11 +122,11 @@ index 741a80a11..cdd2eb38d 100644
  mod spot_dot_gain;
 ```
 
-**What it does, hunk by hunk.**
+**Hunk by hunk.**
 
-1. `smart_filter_stages` is listed here: the trial asserts on a cache the whole process shares, and it took its turn here instead of sharing a process with the parallel screen trials.
+1. `smart_filter_stages` is listed here: it asserts on a shared cache and takes its turn.
 
-**Checked by.** `cargo xtask test-corpus` and the workspace run (green on 2026-11-26).
+**Checked by.** the workspace run (green).
 
 ## `crates/engine/tests/it/main.rs`
 
@@ -150,15 +149,15 @@ index 69b4cb084..d38266586 100644
  mod smart_rerender_fallback;
 ```
 
-**What it does, hunk by hunk.**
+**Hunk by hunk.**
 
-1. `smart_filter_stages` is no longer listed here, because the trial moved to the global-state binary above; leaving both would run it twice, once where it cannot pass.
+1. `smart_filter_stages` is no longer listed here, because it moved to the global-state binary.
 
-**Checked by.** `cargo nextest run -p photocraft-engine` (green on 2026-11-26).
+**Checked by.** `cargo nextest run -p photocraft-engine` (green).
 
 ## `crates/ui-egui/src/canvas.rs`
 
-**Role.** The canvas view: one document's canvas in the window.
+**Role.** The canvas view.
 
 **The code.**
 
@@ -177,11 +176,11 @@ index f2c04a720..51b96350a 100644
      // The primary canvas keeps its view in `app.ui.views`: the pass starts from the stored view and stores the one it
 ```
 
-**What it does, hunk by hunk.**
+**Hunk by hunk.**
 
-1. `canvas_view` records the viewport it draws in, `app.current_viewport`, so a refused Move press can name the window that owns the gesture (#11971).
+1. `canvas_view` records the viewport it draws in, so a refused Move press can name the window that owns the gesture (#11971).
 
-**Checked by.** `cargo nextest run -p photocraft-ui-egui` (green on 2026-11-26).
+**Checked by.** `cargo nextest run -p photocraft-ui-egui` (green).
 
 ## `crates/ui-egui/src/canvas/canvas_tool_menu.rs`
 
@@ -213,16 +212,15 @@ index 98d1dbf39..17fbfe871 100644
                  EYEDROPPER_MENU
 ```
 
-**What it does, hunk by hunk.**
+**Hunk by hunk.**
 
-1. `Tool::Sam3Select` joins the tools whose right-click opens the selection menu.
-2. With a selection it shows the measured-selection menu, and without one the count menu, as the other selection tools do.
+1. `Tool::Sam3Select` joins the tools whose right-click opens the selection menu, with the measured-selection menu when a selection exists.
 
-**Checked by.** `cargo nextest run -p photocraft-ui-egui` (green on 2026-11-26); `sam3_canvas_tests` covers the tool.
+**Checked by.** `cargo nextest run -p photocraft-ui-egui` (green); `sam3_canvas_tests` covers it.
 
 ## `crates/ui-egui/src/canvas/tools/mod.rs`
 
-**Role.** The tool families: which family a tool belongs to.
+**Role.** The tool families.
 
 **The code.**
 
@@ -242,15 +240,15 @@ index 2aa3f2726..d495bd14c 100644
          | Tool::CurvaturePen
 ```
 
-**What it does, hunk by hunk.**
+**Hunk by hunk.**
 
-1. `Tool::Sam3Select` joins `Family::Retouch` beside Object Selection and Red Eye, so its options bar and canvas behaviour follow the retouch tools.
+1. `Tool::Sam3Select` joins `Family::Retouch` beside Object Selection and Red Eye.
 
-**Checked by.** `cargo nextest run -p photocraft-ui-egui` (green on 2026-11-26).
+**Checked by.** `cargo nextest run -p photocraft-ui-egui` (green).
 
 ## `crates/ui-egui/src/canvas/tools/move_tool.rs`
 
-**Role.** The Move tool: the press, the refusals, and the cross-document transfer.
+**Role.** The Move tool.
 
 **The code.**
 
@@ -424,17 +422,17 @@ index c2823c064..4e3c7915c 100644
                  follow(&mut run, app, pointer, cx, false);
 ```
 
-**What it does, hunk by hunk.**
+**Hunk by hunk.**
 
-1. `locked_layer` names what a Move drag cannot move in place: a layer locked all over, locked in position, or the Background.
-2. `locked_hit_at` finds the topmost layer under the pointer that a drag toward another document would transfer, and no other: the lock a pick skips is exactly what travels (#11971).
-3. `may_transfer` says when a refused press can still become a transfer - more than one document open, no transform in flight, and a refused layer or a selection - so the lock message waits while the drag can still reach another document's tab or tile.
+1. `locked_layer` names what a drag cannot move in place: a layer locked all over, locked in position, or the Background.
+2. `locked_hit_at` finds the topmost locked layer a drag toward another document would transfer, and no other.
+3. `may_transfer` says when a refused press can still become a transfer, so the lock message waits while the drag can reach another document's tab or tile (#11971).
 
-**Checked by.** `cargo nextest run -p photocraft-ui-egui` (green on 2026-11-26); the move-tool trials cover the refusal and the transfer.
+**Checked by.** `cargo nextest run -p photocraft-ui-egui` (green).
 
 ## `crates/ui-egui/src/lib.rs`
 
-**Role.** The application state the framework keeps between frames.
+**Role.** The application state.
 
 **The code.**
 
@@ -475,16 +473,16 @@ index 20d0f0d1c..35a47646a 100644
  mod tool_shift_cycle_order_tests;
 ```
 
-**What it does, hunk by hunk.**
+**Hunk by hunk.**
 
-1. The refused Move press is recorded: whether one happened, where it began, whether it moved, the layer it hit, the document, the window that owns the gesture and the viewport drawing this pass. No drag object exists for a refused press, so the transfer cannot happen without them (#11971).
-2. The SAM Selection trials are declared as modules of the crate.
+1. The refused Move press is recorded: whether one happened, where, whether it moved, the layer, the document, the window and the viewport (#11971).
+2. The SAM Selection trials are declared as crate modules.
 
-**Checked by.** `cargo nextest run -p photocraft-ui-egui` (green on 2026-11-26).
+**Checked by.** `cargo nextest run -p photocraft-ui-egui` (green).
 
 ## `crates/ui-egui/src/panels/options_bar.rs`
 
-**Role.** The options bar of the active tool.
+**Role.** The options bar.
 
 **The code.**
 
@@ -506,15 +504,15 @@ index 961b2318e..667e6d271 100644
      {
 ```
 
-**What it does, hunk by hunk.**
+**Hunk by hunk.**
 
-1. The Quick Selection bar draws its own New / Add / Subtract segments before the brush options, with a divider, so the mode sits where Photoshop puts it (#11837).
+1. The Quick Selection bar draws its New / Add / Subtract segments before the brush options (#11837).
 
-**Checked by.** `cargo nextest run -p photocraft-ui-egui` (green on 2026-11-26); `quick_selection_mode_bar_tests` covers it.
+**Checked by.** `cargo nextest run -p photocraft-ui-egui` (green); `quick_selection_mode_bar_tests`.
 
 ## `crates/ui-egui/src/state/tool_options.rs`
 
-**Role.** The tool options, persisted with the document.
+**Role.** The tool options.
 
 **The code.**
 
@@ -605,12 +603,40 @@ index 7c699804a..d10e37dbe 100644
              shape_path_op: default_shape_path_op(),
 ```
 
-**What it does, hunk by hunk.**
+**Hunk by hunk.**
 
-1. `quick_selection_mode` (0 New, 1 Add, 2 Subtract) is its own mode, as in Photoshop, while the other selection tools keep sharing `selection_mode` (#11837).
-2. The SAM Selection options: `sam3_prompt` (empty means click or box), `sam3_threshold` (default 0.5), `sam3_refine` (default 2) and `sam3_individual` (one mask per object instead of their union).
+1. `quick_selection_mode` is Quick Selection's own mode (0 New, 1 Add, 2 Subtract) while the other selection tools share `selection_mode` (#11837).
+2. The SAM Selection options: `sam3_prompt`, `sam3_threshold` (0.5), `sam3_refine` (2) and `sam3_individual`.
 
-**Checked by.** `cargo nextest run -p photocraft-ui-egui` (green on 2026-11-26).
+**Checked by.** `cargo nextest run -p photocraft-ui-egui` (green).
+
+## `crates/ui-egui/src/state.rs`
+
+**Role.** The tool list.
+
+**The code.**
+
+```diff
+diff --git a/crates/ui-egui/src/state.rs b/crates/ui-egui/src/state.rs
+index 78f2ae472..c75811c8c 100644
+--- a/crates/ui-egui/src/state.rs
++++ b/crates/ui-egui/src/state.rs
+@@ -629,7 +629,7 @@ mod tests {
+         assert!(!Tool::RedEye.is_brushlike());
+         assert_eq!(Tool::from_name("patternStamp"), Some(Tool::PatternStamp));
+         assert_eq!(Tool::from_name("Pattern Stamp Tool"), Some(Tool::PatternStamp));
+-        assert_eq!(Tool::ALL.len(), 70);
++        assert_eq!(Tool::ALL.len(), 72);
+     }
+ 
+     fn vector_tool_names_parse() {
+```
+
+**Hunk by hunk.**
+
+1. The tool trial counts 72 tools: the fork's own tools sit in the same array as upstream's.
+
+**Checked by.** `cargo nextest run -p photocraft-ui-egui` (green).
 
 ## `crates/ui-egui/src/tools.rs`
 
@@ -634,15 +660,15 @@ index dd163613d..4c2cdcea7 100644
  mod art_history_reset_tip_tests;
 ```
 
-**What it does, hunk by hunk.**
+**Hunk by hunk.**
 
 1. `quick_selection_mode_bar_tests` is declared as a module of the crate.
 
-**Checked by.** `cargo nextest run -p photocraft-ui-egui` (green on 2026-11-26).
+**Checked by.** `cargo nextest run -p photocraft-ui-egui` (green).
 
 ## `crates/ui-egui/src/tools/retouch_ui/bar/heal.rs`
 
-**Role.** The options of the healing tools.
+**Role.** The healing tools' options.
 
 **The code.**
 
@@ -667,15 +693,15 @@ index 3ba2fc96c..9a0807e65 100644
  fn _json_is_not_used(_: Json) {}
 ```
 
-**What it does, hunk by hunk.**
+**Hunk by hunk.**
 
-1. `lama_cleaner` draws the LaMa Cleaner's one option, the brush size, as a number field with a slider and a unit, and reports a value out of range as the other bars do.
+1. `lama_cleaner` draws the LaMa Cleaner's brush size as a number field with a slider, a unit and a range, and reports an out-of-range value as the other bars do.
 
-**Checked by.** `cargo nextest run -p photocraft-ui-egui` (green on 2026-11-26).
+**Checked by.** `cargo nextest run -p photocraft-ui-egui` (green).
 
 ## `crates/ui-egui/src/tools/tool_reset.rs`
 
-**Role.** What a tool's option reset puts back.
+**Role.** What a tool's reset puts back.
 
 **The code.**
 
@@ -705,10 +731,10 @@ index f324663a3..4ca6e3b39 100644
          | Tool::SliceSelect
 ```
 
-**What it does, hunk by hunk.**
+**Hunk by hunk.**
 
-1. Quick Selection's reset now includes `quick_selection_mode`, since the bar's mode is an option of the tool.
+1. Quick Selection's reset includes `quick_selection_mode`.
 2. SAM Selection resets its prompt, threshold, refinement passes and per-object flag.
-3. `Tool::LamaCleaner` joins the tools whose options are reset with the brush's own, so a reset leaves its size with the brush it uses.
+3. `Tool::LamaCleaner` joins the tools reset with the brush's own options.
 
-**Checked by.** `cargo nextest run -p photocraft-ui-egui` (green on 2026-11-26).
+**Checked by.** `cargo nextest run -p photocraft-ui-egui` (green).

@@ -6,23 +6,21 @@ each entry links to them.
 ## Version 1.4.0
 
 - **Changed**: **the application rides the current official upstream** - `storytold/photocraft` `main`
-  at `d827906d6` (225 commits, of which 128 are change commits, over `a3915ab2f`), with PhotoCraft's
-  own features kept on top: LaMa Cleaner, SAM 3.1 selection, the quick-selection mode bar in the
-  options bar, dragging selected pixels between documents, the Japanese interface and its font names.
-- **Changed**: **the shared framework follows upstream's pin** - `storytold/craft-libs` at
-  `a165ef3a2` (the `next` line) for the framework crates and `249a41bd9` for `craft-develop`, so the
-  application builds against the revisions upstream itself pins.
+  at `f0205ae33` (254 commits over `a3915ab2f`, of which 141 are change commits), with PhotoCraft's own
+  features kept on top: LaMa Cleaner, SAM 3.1 selection, the quick-selection mode bar in the options
+  bar, dragging selected pixels between documents, the Japanese interface and its font names.
+- **Changed**: **the shared framework follows upstream's pin** - `storytold/craft-libs` at `5c30761a8`
+  (the `next` line) for the framework crates and `249a41bd9` for `craft-develop`, so the application
+  builds against the revisions upstream itself pins.
 - **Fixed**: **the Move tool's refused press keeps its document** - a press a lock refuses records the
   point, the layer, the document and the window that owned it, so the press cannot become a
   cross-document transfer by accident (#11971).
 - **Fixed**: **the smart-filter stage trial runs where its cache is its own** - it moved to the
   global-state trials, which run one at a time, instead of sharing a process with the parallel screen
   trials.
-- **Fixed**: **Space on a focused icon button opens its menu** - the icon button asks for the key as
-  the buttons, links, selects, word runs and rail flyouts do.
-- **Suites**: the workspace runs **15,771 passed / 0 failed / 96 skipped**; `cargo xtask test-corpus`
-  exits 0 with 670 passed / 0 failed / 11 ignored; check, clippy, format, layers, panel-commands,
-  wasm, parity and the panic hunt all exit 0.
+- **Suites**: the workspace runs **15,782 passed / 0 failed / 96 skipped**; `cargo xtask test-corpus`
+  reports 670 passed / 0 failed / 11 ignored; check, clippy, format, layers, panel-commands, wasm,
+  parity and the panic hunt all exit 0. The release executable builds and starts.
 - See [Release Notes v1.4.0](https://github.com/ussoewwin/photocraft/releases/tag/v1.4.0) for details.
 
 ## Version 1.3.9

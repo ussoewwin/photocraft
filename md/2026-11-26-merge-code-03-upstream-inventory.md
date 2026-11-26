@@ -2,19 +2,54 @@
 
 ## The upstream range
 
-- The fork's state before the merge: `a3915ab2f`.
-- The upstream commit merged last: `d827906d6`.
-- Commits taken: **225**, of which **122** are change commits.
+- The fork's state before this run: `a3915ab2f`.
+- The upstream commits merged, in order: `dbd191586`, `d827906d6`, `c5aea7e75`, `f0205ae33`.
+- The upstream tip at the end of this run: `f0205ae33`.
+  - `dbd191586`: 209 commits, 115 change commits (counted from `a3915ab2f`).
+  - `d827906d6`: 225 commits, 122 change commits (counted from `a3915ab2f`).
+  - `c5aea7e75`: 253 commits, 140 change commits (counted from `a3915ab2f`).
+  - `f0205ae33`: 254 commits, 141 change commits (counted from `a3915ab2f`).
 
-### Every commit
+**254 commits** between the fork's starting point and the last upstream commit of this run.
 
+### Every commit of the range
+
+- `f0205ae33 Pin the nightly callers to craft-common-actions fc7124a1 (#369, #370) (#17025)`
+- `c5aea7e75 Merge pull request #17028 from davidmann4/fix/17027-setup-window-args`
+- `b2debb061 Merge pull request #17007 from davidmann4/fix/input-stage-stall`
+- `65fc820f1 Merge pull request #17020 from davidmann4/fix/artboard-transform-click-outside`
+- `735f15b49 Agents: move craft-libs to next with the token cache fix (#17006)`
+- `292e8ce69 Merge remote-tracking branch 'origin/main' into fix/input-stage-stall`
+- `0cb83015b test(ui): pass the settings folder to setup_window in bar_cursor_tests (#17027)`
+- `a5f2c3103 Merge pull request #17013 from davidmann4/fix/raw-develop-window`
+- `6d5223e2a Merge pull request #16994 from superplay2021/fix/menu-bar-cursor`
+- `fbeed0d23 Merge pull request #17018 from davidmann4/fix/color-picker-no-screen-eyedropper`
+- `ab42a07c5 Free Transform: in artboard documents only a click outside the boards' bounding box applies the box (#17019)`
+- `45b84b64b docs: color-picker wording`
+- `9eb87d4ad color_picker_demo: open the text swatch by its current name`
+- `09e1d1cb6 Agents: no UI freeze every 5 s from a refused token file (#17006)`
+- `a135524f1 Merge remote-tracking branch 'origin/main' into fix/color-picker-no-screen-eyedropper`
+- `0202f45dd Color Picker: no screen eyedropper button, as in the reference application (#17017)`
+- `79ce50ae4 Merge remote-tracking branch 'origin/main' into fix/raw-develop-window`
+- `b0f7e8662 RAW Develop: sharp preview and a remembered window (#17012)`
+- `bd939e3af Merge remote-tracking branch 'origin/main' into fix/input-stage-stall`
 - `d827906d6 Merge queue batch #17001: #14868, #16986`
+- `f65c89eb7 test(ui): check the shown cursor at every title-bar sample`
+- `32d14daf9 Free Transform: a click outside the artboards applies the box (#17019)`
+- `b6c5cee17 WIP: Free Transform: a click outside the artboards applies the box (#17019)`
+- `b8947666b fix(ui): keep the arrow over the title bar's move band`
+- `32d7141bc WIP: Color Picker without the screen eyedropper button (#17017)`
+- `b36316fa0 WIP: RAW Develop sharp preview and remembered window (#17012)`
+- `45611e1b5 WIP: UI: stop the periodic input-stage stall during drags (#17006)`
 - `0ba4c510a Merge #16986 into the merge queue batch`
 - `deaa85f93 Merge #14868 into the merge queue batch`
 - `dbd191586 Sign PhotoCraft nightlies on the dedicated nightly-signer branch (#16906)`
 - `b5c762017 Merge queue batch #16992: #16970, #16973`
+- `0519632e0 test(ui): check the real Move tool cursor across the menu bar`
+- `9abd17383 test(ui): let menu cursor hover settle before asserting`
 - `9c86fb682 Use the boxed app in Layer Style regression tests`
 - `00aabb53b Integrate atomic Layer Style confirmation with current main`
+- `4f2e44ec9 Menu bar: show the arrow over menu titles`
 - `b02115c08 Merge #16973 into the merge queue batch`
 - `a45851939 Merge #16970 into the merge queue batch`
 - `5f8d3d0fb Merge queue batch #16982: #15966, #15801, #16442, #15186, #16958, #16971`
@@ -239,16 +274,18 @@
 - `cargo check --workspace --all-targets --keep-going`: exit 0.
 - `cargo clippy --workspace --all-targets -- -D warnings`: exit 0.
 - `cargo fmt -- --check`: exit 0.
-- `cargo xtask layers`: OK (30 crates), `panel-commands`: OK, `wasm`: OK (22 crates), `parity`: exit 0.
-- `cargo nextest run --workspace --no-fail-fast --test-threads 4`: **15,771 passed / 0 failed / 96 skipped**, exit 0 (1,534 s).
+- `cargo xtask layers`: OK (30 crates); `panel-commands`: OK; `wasm`: OK (22 crates); `parity`: exit 0.
+- `cargo nextest run --workspace --no-fail-fast --test-threads 4`: **15,782 passed / 0 failed / 96 skipped**, exit 0.
+- `cargo xtask test-corpus`: 670 passed / 0 failed / 11 ignored.
 - `cargo test -p photocraft-engine --test panic_hunt -- --ignored`: exit 0.
-- `cargo xtask test-corpus`: **670 passed / 0 failed / 11 ignored**, exit 0 (the run also reports 744 and 217 in its two other binaries).
-- The environment the suites need: `CRAFT_I18N_DIR=D:\USERFILES\GitHub\craft-i18n`, `CRAFT_I18N_REQUIRED=1`, `CRAFT_FONTS_DIR=<checkout>\craft-fonts`, `LOCALAPPDATA` set. Without them the i18n trials fail on a missing catalog (`registered language`), measured both ways.
-- The corpus archives are extracted by the pinned bytes and checked against `xtask/psd-corpus.sha256` (170 files) and `xtask/psd-tools-corpus.sha256` (309 files): `bsdtar` on this Windows build cannot read the one Japanese filename in the ag-psd archive (`ウニフラ白.psb`) and exits 1 after writing 735 of 736 files, so the extraction was done by Python's `tarfile` and every file verified against the manifest.
+- `cargo build --release -p photocraft`: exit 0; the executable is 278,547,456 B, starts and shows its window.
+- The suites need `CRAFT_I18N_DIR`, `CRAFT_I18N_REQUIRED=1`, `CRAFT_FONTS_DIR` and `LOCALAPPDATA`; without them the i18n trials fail on a missing catalog (`registered language`).
+- The corpus archives are placed from the pinned bytes and every file is checked against `xtask/psd-corpus.sha256` (170) and `xtask/psd-tools-corpus.sha256` (309): `bsdtar` on this Windows build cannot read the one Japanese filename in the ag-psd archive (`ウニフラ白.psb`) and exits 1 after writing 735 of 736 files.
 
 ## What is not proven
 
 - The macOS and Linux legs were not run; this is a Windows machine.
-- The corpus was placed from the pinned archives by checksum, not by `cargo xtask corpus` itself, because of the archive entry above.
-- The GPU timing trials measure the wall clock, so their results depend on the machine's load; they run one at a time in this configuration.
+- The corpus was placed from the pinned archives by checksum, not by `cargo xtask corpus` itself.
+- The upstream steps after the last full suite (CI and documentation files only, no `.rs` or `.toml` change) were not re-run through the suite; the release executable is built from that tree.
+- The GPU timing trials measure the wall clock, so their results depend on the machine's load.
 - The release executable was started and its window shown; the interface was not judged by eye against the reference application.

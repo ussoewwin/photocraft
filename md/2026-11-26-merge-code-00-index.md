@@ -1,47 +1,42 @@
-# The upstream merge of 2026-11-25 and 2026-11-26
+# The upstream merges of 2026-11-25 and 2026-11-26
 
 ## Scope
 
-Both repositories were brought to the current official upstream, and every fork feature was kept on
-top. The merges are separate because the two repositories are: craft-libs is a library the other
-repository pins by revision.
+Both repositories were brought to the current official upstream while upstream kept moving, and the
+fork's own features were kept on top.
 
-| repository | merge commits | the fork before | the upstream commits taken |
+| repository | branch tip | the fork before | the upstream commits merged, in order |
 |---|---|---|---|
-| craft-libs (`next`) | `0507d5acb` | `75866f6b1` | `93c2e0825` (190 commits, 117 change commits) |
-| photocraft (`main`) | `214e45a35`, `06dd81e8b` | `a3915ab2f` | `dbd191586` then `d827906d6` (225 commits, 128 change commits) |
+| craft-libs | `e629d2315` | `75866f6b1` | `93c2e0825`, `0cb8ed397`, `7635245a9`, `8f1bb4c46`, `e17227177` |
+| photocraft | `eaf7ef1e9` | `a3915ab2f` | `dbd191586`, `d827906d6`, `c5aea7e75`, `f0205ae33` |
 
-A repair commit followed on craft-libs: `9f430f19b` (`Space` routing complexity, and Space on a
-focused icon button).
+Each merge is a commit of its own; the repair commits that followed answer what a merge or an
+upstream change broke.
 
 ## The documents
 
-| document | repository | what it holds |
-|---|---|---|
-| [01 - the fork's code in craft-libs](https://github.com/ussoewwin/craft-libs/blob/next/md/2026-11-26-merge-code-01-fork-code.md) | craft-libs | every file the merge decided on, with the role, the code and what each hunk does |
-| [02 - the fork's code in photocraft](https://github.com/ussoewwin/photocraft/blob/main/md/2026-11-26-merge-code-02-fork-code.md) | photocraft | the same for this repository |
-| [03 - the upstream range and the verification, craft-libs](https://github.com/ussoewwin/craft-libs/blob/next/md/2026-11-26-merge-code-03-upstream-inventory.md) | craft-libs | every upstream commit, the measurements, and what they do not prove |
-| [03 - the upstream range and the verification, photocraft](https://github.com/ussoewwin/photocraft/blob/main/md/2026-11-26-merge-code-03-upstream-inventory.md) | photocraft | the same for this repository |
-| [04 - the upstream code behind the answers, craft-libs](https://github.com/ussoewwin/craft-libs/blob/next/md/2026-11-26-merge-code-04-upstream-code.md) | craft-libs | each adaptation's upstream lines, quoted with their numbers |
-| [04 - the upstream code behind the answers, photocraft](https://github.com/ussoewwin/photocraft/blob/main/md/2026-11-26-merge-code-04-upstream-code.md) | photocraft | the same for this repository |
+| document | what it holds |
+|---|---|
+| [01 - craft-libs' code](https://github.com/ussoewwin/craft-libs/blob/next/md/2026-11-26-merge-code-01-fork-code.md) | every file a merge decided on, with the code |
+| [02 - photocraft's code](https://github.com/ussoewwin/photocraft/blob/main/md/2026-11-26-merge-code-02-fork-code.md) | the same for this repository |
+| [03 - craft-libs' range and its measurements](https://github.com/ussoewwin/craft-libs/blob/next/md/2026-11-26-merge-code-03-upstream-inventory.md) | every upstream commit, the measurements, and what they do not prove |
+| [03 - photocraft's range and its measurements](https://github.com/ussoewwin/photocraft/blob/main/md/2026-11-26-merge-code-03-upstream-inventory.md) | the same |
+| [04 - the upstream code behind craft-libs' answers](https://github.com/ussoewwin/craft-libs/blob/next/md/2026-11-26-merge-code-04-upstream-code.md) | each answer's upstream lines, quoted with their numbers |
+| [04 - the upstream code behind photocraft's answers](https://github.com/ussoewwin/photocraft/blob/main/md/2026-11-26-merge-code-04-upstream-code.md) | the same |
 
-## What "the merge decided" means
+## What "a merge decided" means
 
 Not every file the fork holds. A file is a decision when its merged content differs from **both**
-parents, or when a repair commit wrote it after the merge. Everything else came from one side
-unchanged, and is not listed - the fork's own identity (its crates, its documents, its plugins) is a
-different question and is not what a merge decides.
+parents, or when a repair wrote it after a merge.
 
 ```powershell
-git diff --name-only <first-parent> <merge>      # what the merge touched
-git show <merge>:<path>                          # the merged copy
-git show <first-parent>:<path>                   # the fork's copy
-git show <second-parent>:<path>                  # the upstream copy
+git diff --name-only <first-parent> <merge>
+git show <merge>:<path>; git show <first-parent>:<path>; git show <second-parent>:<path>
 ```
 
 ## Re-deriving a claim
 
-- The fork's code: `git diff d827906d6 HEAD -- <path>` in photocraft, `git diff 93c2e0825 HEAD -- <path>` in craft-libs.
-- The upstream code: `git show <upstream>:<path>`, with that commit's line numbers.
-- The range: `git log --format='%h %s' a3915ab2f..d827906d6` in photocraft, `75866f6b1..93c2e0825` in craft-libs.
-- The measurements: the commands and their numbers are in each document 03, with the limits stated.
+- The fork's code: `git diff e17227177 HEAD -- <path>` in craft-libs, `git diff f0205ae33 HEAD -- <path>` in photocraft.
+- The upstream code: `git show <upstream>:<path>` with that commit's line numbers.
+- The range: `git log --format='%h %s' 75866f6b1..e17227177` and `a3915ab2f..f0205ae33`.
+- The measurements: each document 03 lists the commands with their numbers and their limits.
