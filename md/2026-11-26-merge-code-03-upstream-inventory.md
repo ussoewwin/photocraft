@@ -1,145 +1,254 @@
 # The upstream range and what was verified in photocraft
 
-Every upstream commit this merge took, the measurements made on the merged
-tree, and what those measurements do not prove.
-
 ## The upstream range
 
-- The upstream commit this merge took: `e22facf45`.
-- The fork's pre-merge head: `b86838240`.
-- Commits in the range: **108**, of which **63** are change commits; the rest
-  are merges.
+- The fork's state before the merge: `a3915ab2f`.
+- The upstream commit merged last: `d827906d6`.
+- Commits taken: **225**, of which **122** are change commits.
 
-### Every commit of the range
+### Every commit
 
-- `e22facf45 Merge pull request #16894 from superplay2021/fix/cmyk-vector-shape-paint`
-- `a39646d49 Merge branch 'main' into fix/cmyk-vector-shape-paint`
-- `8a3ff6c08 Merge pull request #16691 from davidmann4/batch/16665-16598`
-- `3e094078e Pen shape-mode tests read the number before the unit next adds to a field's accessible value`
-- `2f9362d24 Move craft-libs to storytold next 3656e8aaa4 (dock-gap fixes, storytold/craft-libs#3383, #3360, #3058, #3086, #3212)`
-- `ffe41a5dc fix(cmyk): discard invisible ink before dropping alpha`
-- `3e3831ab4 Merge remote-tracking branch 'origin/main' into HEAD`
-- `b76d2a12b i18n tests: the drawn File title starts with the translation, with the access key after it on next`
-- `492cbae90 fix(cmyk): preserve native CMYK in vector shape fills and strokes`
-- `ac2e39a06 Merge queue batch #16717: #15767, #15421, #16049, #15092, #16446`
-- `2af203280 Review fixes: a held corner widget is no snap target; a pasted CRLF moves the caret by one`
-- `39f8ba661 Move craft-libs to storytold next a3174010b7 (font-manager builds for wasm again, storytold/craft-libs#3399)`
-- `349af1806 Merge remote-tracking branch 'origin/main' into HEAD`
-- `23bf461da Task bars stay clear of the scroll bars; the Magnetic Lasso test takes the arrow cursor`
-- `5babb6a3b Merge #16446 into the merge queue batch`
-- `8cf4c9951 Merge #15092 into the merge queue batch`
-- `713963e39 Merge #16049 into the merge queue batch`
-- `0aaf8ecfb Merge #15421 into the merge queue batch`
-- `94f968388 Merge #15767 into the merge queue batch`
-- `928326271 RAW #587: choose the actual frame budget for shared CFA development (#16699)`
-- `dd56106df Merge queue batch #16705: #14467, #16250, #16290, #15965, #16318, #16308`
-- `6e5dec786 Drop a stray trailing blank line at the test file's end`
-- `76467eab5 Name the dot-parse assumption on field_number: the harness locale is the built-in one, a comma locale would need a pin`
-- `399271a8e Merge upstream/main into feat/pen-shape-fill-stroke-12907`
-- `928b9ff70 Merge #16308 into the merge queue batch`
-- `e67693730 Merge #16318 into the merge queue batch`
-- `c80a7a618 Merge #15965 into the merge queue batch`
-- `223d159e6 Merge #16290 into the merge queue batch`
-- `f1c86f09c Merge #16250 into the merge queue batch`
-- `7e8d2959c Merge #14467 into the merge queue batch`
-- `32f53c8fb Merge queue batch #16687: #16079, #16122`
-- `e86d7a20b test(atn): start the engine guard tests from an installed session`
-- `15c6baf62 Drop the now-unused Checkbox and VectorMode imports in shape_options: main moved the shape tools' Align Edges out of this file`
-- `31d7313d2 Port the pen bar's Align Edges to main's checkbox, and fit the swatch tests to the new browser`
-- `a2a757a99 Move craft-libs to storytold next c6a4484bca and egui to a87d00caa (storytold/craft-libs#3357)`
-- `c8a3b0386 Call session presets as a method: main turned the engine's presets field into an accessor`
-- `6281da080 Merge remote-tracking branch 'pr/16598' into HEAD`
-- `c473b4108 New Document: test that documents created alike stay separate Recent items (#14038)`
-- `068a52e83 Tests follow craft-libs next: set copy order, edge click, no desktop pointer`
-- `87c83781e Move craft-libs to storytold next a4db799563 (own-window dialogs keep their size, task bar keeps its controls)`
-- `f27cd5f0b Merge main into fix/new-doc-recent-items-14038`
-- `f5ee04545 fix(engine): Auto-Blend Layers is unavailable with a type layer or smart object selected (#14204)`
-- `85c63e6a4 Merge upstream/main into feat/pen-shape-fill-stroke-12907`
-- `9d4d331a4 Merge #16122 into the merge queue batch`
-- `11f3caafc Merge #16079 into the merge queue batch`
-- `f00af0431 Merge remote-tracking branch 'origin/main' into HEAD`
-- `db1402989 Merge queue batch #16679: #16655, #13486, #15281`
-- `aa84e9e92 Merge #15281 into the merge queue batch`
-- `5146eca6d Merge #13486 into the merge queue batch`
-- `01459afbd Merge #16655 into the merge queue batch`
-- `8e3529512 fix(atn): match the ask's name test to each layer-selector kind`
-- `f926cafb9 fix(atn): follow main's session accessor in the engine guard tests`
-- `492786e8e fix(atn): follow main's session accessor in the panel tests`
-- `17d7b5aa6 ﻿Merge upstream/main into fix/atn-recording-any-document-10769`
-- `530eb4191 Warp: remove the added split from its inner anchors`
-- `072a7a427 Move egui to storytold/egui next 7520646e5c (VoiceOver reads floating panels, storytold/egui#58)`
-- `218d0780f Move craft-libs to storytold next 7762aab37b, which carries every release fix`
-- `883daa21a Merge remote-tracking branch 'upstream/main' into rc-bump-next`
-- `50b2584dc Move craft-libs to rc-integration 3e5f0cbdbc (adds the memo view fill fix from craft-libs#3319: the title bar spans the window again)`
-- `608760bf2 Use the internal command argument for the Warp pick`
-- `a4f869fe5 Warp: remove the split line at the picked anchor`
-- `0a453eb6f Move craft-libs to rc-integration df7df7c663 (next 3238a3eca8 with the release fixes and craft-libs#3319)`
-- `340ad3141 Follow next's deliberate changes in the ui-egui tests; shape box drags skip their own layers as snap targets`
-- `074537073 Actions tests: sets keep the order they were made in`
-- `135a6b342 Move craft-libs to next`
-- `9de7ffac9 WIP: RAW Develop window keeps its size (#16595)`
-- `07278de6c Merge main into feat/14136-print-units-points-picas`
-- `4a8374298 Dering only the columns read, and read beyond the content as the default pixel`
-- `b13e942d0 Merge remote-tracking branch 'origin/main' into a-15092`
-- `9abf14768 ui: grey the Count tool's one-layer rows only with several pixel layers selected (#12358)`
-- `e6035facf Limit Preserve Details deringing to the measured case and bound its memory`
-- `bef461389 Merge main into fix/12358-canvas-layer-menu-plural-labels`
-- `a306a440c Merge remote-tracking branch 'origin/main' into tests-condition-waits`
-- `a49f739ed Enlarge with Preserve Details without ringing at hard edges`
-- `ff80f6869 Smudge: Alt flips Finger Painting only at Strength 100% (CodeRabbit on #16308)`
-- `249a1912c Create Ellipse: open with the active ellipse's size, else 100 x 100`
-- `cfe88d326 Smudge: Alt turns Finger Painting the other way for the stroke`
-- `6eb8a853a Magic Eraser: alerts for a hidden layer, a locked layer and a group`
-- `36601b9cb Content-Aware Fill: choosing Custom asks for the Sampling Brush`
-- `8c06f525d Freeform Pen: Shift leaves the freehand stroke as drawn`
-- `1205c6a1d Assign Profile: ask before assigning on a document with layers`
-- `5d8594323 fix(pen): measure the W / H row against the live Freeform Pen trace`
-- `c85bbe79d test(pen): pin the degenerate W / H drafts and the Curvature Pen row`
-- `7b59c7136 refactor(pen): measure the Shape-mode W / H with the existing path bounds helper`
-- `3d6fda134 feat(pen): show the W and H captions in the Shape-mode options bar`
-- `6c296cd89 feat(pen): Fill, Stroke, W/H and Align Edges in the Shape-mode options bar`
-- `4e4044ffb Merge upstream/main into fix/atn-recording-any-document-10769`
-- `1be0226c4 Merge upstream/main into fix/atn-recording-any-document-10769`
-- `20a50d657 Merge commit '86c2056d01ca55dd0295e314dd6f526e879155c5' into HEAD`
-- `4fbc1d373 Merge remote-tracking branch 'upstream/main' into fix/atn-recording-any-document-10769`
-- `0ed9f48cc Merge remote-tracking branch 'upstream/main' into fix/atn-recording-any-document-10769`
-- `b72d57b33 docs(atn): say which two cases the missing-layer pin's document covers`
-- `6308e802c fix(atn): widen the ask's name match, narrow it to the failed step`
-- `bced4247e fix(atn): ask Continue or Stop when a played step names a missing layer`
-- `515733b12 Tests: the queued-starts wait matches the session clone count exactly`
-- `3878d8fd5 Tests: the batch check waits until the cancelled batch has returned`
-- `19a42910c Tests: wait for the other thread's state instead of a fixed sleep (#15379)`
-- `ca25ec261 Merge origin/main into fix/summarize-modifier-order-14882`
-- `dafd55564 Print: the printer's paper line follows Units; typed lengths at 72 pt/in`
-- `654295da1 Print: Units lists Inches, Centimeters, Millimeters, Points and Picas (#14136)`
-- `3efed5840 New Document: an empty Recent tab lists only Default PhotoCraft Size (#14038)`
-- `33b8ade49 Merge main into fix/new-doc-recent-items-14038`
-- `c2ef3cbf8 Merge main into fix/new-doc-recent-items-14038`
-- `6228b5cf4 New Document: Recent tab lists Your Recent Items, 4 per row, duplicates kept (#14038)`
-- `e3743d0e1 Summarize: order modifiers Alt, Shift, Ctrl off macOS (#14882)`
-- `55e9b409b ui: Count tool layer menu greys Blending Options, Color Range and Load Selection with several layers selected (#12358)`
-- `f502e675a Merge remote-tracking branch 'upstream/main' into fix/12358-canvas-layer-menu-plural-labels`
-- `8947ad041 ui: canvas layer menu reads Duplicate/Delete/Rasterize Layers with several layers selected (#12358)`
+- `d827906d6 Merge queue batch #17001: #14868, #16986`
+- `0ba4c510a Merge #16986 into the merge queue batch`
+- `deaa85f93 Merge #14868 into the merge queue batch`
+- `dbd191586 Sign PhotoCraft nightlies on the dedicated nightly-signer branch (#16906)`
+- `b5c762017 Merge queue batch #16992: #16970, #16973`
+- `9c86fb682 Use the boxed app in Layer Style regression tests`
+- `00aabb53b Integrate atomic Layer Style confirmation with current main`
+- `b02115c08 Merge #16973 into the merge queue batch`
+- `a45851939 Merge #16970 into the merge queue batch`
+- `5f8d3d0fb Merge queue batch #16982: #15966, #15801, #16442, #15186, #16958, #16971`
+- `1e87800fa Color Picker: Add to Swatches asks for the swatch name (#16745)`
+- `b2678c8ee Merge #16971 into the merge queue batch`
+- `5e33fa6a7 Merge #16958 into the merge queue batch`
+- `09a962da6 Merge #15186 into the merge queue batch`
+- `7095c743d Merge #16442 into the merge queue batch`
+- `fa3ce3fc6 Merge #15801 into the merge queue batch`
+- `8a16296b9 Merge #15966 into the merge queue batch`
+- `13520900d Merge queue batch #16959: #16948, #16127, #16147, #16153, #16298, #16312, #16309, #15233, #16009, #16479, #16183, #16651, #16175, #16023, #16065`
+- `29a3c7ece Layers: with the Background active, the panel menu starts with Layer from Background… (#16765)`
+- `9a9c391d6 Move tool: show directional drag distances`
+- `eff5cf198 Merge #16065 into the merge queue batch`
+- `80a19d25e Merge #16023 into the merge queue batch`
+- `787619006 Merge #16175 into the merge queue batch`
+- `92a7f23f4 Merge #16651 into the merge queue batch`
+- `9b2cd89b2 Merge #16183 into the merge queue batch`
+- `44c2a2937 Merge #16479 into the merge queue batch`
+- `5eaa0d880 Merge #16009 into the merge queue batch`
+- `e376c2311 Merge #15233 into the merge queue batch`
+- `8a9190130 Merge #16309 into the merge queue batch`
+- `d577fabd2 Merge #16312 into the merge queue batch`
+- `b60b4f898 Merge #16298 into the merge queue batch`
+- `2d9e14517 Merge #16153 into the merge queue batch`
+- `7f285b380 Merge #16147 into the merge queue batch`
+- `6e11fa7d2 Merge #16127 into the merge queue batch`
+- `c4d35fa94 Merge #16948 into the merge queue batch`
+- `51aded665 Create Ellipse: its range alert carries the dialog's own title (#13230)`
+- `05ca8512f fix(ui): open the pasteboard menu outside the image (#16877)`
+- `2aa6e0657 Color Table preset tests: start from the installed command registry (#14344)`
+- `37c3c0a32 Merge remote-tracking branch 'origin/main' into s073-16442`
+- `029cbe6c7 Color Lookup: a smart filter's unknown interpolation reaches its editor unchanged`
+- `830316b77 Merge pull request #16955 from davidmann4/fix/16905-repin-own-window-moves`
+- `1d5af6458 Merge queue batch #16952: #16686, #16417, #16945, #16935, #16012, #16534`
+- `34238f8b5 Layers: Layer from Background's History state reads "Make Layer" (#16760)`
+- `61abd76ec Merge remote-tracking branch 'upstream/main' into fix/place-embedded-title-14110`
+- `23e432ab7 Cargo.lock for craft-libs next a165ef3a2c`
+- `6604a4cec Move craft-libs to storytold next a165ef3a2c and egui to b15ffe9bf (own-window dialogs move and resize, storytold/craft-libs#3476)`
+- `416983ec5 Merge #16534 into the merge queue batch`
+- `a9b731d10 Merge #16012 into the merge queue batch`
+- `5a635583f Merge #16935 into the merge queue batch`
+- `8b2d05dba Merge #16945 into the merge queue batch`
+- `71f317aa2 Merge #16417 into the merge queue batch`
+- `ac393630e Merge #16686 into the merge queue batch`
+- `9d317c5fb Enable the PhotoCraft nightly for supervised manual runs (#16594)`
+- `41a0723c5 Merge queue batch #16881: #15562, #16200, #16379, #16553, #16017, #16411, #16638, #16010, #15990, #16661, #16670, #16674, #16680, #16558, #16451, #16689, #16702, #16703, #16533, #16907, #16927`
+- `fcd6eed99 Star tool: the points field sets the next star's points, 3 to 20`
+- `48ac8e57f Merge #16927 into the merge queue batch`
+- `e5ef7adfd Merge #16907 into the merge queue batch`
+- `50fd48a70 Merge #16533 into the merge queue batch`
+- `73b614036 Merge #16703 into the merge queue batch`
+- `b3e8b34ff Merge #16702 into the merge queue batch`
+- `ce4f3b87c Merge #16689 into the merge queue batch`
+- `0a3a4de7a Merge #16451 into the merge queue batch`
+- `601548579 Merge #16558 into the merge queue batch`
+- `be5a186dc Merge #16680 into the merge queue batch`
+- `b1e85c01d Merge #16674 into the merge queue batch`
+- `2ec0c1eed Merge #16670 into the merge queue batch`
+- `b30a4b0ba Merge #16661 into the merge queue batch`
+- `b8eea8463 Merge #15990 into the merge queue batch`
+- `09a55b4a0 Merge #16010 into the merge queue batch`
+- `ec236094c Merge #16638 into the merge queue batch`
+- `3bd9c0deb Merge #16411 into the merge queue batch`
+- `3cf376639 Merge #16017 into the merge queue batch`
+- `f53e981b0 Merge #16553 into the merge queue batch`
+- `8aaaa7319 Merge #16379 into the merge queue batch`
+- `77b7358fb Merge #16200 into the merge queue batch`
+- `aca633da3 Merge #15562 into the merge queue batch`
+- `fbddf433c fix(vector): a live Pen draft follows only the steps it minted`
+- `fca3fba90 Commit Free Transform's Rotate and Flip presets on whole pixels`
+- `8eea05e2b test(dialogs): drive the Calculations preview row through the control channel`
+- `a5fac14ae feat(dialogs): the Calculations dialog previews its result channel in grey`
+- `d9bc2715a Review fix (#16861): check the selection change at the same pointer pixel`
+- `6df7af89d Smart Guides: Ctrl over the selected layer itself measures nothing (#16861)`
+- `baea3f6ef Layer Comps to Files: a part that fits keeps its trailing space (#13940)`
+- `580011e93 Actions: play the Auto-Align step in the full app's session (#14201)`
+- `3fc42fdab Layer Comps to Files: a cut part leaves out the parts after it (#13940)`
+- `5bc015339 Layer Comps to Files: a long comment is shortened, not a failed export (#13940)`
+- `b1100518a Modern Brightness: each input rises with the slider up to ±150 (#14348)`
+- `213133071 Pasteboard menu: remove separator before Select Custom Color… (#16878)`
+- `98e31bc19 The droplet destination tests clean up their fixture folders`
+- `7242b84e3 docs(paint): state the CMYK channel invariant of the ink blend`
+- `506832029 fix(paint): blend Color replacement on the CMYK channels of the document`
+- `ebb5365c2 test(vector): require the first Pen anchor in the receiving document (#12890)`
+- `326a8bd78 fix(vector): the Pen's live Work Path over a replace and a Redo (#12890)`
+- `b8d89b3a2 test(engine-paint): ask the CMYK Color click for the ink table of #11918`
+- `11e6ed38e rustfmt over the spliced test line: the chain wraps as the file does elsewhere`
+- `e691ebb03 The Destination run sits on main's session accessors: actions_mut(), the recording counters and the preset-store trait`
+- `0e8616faa Merge upstream/main into feat/droplet-destination-13711`
+- `55049623b Give the Clone Stamp preset tooltip its own stage`
+- `39a3bc537 fix(vector): keep the options bar's new ingredients cheap (#12890)`
+- `c9679429f Import the action store extension in the Dodge and Burn regression`
+- `0f2219c73 Test Clone Stamp percentages with the regional number format`
+- `d749019de Clone Stamp: validate whole-percent brush edits and explain controls (#12607)`
+- `e8d6f2868 Dodge and Burn: expose brush angle and pressure for size (#12683, #12667)`
+- `87fab7cca test(vector): pin that the options bar follows each path it works from (#12890)`
+- `8a06a9858 Color Lookup: a Smart Filter's editor opens on the interpolation and dither it renders with (#14419)`
+- `5c8f1b35d Direct Selection: another anchor selection ends the nudge run (#13204)`
+- `315dcd64e fix(vector): the options bar follows a Pen path drawn click by click (#12890)`
+- `a91f96d89 Adjustment Brush: Overlay tooltip in our own words (#12520)`
+- `71c718f8b Render Video alpha: refuse unreadable scratch tiles, resolve PNG as the encoder does (#14163)`
+- `ea21d77e0 Direct Selection: consecutive arrow nudges are one "Nudge Path" step (#13204)`
+- `488843d09 fix(engine): the Spectrum and system Color Table presets run in the reference order (#14344)`
+- `ddfeabd6a Merge upstream/main into fix/content-aware-patch-fill-12118`
+- `83b9637e5 feat(vector): every Pen click gets its own History entry (#12890)`
+- `48ce0d9d4 Import Notes: the Notes panel keeps its state, View › Show › Notes turns on (#13918)`
+- `99dde7aa6 Format the Export submenu separator test`
+- `522e4fa3a File › Export: a separator above Export Preferences (#13801)`
+- `c20ae600e Sharpen tool options bar: brush Angle field after Strength (#12946)`
+- `e5ef3bd3f Render Video alpha: a matte array of the wrong length or with a non-number is an error (#14163)`
+- `bab63cc90 Outer Glow: read the floor from the box end taps (#15871)`
+- `f9c6b8b05 Outer Glow: one Range/Size rule for Softer Edge glows (#15871)`
+- `d137f58e0 Render Video alpha: keep partly transparent pixels, strict matte (#14163)`
+- `123c88f0b Merge remote-tracking branch 'origin/main' into fix/fill-mode-by-document-14647`
+- `d6413ccdc Merge upstream/main into feat/vertical-type-mask-altdrag-12090`
+- `6591d38b5 Render Video: Alpha Channel option for PNG sequences (#14163)`
+- `ca431fde0 test(tools): pin the Indexed pattern row this change lets go, and name its follow-up`
+- `834f641fd Auto-Blend Stack Images: keep the bottom masked under Blend If, a shapeless knockout or an opaque default`
+- `5da64cdb9 Merge remote-tracking branch 'origin/main' into s18-16183`
+- `7fd9c11ea Merge remote-tracking branch 'origin/main' into s18-15990`
+- `3c6e332fc fix(tools): a pattern from an Indexed image keeps painting (#13071)`
+- `818a4a010 feat(doc): patterns record the colour mode they were defined from`
+- `94a927466 Brightness/Contrast refusal tests paint their grey square directly (#14359)`
+- `1010ca8c3 Merge remote-tracking branch 'origin/main' into fix/fill-mode-by-document-14647`
+- `b77e6333e Merge remote-tracking branch 'origin/main' into fix/13940-comps-to-files-names`
+- `3dc4aa7bf Merge remote-tracking branch 'origin/main' into fix/14359-brightness-contrast-hidden-empty`
+- `dc42d8631 Merge remote-tracking branch 'origin/main' into fix/14253-caf-select-all-silent`
+- `063f21b0b test(algo): the merge test refuses a sample that is not a colour (#14723)`
+- `79aaba8a6 fix(algo): Merge to HDR Pro keeps the mean-anchored tone map (#14723)`
+- `27ee8ed45 fix(ui): keep the shared Calculations list for a merged source without a Background`
+- `d7b2d3326 test(engine-paint): keep the CMYK Color Replacement tests with the moved command code`
+- `d66e704ae Merge upstream/main into fix/cmyk-color-blend-11918`
+- `437aa2eba Merge upstream/main into fix/calculations-channel-dropdowns-14521`
+- `7741e781d test(ui-egui): the dialog's refused-name guard covers the centred key too`
+- `1bf405608 Merge remote-tracking branch 'origin/main' into fix/14975-pattern-grayscale-greys`
+- `5fd06cbe1 Merge feat/type-paragraph-text-size-12044 into feat/vertical-type-mask-altdrag-12090`
+- `177fd7a03 Test the Define Brush Preset 5000 px limit and the 2500 px image import limit`
+- `192a167bd Define Brush Preset accepts tips up to 5000 px and is unavailable for larger areas`
+- `48581d833 Merge remote-tracking branch 'origin/main' into s4e-16023`
+- `31ac857ec Merge remote-tracking branch 'origin/main' into fix/14359-brightness-contrast-hidden-empty`
+- `765c6574c Merge remote-tracking branch 'upstream/main' into fix/content-aware-patch-fill-12118`
+- `6f946e0f4 fix(retouch): cover the Content-Aware patch fill at 16 bits (#12118)`
+- `169d5de47 Auto-Blend Stack Images: keep the bottom masked when the top sits in a group of its own (#14212)`
+- `e49d5493a Define Custom Shape: a cut in either path stays inside its own area (#14293)`
+- `07bd38db0 Merge origin/main into fix/14293-custom-shape-combine`
+- `8af2f0117 Canvas Size: a recorded width-only relative percent step plays back (#14541)`
+- `00aa95a1b fix(retouch): Content-Aware patch fills from surroundings (#12118)`
+- `db026fbf5 Merge origin/main into fix/14253-caf-select-all-silent`
+- `61645e202 Fix Levels clipping preview state handoff`
+- `5dff56147 Merge main into atn-auto-align-step-14201`
+- `6b7dd902f Merge main into fix/fill-mode-by-document-14647`
+- `08b333eda Merge main into fix/13940-comps-to-files-names`
+- `40b7d1755 Merge main into fix/14419-color-lookup-tetrahedral-dither-default`
+- `f3ea52b6c Auto-Blend Stack Images: keep the bottom masked under a clipped or not quite opaque top (#14212)`
+- `ed726ead5 Patterns keep the luma greys where #14975 did not measure`
+- `950df19a5 test(ui-egui): pass app to row_menu in the group-row artboard test (#14566)`
+- `60d25a490 Merge remote-tracking branch 'origin/main' into b-16009`
+- `8ae2b56a0 Auto-Blend Stack Images: keep the bottom masked when revealing it would change the picture (#14212)`
+- `b2b882ae2 Merge remote-tracking branch 'origin/main' into fix/14212-stack-bottom-mask`
+- `15ab03673 Brightness/Contrast: the status bar shows the refusals in the interface language (#14359)`
+- `e9a35ecfa Canvas Size: build the relative percent test session with crate::session()`
+- `8cbc9068d test(engine-core): pin Color Replacement on a profiled CMYK/16 document`
+- `9059ab8d1 Merge upstream/main into fix/calculations-channel-dropdowns-14521`
+- `8620acd17 test(ui): list the layer source ids and name the Calculations arm`
+- `76e392bc1 Merge origin/main into fix/14359-brightness-contrast-hidden-empty`
+- `07acb9eae Merge origin/main into canvas-size-relative-percent-14541`
+- `7018cba62 fix(paint): blend Color in a CMYK document through its own profile`
+- `2c3e64864 fix(ui): Calculations channel lists are per source, defaulting to Red`
+- `c8b8bf9fc Merge remote-tracking branch 'origin/main' into fix/14975-pattern-grayscale-greys`
+- `f3fd35b3e Layer Style: the stroke command refuses an eleventh stroke (#15140)`
+- `b654156cb Patterns paint the grey profile's greys in Grayscale documents (#14975)`
+- `e11eeb964 Adjustment Brush: tint the active adjustment layer's mask with Overlay (#12520)`
+- `aac41201d Color Lookup: Image > Adjustments interpolates tetrahedrally and dithers by default (#14419)`
+- `0344c55a3 test(algo): set every HDR Toning control in the overflow test (#14723)`
+- `79335e9df fix(algo): HDR Toning stays finite when its tone overflows f32 (#14723)`
+- `d1bf7129b fix(algo): HDR Toning stretches an ordinary image to the full range (#14723)`
+- `6814484a9 Layer Comps to Files: comment in the name, dashes in PNG names, .tif and .jpg (#13940)`
+- `4706e8c2e Actions: an Auto-Align step aimed at other layers is unsupported (#14201)`
+- `0ee9c7f09 Actions: play and record the Auto-Align Layers step (#14201)`
+- `ab92524f9 Freeform and Curvature Pens: no menu in Shape mode, the Pen's transform row labels (CodeRabbit on #16309)`
+- `2dbc49171 Merge main into fix/fill-mode-by-document-14647`
+- `2b0f4ef4b Rectangle, Ellipse and Polygon tools: Alt-click picks the foreground and Fill`
+- `35961942b Freeform and Curvature Pens: right-click opens the Pen's path menu`
+- `5e29ef92e Spot Healing Brush: alerts for a hidden layer, Lock All and a group`
+- `3da8da995 Modern Brightness at +150 and -150 matches the reference ramps (#14348)`
+- `05182cfa8 Auto-Blend Stack Images: the bottom layer shows everywhere (#14212)`
+- `369242e22 #14293: Define Custom Shape stores a targeted path together with the active shape layer`
+- `e2aa47c78 Layer Style: a new Drop Shadow starts with the last committed values`
+- `902b5be09 Fill new shape layers drawn from open pen paths`
+- `e166c561a Tests: the Triangle tool's Make row in Path mode`
+- `55db8a338 test(type-tool): pin the up-right Alt+drag gate and the centred field edit (#12090)`
+- `77a5b88db Canvas Size: a relative size in percent grows or shrinks each side by that share (#14541)`
+- `6076dbf5f Merge origin/feat/type-paragraph-text-size-12044 into feat/vertical-type-mask-altdrag-12090`
+- `9d123fc38 Content-Aware Fill with the whole canvas selected does nothing silently (#14253)`
+- `9b5efc4d9 Brightness/Contrast: refuse a hidden or empty pixel layer (#14359)`
+- `857147bcf Offer New Artboard and Artboard from Group on a group row (#14566)`
+- `dbfd93049 feat(type-tool): Alt+drag on Vertical Type Mask opens Text Size dialog`
+- `0e1f852e2 Fill and Stroke grey the modes the document can't use (#14647)`
+- `758290384 Merge upstream/main into feat/droplet-destination-13711`
+- `26df95e30 File › Place Embedded: the picker is titled Place Embedded (#14110)`
+- `9aa10b970 Merge upstream/main into feat/droplet-destination-13711`
+- `93b430df3 fix(droplet): validate a None run's steps before touching the caller's actions`
+- `2c6efd197 Merge upstream/main into feat/droplet-destination-13711`
+- `c4d1957ae Merge upstream/main into feat/droplet-destination-13711`
+- `110d5f1e6 Merge upstream/main into feat/droplet-destination-13711`
+- `2eadc6782 fix(droplet): review round for the Destination dropdown (#13711)`
+- `37b938e14 feat(droplet): Create Droplet gets the Destination dropdown (#13711)`
+- `73800314a Port atomic Layer Style confirmation to the craft dialog`
+- `3cdfab9e9 Merge main into Layer Style history PR`
+- `771bf846b Merge main into draft PR #14868`
+- `8f09b5b26 Use an action row in the shortcut set switch test`
+- `f19139560 Format the JPEG preview regression test`
+- `9927d15d4 Make the JPEG preview revision test independent of worker timing`
+- `9cce22b80 Artboards to Files order test: expect the <prefix><name> file names (#15170)`
+- `5618afb06 Merge main into draft PR #14868`
+- `6e0652e31 Merge current main into codex/layer-style-one-history-step`
+- `f5f4c2ff2 Apply Layer Style dialog in one history state`
 
 ## What was measured
 
-- `cargo nextest run --workspace --no-fail-fast --test-threads 4`: **15,460 passed / 0 failed / 96 skipped**, exit 0 (1,795 s; one GPU timing trial passed on its retry).
-- `cargo xtask test-corpus`: 670 passed / 0 failed / 11 ignored, exit 0.
 - `cargo check --workspace --all-targets --keep-going`: exit 0.
 - `cargo clippy --workspace --all-targets -- -D warnings`: exit 0.
 - `cargo fmt -- --check`: exit 0.
-- `cargo xtask layers`: OK, 30 crates, no layering violations.
-- `cargo xtask panel-commands`: OK, every click handler routes through a command id.
-- `cargo xtask wasm`: ok, 22 crates.
-- `cargo xtask parity`: exit 0.
-- `cargo test -p photocraft-engine --test panic_hunt -- --ignored`: 1 passed.
-- `cargo build --release -p photocraft`: exit 0 (66 min); the executable starts and shows its window.
+- `cargo xtask layers`: OK (30 crates), `panel-commands`: OK, `wasm`: OK (22 crates), `parity`: exit 0.
+- `cargo nextest run --workspace --no-fail-fast --test-threads 4`: **15,771 passed / 0 failed / 96 skipped**, exit 0 (1,534 s).
+- `cargo test -p photocraft-engine --test panic_hunt -- --ignored`: exit 0.
+- `cargo xtask test-corpus`: **670 passed / 0 failed / 11 ignored**, exit 0 (the run also reports 744 and 217 in its two other binaries).
+- The environment the suites need: `CRAFT_I18N_DIR=D:\USERFILES\GitHub\craft-i18n`, `CRAFT_I18N_REQUIRED=1`, `CRAFT_FONTS_DIR=<checkout>\craft-fonts`, `LOCALAPPDATA` set. Without them the i18n trials fail on a missing catalog (`registered language`), measured both ways.
+- The corpus archives are extracted by the pinned bytes and checked against `xtask/psd-corpus.sha256` (170 files) and `xtask/psd-tools-corpus.sha256` (309 files): `bsdtar` on this Windows build cannot read the one Japanese filename in the ag-psd archive (`ウニフラ白.psb`) and exits 1 after writing 735 of 736 files, so the extraction was done by Python's `tarfile` and every file verified against the manifest.
 
 ## What is not proven
 
 - The macOS and Linux legs were not run; this is a Windows machine.
-- The corpus is fetched and verified on this machine; the archive layout behind the fetch is not re-checked.
-- The GPU timing trial measures the wall clock, so its result depends on the load of the machine; the fork's configuration runs it one at a time.
-- The release executable was started and its window shown; the behaviour of the interface itself was not judged by eye against the reference application.
-- Upstream's own CI was not reproduced.
-
+- The corpus was placed from the pinned archives by checksum, not by `cargo xtask corpus` itself, because of the archive entry above.
+- The GPU timing trials measure the wall clock, so their results depend on the machine's load; they run one at a time in this configuration.
+- The release executable was started and its window shown; the interface was not judged by eye against the reference application.
