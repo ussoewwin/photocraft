@@ -3,6 +3,26 @@
 PhotoCraft's release history, newest first. Every release has full notes on GitHub; the last line of
 each entry links to them.
 
+## Version 1.4.1
+
+- **Changed**: **the application rides the current official upstream** - `storytold/photocraft` `main`
+  at `eff5ee712` (50 commits over `f0205ae33`, of which 27 are change commits), with PhotoCraft's own
+  features kept on top: LaMa Cleaner, SAM 3.1 selection, the quick-selection mode bar in the options
+  bar, dragging selected pixels between documents, the Japanese interface and its font names.
+- **Fixed**: **the two places the merge met keep both sides** - the Remove command's trials keep the
+  fork's selection trial beside upstream's smart-object trial, and the tool menu keeps upstream's
+  Vertical Type Mask branch, with its measured selection table, and the fork's SAM Selection in the
+  same list.
+- **Changed**: **the shared framework follows upstream's pin** - `storytold/craft-libs` at `5c30761a8`
+  (the `next` line) for the framework crates and `249a41bd9` for `craft-develop`.
+- **Checked**: **nothing was lost in the merge** - a three-way audit against the merge base reports 0
+  of 52 upstream files and 0 of 190 fork files dropped, and the 10 files both sides touched keep every
+  added line of both (255 upstream, 490 fork); the fork-only files stay at 87.
+- **Suites**: the workspace runs **15,845 passed / 0 failed / 96 skipped**; check, clippy, format,
+  layers, panel-commands, wasm and parity all exit 0. The release executable is 331,762,176 bytes,
+  builds, starts and shows its window.
+- See [Release Notes v1.4.1](https://github.com/ussoewwin/photocraft/releases/tag/v1.4.1) for details.
+
 ## Version 1.4.0
 
 - **Changed**: **the application rides the current official upstream** - `storytold/photocraft` `main`
