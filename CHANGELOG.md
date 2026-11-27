@@ -3,6 +3,25 @@
 PhotoCraft's release history, newest first. Every release has full notes on GitHub; the last line of
 each entry links to them.
 
+## Version 1.4.3
+
+- **Changed**: **the application rides the current official upstream** - `storytold/photocraft` `main`
+  at `702da0278` (19 commits over `984c304b2`): the merge-queue batch #17136 (#14621, #15962,
+  #17117), the toolbar footer memo #17143, the color-settings text gamma work and the
+  channel-calculation trials, with PhotoCraft's own features kept on top.
+- **Changed**: **the shared framework follows this round's `craft-libs`** - `storytold/craft-libs` at
+  `c0977ad61` for the 41 framework crates, the merge this release cut alongside; `git merge-base
+  --is-ancestor c0977ad61 HEAD` in the craft-libs checkout exits 0, so `cargo xtask craftlibs on`
+  patches the crates from that tree.
+- **Checked**: **nothing was lost in the merge** - the mechanical audit against the merge base
+  reports 0 upstream files dropped and 0 fork files lost, and the merge itself carried no conflict.
+- **Suites**: the workspace runs **15,898 passed / 0 failed / 96 skipped**; check, clippy, format,
+  layers, panel-commands, wasm, parity and the panic hunt all exit 0; `cargo xtask test-corpus`
+  reports 744 passed and 670 passed with 0 failed. The release executable is 333,083,648 bytes,
+  starts, and shows its `PhotoCraft` window.
+- **Written down**: `md/2026-11-27-round-4-merge.md` holds the merge, the pin and each measurement.
+- See [Release Notes v1.4.3](https://github.com/ussoewwin/photocraft/releases/tag/v1.4.3) for details.
+
 ## Version 1.4.2
 
 - **Changed**: **the application rides the current official upstream** - `storytold/photocraft` `main`
