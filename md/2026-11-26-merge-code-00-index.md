@@ -1,5 +1,11 @@
 # The upstream merges of 2026-11-25 and 2026-11-26
 
+> **Branches as they stand today.** `storytold/craft-libs` and `storytold/photocraft` both have one
+> line, `main`; upstream merged the old `next` line into `main` and deleted the branch on 2026-11-27
+> (pull requests #3644 and #3645 there), and this fork's own branch was renamed `next` to `main` the
+> same day. Where a command or a measurement below names `next`, it names the line as it was at that
+> moment and is kept as the record of that round.
+
 ## Scope
 
 Both repositories were brought to the current official upstream while upstream kept moving, and the
@@ -17,11 +23,11 @@ upstream change broke.
 
 | document | what it holds |
 |---|---|
-| [01 - craft-libs' code](https://github.com/ussoewwin/craft-libs/blob/next/md/2026-11-26-merge-code-01-fork-code.md) | every file a merge decided on, with the code |
+| [01 - craft-libs' code](https://github.com/ussoewwin/craft-libs/blob/main/md/2026-11-26-merge-code-01-fork-code.md) | every file a merge decided on, with the code |
 | [02 - photocraft's code](https://github.com/ussoewwin/photocraft/blob/main/md/2026-11-26-merge-code-02-fork-code.md) | the same for this repository |
-| [03 - craft-libs' range and its measurements](https://github.com/ussoewwin/craft-libs/blob/next/md/2026-11-26-merge-code-03-upstream-inventory.md) | every upstream commit, the measurements, and what they do not prove |
+| [03 - craft-libs' range and its measurements](https://github.com/ussoewwin/craft-libs/blob/main/md/2026-11-26-merge-code-03-upstream-inventory.md) | every upstream commit, the measurements, and what they do not prove |
 | [03 - photocraft's range and its measurements](https://github.com/ussoewwin/photocraft/blob/main/md/2026-11-26-merge-code-03-upstream-inventory.md) | the same |
-| [04 - the upstream code behind craft-libs' answers](https://github.com/ussoewwin/craft-libs/blob/next/md/2026-11-26-merge-code-04-upstream-code.md) | each answer's upstream lines, quoted with their numbers |
+| [04 - the upstream code behind craft-libs' answers](https://github.com/ussoewwin/craft-libs/blob/main/md/2026-11-26-merge-code-04-upstream-code.md) | each answer's upstream lines, quoted with their numbers |
 | [04 - the upstream code behind photocraft's answers](https://github.com/ussoewwin/photocraft/blob/main/md/2026-11-26-merge-code-04-upstream-code.md) | the same |
 
 ## What "a merge decided" means

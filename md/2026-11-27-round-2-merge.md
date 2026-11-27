@@ -4,7 +4,7 @@
 
 | repository | branch | the upstream commits merged | merge commit |
 |---|---|---|---|
-| craft-libs | `next` | 13, over `ea14416aa`, at `a46af76c7` | `b3e81eb46` |
+| craft-libs | `next`, renamed `main` later that day | 13, over `ea14416aa`, at `a46af76c7` | `b3e81eb46` |
 | photocraft | `main` | 53, over `eff5ee712`, at `984c304b2` | `efcbecc20` |
 
 craft-libs merged with no conflict. photocraft had one, in

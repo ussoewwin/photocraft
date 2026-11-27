@@ -1,6 +1,6 @@
 # craft-libs API breaking changes and the fork's adaptation
 
-This document records the breaking changes that came with the upstream redesign of `storytold/craft-libs` (`next`), the changes `photocraft` (`crates/ui-egui`) needed to meet them, and the fork features that had to survive: Space as the Hand tool's own key (the `with_space_activation` rule), the PSD extension blocks, the ZIP 64-bit EOCD header, and the CJK font classification.
+This document records the breaking changes that came with the upstream redesign of `storytold/craft-libs` (`main` since 2026-11-27, `next` before that), the changes `photocraft` (`crates/ui-egui`) needed to meet them, and the fork features that had to survive: Space as the Hand tool's own key (the `with_space_activation` rule), the PSD extension blocks, the ZIP 64-bit EOCD header, and the CJK font classification.
 
 Every path below is repository-relative. Code is quoted from the working tree at the time of the repair; the measurements at the end are dated.
 
@@ -9,7 +9,7 @@ Every path below is repository-relative. Code is quoted from the working tree at
 ## 1. What broke
 
 ### 1.1 The release build stopped
-Linking the shared library (`craft-libs`, `next`) into `photocraft` with the local patch (`cargo xtask craftlibs on`) produced type errors, trait-bound errors and calls to methods that no longer existed, across `crates/ui-egui`; no Windows binary (`photocraft.exe`, `photocraft-cli.exe`) could be produced from that tree.
+Linking the shared library (`craft-libs`, then on `next`, now `main`) into `photocraft` with the local patch (`cargo xtask craftlibs on`) produced type errors, trait-bound errors and calls to methods that no longer existed, across `crates/ui-egui`; no Windows binary (`photocraft.exe`, `photocraft-cli.exe`) could be produced from that tree.
 
 ### 1.2 The upstream redesign
 Upstream introduced memoization for the UI panels, changed how multilingual menus are published, simplified the preset manager's type parameters, and added generation tracking to the rendering caches — in one series of commits. The public signatures the application had been calling changed with them.

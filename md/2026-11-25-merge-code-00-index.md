@@ -1,5 +1,11 @@
 # The 2026-11-25 merge: every line of the fork's code, explained
 
+> **Branches as they stand today.** `storytold/craft-libs` and `storytold/photocraft` both have one
+> line, `main`; upstream merged the old `next` line into `main` and deleted the branch on 2026-11-27
+> (pull requests #3644 and #3645 there), and this fork's own branch was renamed `next` to `main` the
+> same day. Where a command or a measurement below names `next`, it names the line as it was at that
+> moment and is kept as the record of that round.
+
 ## What this set is
 
 Four documents that together account for **every line the fork changed** around the upstream merges of
