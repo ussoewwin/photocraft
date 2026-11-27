@@ -28,6 +28,16 @@ fn ring_badge(c: &Option<Cursor>) -> Option<Option<CursorBadge>> {
     }
 }
 
+/// The badge of any pointer form the mode badge rides: the ring's, the tool icon's, the crosshair's.
+fn any_badge(c: &Option<Cursor>) -> Option<Option<CursorBadge>> {
+    match c {
+        Some(Cursor::Painted(PaintedCursor::Circle { badge, .. } | PaintedCursor::Outline { badge, .. } | PaintedCursor::Tool { badge, .. })) => Some(*badge),
+        Some(Cursor::Painted(PaintedCursor::Badged { badge, .. })) => Some(Some(*badge)),
+        Some(Cursor::Painted(PaintedCursor::Crosshair)) => Some(None),
+        _ => None,
+    }
+}
+
 /// The ring without its centre mark and badge: the tip's shape alone.
 fn ring(c: &Option<Cursor>) -> Option<PaintedCursor> {
     match c {
@@ -57,23 +67,26 @@ fn alt_over_a_selection_marks_the_centre_of_the_ring() {
     assert_eq!(ring_badge(&cursor(&mut h, Modifiers::NONE)), Some(None), "⌥ released: the plain ring again");
 }
 
-/// ⇧ with a selection, and ⌥ with none, were measured to show the plain ring; ⇧⌥ was not measured and
-/// keeps it.
+/// A selection with ⇧, and ⌥ with none: ⇧ is the mode badge the options bar reads (New mode adds, so the
+/// ring carries a +), and ⌥ with nothing selected has nothing to subtract from, so the ring stays plain.
 #[test]
 fn shift_or_no_selection_keeps_the_plain_ring() {
     let mut h = quick_selection(true);
     let plain = cursor(&mut h, Modifiers::NONE);
-    for (m, what) in [(Modifiers::SHIFT, "⇧"), (Modifiers::SHIFT | Modifiers::ALT, "⇧⌥")] {
-        assert_eq!(cursor(&mut h, m), plain, "{what} with a selection");
-    }
+    let shift = cursor(&mut h, Modifiers::SHIFT);
+    assert_eq!(ring_badge(&shift), Some(Some(CursorBadge::Add)), "⇧ with a selection: the + the mode bar shows");
+    assert_eq!(ring(&shift), ring(&plain), "the ring itself is unchanged");
+    let both = cursor(&mut h, Modifiers::SHIFT | Modifiers::ALT);
+    assert_eq!(ring(&both), ring(&plain), "⇧⌥ keeps the ring too");
     let mut h = quick_selection(false);
     let plain = cursor(&mut h, Modifiers::NONE);
     assert_eq!(ring_badge(&plain), Some(None), "the plain ring");
     assert_eq!(cursor(&mut h, Modifiers::ALT), plain, "⌥ with nothing selected");
 }
 
-/// The Standard and Precise painting cursors are no ring and were not measured: ⌥ leaves them as
-/// they were.
+/// The Standard and Precise painting cursors are no ring: the mode badge rides the icon and the
+/// crosshair those settings draw, as the framework gives it on whichever pointer it paints, and ⌥
+/// with nothing selected leaves them as they were.
 #[test]
 fn cursors_without_a_ring_keep_their_pointer() {
     let mut h = quick_selection(true);
@@ -81,6 +94,7 @@ fn cursors_without_a_ring_keep_their_pointer() {
         h.state_mut().run("prefs.set", json!({"path": "cursors.painting", "value": value})).unwrap();
         let plain = cursor(&mut h, Modifiers::NONE);
         assert_eq!(ring_badge(&plain), None, "{value}: no ring");
-        assert_eq!(cursor(&mut h, Modifiers::ALT), plain, "{value}: ⌥ changes nothing");
+        assert_eq!(any_badge(&plain), Some(None), "{value}: no badge with no key");
+        assert_eq!(any_badge(&cursor(&mut h, Modifiers::ALT)), Some(Some(CursorBadge::Subtract)), "{value}: ⌥ puts its − on the same pointer");
     }
 }

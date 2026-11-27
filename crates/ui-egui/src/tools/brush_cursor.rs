@@ -162,20 +162,17 @@ pub(crate) fn cursor(app: &PhotocraftApp, cx: &ToolContext<'_>) -> Cursor {
 
         let round = !block && crate::canvas::cursor_policy::pencil_tip_is_round(size);
         let tip = BrushTip::new(f64::from(size), BrushTipOutline::pixels(Rect::new(x0, y0, x1, y1), round));
-        return BrushCursor::new(&tip).centre(centre).painting(painting).icon(icon).cursor(cx, &options, &space.view);
+        return BrushCursor::new(&tip).centre(centre).painting(painting).icon(icon).badge(badge).cursor(cx, &options, &space.view);
     }
     let Some((_, tip)) = &app.brush_tip else { return arrow };
     let cursor =
-        BrushCursor::new(tip).pose(pose(brush, cx.pointer.as_ref().map(|p| p.sample))).centre(centre).painting(painting).icon(icon).cursor(
+        BrushCursor::new(tip).pose(pose(brush, cx.pointer.as_ref().map(|p| p.sample))).centre(centre).painting(painting).icon(icon).badge(badge).cursor(
             cx,
             &options,
             &space.view,
         );
-    // Quick Selection's badge goes on its ring only: the icon and crosshair the other Painting Cursors settings, Caps
-    // Lock or a small tip give were not measured and stay as they are. The badge is the fork's selection read
-    // (`tool_feedback::selection_op`), marked through the ring so the plain ring stays plain.
-    match (cursor, badge) {
-        (Cursor::Painted(ring), Some(badge)) => Cursor::Painted(ring.marked(centre, Some(badge))),
-        (cursor, _) => cursor,
-    }
+    // The badge is the fork's selection read (`tool_feedback::selection_op`), which the options bar shows too; the
+    // framework puts it on whichever pointer the Painting Cursors setting gives (`BrushCursor::badge`), so the same
+    // rule covers the ring, the tool's icon and the precise crosshair.
+    cursor
 }
