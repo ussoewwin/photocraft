@@ -868,7 +868,7 @@ fn restart_cases() -> Vec<Case> {
                 assert_eq!(stored["selectedTool"], json!("Eraser"));
                 assert_eq!(app.ui.tool, Tool::Eraser, "restored before the first frame");
                 assert_eq!(app.ui.group_tool(Tool::Eraser.key()), Some(Tool::Eraser));
-                assert_eq!(app.ui.tool_options, crate::state::ToolOptions::default());
+                assert_eq!(*app.ui.tool_options, crate::state::ToolOptions::default());
             }),
         },
         Case {
@@ -1112,7 +1112,7 @@ fn damaged_cases() -> (Vec<Loaded>, Vec<Case>) {
         },
     ));
     cases.push(loaded("tool options: a good value is left alone", json!({"toolOptions": {"feather": 12.5}}), move |app| {
-        assert_eq!(app.ui.tool_options, crate::state::ToolOptions { feather: 12.5, ..d() });
+        assert_eq!(*app.ui.tool_options, crate::state::ToolOptions { feather: 12.5, ..d() });
         let mut def = d();
         crate::tool_memory::sanitize(&mut def);
         assert_eq!(def, d(), "in-range defaults never change");
@@ -1442,7 +1442,7 @@ fn reset_tools_clear_the_remembered_options_and_brushes() {
         |brushes: &[(Tool, photocraft_engine::BrushSettings)]| brushes.iter().all(|(t, b)| *b == crate::paint_mouse::fresh_brush(*t, b) && b.size != 77.0);
     assert!(starting(&app.ui.tool_brushes), "{saved}");
     let app2 = app_on(&store);
-    assert_eq!(app2.ui.tool_options, crate::state::ToolOptions::default());
+    assert_eq!(*app2.ui.tool_options, crate::state::ToolOptions::default());
     assert!(!app2.ui.tool_brushes.is_empty() && starting(&app2.ui.tool_brushes), "remembered across a restart");
 }
 
