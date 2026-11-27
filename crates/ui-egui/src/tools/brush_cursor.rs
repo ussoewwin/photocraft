@@ -7,7 +7,6 @@
 
 use craft::behavior::kurbo::Rect;
 use craft::behavior::{Cursor, CursorIcon, PointerSample};
-use craft::keymap::Mods;
 use craft::ui::canvas::ToolContext;
 use craft::ui::canvas_controls::brush::{BrushCursor, BrushCursorOptions, BrushTip, BrushTipOutline, PaintingCursor, TipPose, TipRings};
 use photocraft_engine::prefs::PaintingCursor as PaintingPref;
