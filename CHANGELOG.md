@@ -3,6 +3,28 @@
 PhotoCraft's release history, newest first. Every release has full notes on GitHub; the last line of
 each entry links to them.
 
+## Version 1.4.2
+
+- **Changed**: **the application rides the current official upstream** - `storytold/photocraft` `main`
+  at `984c304b2` (53 commits over `eff5ee712`), with PhotoCraft's own features kept on top: LaMa
+  Cleaner, SAM 3.1 selection, the quick-selection mode bar in the options bar, dragging selected
+  pixels between documents, the Japanese interface and its font names.
+- **Fixed**: **the Quick Selection badge reaches the cursor once** - the framework gives the badge on
+  whichever pointer the Painting Cursors setting draws, with the mode the options bar shows (⇧ adds,
+  ⌥ subtracts), and upstream's second mark of the ring is removed; the two upstream trials now state
+  the rule the pointer follows, so New adds with ⇧ and ⌥ with nothing selected changes nothing.
+- **Changed**: **the shared framework follows this round's `craft-libs`** - `storytold/craft-libs` at
+  `a46af76c7` for the framework crates, with that line's Space-on-release rule.
+- **Checked**: **nothing was lost in the merge** - a three-way audit against the merge base reports 0
+  of 36 upstream files and 0 of 190 fork files dropped, and every line both sides added is present;
+  the one difference on purpose is the badge line.
+- **Suites**: the workspace runs **15,869 passed / 0 failed / 96 skipped**; check, clippy, format,
+  layers, panel-commands, wasm and parity all exit 0. The release executable is 333,062,144 bytes
+  (sha256 `31B2D8C1...`), starts, and shows its window.
+- **Written down**: `md/2026-11-27-round-2-merge.md` holds the merge, the audit and each of the
+  round's findings with its measurement.
+- See [Release Notes v1.4.2](https://github.com/ussoewwin/photocraft/releases/tag/v1.4.2) for details.
+
 ## Version 1.4.1
 
 - **Changed**: **the application rides the current official upstream** - `storytold/photocraft` `main`
