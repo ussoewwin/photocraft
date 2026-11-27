@@ -89,9 +89,9 @@ pub(super) fn preview_text(app: &PhotocraftApp) -> Option<String> {
     (!line.is_empty()).then_some(line)
 }
 
-/// Show the families by their English names: the preference decides, except in a Japanese
-/// interface, which lists them by their Japanese names (ＭＳ Ｐ明朝, not MS PMincho) as Photoshop
-/// does.
+/// Show the families by their English names. This is the one place the fork differs from the upstream
+/// default: the preference decides, except in a Japanese interface, which lists the families by their
+/// Japanese names (ＭＳ Ｐ明朝, not MS PMincho) as Photoshop does, whatever the preference says.
 pub(super) fn english_font_names(preference: bool, language: &str) -> bool {
     preference && !language.starts_with("ja")
 }

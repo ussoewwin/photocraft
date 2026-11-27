@@ -33,6 +33,9 @@ fn defaults_match_photoshop() {
     assert_eq!(p.transparency_and_gamut.colors(), [[255, 255, 255], [204, 204, 204]]);
     assert_eq!(p.transparency_and_gamut.square(), Some(8.0));
     assert_eq!(p.cursors.painting, PaintingCursor::NormalTip);
+    // The English-names preference is Photoshop's default; the Japanese interface overrides it in one
+    // place (`english_font_names`), not here.
+    assert!(p.type_.show_font_names_in_english);
     // Every dialog section is a key of the JSON form.
     let v = p.to_json();
     for (id, _) in SECTIONS {

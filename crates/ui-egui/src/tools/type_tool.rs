@@ -139,4 +139,7 @@ mod mask_escape_tests;
 mod unchanged_edit_history_tests;
 
 #[cfg(test)]
+mod font_names_tests;
+
+#[cfg(test)]
 mod vertical_mask_alt_drag_tests;
