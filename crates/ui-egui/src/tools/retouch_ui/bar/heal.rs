@@ -154,7 +154,7 @@ pub(super) fn clone(ui: &mut egui::Ui, app: &mut PhotocraftApp) -> Option<RangeA
 /// The options of LaMa Cleaner.
 pub(super) fn lama_cleaner(ui: &mut egui::Ui, app: &mut PhotocraftApp) -> Option<RangeAlert> {
     let mut size = app.session.tools.brush.size.max(1.0);
-    let alert = number(tl!("Size:"), &mut size, 1.0..=500.0).unit("px").whole().popup_slider().show(ui);
+    let alert = number(tl!("Size:"), Bind::bound(&mut size), 1.0..=500.0).unit("px").whole().popup_slider().show(ui);
     app.session.tools.brush.size = size;
     alert.out_of_range
 }

@@ -1118,6 +1118,8 @@ fn a_typed_prompt_wins_over_the_gesture() {
     app.ui.tool_options.sam3_prompt.clear();
     let click = sam3_select_params(&app, [10.0, 20.0], [10.0, 20.0], m);
     assert_eq!(click["point"], json!([10.0, 20.0]), "{click}");
+}
+
 /// #13096: a Red Eye press outside the selection does nothing and says nothing, as in Photoshop:
 /// no status message, no error, no History state and no pixel change.
 #[test]

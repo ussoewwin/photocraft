@@ -93,25 +93,28 @@ pub(super) fn object_selection(ui: &mut egui::Ui, app: &mut PhotocraftApp) -> Op
 pub(super) fn sam3_select(ui: &mut egui::Ui, app: &mut PhotocraftApp) -> Option<RangeAlert> {
     crate::panels::options_bar::selection::operation_segments(app, ui, true);
     Divider::vertical().show(ui);
-    let o = &mut app.ui.tool_options;
-    check(ui, tl!("Sample All Layers"), &mut o.sample_all.sam3_select, true, None);
+    let refine_before = app.ui.tool_options.sam3_refine as f32;
+    let (sample_all, prompt, threshold, individual) = bind_tracked!(
+        app.ui.tool_options => sample_all.sam3_select, sam3_prompt, sam3_threshold, sam3_individual
+    );
+    check(ui, tl!("Sample All Layers"), sample_all, true, None);
     Divider::vertical().show(ui);
-    TextField::new(Label::from(tl!("Prompt")), Bind::bound(&mut o.sam3_prompt)).show(ui);
-    let mut threshold = o.sam3_threshold;
-    let alert1 = number(tl!("Threshold"), &mut threshold, 0.0..=1.0).show(ui);
-    o.sam3_threshold = threshold;
-    let mut refine = o.sam3_refine as f32;
-    let alert2 = number(tl!("Refine"), &mut refine, 0.0..=5.0).whole().show(ui);
-    o.sam3_refine = refine.round().clamp(0.0, 5.0) as u8;
-    check(ui, tl!("Individual Masks"), &mut o.sam3_individual, true, None);
+    TextField::new(Label::from(tl!("Prompt")), prompt).show(ui);
+    let alert1 = number(tl!("Threshold"), threshold, 0.0..=1.0).show(ui);
+    let mut refine = refine_before;
+    let alert2 = number(tl!("Refine"), Bind::bound(&mut refine), 0.0..=5.0).whole().show(ui);
+    check(ui, tl!("Individual Masks"), individual, true, None);
     Divider::vertical().show(ui);
-    let can_detect = !o.sam3_prompt.trim().is_empty();
+    let rounded = refine.round().clamp(0.0, 5.0) as u8;
+    if app.ui.tool_options.sam3_refine != rounded {
+        app.ui.tool_options.sam3_refine = rounded;
+    }
+    let (prompt, threshold, refine, individual, sample_all) = {
+        let o = &app.ui.tool_options;
+        (o.sam3_prompt.clone(), o.sam3_threshold, o.sam3_refine, o.sam3_individual, o.sample_all.sam3_select)
+    };
+    let can_detect = !prompt.trim().is_empty();
     if clicked(&Button::new(tl!("Detect")).enabled(can_detect).show(ui)) {
-        let prompt = o.sam3_prompt.clone();
-        let threshold = o.sam3_threshold;
-        let refine = o.sam3_refine;
-        let individual = o.sam3_individual;
-        let sample_all = o.sample_all.sam3_select;
         let mode = crate::canvas::tool_feedback::mode_name(crate::canvas::tool_feedback::selection_op(
             Tool::Sam3Select,
             app.ui.selection_mode,
