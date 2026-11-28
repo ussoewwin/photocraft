@@ -3,6 +3,31 @@
 PhotoCraft's release history, newest first. Every release has full notes on GitHub; the last line of
 each entry links to them.
 
+## Version 1.4.4
+
+- **Changed**: **the application rides the current official upstream** - `storytold/photocraft` `main`
+  at `8d7c1f833` (207 commits over `904374406`, merged as `581eb807b`), with five conflicted files each
+  resolved to keep both sides: the pins, the lock, the options' tracked model, the retouch bar's
+  selection row and the retouch trials.
+- **Changed**: **the shared framework follows this round's `craft-libs`** - `storytold/craft-libs` at
+  `51fcc3b04` for the 44 pins, the merge this release cut alongside; `craft::egui_fork::REV` is
+  `932a73b2`, matching the `[patch.crates-io]` entries.
+- **Fixed**: **the framework's new APIs are followed** - the number and check cells take `Bind<'_, T>`;
+  `ShapeGeometry::Triangle` carries `corner_radius`, kept by the whole-pixel conversion and by
+  `shape.create`'s params; and the SAM options row binds through `bind_tracked!`, so an idle frame no
+  longer moves the tool options revision.
+- **Checked**: **nothing was lost in the merge** - 21 files differ from both parents, each explained
+  hunk by hunk in `md/2026-11-28-merge-code-02-photocraft.md`, and the fork's features are intact:
+  Quick Selection's New / Add / Subtract with its outline drag, LaMa Cleaner, SAM Selection, the
+  refused-Move bookkeeping and the Japanese-name rule for font families.
+- **Suites**: the workspace runs **16,132 passed / 0 failed / 96 skipped**; `cargo xtask ci lint`
+  passes all 9 steps; parity and the panic hunt exit 0; `cargo xtask test-corpus` reports 744 and 670
+  passed with 0 failed. The release executable is 333,945,856 bytes, starts, and shows its `PhotoCraft`
+  window.
+- **Written down**: `md/2026-11-28-merge-code-00-index.md` links the five documents, the upstream
+  inventory of 328 and 207 commits included.
+- See [Release Notes v1.4.4](https://github.com/ussoewwin/photocraft/releases/tag/v1.4.4) for details.
+
 ## Version 1.4.3
 
 - **Changed**: **the application rides the current official upstream** - `storytold/photocraft` `main`
