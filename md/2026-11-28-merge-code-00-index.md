@@ -31,7 +31,7 @@ Files the fork changed **after** the merge are answers too: craft-libs 5 (`02352
 
 - [01](2026-11-28-merge-code-01-craft-libs.md) - the framework's kept code and its repair.
 - [02](2026-11-28-merge-code-02-photocraft.md) - the application's kept code and its repair.
-- [03](2026-11-28-merge-code-03-upstream-inventory.md) - every commit of both ranges, the measured
+- [03](2026-11-28-merge-code-03-upstream-inventory.md) - both ranges with every non-merge commit listed (198 of 328, 123 of 207), the measured
   numbers, and what they do not prove.
 - [04](2026-11-28-merge-code-04-upstream-code.md) - the upstream lines that forced each answer,
   quoted with their path and line.
@@ -49,7 +49,7 @@ git -C <repo> diff 581eb807b^2 581eb807b -- <path>                  # the diffs 
 ## What is not proven here
 
 - Upstream's own code is not reproduced whole: 535 commits would be a copy of `storytold`'s
-  repositories. Document 03 lists every commit; document 04 quotes upstream only where it
-  intersects the fork.
+  repositories. Document 03 lists every non-merge commit and counts the merges; document 04 quotes
+  upstream only where it intersects the fork.
 - The suites ran on the working trees the two merge trees record, at the times document 03
   states; a run is evidence for the tree it ran on, not for later commits.
