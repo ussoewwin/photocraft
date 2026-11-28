@@ -29,12 +29,15 @@ Files the fork changed **after** the merge are answers too: craft-libs 5 (`02352
 
 ## Documents
 
-- [01](2026-11-28-merge-code-01-craft-libs.md) - the framework's kept code and its repair.
-- [02](2026-11-28-merge-code-02-photocraft.md) - the application's kept code and its repair.
-- [03](2026-11-28-merge-code-03-upstream-inventory.md) - both ranges with every non-merge commit listed (198 of 328, 123 of 207), the measured
-  numbers, and what they do not prove.
-- [04](2026-11-28-merge-code-04-upstream-code.md) - the upstream lines that forced each answer,
-  quoted with their path and line.
+- [01](2026-11-28-merge-code-01-craft-libs.md) - 5 file sections, each with its role, the diff
+  verbatim, one item per hunk and the check that catches a revert.
+- [02](2026-11-28-merge-code-02-photocraft.md) - 27 file sections: the 21 the merge keeps that differ
+  from both parents, then the repair commit's six (its `Cargo.lock` beside five code files), each with
+  the same four parts.
+- [03](2026-11-28-merge-code-03-upstream-inventory.md) - 2 ranges with every non-merge commit listed
+  (198 of 328, 123 of 207), the measured numbers, and what they do not prove.
+- [04](2026-11-28-merge-code-04-upstream-code.md) - 9 upstream sites that forced an answer, each
+  quoted with its path and line.
 
 ## How to re-derive each claim
 
